@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init)",
+      "Bash(git branch -M main)",
+      "Bash(git remote add origin https://github.com/tamirpopliker/martin-bakery.git)",
+      "Bash(git add -A)"
+    ]
+  }
+}

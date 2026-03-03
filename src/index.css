@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+* {
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+body {
+  direction: rtl;
+  background-color: #f8fafc;
+}
