@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { usePeriod } from '../lib/PeriodContext'
+import PeriodPicker from '../components/PeriodPicker'
 import { ArrowRight, Plus, Pencil, Trash2, CheckCircle, XCircle, TrendingUp, Package } from 'lucide-react'
 
 // ─── טיפוסים ───────────────────────────────────────────────────────────────
@@ -37,7 +39,7 @@ function hebrewDate(dateStr: string) {
 }
 
 // ─── גרף קו פשוט (SVG) ─────────────────────────────────────────────────────
-function LineChart({ entries, color, isQty }: { entries: Entry[]; color: string; isQty: boolean }) {
+function LineChart({ entries, color, isQty, previousData }: { entries: Entry[]; color: string; isQty: boolean; previousData?: Entry[] }) {
   const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date))
   if (sorted.length < 2) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', fontSize: '13px' }}>
@@ -47,7 +49,13 @@ function LineChart({ entries, color, isQty }: { entries: Entry[]; color: string;
 
   const W = 700, H = 160, PAD = { top: 16, bottom: 32, left: 16, right: 16 }
   const vals = sorted.map(e => e.amount)
-  const minV = Math.min(...vals), maxV = Math.max(...vals)
+
+  // Include previous month values in min/max so both lines share the same Y scale
+  const prevSorted = previousData ? [...previousData].sort((a, b) => a.date.localeCompare(b.date)) : []
+  const prevVals = prevSorted.map(e => e.amount)
+  const allVals = [...vals, ...prevVals]
+
+  const minV = Math.min(...allVals), maxV = Math.max(...allVals)
   const range = maxV - minV || 1
 
   const toX = (i: number) => PAD.left + (i / (sorted.length - 1)) * (W - PAD.left - PAD.right)
@@ -59,6 +67,15 @@ function LineChart({ entries, color, isQty }: { entries: Entry[]; color: string;
     ` L ${toX(sorted.length - 1)},${H - PAD.bottom} L ${toX(0)},${H - PAD.bottom} Z`
 
   const avg = vals.reduce((a, b) => a + b, 0) / vals.length
+
+  // Determine days in the current month for x-axis alignment of previous month data
+  const daysInMonth = sorted.length > 0
+    ? new Date(
+        parseInt(sorted[0].date.split('-')[0]),
+        parseInt(sorted[0].date.split('-')[1]),
+        0
+      ).getDate()
+    : 31
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: '160px' }}>
@@ -72,6 +89,16 @@ function LineChart({ entries, color, isQty }: { entries: Entry[]; color: string;
       <path d={area} fill={color} opacity={0.08} />
       {/* קו */}
       <polyline points={points} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" />
+      {/* Previous month overlay */}
+      {prevSorted.length >= 2 && (() => {
+        const prevPoints = prevSorted.map((e) => {
+          const dayNum = parseInt(e.date.split('-')[2])
+          const x = PAD.left + ((dayNum - 1) / Math.max(daysInMonth - 1, 1)) * (W - PAD.left - PAD.right)
+          const y = PAD.top + (1 - (Number(e.amount) - minV) / range) * (H - PAD.top - PAD.bottom)
+          return `${x},${y}`
+        }).join(' ')
+        return <polyline points={prevPoints} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="6 4" />
+      })()}
       {/* נקודות */}
       {sorted.map((e, i) => (
         <g key={e.id}>
@@ -105,13 +132,14 @@ export default function DailyProduction({ department, onBack }: Props) {
   const cfg = DEPT_CONFIG[department]
 
   const [entries, setEntries]           = useState<Entry[]>([])
+  const [prevEntries, setPrevEntries]   = useState<Entry[]>([])
   const [date, setDate]                 = useState(new Date().toISOString().split('T')[0])
   const [amount, setAmount]             = useState('')
   const [loading, setLoading]           = useState(false)
   const [todayEntered, setTodayEntered] = useState(false)
   const [editId, setEditId]             = useState<number | null>(null)
   const [editAmount, setEditAmount]     = useState('')
-  const [monthFilter, setMonthFilter]   = useState(new Date().toISOString().slice(0, 7))
+  const { period, setPeriod, from, to, comparisonPeriod } = usePeriod()
   const [showChart, setShowChart]       = useState(true)
 
   // ─── שליפה ──────────────────────────────────────────────────────────────
@@ -120,17 +148,28 @@ export default function DailyProduction({ department, onBack }: Props) {
       .from('daily_production')
       .select('*')
       .eq('department', department)
-      .gte('date', monthFilter + '-01')
-      .lte('date', monthFilter + '-31')
+      .gte('date', from)
+      .lt('date', to)
       .order('date', { ascending: false })
     if (data) {
       setEntries(data)
       const today = new Date().toISOString().split('T')[0]
       setTodayEntered(data.some(e => e.date === today))
     }
+
+    // Comparison period (previous month or equivalent)
+    const { data: prevData } = await supabase
+      .from('daily_production')
+      .select('*')
+      .eq('department', department)
+      .gte('date', comparisonPeriod.from)
+      .lt('date', comparisonPeriod.to)
+      .order('date')
+    if (prevData) setPrevEntries(prevData)
+    else setPrevEntries([])
   }
 
-  useEffect(() => { fetchEntries() }, [monthFilter, department])
+  useEffect(() => { fetchEntries() }, [from, to, department])
 
   // ─── הוספה ──────────────────────────────────────────────────────────────
   async function handleAdd() {
@@ -185,8 +224,12 @@ export default function DailyProduction({ department, onBack }: Props) {
 
       {/* ─── כותרת ─────────────────────────────────────────────── */}
       <div style={S.header}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: 'none', borderRadius: '10px', padding: '8px', cursor: 'pointer', display: 'flex' }}>
-          <ArrowRight size={20} color="#64748b" />
+        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
+        >
+          <ArrowRight size={22} color="currentColor" />
+          חזרה
         </button>
 
         <div style={{ width: '40px', height: '40px', background: cfg.bg, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -262,8 +305,7 @@ export default function DailyProduction({ department, onBack }: Props) {
               <span style={{ fontSize: '15px', fontWeight: '700', color: '#374151' }}>גרף ייצור</span>
             </div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <input type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)}
-                style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '7px 12px', fontSize: '14px', background: 'white', fontFamily: 'inherit' }} />
+              <PeriodPicker period={period} onChange={setPeriod} />
               <button
                 onClick={() => setShowChart(v => !v)}
                 style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '13px', cursor: 'pointer', color: '#64748b' }}
@@ -273,9 +315,21 @@ export default function DailyProduction({ department, onBack }: Props) {
             </div>
           </div>
           {showChart && (
-            <div style={{ background: '#fafafa', borderRadius: '12px', padding: '12px', minHeight: '180px', display: 'flex', alignItems: 'center' }}>
-              <LineChart entries={entries} color={cfg.color} isQty={cfg.isQty} />
-            </div>
+            <>
+              <div style={{ background: '#fafafa', borderRadius: '12px', padding: '12px', minHeight: '180px', display: 'flex', alignItems: 'center' }}>
+                <LineChart entries={entries} color={cfg.color} isQty={cfg.isQty} previousData={prevEntries} />
+              </div>
+              <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '20px', height: '3px', background: cfg.color, borderRadius: '2px', display: 'inline-block' }} />
+                  חודש נוכחי
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ width: '20px', height: '3px', background: '#94a3b8', borderRadius: '2px', display: 'inline-block', borderTop: '1.5px dashed #94a3b8' }} />
+                  חודש קודם
+                </span>
+              </div>
+            </>
           )}
         </div>
 

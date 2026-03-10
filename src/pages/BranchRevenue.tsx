@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { usePeriod } from '../lib/PeriodContext'
+import PeriodPicker from '../components/PeriodPicker'
 import { ArrowRight, Plus, Pencil, Trash2, Search, X, ShoppingBag, CreditCard, Monitor } from 'lucide-react'
 
 interface Props {
@@ -60,10 +62,10 @@ function AutocompleteInput({ value, onChange, suggestions, placeholder, color }:
 }
 
 export default function BranchRevenue({ branchId, branchName, branchColor, onBack }: Props) {
+  const { period, setPeriod, from, to } = usePeriod()
   const [tab, setTab]               = useState<Source>('cashier')
   const [entries, setEntries]       = useState<Entry[]>([])
   const [creditCustomers, setCreditCustomers] = useState<string[]>([])
-  const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7))
   const [searchFilter, setSearchFilter] = useState('')
   const [editId, setEditId]         = useState<number | null>(null)
   const [editData, setEditData]     = useState<Partial<Entry>>({})
@@ -80,7 +82,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   async function fetchEntries() {
     const { data } = await supabase.from('branch_revenue').select('*')
       .eq('branch_id', branchId)
-      .gte('date', monthFilter + '-01').lte('date', monthFilter + '-31')
+      .gte('date', from).lt('date', to)
       .order('date', { ascending: false })
     if (data) setEntries(data)
   }
@@ -94,7 +96,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   useEffect(() => {
     fetchEntries(); fetchCreditCustomers()
     setAmount(''); setTxCount(''); setCustomer(''); setDocNumber(''); setNotes(''); setSearchFilter('')
-  }, [monthFilter, branchId, tab])
+  }, [from, to, branchId, tab])
 
   async function addEntry() {
     if (!amount || !date) return
@@ -162,8 +164,12 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
       {/* כותרת + 4 כרטיסי סיכום */}
       <div style={{ background: 'white', padding: '16px 32px', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' as const }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: 'none', borderRadius: '10px', padding: '8px', cursor: 'pointer', display: 'flex' }}>
-          <ArrowRight size={20} color="#64748b" />
+        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
+        >
+          <ArrowRight size={22} color="currentColor" />
+          חזרה
         </button>
         <div style={{ width: '38px', height: '38px', background: branchColor + '20', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ShoppingBag size={18} color={branchColor} />

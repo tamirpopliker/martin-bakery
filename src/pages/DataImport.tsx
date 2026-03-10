@@ -1,0 +1,930 @@
+import { useState, useRef, useCallback } from 'react'
+import { supabase, monthEnd } from '../lib/supabase'
+import Papa from 'papaparse'
+import { Upload, CheckCircle, AlertCircle, XCircle, FileText, Loader2, Download, Trash2 } from 'lucide-react'
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+interface Props { onBack?: () => void }
+
+interface FileMapping {
+  csvName: string
+  tableName: string
+  label: string
+  status: 'ready' | 'warning' | 'skip' | 'importing' | 'done' | 'error'
+  rows: Record<string, any>[]
+  rowCount: number
+  rawCount?: number
+  warning?: string
+  warnings?: string[]
+  sampleRows?: Record<string, any>[]
+  result?: { inserted: number; skipped: number; errors: number; nullRows?: number; deleteError?: string; firstError?: string }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+interface TableDef {
+  table: string
+  label: string
+  mapRow: (row: Record<string, string>, extra: { month?: string }) => Record<string, any> | null
+  dupeKey: (row: Record<string, any>) => string
+  autoInject?: Record<string, any>
+  hasDate?: boolean
+}
+
+const DEPT_MAP: Record<string, string> = {
+  'קרמים': 'creams', 'creams': 'creams', 'cream': 'creams',
+  'בצקים': 'dough', 'dough': 'dough',
+  'אריזה': 'packaging', 'packaging': 'packaging', 'pack': 'packaging',
+  'ניקיון': 'cleaning', 'cleaning': 'cleaning', 'clean': 'cleaning',
+  'נהג': 'cleaning', 'נהגים': 'cleaning', 'driver': 'cleaning',
+  'ניקיון/נהג': 'cleaning', 'ניקיון+נהג': 'cleaning', 'ניקיון + נהג': 'cleaning',
+  'הנהלה': 'cleaning', 'משרד': 'cleaning',
+}
+
+const REPAIR_TYPE_MAP: Record<string, string> = {
+  'תיקון': 'repair', 'repair': 'repair',
+  'ציוד חדש': 'new_equipment', 'new_equipment': 'new_equipment', 'new equipment': 'new_equipment',
+}
+
+function parseDept(val: string | undefined): string {
+  if (!val) return ''
+  const v = val.trim()
+  return DEPT_MAP[v] || DEPT_MAP[v.toLowerCase()] || v
+}
+
+function parseNum(val: string | undefined): number | null {
+  if (!val || val.trim() === '') return null
+  const n = parseFloat(val.replace(/,/g, ''))
+  return isNaN(n) ? null : Math.round(n * 100) / 100
+}
+
+function parseDate(val: string | undefined): string | null {
+  if (!val) return null
+  let v = val.replace(/[א-ת]+/g, '').replace(/\s+/g, ' ').trim().replace(/^[\s\-]+|[\s\-]+$/g, '').trim()
+  const dmy = v.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/)
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`
+  const ymd = v.match(/^(\d{4})[\s\-]+(\d{1,2})[\s\-]+(\d{1,2})$/)
+  if (ymd) return `${ymd[1]}-${ymd[2].padStart(2, '0')}-${ymd[3].padStart(2, '0')}`
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v
+  return null
+}
+
+function parseRepairType(val: string | undefined): string {
+  if (!val) return 'repair'
+  const v = val.trim()
+  return REPAIR_TYPE_MAP[v] || REPAIR_TYPE_MAP[v.toLowerCase()] || 'repair'
+}
+
+// ─── Pre-import validation ───────────────────────────────────────────────────
+function validateRows(tableName: string, mapped: Record<string, any>[], rawRows: Record<string, string>[]): string[] {
+  const warnings: string[] = []
+  // Unrecognized departments
+  if (['daily_production', 'factory_waste', 'factory_repairs', 'labor'].includes(tableName)) {
+    const badDepts = new Set<string>()
+    for (const r of rawRows) {
+      const dept = r.department?.trim()
+      if (dept && !DEPT_MAP[dept] && !DEPT_MAP[dept.toLowerCase()]) badDepts.add(dept)
+    }
+    if (badDepts.size > 0) warnings.push(`מחלקות לא מזוהות: ${[...badDepts].join(', ')}`)
+  }
+  // Unrecognized repair types
+  if (tableName === 'factory_repairs') {
+    const badTypes = new Set<string>()
+    for (const r of rawRows) {
+      const val = (r.status || r.type || '').trim()
+      if (val && !REPAIR_TYPE_MAP[val] && !REPAIR_TYPE_MAP[val.toLowerCase()]) badTypes.add(val)
+    }
+    if (badTypes.size > 0) warnings.push(`סוגי תיקון לא מזוהים (ישתמש ב-repair): ${[...badTypes].join(', ')}`)
+  }
+  // Mixed months
+  const months = new Set<string>()
+  for (const r of mapped) {
+    if (r.date && typeof r.date === 'string') {
+      const m = r.date.slice(0, 7)
+      if (/^\d{4}-\d{2}$/.test(m)) months.add(m)
+    }
+  }
+  if (months.size > 1) warnings.push(`תאריכים מחודשים שונים: ${[...months].join(', ')}`)
+  // Rejected rows
+  const rejected = rawRows.length - mapped.length
+  if (rejected > 0) warnings.push(`${rejected} שורות נדחו (שדות חסרים: תאריך, סכום וכו')`)
+  return warnings
+}
+
+// ─── Table definitions ───────────────────────────────────────────────────────
+const FILE_MAP: Record<string, TableDef> = {
+  'factory_daily_production': {
+    table: 'daily_production', label: 'ייצור יומי', hasDate: true,
+    mapRow: (r) => {
+      const date = parseDate(r.date); const dept = parseDept(r.department)
+      if (!date || !dept) return null
+      return {
+        date, department: dept,
+        amount: parseNum(r.production_amount) ?? parseNum(r.amount) ?? parseNum(r.quantity) ?? 0,
+      }
+    },
+    dupeKey: (r) => `${r.date}_${r.department}`,
+  },
+  'factory_labor': {
+    table: 'labor', label: 'לייבור מחלקות', hasDate: true,
+    autoInject: { entity_type: 'factory' },
+    mapRow: (r) => {
+      const date = parseDate(r.date); const dept = parseDept(r.department)
+      if (!date || !r.employee_name?.trim()) return null
+      const gross = parseNum(r.gross_salary) ?? 0
+      let empCost = parseNum(r.employer_cost)
+      if (!empCost || empCost === 0) empCost = Math.round(gross * 1.3 * 100) / 100
+      return {
+        date, entity_id: dept, entity_type: 'factory',
+        employee_name: r.employee_name.trim(),
+        hours_100: parseNum(r.hours) ?? 0, hours_125: 0, hours_150: 0,
+        gross_salary: gross, employer_cost: empCost,
+        hourly_rate: parseNum(r.hourly_rate) ?? 0, bonus: parseNum(r.bonus) ?? 0,
+      }
+    },
+    dupeKey: (r) => `${r.date}_${r.employee_name}_${r.gross_salary}`,
+  },
+  'factory_sales': {
+    table: 'factory_sales', label: 'מכירות מפעל', hasDate: true,
+    mapRow: (r) => {
+      const date = parseDate(r.date); const amount = parseNum(r.amount)
+      if (!date || amount === null) return null
+      return {
+        date, department: parseDept(r.department),
+        customer: r.customer?.trim() || null, amount,
+        doc_number: r.doc_number?.trim() || null, notes: r.notes?.trim() || null,
+      }
+    },
+    dupeKey: (r) => `${r.date}_${r.customer}_${r.amount}_${r.doc_number}`,
+  },
+  'factory_other_sales': {
+    table: 'factory_b2b_sales', label: 'מכירות B2B/שונות', hasDate: true,
+    mapRow: (r) => {
+      const date = parseDate(r.date); const amount = parseNum(r.amount)
+      if (!date || amount === null) return null
+      let st = r.sale_type?.trim().toLowerCase() || 'misc'
+      if (st === 'שונות') st = 'misc'
+      if (st === 'עסקי' || st === 'b2b') st = 'b2b'
+      return {
+        date, sale_type: st, customer: r.customer?.trim() || null,
+        amount, doc_number: r.doc_number?.trim() || null, notes: r.notes?.trim() || null,
+      }
+    },
+    dupeKey: (r) => `${r.date}_${r.customer}_${r.amount}`,
+  },
+  'factory_supplier_invoices': {
+    table: 'supplier_invoices', label: 'חשבוניות ספקים', hasDate: true,
+    mapRow: (r) => {
+      const date = parseDate(r.date); const amount = parseNum(r.amount)
+      if (!date || amount === null) return null
+      return {
+        date, amount,
+        supplier_name: r.supplier_name?.trim() || null,
+        doc_number: r.doc_number?.trim() || null,
+        doc_type: r.category?.trim() || r.doc_type?.trim() || 'חשבונית מס',
+        notes: r.notes?.trim() || null,
+      }
+    },
+    dupeKey: (r) => `${r.date}_${r.supplier_id || r.supplier_name}_${r.amount}_${r.doc_number}`,
+  },
+  'factory_waste': {
+    table: 'factory_waste', label: 'פחת', hasDate: true,
+    mapRow: (r) => {
+      const date = parseDate(r.date); const amount = parseNum(r.amount)
+      if (!date || amount === null) return null
+      const dept = parseDept(r.department)
+      return {
+        date, department: dept || 'creams',
+        amount,
+        category: r.category?.trim() || null,
+        description: r.notes?.trim() || r.description?.trim() || null,
+      }
+    },
+    dupeKey: (r) => `${r.date}_${r.department}_${r.amount}`,
+  },
+  'factory_repairs': {
+    table: 'factory_repairs', label: 'תיקונים', hasDate: true,
+    mapRow: (r) => {
+      const date = parseDate(r.date); const amount = parseNum(r.amount)
+      if (!date || amount === null) return null
+      return {
+        date, department: parseDept(r.department) || 'creams',
+        amount,
+        type: parseRepairType(r.status || r.type),
+        description: r.description?.trim() || null,
+      }
+    },
+    dupeKey: (r) => `${r.date}_${r.amount}_${r.description}`,
+  },
+  'factory_fixed_costs': {
+    table: 'fixed_costs', label: 'עלויות קבועות', hasDate: false,
+    mapRow: (r, extra) => {
+      const amount = parseNum(r.amount)
+      if (!r.name?.trim() || amount === null) return null
+      let et = r.entity_type?.trim() || 'factory'
+      if (et === 'fixed') et = 'factory'
+      const rawMonth = r.month?.toString().trim() || extra.month || new Date().toISOString().slice(0, 7)
+      return {
+        name: r.name.trim(), amount,
+        month: rawMonth,
+        entity_type: et,
+        entity_id: 'factory',
+      }
+    },
+    dupeKey: (r) => `${r.name}_${r.month}`,
+  },
+  'factory_kpi_targets': {
+    table: 'kpi_targets', label: 'יעדי KPI', hasDate: false,
+    mapRow: (r) => {
+      const dept = parseDept(r.department)
+      if (!dept) return null
+      return {
+        department: dept,
+        labor_pct: parseNum(r.labor_pct) ?? 25, waste_pct: parseNum(r.waste_pct) ?? 5,
+        repairs_pct: parseNum(r.repairs_pct) ?? 3, gross_profit_pct: parseNum(r.gross_profit_pct) ?? 40,
+        production_pct: parseNum(r.production_pct) ?? 45,
+      }
+    },
+    dupeKey: (r) => `${r.department}`,
+  },
+  'factory_suppliers': {
+    table: 'suppliers', label: 'ספקים', hasDate: false,
+    mapRow: (r) => {
+      if (!r.name?.trim()) return null
+      return { name: r.name.trim() }
+    },
+    dupeKey: (r) => `${r.name}`,
+  },
+}
+
+const SKIP_FILES = ['factory_customers', 'factory_packaging', 'factory_packaging_products']
+
+// ─── Auto-detect month from data ─────────────────────────────────────────────
+function detectMonth(allFiles: FileMapping[]): string {
+  const months: Record<string, number> = {}
+  for (const f of allFiles) {
+    for (const row of f.rows) {
+      if (row.date && typeof row.date === 'string') {
+        const m = row.date.slice(0, 7)
+        if (/^\d{4}-\d{2}$/.test(m)) months[m] = (months[m] || 0) + 1
+      }
+    }
+  }
+  let best = '', bestCount = 0
+  for (const [m, c] of Object.entries(months)) {
+    if (c > bestCount) { best = m; bestCount = c }
+  }
+  return best || new Date().toISOString().slice(0, 7)
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+export default function DataImport(_props: Props) {
+  const [files, setFiles] = useState<FileMapping[]>([])
+  const [importing, setImporting] = useState(false)
+  const [done, setDone] = useState(false)
+  const [clearExisting, setClearExisting] = useState(true)
+  const [progress, setProgress] = useState({ current: 0, total: 0, label: '' })
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [dragOver, setDragOver] = useState(false)
+  const [dbStatus, setDbStatus] = useState<{ month: string; tables: Record<string, { count: number; label: string; error?: string; sum?: number; sumLabel?: string }> } | null>(null)
+  const [checkingDb, setCheckingDb] = useState(false)
+  const [confirmPurge, setConfirmPurge] = useState(false)
+  const [purgingAll, setPurgingAll] = useState(false)
+  const [purgeResult, setPurgeResult] = useState<{ table: string; label: string; ok: boolean; error?: string }[] | null>(null)
+
+  // ─── Identify file ─────────────────────────────────────────────────────────
+  function identifyFile(name: string): { key: string; def: TableDef } | { key: string; skip: true } | null {
+    const base = name.replace(/\.csv$/i, '').toLowerCase().trim()
+    if (FILE_MAP[base]) return { key: base, def: FILE_MAP[base] }
+    if (SKIP_FILES.some(s => base.includes(s))) return { key: base, skip: true }
+    for (const [key, def] of Object.entries(FILE_MAP)) {
+      if (base.includes(key) || key.includes(base)) return { key, def }
+    }
+    return null
+  }
+
+  // ─── Parse files ───────────────────────────────────────────────────────────
+  const handleFiles = useCallback((fileList: FileList) => {
+    const newPlaceholders: FileMapping[] = []
+
+    Array.from(fileList).forEach(file => {
+      if (!file.name.toLowerCase().endsWith('.csv')) return
+      const identified = identifyFile(file.name)
+
+      if (!identified) {
+        newPlaceholders.push({
+          csvName: file.name, tableName: '', label: 'לא מזוהה',
+          status: 'skip', rows: [], rowCount: 0, warning: 'קובץ לא מזוהה — ידולג',
+        })
+        return
+      }
+      if ('skip' in identified) {
+        newPlaceholders.push({
+          csvName: file.name, tableName: '', label: file.name,
+          status: 'skip', rows: [], rowCount: 0, warning: 'קובץ ידולג (לא נתמך)',
+        })
+        return
+      }
+
+      const { def } = identified
+
+      newPlaceholders.push({
+        csvName: file.name, tableName: def.table, label: def.label,
+        status: 'ready', rows: [], rowCount: 0,
+      })
+
+      // Parse async — month will be set during import
+      Papa.parse(file, {
+        header: true, encoding: 'UTF-8', skipEmptyLines: true,
+        complete: (results) => {
+          const mapped: Record<string, any>[] = []
+          // First pass: collect dates to detect month for fixed costs
+          const tempMonth = new Date().toISOString().slice(0, 7)
+          for (const row of results.data as Record<string, string>[]) {
+            const m = def.mapRow(row, { month: tempMonth })
+            if (m) {
+              if (def.autoInject) Object.assign(m, def.autoInject)
+              mapped.push(m)
+            }
+          }
+          const rawTotal = (results.data as any[]).length
+          const warnings = validateRows(def.table, mapped, results.data as Record<string, string>[])
+          const sampleRows = mapped.slice(0, 3)
+          setFiles(prev => prev.map(f =>
+            f.csvName === file.name
+              ? { ...f, rows: mapped, rowCount: mapped.length, rawCount: rawTotal, warnings, sampleRows, status: mapped.length > 0 ? 'ready' : 'warning', warning: mapped.length === 0 ? `0 שורות תקינות מתוך ${rawTotal} (mapRow החזיר null לכולן)` : undefined }
+              : f
+          ))
+        },
+      })
+    })
+
+    setFiles(prev => {
+      const merged = [...prev]
+      for (const p of newPlaceholders) {
+        if (!merged.find(f => f.csvName === p.csvName)) merged.push(p)
+      }
+      return merged
+    })
+    setDone(false)
+  }, [])
+
+  // ─── Check DB ────────────────────────────────────────────────────────────
+  async function checkDb(month?: string) {
+    setCheckingDb(true)
+    const m = month || detectedMonth || new Date().toISOString().slice(0, 7)
+    const from = m + '-01'
+    const to = monthEnd(m)
+    const tables: Record<string, { count: number; label: string; error?: string; sum?: number; sumLabel?: string }> = {}
+    const checks: { name: string; label: string; dateFilter?: boolean; extra?: Record<string, string>; monthFilter?: boolean; sumField?: string; sumLabel?: string }[] = [
+      { name: 'daily_production', label: 'ייצור יומי', dateFilter: true, sumField: 'amount' },
+      { name: 'labor', label: 'לייבור', dateFilter: true, extra: { entity_type: 'factory' }, sumField: 'employer_cost', sumLabel: 'עלות מעסיק' },
+      { name: 'factory_sales', label: 'מכירות', dateFilter: true, sumField: 'amount' },
+      { name: 'factory_b2b_sales', label: 'B2B', dateFilter: true, sumField: 'amount' },
+      { name: 'supplier_invoices', label: 'חשבוניות ספקים', dateFilter: true, sumField: 'amount' },
+      { name: 'factory_waste', label: 'פחת', dateFilter: true, sumField: 'amount' },
+      { name: 'factory_repairs', label: 'תיקונים', dateFilter: true, sumField: 'amount' },
+      { name: 'fixed_costs', label: 'עלויות קבועות', monthFilter: true, sumField: 'amount' },
+      { name: 'kpi_targets', label: 'יעדי KPI' },
+      { name: 'suppliers', label: 'ספקים' },
+    ]
+    for (const t of checks) {
+      // Count query
+      let q = supabase.from(t.name).select('*', { count: 'exact', head: true })
+      if (t.dateFilter) q = q.gte('date', from).lt('date', to)
+      if (t.extra) for (const [k, v] of Object.entries(t.extra)) q = q.eq(k, v)
+      if (t.monthFilter) q = q.eq('entity_type', 'factory').eq('month', m)
+      const { count, error } = await q
+      // Sum query (if applicable)
+      let sum: number | undefined
+      if (t.sumField && (count ?? 0) > 0) {
+        let sq = supabase.from(t.name).select(t.sumField)
+        if (t.dateFilter) sq = sq.gte('date', from).lt('date', to)
+        if (t.extra) for (const [k, v] of Object.entries(t.extra)) sq = sq.eq(k, v)
+        if (t.monthFilter) sq = sq.eq('entity_type', 'factory').eq('month', m)
+        const { data: sumData } = await sq
+        if (sumData) sum = sumData.reduce((s: number, r: any) => s + Number(r[t.sumField!] || 0), 0)
+      }
+      tables[t.name] = { count: count ?? 0, label: t.label, error: error?.message, sum, sumLabel: t.sumLabel || (t.sumField ? 'סכום' : undefined) }
+    }
+    setDbStatus({ month: m, tables })
+    setCheckingDb(false)
+  }
+
+  // ─── Purge all data ──────────────────────────────────────────────────────────
+  async function purgeAllData() {
+    setPurgingAll(true)
+    setPurgeResult(null)
+    const results: { table: string; label: string; ok: boolean; error?: string }[] = []
+
+    // Order matters: supplier_invoices BEFORE suppliers (FK constraint)
+    // Use .not('id', 'is', null) as universal filter — matches ALL rows (id is PK, never null)
+    const purgeList: { table: string; label: string; filter: (q: any) => any }[] = [
+      { table: 'supplier_invoices', label: 'חשבוניות ספקים', filter: (q: any) => q.not('id', 'is', null) },
+      { table: 'daily_production', label: 'ייצור יומי', filter: (q: any) => q.not('id', 'is', null) },
+      { table: 'labor', label: 'לייבור (מפעל)', filter: (q: any) => q.eq('entity_type', 'factory') },
+      { table: 'factory_sales', label: 'מכירות מפעל', filter: (q: any) => q.not('id', 'is', null) },
+      { table: 'factory_b2b_sales', label: 'מכירות B2B', filter: (q: any) => q.not('id', 'is', null) },
+      { table: 'factory_waste', label: 'פחת', filter: (q: any) => q.not('id', 'is', null) },
+      { table: 'factory_repairs', label: 'תיקונים', filter: (q: any) => q.not('id', 'is', null) },
+      { table: 'fixed_costs', label: 'עלויות קבועות', filter: (q: any) => q.eq('entity_type', 'factory') },
+      { table: 'kpi_targets', label: 'יעדי KPI', filter: (q: any) => q.not('id', 'is', null) },
+      { table: 'suppliers', label: 'ספקים', filter: (q: any) => q.not('id', 'is', null) },
+    ]
+
+    for (const item of purgeList) {
+      try {
+        // Count rows before delete
+        let cq = supabase.from(item.table).select('*', { count: 'exact', head: true })
+        if (item.table === 'labor') cq = cq.eq('entity_type', 'factory')
+        if (item.table === 'fixed_costs') cq = cq.eq('entity_type', 'factory')
+        const { count: before } = await cq
+
+        // Delete
+        const q = supabase.from(item.table).delete()
+        const { error } = await item.filter(q)
+
+        if (error) {
+          results.push({ table: item.table, label: item.label, ok: false, error: `${error.message} (${before ?? '?'} rows)` })
+        } else {
+          results.push({ table: item.table, label: `${item.label} (${before ?? 0} נמחקו)`, ok: true })
+        }
+      } catch (e: any) {
+        results.push({ table: item.table, label: item.label, ok: false, error: e.message || 'Unknown error' })
+      }
+    }
+
+    setPurgeResult(results)
+    setPurgingAll(false)
+    setConfirmPurge(false)
+    setDbStatus(null)
+    setFiles([])
+    setDone(false)
+  }
+
+  // ─── Drop ──────────────────────────────────────────────────────────────────
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault(); setDragOver(false)
+    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files)
+  }
+
+  // ─── Import ────────────────────────────────────────────────────────────────
+  async function importAll() {
+    setImporting(true)
+    const readyFiles = files.filter(f => f.status === 'ready' && f.rows.length > 0)
+    const totalRows = readyFiles.reduce((s, f) => s + f.rows.length, 0)
+    let globalCurrent = 0
+
+    // Auto-detect month from data dates
+    const dataMonth = detectMonth(readyFiles)
+    const from = dataMonth + '-01'
+    const to = monthEnd(dataMonth)
+
+    // Ensure suppliers imported before supplier_invoices (FK dependency)
+    readyFiles.sort((a, b) => {
+      if (a.tableName === 'suppliers') return -1
+      if (b.tableName === 'suppliers') return 1
+      return 0
+    })
+
+    // Update fixed costs month with detected month (always override — CSV month is usually empty)
+    for (const fm of readyFiles) {
+      if (fm.csvName.toLowerCase().includes('fixed_costs')) {
+        fm.rows = fm.rows.map(r => ({
+          ...r,
+          month: dataMonth,
+        }))
+      }
+    }
+
+    for (const fm of readyFiles) {
+      // ─── Resolve supplier_name → supplier_id for invoices ──────────────
+      if (fm.tableName === 'supplier_invoices') {
+        const uniqueNames = new Set<string>()
+        for (const row of fm.rows) {
+          if (row.supplier_name) uniqueNames.add(row.supplier_name)
+        }
+        // Fetch existing suppliers
+        const { data: existingSuppliers } = await supabase.from('suppliers').select('id, name')
+        const nameToId: Record<string, number> = {}
+        if (existingSuppliers) {
+          for (const s of existingSuppliers) nameToId[s.name] = s.id
+        }
+        // Auto-create missing suppliers
+        for (const name of uniqueNames) {
+          if (!nameToId[name]) {
+            const { data: newSup } = await supabase.from('suppliers').insert({ name }).select('id').single()
+            if (newSup) nameToId[name] = newSup.id
+          }
+        }
+        // Replace supplier_name → supplier_id in each row
+        fm.rows = fm.rows.map(row => {
+          const { supplier_name, ...rest } = row
+          const supplier_id = nameToId[supplier_name]
+          if (!supplier_id) return null
+          return { ...rest, supplier_id }
+        }).filter(Boolean) as Record<string, any>[]
+      }
+
+      setProgress({ current: globalCurrent, total: totalRows, label: fm.label })
+      setFiles(prev => prev.map(f => f.csvName === fm.csvName ? { ...f, status: 'importing' as const } : f))
+
+      const defEntry = Object.values(FILE_MAP).find(d => d.table === fm.tableName)
+      if (!defEntry) continue
+
+      let deleteError = ''
+
+      // Clear existing data if toggle is ON
+      if (clearExisting) {
+        let delRes: { error: any } | null = null
+        if (fm.tableName === 'labor') {
+          delRes = await supabase.from('labor').delete().eq('entity_type', 'factory').gte('date', from).lt('date', to)
+        } else if (fm.tableName === 'fixed_costs') {
+          delRes = await supabase.from('fixed_costs').delete().eq('entity_type', 'factory').eq('month', dataMonth)
+        } else if (fm.tableName === 'kpi_targets') {
+          delRes = await supabase.from('kpi_targets').delete().neq('department', '__never__')
+        } else if (fm.tableName === 'suppliers') {
+          // Don't delete suppliers — just skip dupes
+        } else if (defEntry.hasDate) {
+          delRes = await supabase.from(fm.tableName).delete().gte('date', from).lt('date', to)
+        }
+        if (delRes?.error) {
+          deleteError = `מחיקה: ${delRes.error.message}`
+          console.error(`[Delete ${fm.tableName}]`, delRes.error)
+        }
+      }
+
+      // Fetch existing for dupe check (after clearing)
+      const existingKeys = new Set<string>()
+      try {
+        let q = supabase.from(fm.tableName).select('*')
+        if (fm.tableName === 'labor') q = q.eq('entity_type', 'factory')
+        const { data } = await q.limit(10000)
+        if (data) data.forEach((rec: any) => existingKeys.add(defEntry.dupeKey(rec)))
+      } catch { /* ignore */ }
+
+      let inserted = 0, skipped = 0, errors = 0, firstError = deleteError
+      const BATCH = 50
+
+      for (let i = 0; i < fm.rows.length; i += BATCH) {
+        const batch = fm.rows.slice(i, i + BATCH)
+        const toInsert: Record<string, any>[] = []
+
+        for (const row of batch) {
+          const key = defEntry.dupeKey(row)
+          if (existingKeys.has(key)) { skipped++ }
+          else { toInsert.push(row); existingKeys.add(key) }
+        }
+
+        if (toInsert.length > 0) {
+          const { error } = await supabase.from(fm.tableName).insert(toInsert)
+          if (error) {
+            // Row-by-row fallback
+            for (const row of toInsert) {
+              const { error: re } = await supabase.from(fm.tableName).insert(row)
+              if (re) {
+                errors++
+                if (!firstError) firstError = `${re.message} | ${re.details || ''} | ${re.hint || ''}`
+                console.error(`[Import ${fm.tableName}]`, re.message, re.details, JSON.stringify(row))
+              } else { inserted++ }
+            }
+          } else {
+            inserted += toInsert.length
+          }
+        }
+
+        globalCurrent += batch.length
+        setProgress({ current: globalCurrent, total: totalRows, label: fm.label })
+      }
+
+      const nullRows = (fm.rawCount || fm.rows.length) - fm.rows.length
+      setFiles(prev => prev.map(f =>
+        f.csvName === fm.csvName ? { ...f, status: 'done' as const, result: { inserted, skipped, errors, nullRows, deleteError: deleteError || undefined, firstError: firstError || undefined } } : f
+      ))
+    }
+
+    setImporting(false); setDone(true)
+    // Auto-verify database state after import
+    checkDb(dataMonth)
+  }
+
+  // ─── Computed ──────────────────────────────────────────────────────────────
+  const readyFiles = files.filter(f => f.status === 'ready' && f.rows.length > 0)
+  const totalReady = readyFiles.reduce((s, f) => s + f.rows.length, 0)
+  const canImport = readyFiles.length > 0 && !importing
+  const totalInserted = files.reduce((s, f) => s + (f.result?.inserted || 0), 0)
+  const totalSkipped = files.reduce((s, f) => s + (f.result?.skipped || 0), 0)
+  const detectedMonth = files.length > 0 ? detectMonth(files) : ''
+
+  const S = {
+    card: { background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' } as React.CSSProperties,
+  }
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+  return (
+    <div style={{ direction: 'rtl', fontFamily: "'Segoe UI', Arial, sans-serif" }}>
+
+      {/* Purge all data */}
+      <div style={{ ...S.card, border: '2px solid #fca5a5', background: '#fff5f5', marginBottom: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: '700', color: '#991b1b' }}>🗑️ מחיקת כל הנתונים</div>
+            <div style={{ fontSize: '12px', color: '#b91c1c', marginTop: '2px' }}>
+              מוחק את כל הנתונים מכל הטבלאות (ייצור, מכירות, לייבור, פחת, תיקונים, ספקים, עלויות קבועות, KPI)
+            </div>
+          </div>
+          {!confirmPurge ? (
+            <button onClick={() => setConfirmPurge(true)} disabled={purgingAll}
+              style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Trash2 size={16} /> מחק הכל
+            </button>
+          ) : (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <span style={{ fontSize: '13px', fontWeight: '700', color: '#dc2626' }}>בטוח? לא ניתן לשחזר!</span>
+              <button onClick={purgeAllData} disabled={purgingAll}
+                style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '700', cursor: purgingAll ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {purgingAll ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> מוחק...</> : '✓ כן, מחק הכל'}
+              </button>
+              <button onClick={() => setConfirmPurge(false)}
+                style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                ביטול
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Purge result */}
+      {purgeResult && (
+        <div style={{ ...S.card, border: '2px solid #86efac', background: '#f0fdf4', marginBottom: '8px' }}>
+          <div style={{ fontSize: '15px', fontWeight: '700', color: '#065f46', marginBottom: '10px' }}>
+            ✅ מחיקה הושלמה
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '6px' }}>
+            {purgeResult.map(r => (
+              <div key={r.table} style={{
+                background: r.ok ? '#ecfdf5' : '#fef2f2', border: `1px solid ${r.ok ? '#86efac' : '#fca5a5'}`,
+                borderRadius: '8px', padding: '8px 10px', textAlign: 'center',
+              }}>
+                <div style={{ fontSize: '16px' }}>{r.ok ? '✓' : '✗'}</div>
+                <div style={{ fontSize: '11px', fontWeight: '600', color: r.ok ? '#065f46' : '#991b1b' }}>{r.label}</div>
+                {r.error && <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '2px' }}>{r.error}</div>}
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: '12px', color: '#10b981', fontWeight: '600', marginTop: '10px' }}>
+            ניתן להעלות קבצים מחדש למטה ↓
+          </div>
+        </div>
+      )}
+
+      {/* Drop zone */}
+      {files.length === 0 && (
+        <div
+          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          onClick={() => fileRef.current?.click()}
+          style={{
+            ...S.card, border: `2.5px dashed ${dragOver ? '#3b82f6' : '#cbd5e1'}`,
+            background: dragOver ? '#eff6ff' : '#fafafa',
+            textAlign: 'center', padding: '60px 40px', cursor: 'pointer', transition: 'all 0.2s',
+          }}
+        >
+          <Upload size={48} color={dragOver ? '#3b82f6' : '#94a3b8'} style={{ marginBottom: '16px' }} />
+          <div style={{ fontSize: '18px', fontWeight: '700', color: '#374151', marginBottom: '8px' }}>
+            גרור קבצי CSV לכאן
+          </div>
+          <div style={{ fontSize: '14px', color: '#94a3b8', marginBottom: '20px' }}>
+            או לחץ לבחירת קבצים · ניתן להעלות מספר קבצים בו-זמנית
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
+            {Object.keys(FILE_MAP).map(key => (
+              <span key={key} style={{ background: '#f1f5f9', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: '#64748b' }}>
+                {key}.csv
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <input ref={fileRef} type="file" accept=".csv" multiple style={{ display: 'none' }}
+        onChange={e => { if (e.target.files) handleFiles(e.target.files); e.target.value = '' }} />
+
+      {/* File list */}
+      {files.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+          {/* Header */}
+          <div style={{ ...S.card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <div style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>
+                {done ? `יובאו ${totalInserted.toLocaleString()} שורות` : `${readyFiles.length} קבצים מוכנים לייבוא`}
+              </div>
+              <div style={{ fontSize: '13px', color: '#94a3b8', marginTop: '2px' }}>
+                {done
+                  ? `${totalSkipped > 0 ? `דולגו ${totalSkipped} כפילויות · ` : ''}${files.filter(f => f.status === 'done').length} טבלאות`
+                  : `${totalReady.toLocaleString()} שורות סה"כ`}
+              </div>
+              {detectedMonth && !done && (
+                <div style={{ fontSize: '13px', color: '#3b82f6', fontWeight: '600', marginTop: '4px' }}>
+                  חודש נתונים: {new Date(detectedMonth + '-01').toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {!done && !importing && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#64748b', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={clearExisting} onChange={e => setClearExisting(e.target.checked)}
+                    style={{ accentColor: '#ef4444', width: '16px', height: '16px' }} />
+                  <Trash2 size={14} color={clearExisting ? '#ef4444' : '#94a3b8'} />
+                  נקה נתונים קודמים
+                </label>
+              )}
+              <button onClick={() => checkDb()} disabled={checkingDb}
+                style={{ background: '#dbeafe', color: '#2563eb', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '600', cursor: checkingDb ? 'default' : 'pointer', opacity: checkingDb ? 0.6 : 1 }}>
+                {checkingDb ? '⏳ בודק...' : '🔍 בדוק מסד נתונים'}
+              </button>
+              <button onClick={() => { setFiles([]); setDone(false); setDbStatus(null) }}
+                style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                איפוס
+              </button>
+              {!done && (
+                <button onClick={() => fileRef.current?.click()}
+                  style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                  + הוסף קבצים
+                </button>
+              )}
+              {!done && (
+                <button onClick={importAll} disabled={!canImport}
+                  style={{
+                    background: canImport ? '#0f172a' : '#e2e8f0', color: canImport ? 'white' : '#94a3b8',
+                    border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700',
+                    cursor: canImport ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: '8px',
+                  }}>
+                  {importing ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> מייבא...</> : <><Download size={18} /> ייבא הכל</>}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Progress */}
+          {importing && progress.total > 0 && (
+            <div style={S.card}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
+                <span>{progress.label}</span>
+                <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+              </div>
+              <div style={{ background: '#e2e8f0', borderRadius: '8px', height: '8px', overflow: 'hidden' }}>
+                <div style={{
+                  background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)', height: '100%', borderRadius: '8px',
+                  width: `${(progress.current / progress.total) * 100}%`, transition: 'width 0.3s',
+                }} />
+              </div>
+            </div>
+          )}
+
+          {/* Files */}
+          {files.map((fm, i) => {
+            const color = fm.status === 'done' ? '#10b981' : fm.status === 'error' ? '#ef4444' : fm.status === 'skip' ? '#94a3b8' : fm.status === 'warning' ? '#f59e0b' : '#3b82f6'
+            return (
+              <div key={fm.csvName + i} style={{
+                ...S.card, padding: '16px 20px', borderRight: `4px solid ${color}`,
+                opacity: fm.status === 'skip' ? 0.6 : 1,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {fm.status === 'done' && <CheckCircle size={20} color="#10b981" />}
+                  {fm.status === 'error' && <XCircle size={20} color="#ef4444" />}
+                  {fm.status === 'skip' && <XCircle size={20} color="#94a3b8" />}
+                  {fm.status === 'warning' && <AlertCircle size={20} color="#f59e0b" />}
+                  {fm.status === 'importing' && <Loader2 size={20} color="#3b82f6" style={{ animation: 'spin 1s linear infinite' }} />}
+                  {fm.status === 'ready' && <FileText size={20} color="#3b82f6" />}
+
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>{fm.csvName}</span>
+                      <span style={{ fontSize: '12px', color: '#94a3b8' }}>→</span>
+                      <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>{fm.label}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                      {fm.rowCount > 0 && (
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                          {fm.rowCount} שורות תקינות
+                          {fm.rawCount && fm.rawCount !== fm.rowCount && (
+                            <span style={{ color: '#f59e0b' }}> (מתוך {fm.rawCount} ב-CSV, {fm.rawCount - fm.rowCount} נדחו)</span>
+                          )}
+                        </span>
+                      )}
+                      {fm.warning && <span style={{ fontSize: '12px', color: '#f59e0b', fontWeight: '600' }}>{fm.warning}</span>}
+                      {fm.result && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span style={{ fontSize: '12px', color: '#10b981', fontWeight: '600' }}>
+                            {fm.result.inserted} יובאו
+                            {fm.result.skipped > 0 && ` · ${fm.result.skipped} כפילויות`}
+                            {fm.result.errors > 0 && <span style={{ color: '#ef4444' }}> · {fm.result.errors} שגיאות</span>}
+                            {fm.result.nullRows != null && fm.result.nullRows > 0 && (
+                              <span style={{ color: '#f59e0b' }}> · {fm.result.nullRows} שורות נדחו</span>
+                            )}
+                          </span>
+                          {fm.result.deleteError && (
+                            <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: '700' }}>
+                              ⚠️ {fm.result.deleteError}
+                            </span>
+                          )}
+                          {fm.result.firstError && !fm.result.deleteError && (
+                            <span style={{ fontSize: '11px', color: '#ef4444', maxWidth: '500px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                              title={fm.result.firstError}>
+                              {fm.result.firstError.slice(0, 100)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {/* Pre-import warnings */}
+                    {fm.warnings && fm.warnings.length > 0 && !fm.result && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
+                        {fm.warnings.map((w, wi) => (
+                          <span key={wi} style={{ fontSize: '11px', color: '#f59e0b', fontWeight: '500' }}>⚠️ {w}</span>
+                        ))}
+                      </div>
+                    )}
+                    {/* Sample rows preview */}
+                    {fm.sampleRows && fm.sampleRows.length > 0 && fm.status === 'ready' && (
+                      <details style={{ marginTop: '6px' }}>
+                        <summary style={{ fontSize: '11px', color: '#64748b', cursor: 'pointer' }}>
+                          תצוגה מקדימה ({fm.sampleRows.length} שורות לדוגמה)
+                        </summary>
+                        <div style={{ marginTop: '4px', fontSize: '10px', fontFamily: 'monospace', direction: 'ltr' as const, background: '#f8fafc', padding: '8px', borderRadius: '8px', overflow: 'auto', maxHeight: '100px' }}>
+                          {fm.sampleRows.map((row, ri) => (
+                            <div key={ri} style={{ marginBottom: '3px', whiteSpace: 'nowrap' }}>{JSON.stringify(row)}</div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+
+                  {!importing && fm.status !== 'done' && (
+                    <button onClick={() => setFiles(prev => prev.filter(f => f.csvName !== fm.csvName))}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
+                      <XCircle size={16} color="#cbd5e1" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Done */}
+          {done && (
+            <div style={{ ...S.card, background: '#f0fdf4', borderTop: '3px solid #10b981', textAlign: 'center', padding: '32px' }}>
+              <CheckCircle size={40} color="#10b981" style={{ marginBottom: '12px' }} />
+              <div style={{ fontSize: '20px', fontWeight: '800', color: '#065f46', marginBottom: '8px' }}>הייבוא הושלם בהצלחה!</div>
+              <div style={{ fontSize: '15px', color: '#10b981', fontWeight: '600' }}>
+                יובאו {totalInserted.toLocaleString()} שורות{totalSkipped > 0 && ` · דולגו ${totalSkipped} כפילויות`}
+              </div>
+            </div>
+          )}
+
+          {/* DB Status Verification */}
+          {dbStatus && (
+            <div style={{ ...S.card, border: '2px solid #3b82f6', background: '#fafcff' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <div style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a' }}>
+                  🔍 מצב מסד נתונים — {new Date(dbStatus.month + '-01').toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
+                </div>
+                <button onClick={() => setDbStatus(null)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#94a3b8' }}>✕</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px' }}>
+                {Object.entries(dbStatus.tables).map(([table, info]) => (
+                  <div key={table} style={{
+                    background: info.error ? '#fef2f2' : info.count > 0 ? '#f0fdf4' : '#fffbeb',
+                    border: `1.5px solid ${info.error ? '#fca5a5' : info.count > 0 ? '#86efac' : '#fde68a'}`,
+                    borderRadius: '12px', padding: '12px', textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: '24px', fontWeight: '800', color: info.error ? '#ef4444' : info.count > 0 ? '#10b981' : '#f59e0b' }}>
+                      {info.error ? '✗' : info.count}
+                    </div>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151', marginTop: '4px' }}>{info.label}</div>
+                    {info.sum !== undefined && info.sum > 0 && (
+                      <div style={{ fontSize: '10px', color: '#374151', fontWeight: '600', marginTop: '2px' }}>
+                        {info.sumLabel || 'סכום'}: ₪{Math.round(info.sum).toLocaleString()}
+                      </div>
+                    )}
+                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', direction: 'ltr' }}>{table}</div>
+                    {info.error && <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '4px' }}>{info.error}</div>}
+                  </div>
+                ))}
+              </div>
+              {Object.values(dbStatus.tables).every(t => t.count === 0 && !t.error) && (
+                <div style={{ marginTop: '14px', padding: '12px', background: '#fef3c7', borderRadius: '8px', fontSize: '13px', color: '#92400e', fontWeight: '600' }}>
+                  ⚠️ כל הטבלאות ריקות לחודש זה! ודא שהקבצים הועלו בהצלחה ושאין שגיאות בייבוא.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+    </div>
+  )
+}

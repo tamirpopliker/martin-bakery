@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { usePeriod } from '../lib/PeriodContext'
+import PeriodPicker from '../components/PeriodPicker'
 import {
   ArrowRight, Plus, Pencil, Trash2, Search, X,
   Building2, FileText, ChevronDown
@@ -70,7 +72,6 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
   // ── מצב חשבוניות ──
   const [invoices, setInvoices]       = useState<Invoice[]>([])
   const [suppliers, setSuppliers]     = useState<Supplier[]>([])
-  const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7))
   const [searchInv, setSearchInv]     = useState('')
   const [editInvId, setEditInvId]     = useState<number | null>(null)
   const [editInvData, setEditInvData] = useState<Partial<Invoice>>({})
@@ -100,14 +101,14 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
   async function fetchInvoices() {
     const { data } = await supabase
       .from('supplier_invoices').select('*')
-      .gte('date', monthFilter + '-01')
-      .lte('date', monthFilter + '-31')
+      .gte('date', from)
+      .lt('date', to)
       .order('date', { ascending: false })
     if (data) setInvoices(data)
   }
 
   useEffect(() => { fetchSuppliers() }, [])
-  useEffect(() => { fetchInvoices()  }, [monthFilter])
+  useEffect(() => { fetchInvoices()  }, [from, to])
 
   const supplierName = (id: number) => suppliers.find(s => s.id === id)?.name || '—'
   const supplierNames = suppliers.map(s => s.name)
@@ -200,8 +201,12 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
 
       {/* ─── כותרת ──────────────────────────────────────────────────────── */}
       <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: 'none', borderRadius: '10px', padding: '8px', cursor: 'pointer', display: 'flex' }}>
-          <ArrowRight size={20} color="#64748b" />
+        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
+        >
+          <ArrowRight size={22} color="currentColor" />
+          חזרה
         </button>
         <div style={{ width: '40px', height: '40px', background: BG, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Building2 size={20} color={COLOR} />

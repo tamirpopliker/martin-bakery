@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { ArrowRight, Plus, Pencil, Trash2, Save, Settings, Users, Target, DollarSign } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Save, Settings, Users, Target, DollarSign, Database, Download, Calendar } from 'lucide-react'
+import DataImport from './DataImport'
+import DataExport from './DataExport'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Props { onBack: () => void }
 
-type Tab = 'kpi' | 'costs' | 'employees'
+type Tab = 'kpi' | 'costs' | 'employees' | 'import' | 'export'
 type Dept = 'creams' | 'dough'
 
 interface KpiTarget {
@@ -16,6 +18,7 @@ interface KpiTarget {
   repairs_pct: number
   gross_profit_pct: number
   production_pct: number
+  operating_profit_pct: number
 }
 
 interface FixedCost {
@@ -28,11 +31,13 @@ interface FixedCost {
 interface Employee {
   id: number
   name: string
+  employee_number: string | null
   department: string
-  salary_type: 'hourly' | 'global'
+  wage_type: 'hourly' | 'global'
   hourly_rate: number | null
-  monthly_salary: number | null
+  global_daily_rate: number | null
   bonus: number | null
+  active: boolean
 }
 
 // ─── קבועים ─────────────────────────────────────────────────────────────────
@@ -48,6 +53,7 @@ const ALL_DEPTS = [
   { key: 'cleaning',  label: 'ניקיון/נהג' },
 ]
 
+
 const DEFAULT_FIXED_COSTS = ['ארנונה', 'שכירות', 'גז', 'חשמל', 'מים', 'אינטרנט', 'ביטוח']
 
 const KPI_FIELDS: { key: keyof KpiTarget; label: string; higher: boolean; hint: string }[] = [
@@ -56,6 +62,7 @@ const KPI_FIELDS: { key: keyof KpiTarget; label: string; higher: boolean; hint: 
   { key: 'repairs_pct',     label: 'תיקונים / הכנסות %',    higher: false, hint: 'נמוך יותר = טוב יותר' },
   { key: 'gross_profit_pct',label: 'רווח גולמי %',          higher: true,  hint: 'גבוה יותר = טוב יותר' },
   { key: 'production_pct',  label: 'ייצור / הכנסות %',      higher: false, hint: 'נמוך יותר = טוב יותר' },
+  { key: 'operating_profit_pct', label: 'רווח תפעולי %',   higher: true,  hint: 'גבוה יותר = טוב יותר' },
 ]
 
 function fmtM(n: number) { return '₪' + Math.round(n || 0).toLocaleString() }
@@ -66,8 +73,8 @@ export default function FactorySettings({ onBack }: Props) {
 
   // ── KPI ──
   const [kpiTargets, setKpiTargets] = useState<Record<Dept, KpiTarget>>({
-    creams: { department: 'creams', labor_pct: 25, waste_pct: 5, repairs_pct: 3, gross_profit_pct: 40, production_pct: 45 },
-    dough:  { department: 'dough',  labor_pct: 25, waste_pct: 5, repairs_pct: 3, gross_profit_pct: 40, production_pct: 45 },
+    creams: { department: 'creams', labor_pct: 25, waste_pct: 5, repairs_pct: 3, gross_profit_pct: 40, production_pct: 45, operating_profit_pct: 30 },
+    dough:  { department: 'dough',  labor_pct: 25, waste_pct: 5, repairs_pct: 3, gross_profit_pct: 40, production_pct: 45, operating_profit_pct: 30 },
   })
   const [kpiSaved, setKpiSaved] = useState(false)
 
@@ -86,8 +93,18 @@ export default function FactorySettings({ onBack }: Props) {
   const [editEmpId, setEditEmpId]   = useState<number | null>(null)
   const [editEmpData, setEditEmpData] = useState<Partial<Employee>>({})
   const [showAddEmp, setShowAddEmp] = useState(false)
-  const [newEmp, setNewEmp]         = useState<Partial<Employee>>({ salary_type: 'hourly', department: 'creams' })
+  const [newEmp, setNewEmp]         = useState<Partial<Employee>>({ wage_type: 'hourly', department: 'creams' })
   const [loadingEmp, setLoadingEmp] = useState(false)
+
+  // ── ימי עבודה ──
+  interface WorkingDaysRow { id: number; month: string; amount: number }
+  const [wageFilter, setWageFilter] = useState<'all' | 'hourly' | 'global'>('all')
+  const [wdMonth, setWdMonth]             = useState(new Date().toISOString().slice(0, 7))
+  const [workingDays, setWorkingDays]     = useState<WorkingDaysRow[]>([])
+  const [editWdId, setEditWdId]           = useState<number | null>(null)
+  const [editWdVal, setEditWdVal]         = useState(26)
+  const [newWdMonth, setNewWdMonth]       = useState('')
+  const [newWdCount, setNewWdCount]       = useState(26)
 
   // ─── שליפות ──────────────────────────────────────────────────────────────
   async function fetchKpi() {
@@ -114,7 +131,17 @@ export default function FactorySettings({ onBack }: Props) {
     if (data) setEmployees(data)
   }
 
-  useEffect(() => { fetchKpi(); fetchEmployees() }, [])
+
+  async function fetchWorkingDays() {
+    const { data } = await supabase
+      .from('fixed_costs')
+      .select('id, month, amount')
+      .eq('entity_type', 'working_days')
+      .order('month', { ascending: false })
+    if (data) setWorkingDays(data as WorkingDaysRow[])
+  }
+
+  useEffect(() => { fetchKpi(); fetchEmployees(); fetchWorkingDays() }, [])
   useEffect(() => { fetchCosts() }, [costMonth])
 
   // ─── KPI save ────────────────────────────────────────────────────────────
@@ -128,6 +155,7 @@ export default function FactorySettings({ onBack }: Props) {
         if (data) setKpiTargets(prev => ({ ...prev, [dept.key]: data }))
       }
     }
+    await fetchKpi()
     setKpiSaved(true)
     setTimeout(() => setKpiSaved(false), 2000)
   }
@@ -172,16 +200,18 @@ export default function FactorySettings({ onBack }: Props) {
 
   // ─── עובדים CRUD ─────────────────────────────────────────────────────────
   async function addEmployee() {
-    if (!newEmp.name || !newEmp.department || !newEmp.salary_type) return
+    if (!newEmp.name || !newEmp.department || !newEmp.wage_type) return
     setLoadingEmp(true)
     await supabase.from('employees').insert({
-      name: newEmp.name, department: newEmp.department,
-      salary_type: newEmp.salary_type,
-      hourly_rate: newEmp.salary_type === 'hourly' ? (newEmp.hourly_rate || null) : null,
-      monthly_salary: newEmp.salary_type === 'global' ? (newEmp.monthly_salary || null) : null,
+      name: newEmp.name,
+      employee_number: newEmp.employee_number || null,
+      department: newEmp.department,
+      wage_type: newEmp.wage_type,
+      hourly_rate: newEmp.wage_type === 'hourly' ? (newEmp.hourly_rate || null) : null,
+      global_daily_rate: newEmp.wage_type === 'global' ? (newEmp.global_daily_rate || null) : null,
       bonus: newEmp.bonus || null
     })
-    setNewEmp({ salary_type: 'hourly', department: 'creams' })
+    setNewEmp({ wage_type: 'hourly', department: 'creams' })
     setShowAddEmp(false)
     await fetchEmployees()
     setLoadingEmp(false)
@@ -199,9 +229,42 @@ export default function FactorySettings({ onBack }: Props) {
     await fetchEmployees()
   }
 
+  async function toggleActive(emp: Employee) {
+    await supabase.from('employees').update({ active: !emp.active }).eq('id', emp.id)
+    await fetchEmployees()
+  }
+
+  // ─── ימי עבודה CRUD ──────────────────────────────────────────────────────
+  async function addWorkingDay() {
+    if (!newWdMonth) return
+    await supabase.from('fixed_costs').insert({
+      entity_type: 'working_days', entity_id: 'factory',
+      name: 'ימי עבודה', month: newWdMonth, amount: newWdCount,
+    })
+    setNewWdMonth('')
+    setNewWdCount(26)
+    await fetchWorkingDays()
+  }
+
+  async function saveWorkingDay(id: number) {
+    await supabase.from('fixed_costs').update({ amount: editWdVal }).eq('id', id)
+    setEditWdId(null)
+    await fetchWorkingDays()
+  }
+
+  async function deleteWorkingDay(id: number) {
+    if (!confirm('למחוק?')) return
+    await supabase.from('fixed_costs').delete().eq('id', id)
+    await fetchWorkingDays()
+  }
+
   // ─── חישובים ─────────────────────────────────────────────────────────────
   const totalFixedCosts = costs.reduce((s, c) => s + Number(c.amount), 0)
-  const filteredEmps = deptFilter === 'all' ? employees : employees.filter(e => e.department === deptFilter)
+  const filteredEmps = employees.filter(e => {
+    if (wageFilter !== 'all' && e.wage_type !== wageFilter) return false
+    if (deptFilter !== 'all' && e.department !== deptFilter) return false
+    return true
+  })
 
   // ─── סגנונות ─────────────────────────────────────────────────────────────
   const S = {
@@ -216,8 +279,12 @@ export default function FactorySettings({ onBack }: Props) {
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
       <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: 'none', borderRadius: '10px', padding: '8px', cursor: 'pointer', display: 'flex' }}>
-          <ArrowRight size={20} color="#64748b" />
+        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
+        >
+          <ArrowRight size={22} color="currentColor" />
+          חזרה
         </button>
         <div style={{ width: '40px', height: '40px', background: '#f1f5f9', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Settings size={20} color="#64748b" />
@@ -231,9 +298,11 @@ export default function FactorySettings({ onBack }: Props) {
       {/* ─── טאבים ───────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', padding: '0 32px', background: 'white', borderBottom: '1px solid #e2e8f0' }}>
         {([
-          ['kpi',       '🎯 יעדי KPI',       Target],
-          ['costs',     '💰 עלויות קבועות',  DollarSign],
-          ['employees', '👷 עובדים',          Users],
+          ['kpi',              '🎯 יעדי KPI',       Target],
+          ['costs',            '💰 עלויות קבועות',  DollarSign],
+          ['employees',        '👷 עובדים',          Users],
+          ['import',           '📥 ייבוא נתונים',  Database],
+          ['export',           '📤 ייצוא נתונים',  Download],
         ] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key as Tab)}
             style={{ padding: '14px 22px', background: 'none', border: 'none', borderBottom: tab === key ? '3px solid #64748b' : '3px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: tab === key ? '700' : '500', color: tab === key ? '#0f172a' : '#64748b' }}>
@@ -394,16 +463,25 @@ export default function FactorySettings({ onBack }: Props) {
         {/* ══ עובדים ══════════════════════════════════════════════════════ */}
         {tab === 'employees' && (
           <>
-            {/* פילטר מחלקה + הוספה */}
+            {/* פילטר סוג שכר + מחלקה + הוספה */}
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' as const }}>
               <div style={{ display: 'flex', gap: '6px' }}>
+                {([['all', 'הכל'], ['hourly', 'שעתי'], ['global', 'גלובלי']] as const).map(([val, lbl]) => (
+                  <button key={val} onClick={() => setWageFilter(val)}
+                    style={{ background: wageFilter === val ? '#0f172a' : '#f1f5f9', color: wageFilter === val ? 'white' : '#64748b', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+              <div style={{ width: '1px', height: '24px', background: '#e2e8f0' }} />
+              <div style={{ display: 'flex', gap: '6px' }}>
                 <button onClick={() => setDeptFilter('all')}
-                  style={{ background: deptFilter === 'all' ? '#0f172a' : '#f1f5f9', color: deptFilter === 'all' ? 'white' : '#64748b', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                  style={{ background: deptFilter === 'all' ? '#64748b' : '#f1f5f9', color: deptFilter === 'all' ? 'white' : '#94a3b8', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
                   הכל
                 </button>
-                {ALL_DEPTS.map(d => (
+                {[...ALL_DEPTS, { key: 'both', label: 'שניהם' }].map(d => (
                   <button key={d.key} onClick={() => setDeptFilter(d.key)}
-                    style={{ background: deptFilter === d.key ? '#0f172a' : '#f1f5f9', color: deptFilter === d.key ? 'white' : '#64748b', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                    style={{ background: deptFilter === d.key ? '#64748b' : '#f1f5f9', color: deptFilter === d.key ? 'white' : '#94a3b8', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
                     {d.label}
                   </button>
                 ))}
@@ -425,40 +503,60 @@ export default function FactorySettings({ onBack }: Props) {
                       onChange={e => setNewEmp(p => ({ ...p, name: e.target.value }))} style={S.input} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                    <label style={S.label}>מחלקה</label>
-                    <select value={newEmp.department || 'creams'} onChange={e => setNewEmp(p => ({ ...p, department: e.target.value }))}
-                      style={{ ...S.input, background: 'white' }}>
-                      {ALL_DEPTS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-                    </select>
+                    <label style={S.label}>מס׳ עובד <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
+                    <input type="text" placeholder="—" value={newEmp.employee_number || ''}
+                      onChange={e => setNewEmp(p => ({ ...p, employee_number: e.target.value || null }))} style={S.input} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' as const }}>
                     <label style={S.label}>סוג שכר</label>
-                    <select value={newEmp.salary_type || 'hourly'} onChange={e => setNewEmp(p => ({ ...p, salary_type: e.target.value as any }))}
+                    <select value={newEmp.wage_type || 'hourly'} onChange={e => setNewEmp(p => ({ ...p, wage_type: e.target.value as any }))}
                       style={{ ...S.input, background: 'white' }}>
                       <option value="hourly">שעתי</option>
                       <option value="global">גלובלי</option>
                     </select>
                   </div>
-                  {newEmp.salary_type === 'hourly' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                    <label style={S.label}>מחלקה</label>
+                    <select value={newEmp.department || 'creams'} onChange={e => setNewEmp(p => ({ ...p, department: e.target.value }))}
+                      style={{ ...S.input, background: 'white' }}>
+                      {(newEmp.wage_type === 'global' ? [...ALL_DEPTS, { key: 'both', label: 'שניהם (50/50)' }] : ALL_DEPTS).map(d => (
+                        <option key={d.key} value={d.key}>{d.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {newEmp.wage_type === 'hourly' ? (
                     <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                      <label style={S.label}>שכר שעתי (₪)</label>
+                      <label style={S.label}>תעריף שעתי (₪)</label>
                       <input type="number" placeholder="0" value={newEmp.hourly_rate || ''}
                         onChange={e => setNewEmp(p => ({ ...p, hourly_rate: parseFloat(e.target.value) || null }))}
                         style={{ ...S.input, textAlign: 'right' as const }} />
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                      <label style={S.label}>שכר חודשי (₪)</label>
-                      <input type="number" placeholder="0" value={newEmp.monthly_salary || ''}
-                        onChange={e => setNewEmp(p => ({ ...p, monthly_salary: parseFloat(e.target.value) || null }))}
+                      <label style={S.label}>משכורת חודשית (₪)</label>
+                      <input type="number" placeholder="0" value={newEmp.global_daily_rate || ''}
+                        onChange={e => setNewEmp(p => ({ ...p, global_daily_rate: parseFloat(e.target.value) || null }))}
                         style={{ ...S.input, textAlign: 'right' as const }} />
                     </div>
                   )}
                   <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                    <label style={S.label}>בונוס (₪) <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
+                    <label style={S.label}>
+                      {newEmp.wage_type === 'hourly' ? 'בונוס שעתי (₪/ש׳)' : 'בונוס חודשי (₪)'}
+                      <span style={{ fontWeight: 400, color: '#94a3b8' }}> (אופ׳)</span>
+                    </label>
                     <input type="number" placeholder="0" value={newEmp.bonus || ''}
                       onChange={e => setNewEmp(p => ({ ...p, bonus: parseFloat(e.target.value) || null }))}
                       style={{ ...S.input, textAlign: 'right' as const }} />
+                    {newEmp.wage_type === 'hourly' && newEmp.bonus ? (
+                      <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                        סכום נוסף לשעה — לא מוכפל ב-×1.3
+                      </span>
+                    ) : null}
+                    {newEmp.wage_type === 'global' ? (
+                      <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                        חישוב: (משכורת × 1.3) + בונוס
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 <button onClick={addEmployee} disabled={loadingEmp || !newEmp.name}
@@ -470,43 +568,54 @@ export default function FactorySettings({ onBack }: Props) {
 
             {/* רשימת עובדים */}
             <div style={S.card}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 80px 120px 100px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
-                <span>שם</span><span>מחלקה</span><span>סוג</span><span style={{ textAlign: 'center' }}>שכר</span><span style={{ textAlign: 'center' }}>בונוס</span><span /><span />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 90px 70px 110px 90px 50px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                <span>שם</span><span>מ.עובד</span><span>מחלקה</span><span>סוג</span><span style={{ textAlign: 'center' }}>שכר</span><span style={{ textAlign: 'center' }}>בונוס</span><span style={{ textAlign: 'center' }}>פעיל</span><span /><span />
               </div>
 
               {filteredEmps.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין עובדים</div>
               ) : filteredEmps.map((emp, i) => (
-                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 80px 120px 100px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < filteredEmps.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 90px 70px 110px 90px 50px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < filteredEmps.length - 1 ? '1px solid #f1f5f9' : 'none', background: !emp.active ? '#fef2f2' : i % 2 === 0 ? 'white' : '#fafafa', opacity: emp.active ? 1 : 0.6 }}>
                   {editEmpId === emp.id ? (
                     <>
                       <input type="text" value={editEmpData.name || ''} onChange={e => setEditEmpData(p => ({ ...p, name: e.target.value }))} autoFocus style={{ border: '1.5px solid #0f172a', borderRadius: '8px', padding: '5px 8px', fontSize: '13px', fontFamily: 'inherit' }} />
+                      <input type="text" value={editEmpData.employee_number || ''} onChange={e => setEditEmpData(p => ({ ...p, employee_number: e.target.value || null }))} style={{ border: '1px solid #0f172a', borderRadius: '6px', padding: '5px 6px', fontSize: '12px', textAlign: 'center' as const }} placeholder="—" />
                       <select value={editEmpData.department || ''} onChange={e => setEditEmpData(p => ({ ...p, department: e.target.value }))} style={{ border: '1px solid #0f172a', borderRadius: '6px', padding: '5px 6px', fontSize: '12px', fontFamily: 'inherit' }}>
-                        {ALL_DEPTS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+                        {(editEmpData.wage_type === 'global' ? [...ALL_DEPTS, { key: 'both', label: 'שניהם' }] : ALL_DEPTS).map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
                       </select>
-                      <select value={editEmpData.salary_type || ''} onChange={e => setEditEmpData(p => ({ ...p, salary_type: e.target.value as any }))} style={{ border: '1px solid #0f172a', borderRadius: '6px', padding: '5px 6px', fontSize: '12px', fontFamily: 'inherit' }}>
+                      <select value={editEmpData.wage_type || ''} onChange={e => setEditEmpData(p => ({ ...p, wage_type: e.target.value as any }))} style={{ border: '1px solid #0f172a', borderRadius: '6px', padding: '5px 6px', fontSize: '11px', fontFamily: 'inherit' }}>
                         <option value="hourly">שעתי</option>
                         <option value="global">גלובלי</option>
                       </select>
-                      <input type="number" value={editEmpData.salary_type === 'global' ? (editEmpData.monthly_salary || '') : (editEmpData.hourly_rate || '')} onChange={e => setEditEmpData(p => p.salary_type === 'global' ? { ...p, monthly_salary: parseFloat(e.target.value) } : { ...p, hourly_rate: parseFloat(e.target.value) })} style={{ border: '1px solid #0f172a', borderRadius: '6px', padding: '5px 8px', fontSize: '12px', textAlign: 'center' as const }} />
-                      <input type="number" value={editEmpData.bonus || ''} onChange={e => setEditEmpData(p => ({ ...p, bonus: parseFloat(e.target.value) || null }))} style={{ border: '1px solid #0f172a', borderRadius: '6px', padding: '5px 8px', fontSize: '12px', textAlign: 'center' as const }} />
+                      <input type="number" value={editEmpData.wage_type === 'global' ? (editEmpData.global_daily_rate || '') : (editEmpData.hourly_rate || '')} onChange={e => setEditEmpData(p => p.wage_type === 'global' ? { ...p, global_daily_rate: parseFloat(e.target.value) } : { ...p, hourly_rate: parseFloat(e.target.value) })} style={{ border: '1px solid #0f172a', borderRadius: '6px', padding: '5px 8px', fontSize: '12px', textAlign: 'center' as const }} placeholder={editEmpData.wage_type === 'global' ? 'חודשי' : 'שעתי'} />
+                      <input type="number" value={editEmpData.bonus || ''} onChange={e => setEditEmpData(p => ({ ...p, bonus: parseFloat(e.target.value) || null }))} style={{ border: '1px solid #0f172a', borderRadius: '6px', padding: '5px 8px', fontSize: '12px', textAlign: 'center' as const }} placeholder="בונוס" />
+                      <span />
                       <button onClick={() => saveEmployee(emp.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                       <button onClick={() => setEditEmpId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                     </>
                   ) : (
                     <>
                       <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{emp.name}</span>
-                      <span style={{ fontSize: '12px', color: '#64748b' }}>{ALL_DEPTS.find(d => d.key === emp.department)?.label || emp.department}</span>
-                      <span style={{ fontSize: '12px', background: emp.salary_type === 'hourly' ? '#dbeafe' : '#d1fae5', color: emp.salary_type === 'hourly' ? '#1d4ed8' : '#065f46', padding: '2px 8px', borderRadius: '20px', fontWeight: '600', textAlign: 'center' }}>
-                        {emp.salary_type === 'hourly' ? 'שעתי' : 'גלובלי'}
+                      <span style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>{emp.employee_number || '—'}</span>
+                      <span style={{ fontSize: '12px', color: '#64748b' }}>
+                        {[...ALL_DEPTS, { key: 'both', label: 'שניהם' }].find(d => d.key === emp.department)?.label || emp.department}
                       </span>
-                      <span style={{ textAlign: 'center', fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>
-                        {emp.salary_type === 'hourly'
+                      <span style={{ fontSize: '11px', background: emp.wage_type === 'hourly' ? '#dbeafe' : '#d1fae5', color: emp.wage_type === 'hourly' ? '#1d4ed8' : '#065f46', padding: '2px 8px', borderRadius: '20px', fontWeight: '600', textAlign: 'center' }}>
+                        {emp.wage_type === 'hourly' ? 'שעתי' : 'גלובלי'}
+                      </span>
+                      <span style={{ textAlign: 'center', fontWeight: '700', color: '#0f172a', fontSize: '13px' }}>
+                        {emp.wage_type === 'hourly'
                           ? (emp.hourly_rate ? `₪${emp.hourly_rate}/ש׳` : '—')
-                          : (emp.monthly_salary ? fmtM(emp.monthly_salary) : '—')}
+                          : (emp.global_daily_rate ? fmtM(emp.global_daily_rate) : '—')}
                       </span>
-                      <span style={{ textAlign: 'center', color: '#f59e0b', fontWeight: '600', fontSize: '13px' }}>
-                        {emp.bonus ? fmtM(emp.bonus) : '—'}
+                      <span style={{ textAlign: 'center', color: '#f59e0b', fontWeight: '600', fontSize: '12px' }}>
+                        {emp.bonus ? (emp.wage_type === 'hourly' ? `₪${emp.bonus}/ש׳` : fmtM(emp.bonus)) : '—'}
+                      </span>
+                      <span style={{ textAlign: 'center' }}>
+                        <button onClick={() => toggleActive(emp)}
+                          style={{ background: emp.active ? '#d1fae5' : '#fee2e2', color: emp.active ? '#065f46' : '#991b1b', border: 'none', borderRadius: '20px', padding: '2px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
+                          {emp.active ? '✓' : '✕'}
+                        </button>
                       </span>
                       <button onClick={() => { setEditEmpId(emp.id); setEditEmpData(emp) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
                       <button onClick={() => deleteEmployee(emp.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
@@ -518,10 +627,82 @@ export default function FactorySettings({ onBack }: Props) {
               {filteredEmps.length > 0 && (
                 <div style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderRadius: '0 0 20px 20px', fontSize: '13px', color: '#64748b', fontWeight: '600' }}>
                   {filteredEmps.length} עובדים
+                  {wageFilter === 'all' && (
+                    <span style={{ marginRight: '12px', color: '#94a3b8' }}>
+                      ({employees.filter(e => e.wage_type === 'hourly').length} שעתיים · {employees.filter(e => e.wage_type === 'global').length} גלובליים)
+                    </span>
+                  )}
                 </div>
               )}
             </div>
+
+            {/* ── ימי עבודה לפי חודש ── */}
+            <div style={{ borderTop: '2px solid #e2e8f0', marginTop: '32px', paddingTop: '24px' }}>
+              <h2 style={{ fontSize: '17px', fontWeight: '800', color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Calendar size={18} /> ימי עבודה לפי חודש
+              </h2>
+              <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px', background: '#f8fafc', borderRadius: '8px', padding: '10px 14px' }}>
+                ברירת מחדל: 26 ימים. ללא שבתות. הגדר ימי עבודה בפועל לכל חודש — משפיע על חישוב עובדים גלובליים.
+              </div>
+
+              {/* הוספת חודש */}
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                  <label style={S.label}>חודש</label>
+                  <input type="month" value={newWdMonth} onChange={e => setNewWdMonth(e.target.value)}
+                    style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '8px 14px', fontSize: '14px', fontFamily: 'inherit' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                  <label style={S.label}>ימי עבודה</label>
+                  <input type="number" min="1" max="31" value={newWdCount} onChange={e => setNewWdCount(parseInt(e.target.value) || 26)}
+                    style={{ ...S.input, width: '80px', textAlign: 'center' as const }} />
+                </div>
+                <button onClick={addWorkingDay} disabled={!newWdMonth}
+                  style={{ background: !newWdMonth ? '#e2e8f0' : '#0f172a', color: !newWdMonth ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
+                  <Plus size={16} style={{ display: 'inline', verticalAlign: 'middle', marginLeft: '4px' }} />הוסף
+                </button>
+              </div>
+
+              {/* טבלת ימי עבודה */}
+              <div style={S.card}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                  <span>חודש</span><span style={{ textAlign: 'center' }}>ימי עבודה</span><span /><span />
+                </div>
+                {workingDays.length === 0 ? (
+                  <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>לא הוגדרו ימי עבודה — ברירת מחדל 26 לכל חודש</div>
+                ) : workingDays.map((wd, i) => (
+                  <div key={wd.id} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < workingDays.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                    {editWdId === wd.id ? (
+                      <>
+                        <span style={{ fontWeight: '600' }}>{wd.month}</span>
+                        <input type="number" min="1" max="31" value={editWdVal} onChange={e => setEditWdVal(parseInt(e.target.value) || 26)}
+                          autoFocus style={{ border: '1px solid #0f172a', borderRadius: '6px', padding: '5px 8px', fontSize: '14px', textAlign: 'center' as const, width: '80px', margin: '0 auto' }} />
+                        <button onClick={() => saveWorkingDay(wd.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
+                        <button onClick={() => setEditWdId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontWeight: '600', color: '#374151' }}>{wd.month}</span>
+                        <span style={{ textAlign: 'center', fontWeight: '700', color: '#0f172a', fontSize: '16px' }}>{wd.amount}</span>
+                        <button onClick={() => { setEditWdId(wd.id); setEditWdVal(wd.amount) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
+                        <button onClick={() => deleteWorkingDay(wd.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </>
+        )}
+
+        {/* ══ ייבוא נתונים ═══════════════════════════════════════════════ */}
+        {tab === 'import' && (
+          <DataImport onBack={() => setTab('kpi')} />
+        )}
+
+        {/* ══ ייצוא נתונים ═══════════════════════════════════════════════ */}
+        {tab === 'export' && (
+          <DataExport />
         )}
 
       </div>

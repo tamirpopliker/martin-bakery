@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { usePeriod } from '../lib/PeriodContext'
+import PeriodPicker from '../components/PeriodPicker'
 import { ArrowRight, Plus, Pencil, Trash2, Search, X, TrendingUp } from 'lucide-react'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Props { onBack: () => void }
 
-type SaleType = 'b2b' | 'misc'
+type SaleTab = 'creams' | 'dough' | 'b2b' | 'misc'
 
 interface Entry {
   id: number
@@ -14,14 +16,27 @@ interface Entry {
   amount: number
   doc_number: string
   notes: string
-  sale_type: SaleType
 }
 
-// ─── קבועים ─────────────────────────────────────────────────────────────────
-const TYPE_CONFIG = {
-  b2b:  { label: 'מכירות B2B',     subtitle: 'לקוחות עסקיים חיצוניים', color: '#6366f1', bg: '#e0e7ff' },
-  misc: { label: 'מכירות שונות',   subtitle: 'חומרי גלם לסניפים במחיר עלות', color: '#10b981', bg: '#d1fae5' },
+interface TabConfig {
+  label: string
+  subtitle: string
+  color: string
+  bg: string
+  table: string
+  filterCol: string
+  filterVal: string
 }
+
+// ─── קונפיגורציה לכל טאב ─────────────────────────────────────────────────────
+const TAB_CONFIG: Record<SaleTab, TabConfig> = {
+  creams: { label: 'קרמים',       subtitle: 'מכירות מחלקת קרמים',              color: '#3b82f6', bg: '#dbeafe', table: 'factory_sales',     filterCol: 'department', filterVal: 'creams' },
+  dough:  { label: 'בצקים',       subtitle: 'מכירות מחלקת בצקים',              color: '#8b5cf6', bg: '#ede9fe', table: 'factory_sales',     filterCol: 'department', filterVal: 'dough'  },
+  b2b:    { label: 'B2B',         subtitle: 'לקוחות עסקיים חיצוניים',          color: '#6366f1', bg: '#e0e7ff', table: 'factory_b2b_sales', filterCol: 'sale_type',  filterVal: 'b2b'    },
+  misc:   { label: 'שונות',       subtitle: 'חומרי גלם לסניפים במחיר עלות',   color: '#10b981', bg: '#d1fae5', table: 'factory_b2b_sales', filterCol: 'sale_type',  filterVal: 'misc'   },
+}
+
+const TABS: SaleTab[] = ['creams', 'dough', 'b2b', 'misc']
 
 // ─── Autocomplete ────────────────────────────────────────────────────────────
 function AutocompleteInput({ value, onChange, suggestions, placeholder, color }: {
@@ -62,62 +77,67 @@ function AutocompleteInput({ value, onChange, suggestions, placeholder, color }:
 
 // ─── קומפוננטה ראשית ─────────────────────────────────────────────────────────
 export default function FactoryB2B({ onBack }: Props) {
-  const [tab, setTab]               = useState<SaleType>('b2b')
-  const cfg = TYPE_CONFIG[tab]
+  const [tab, setTab]                   = useState<SaleTab>('creams')
+  const cfg = TAB_CONFIG[tab]
+  const { period, setPeriod, from, to } = usePeriod()
 
-  const [entries, setEntries]       = useState<Entry[]>([])
+  const [entries, setEntries]           = useState<Entry[]>([])
   const [allCustomers, setAllCustomers] = useState<string[]>([])
-  const [monthFilter, setMonthFilter]   = useState(new Date().toISOString().slice(0, 7))
   const [searchFilter, setSearchFilter] = useState('')
-  const [editId, setEditId]         = useState<number | null>(null)
-  const [editData, setEditData]     = useState<Partial<Entry>>({})
-  const [loading, setLoading]       = useState(false)
-  const [showRanking, setShowRanking] = useState(false)
+  const [editId, setEditId]             = useState<number | null>(null)
+  const [editData, setEditData]         = useState<Partial<Entry>>({})
+  const [loading, setLoading]           = useState(false)
+  const [showRanking, setShowRanking]   = useState(false)
 
   // טופס
-  const [date, setDate]             = useState(new Date().toISOString().split('T')[0])
-  const [customer, setCustomer]     = useState('')
-  const [amount, setAmount]         = useState('')
-  const [docNumber, setDocNumber]   = useState('')
-  const [notes, setNotes]           = useState('')
+  const [date, setDate]                 = useState(new Date().toISOString().split('T')[0])
+  const [customer, setCustomer]         = useState('')
+  const [amount, setAmount]             = useState('')
+  const [docNumber, setDocNumber]       = useState('')
+  const [notes, setNotes]               = useState('')
 
   // ─── שליפות ──────────────────────────────────────────────────────────────
   async function fetchEntries() {
     const { data } = await supabase
-      .from('factory_b2b_sales')
+      .from(cfg.table)
       .select('*')
-      .eq('sale_type', tab)
-      .gte('date', monthFilter + '-01')
-      .lte('date', monthFilter + '-31')
+      .eq(cfg.filterCol, cfg.filterVal)
+      .gte('date', from)
+      .lt('date', to)
       .order('date', { ascending: false })
     if (data) setEntries(data)
   }
 
   async function fetchCustomers() {
-    const { data } = await supabase
-      .from('factory_b2b_sales')
-      .select('customer')
-      .eq('sale_type', tab)
-    if (data) {
-      const unique = [...new Set(data.map((r: any) => r.customer).filter(Boolean))] as string[]
-      setAllCustomers(unique.sort())
-    }
+    // אחד את רשימת הלקוחות מכל הטבלאות
+    const [res1, res2] = await Promise.all([
+      supabase.from('factory_sales').select('customer'),
+      supabase.from('factory_b2b_sales').select('customer'),
+    ])
+    const all = [...(res1.data || []), ...(res2.data || [])]
+    const unique = [...new Set(all.map((r: any) => r.customer).filter(Boolean))] as string[]
+    setAllCustomers(unique.sort())
   }
 
   useEffect(() => {
     fetchEntries()
     fetchCustomers()
     setSearchFilter('')
-  }, [tab, monthFilter])
+    setEditId(null)
+  }, [tab, from, to])
 
   // ─── CRUD ─────────────────────────────────────────────────────────────────
   async function addEntry() {
     if (!amount || !date || !customer) return
     setLoading(true)
-    await supabase.from('factory_b2b_sales').insert({
-      sale_type: tab, date, customer,
-      amount: parseFloat(amount), doc_number: docNumber, notes
-    })
+    const payload: any = {
+      date, customer,
+      amount: parseFloat(amount),
+      doc_number: docNumber,
+      notes,
+      [cfg.filterCol]: cfg.filterVal,
+    }
+    await supabase.from(cfg.table).insert(payload)
     if (!allCustomers.includes(customer)) setAllCustomers(p => [...p, customer].sort())
     setAmount(''); setDocNumber(''); setNotes('')
     await fetchEntries()
@@ -126,12 +146,12 @@ export default function FactoryB2B({ onBack }: Props) {
 
   async function deleteEntry(id: number) {
     if (!confirm('למחוק רשומה זו?')) return
-    await supabase.from('factory_b2b_sales').delete().eq('id', id)
+    await supabase.from(cfg.table).delete().eq('id', id)
     await fetchEntries()
   }
 
   async function saveEdit(id: number) {
-    await supabase.from('factory_b2b_sales').update(editData).eq('id', id)
+    await supabase.from(cfg.table).update(editData).eq('id', id)
     setEditId(null)
     await fetchEntries()
   }
@@ -168,15 +188,19 @@ export default function FactoryB2B({ onBack }: Props) {
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
       <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: 'none', borderRadius: '10px', padding: '8px', cursor: 'pointer', display: 'flex' }}>
-          <ArrowRight size={20} color="#64748b" />
+        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
+        >
+          <ArrowRight size={22} color="currentColor" />
+          חזרה
         </button>
         <div style={{ width: '40px', height: '40px', background: cfg.bg, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <TrendingUp size={20} color={cfg.color} />
         </div>
         <div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>מכירות אחרות</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>B2B · מכירות שונות · נכנסות לרווח הגולמי</p>
+          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>מכירות</h1>
+          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>קרמים · בצקים · B2B · שונות</p>
         </div>
         <div style={{ marginRight: 'auto', background: cfg.bg, border: `1px solid ${cfg.color}33`, borderRadius: '10px', padding: '8px 18px' }}>
           <span style={{ fontSize: '18px', fontWeight: '800', color: cfg.color }}>₪{total.toLocaleString()}</span>
@@ -186,10 +210,10 @@ export default function FactoryB2B({ onBack }: Props) {
 
       {/* ─── טאבים ───────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', padding: '0 32px', background: 'white', borderBottom: '1px solid #e2e8f0' }}>
-        {(['b2b', 'misc'] as SaleType[]).map(t => (
+        {TABS.map(t => (
           <button key={t} onClick={() => setTab(t)}
-            style={{ padding: '14px 24px', background: 'none', border: 'none', borderBottom: tab === t ? `3px solid ${TYPE_CONFIG[t].color}` : '3px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: tab === t ? '700' : '500', color: tab === t ? TYPE_CONFIG[t].color : '#64748b' }}>
-            {TYPE_CONFIG[t].label}
+            style={{ padding: '14px 24px', background: 'none', border: 'none', borderBottom: tab === t ? `3px solid ${TAB_CONFIG[t].color}` : '3px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: tab === t ? '700' : '500', color: tab === t ? TAB_CONFIG[t].color : '#64748b' }}>
+            {TAB_CONFIG[t].label}
           </button>
         ))}
       </div>
@@ -199,13 +223,12 @@ export default function FactoryB2B({ onBack }: Props) {
         {/* ─── תיאור ────────────────────────────────────────────────────── */}
         <div style={{ background: cfg.bg, border: `1px solid ${cfg.color}22`, borderRadius: '12px', padding: '12px 18px', marginBottom: '20px', fontSize: '13px', color: cfg.color, fontWeight: '600' }}>
           {cfg.subtitle}
-          {tab === 'b2b' && <span style={{ fontWeight: '400', color: '#64748b', marginRight: '8px' }}>— ללא מע״מ, נכנסות להכנסות ברווח גולמי</span>}
-          {tab === 'misc' && <span style={{ fontWeight: '400', color: '#64748b', marginRight: '8px' }}>— חומרי גלם לסניפים במחיר עלות</span>}
+          <span style={{ fontWeight: '400', color: '#64748b', marginRight: '8px' }}>— ללא מע״מ, נכנסות להכנסות ברווח גולמי</span>
         </div>
 
         {/* ─── טופס הוספה ───────────────────────────────────────────────── */}
         <div style={{ ...S.card, marginBottom: '20px' }}>
-          <h2 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת {tab === 'b2b' ? 'מכירה עסקית' : 'מכירה שונה'}</h2>
+          <h2 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת מכירה — {cfg.label}</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
 
             <div style={{ display: 'flex', flexDirection: 'column' as const }}>
@@ -214,9 +237,9 @@ export default function FactoryB2B({ onBack }: Props) {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column' as const, gridColumn: 'span 2' }}>
-              <label style={S.label}>{tab === 'b2b' ? 'לקוח עסקי' : 'לקוח / יעד'}</label>
+              <label style={S.label}>לקוח</label>
               <AutocompleteInput value={customer} onChange={setCustomer} suggestions={allCustomers}
-                placeholder={tab === 'b2b' ? 'שם לקוח...' : 'שם סניף / לקוח...'}
+                placeholder="שם לקוח..."
                 color={cfg.color} />
             </div>
 
@@ -249,8 +272,7 @@ export default function FactoryB2B({ onBack }: Props) {
 
         {/* ─── פילטרים + דירוג ──────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
-          <input type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)}
-            style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '8px 14px', fontSize: '14px', background: 'white', fontFamily: 'inherit' }} />
+          <PeriodPicker period={period} onChange={setPeriod} />
           <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
             <Search size={15} color="#94a3b8" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }} />
             <input type="text" placeholder="חפש לפי לקוח..." value={searchFilter}
@@ -264,10 +286,10 @@ export default function FactoryB2B({ onBack }: Props) {
           </button>
         </div>
 
-        {/* ─── דירוג לקוחות (3.8.1) ─────────────────────────────────────── */}
+        {/* ─── דירוג לקוחות ────────────────────────────────────────────── */}
         {showRanking && ranking.length > 0 && (
           <div style={{ ...S.card, marginBottom: '16px' }}>
-            <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>דירוג לקוחות — {monthFilter}</h3>
+            <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>דירוג לקוחות — {period.label}</h3>
             {ranking.map((r, i) => {
               const pctVal = grandTotal > 0 ? (r.total / grandTotal) * 100 : 0
               return (
@@ -279,7 +301,7 @@ export default function FactoryB2B({ onBack }: Props) {
                   <div style={{ width: '140px', background: '#f1f5f9', borderRadius: '20px', height: '8px', overflow: 'hidden' }}>
                     <div style={{ width: `${pctVal}%`, background: cfg.color, height: '100%', borderRadius: '20px' }} />
                   </div>
-                  <span style={{ fontWeight: '700', color: cfg.color, fontSize: '14px', minWidth: '80px', textAlign: 'left' }}>
+                  <span style={{ fontWeight: '700', color: cfg.color, fontSize: '14px', minWidth: '80px', textAlign: 'left' as const }}>
                     ₪{r.total.toLocaleString()}
                   </span>
                   <span style={{ fontSize: '12px', color: '#94a3b8', minWidth: '40px' }}>{pctVal.toFixed(1)}%</span>

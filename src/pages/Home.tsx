@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { useState, useEffect, useRef } from 'react'
+import { supabase, getLast6Months } from '../lib/supabase'
+import { usePeriod } from '../lib/PeriodContext'
+import PeriodPicker from '../components/PeriodPicker'
 import DailyProduction from './DailyProduction'
-import FactorySales from './FactorySales'
 import FactoryWaste from './FactoryWaste'
 import FactoryRepairs from './FactoryRepairs'
 import Labor from './Labor'
@@ -11,132 +12,247 @@ import FactoryDashboard from './FactoryDashboard'
 import DepartmentLabor from './DepartmentLabor'
 import FactoryB2B from './FactoryB2B'
 import FactorySettings from './FactorySettings'
+import CEODashboard from './CEODashboard'
 import BranchHome from './BranchHome'
+import DepartmentHome from './DepartmentHome'
+// DataImport is now embedded inside FactorySettings
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
-  Store, Trophy, Settings, LogOut, TrendingUp, Wallet,
-  AlertTriangle, Users, ChevronLeft, ChevronDown,
-  ShoppingCart, Trash2, Wrench, ClipboardList, LayoutDashboard,
-  Truck
+  Store, Trophy, Settings, LogOut, TrendingUp, TrendingDown, Wallet,
+  AlertTriangle, Users, ClipboardList, Truck,
+  Factory, Building2, ChevronLeft, Database
 } from 'lucide-react'
 
-// ─── טיפוסים ───────────────────────────────────────────────────────────────
-type Department = 'creams' | 'dough' | 'packaging' | 'cleaning'
-
-interface SubItem {
-  label: string
-  page: string
-  Icon: any
-}
-
-interface Module {
-  title: string
-  subtitle: string
-  Icon: any
-  color: string
-  bg: string
-  section: string
-  page?: string          // ניווט ישיר (ללא תפריט משנה)
-  dept?: Department      // אם יש תפריט משנה
-  sub?: SubItem[]
-}
-
-// ─── תפריט משנה לפי מחלקת ייצור ────────────────────────────────────────────
-function makeSub(dept: Department): SubItem[] {
-  const base: SubItem[] = [
-    { label: dept === 'packaging' ? 'כמויות יומיות' : 'ייצור יומי', page: `${dept}_production`, Icon: TrendingUp },
-  ]
-  if (dept !== 'cleaning') {
-    base.push({ label: 'מכירות',   page: `${dept}_sales`,   Icon: ShoppingCart })
-    base.push({ label: 'פחת',      page: `${dept}_waste`,   Icon: Trash2 })
-  }
-  base.push({ label: 'תיקונים',  page: `${dept}_repairs`, Icon: Wrench })
-  base.push({ label: 'לייבור',   page: `${dept}_labor`,   Icon: ClipboardList })
-  if (dept !== 'cleaning') {
-    base.push({ label: 'דשבורד',  page: `${dept}_dashboard`, Icon: LayoutDashboard })
-  }
-  return base
-}
-
-// ─── מודולים ─────────────────────────────────────────────────────────────
-const modules: Module[] = [
-  { title: 'קרמים',         subtitle: 'ייצור · מכירות · פחת',   Icon: FlaskConical, color: '#3b82f6', bg: '#dbeafe', section: 'מפעל', dept: 'creams',    sub: makeSub('creams') },
-  { title: 'בצקים',         subtitle: 'ייצור · מכירות · פחת',   Icon: Croissant,    color: '#8b5cf6', bg: '#ede9fe', section: 'מפעל', dept: 'dough',     sub: makeSub('dough') },
-  { title: 'אריזה',         subtitle: 'כמויות · תיקונים · לייבור', Icon: Package,   color: '#0ea5e9', bg: '#e0f2fe', section: 'מפעל', dept: 'packaging', sub: makeSub('packaging') },
-  { title: 'ניקיון/נהג',    subtitle: 'תיקונים · לייבור',        Icon: Truck,       color: '#64748b', bg: '#f1f5f9', section: 'מפעל', dept: 'cleaning',  sub: makeSub('cleaning') },
-  { title: 'לייבור מרוכז',  subtitle: 'העלאת CSV · כל המחלקות', Icon: HardHat,     color: '#f59e0b', bg: '#fef3c7', section: 'מפעל', page: 'labor' },
-  { title: 'ספקים',         subtitle: 'חשבוניות · ניהול ספקים',  Icon: ClipboardList, color: '#10b981', bg: '#d1fae5', section: 'מפעל', page: 'suppliers' },
-  { title: 'מכירות B2B',    subtitle: 'עסקיים · מכירות שונות',   Icon: TrendingUp,    color: '#6366f1', bg: '#e0e7ff', section: 'מפעל', page: 'factory_b2b' },
-  { title: 'דשבורד מפעל',   subtitle: 'KPI · רווח · גרפים',     Icon: BarChart3,   color: '#6366f1', bg: '#e0e7ff', section: 'מפעל', page: 'factory_dashboard' },
-  { title: 'אברהם אבינו',   subtitle: 'הכנסות · הוצאות',         Icon: Store,       color: '#3b82f6', bg: '#dbeafe', section: 'סניפים', page: 'branch_1' },
-  { title: 'הפועלים',       subtitle: 'הכנסות · הוצאות',         Icon: Store,       color: '#10b981', bg: '#d1fae5', section: 'סניפים', page: 'branch_2' },
-  { title: 'יעקב כהן',      subtitle: 'הכנסות · הוצאות',         Icon: Store,       color: '#a855f7', bg: '#f3e8ff', section: 'סניפים', page: 'branch_3' },
-  { title: 'דשבורד מנכ"ל',  subtitle: 'מבט רשתי',                Icon: Trophy,      color: '#f59e0b', bg: '#fef3c7', section: 'ניהול', page: 'ceo_dashboard' },
-  { title: 'הגדרות',        subtitle: 'יעדים · עובדים · עלויות', Icon: Settings,    color: '#64748b', bg: '#f1f5f9', section: 'ניהול', page: 'settings' },
+// ─── קבועים ─────────────────────────────────────────────────────────────────
+const BRANCHES = [
+  { id: 1, name: 'אברהם אבינו', color: '#3b82f6', page: 'branch_1' },
+  { id: 2, name: 'הפועלים',     color: '#10b981', page: 'branch_2' },
+  { id: 3, name: 'יעקב כהן',   color: '#a855f7', page: 'branch_3' },
 ]
 
-const SECTIONS = ['מפעל', 'סניפים', 'ניהול']
-
-const stats = [
-  { label: 'הכנסות היום',  value: '—', Icon: Wallet,        color: '#3b82f6', bg: '#eff6ff',  border: '#bfdbfe' },
-  { label: 'רווח גולמי',   value: '—', Icon: TrendingUp,    color: '#10b981', bg: '#f0fdf4',  border: '#bbf7d0' },
-  { label: 'לייבור',        value: '—', Icon: Users,         color: '#f59e0b', bg: '#fffbeb',  border: '#fde68a' },
-  { label: 'פחת',           value: '—', Icon: AlertTriangle, color: '#ef4444', bg: '#fef2f2',  border: '#fecaca' },
+const FACTORY_MODULES = [
+  { key: 'dept_creams',    label: 'קרמים',        Icon: FlaskConical, color: '#3b82f6' },
+  { key: 'dept_dough',     label: 'בצקים',        Icon: Croissant,    color: '#8b5cf6' },
+  { key: 'dept_packaging', label: 'אריזה',        Icon: Package,      color: '#0ea5e9' },
+  { key: 'dept_cleaning',  label: 'ניקיון/נהג',   Icon: Truck,        color: '#64748b' },
+  { key: 'labor',          label: 'לייבור מרוכז', Icon: HardHat,      color: '#f59e0b' },
+  { key: 'factory_b2b',    label: 'מכירות',        Icon: TrendingUp,   color: '#6366f1' },
+  { key: 'suppliers',      label: 'ספקים',         Icon: ClipboardList, color: '#10b981' },
+  { key: 'factory_dashboard', label: 'דשבורד מפעל', Icon: BarChart3,  color: '#6366f1' },
 ]
 
-// ─── קומפוננטת Home ──────────────────────────────────────────────────────────
+const SIDEBAR_SECTIONS = [
+  { key: 'factory',  label: 'מפעל',  Icon: Factory,  color: '#3b82f6' },
+  { key: 'branches', label: 'סניפים', Icon: Store,    color: '#10b981' },
+  { key: 'manage',   label: 'ניהול',  Icon: Settings, color: '#f59e0b' },
+]
+
+const PANEL_FACTORY = [
+  { label: 'קרמים',        subtitle: 'ייצור · פחת · תיקונים',         Icon: FlaskConical, color: '#3b82f6', page: 'dept_creams' },
+  { label: 'בצקים',        subtitle: 'ייצור · פחת · תיקונים',         Icon: Croissant,    color: '#8b5cf6', page: 'dept_dough' },
+  { label: 'אריזה',        subtitle: 'כמויות · תיקונים · לייבור',     Icon: Package,      color: '#0ea5e9', page: 'dept_packaging' },
+  { label: 'ניקיון/נהג',   subtitle: 'תיקונים · לייבור',              Icon: Truck,        color: '#64748b', page: 'dept_cleaning' },
+  { label: 'לייבור מרוכז', subtitle: 'העלאת CSV · כל המחלקות',       Icon: HardHat,      color: '#f59e0b', page: 'labor' },
+  { label: 'מכירות',        subtitle: 'קרמים · בצקים · B2B · שונות',  Icon: TrendingUp,   color: '#6366f1', page: 'factory_b2b' },
+  { label: 'ספקים',         subtitle: 'חשבוניות · ניהול ספקים',        Icon: ClipboardList, color: '#10b981', page: 'suppliers' },
+  { label: 'דשבורד מפעל',  subtitle: 'KPI · רווח · גרפים',           Icon: BarChart3,    color: '#6366f1', page: 'factory_dashboard' },
+  { label: 'הגדרות מפעל',  subtitle: 'יעדים · עובדים · עלויות',      Icon: Settings,     color: '#64748b', page: 'settings' },
+]
+
+const PANEL_MANAGE = [
+  { label: 'דשבורד מנכ"ל', subtitle: 'מבט רשתי · כל הסניפים', Icon: Trophy,   color: '#f59e0b', page: 'ceo_dashboard' },
+  { label: 'הגדרות מערכת', subtitle: 'יעדים · עובדים · עלויות', Icon: Settings, color: '#64748b', page: 'settings' },
+  { label: 'ייבוא נתונים', subtitle: 'CSV מ-Base44 · העלאה',   Icon: Database, color: '#3b82f6', page: 'data_import' },
+]
+
+const fmtK = (n: number) => n === 0 ? '—' : '₪' + Math.round(n).toLocaleString()
+
+interface BranchKpi { id: number; name: string; color: string; revenue: number; laborPct: number }
+
+// ─── קומפוננטה ──────────────────────────────────────────────────────────────
 export default function Home() {
-  const [page, setPage]               = useState<string | null>(null)
-  const [openDept, setOpenDept]       = useState<string | null>(null)
-  const [hovNav, setHovNav]           = useState<string | null>(null)
-  const [hovCard, setHovCard]         = useState<string | null>(null)
+  const { period, setPeriod, from, to, comparisonPeriod } = usePeriod()
+  const [page, setPage]         = useState<string | null>(null)
+  const [openPanel, setOpenPanel] = useState<string | null>(null)
+  const [hovSidebar, setHovSidebar] = useState<string | null>(null)
+  const [hovFactory, setHovFactory] = useState<string | null>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
-  // ─── ניתוב מסכים ──────────────────────────────────────────────────────
-  // ייצור יומי
+  // KPI data
+  const [factoryRevenue, setFactoryRevenue] = useState(0)
+  const [factoryGross, setFactoryGross]     = useState(0)
+  const [totalBranchRevenue, setTotalBranchRevenue] = useState(0)
+  const [totalBranchGross, setTotalBranchGross]     = useState(0)
+  const [branchKpi, setBranchKpi]           = useState<BranchKpi[]>([])
+  const [avgLaborPct, setAvgLaborPct]       = useState(0)
+  const [alerts, setAlerts]                 = useState(0)
+  const [prevFactoryRevenue, setPrevFactoryRevenue] = useState(0)
+  const [prevFactoryGross, setPrevFactoryGross] = useState(0)
+  const [prevBranchRevenue, setPrevBranchRevenue] = useState(0)
+  const [prevBranchGross, setPrevBranchGross] = useState(0)
+  const [prevAvgLaborPct, setPrevAvgLaborPct] = useState(0)
+  const [trendData, setTrendData] = useState<{ month: string; label: string; revenue: number; labor: number; profit: number }[]>([])
+
+  // ─── Data Loading ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    async function loadKpi() {
+      // Factory data
+      const [salesFs, salesB2b, laborRes, suppliersRes] = await Promise.all([
+        supabase.from('factory_sales').select('amount').gte('date', from).lt('date', to),
+        supabase.from('factory_b2b_sales').select('amount').gte('date', from).lt('date', to),
+        supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', from).lt('date', to),
+        supabase.from('supplier_invoices').select('amount').gte('date', from).lt('date', to),
+      ])
+
+      const fSales = (salesFs.data || []).reduce((s, r) => s + Number(r.amount), 0)
+                   + (salesB2b.data || []).reduce((s, r) => s + Number(r.amount), 0)
+      const fLabor = (laborRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+      const fSupp  = (suppliersRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+      setFactoryRevenue(fSales)
+      setFactoryGross(fSales - fLabor - fSupp)
+
+      // Branch data
+      const bKpi: BranchKpi[] = []
+      let totalBranchRev = 0, totalBranchLab = 0, totalBranchExp = 0, alertCount = 0
+
+      for (const br of BRANCHES) {
+        const [revRes, labRes, expRes] = await Promise.all([
+          supabase.from('branch_revenue').select('amount').eq('branch_id', br.id).gte('date', from).lt('date', to),
+          supabase.from('branch_labor').select('employer_cost').eq('branch_id', br.id).gte('date', from).lt('date', to),
+          supabase.from('branch_expenses').select('amount').eq('branch_id', br.id).gte('date', from).lt('date', to),
+        ])
+        const rev = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+        const lab = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+        const exp = (expRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+        const labPct = rev > 0 ? (lab / rev) * 100 : 0
+        if (labPct > 28) alertCount++
+        totalBranchRev += rev
+        totalBranchLab += lab
+        totalBranchExp += exp
+        bKpi.push({ id: br.id, name: br.name, color: br.color, revenue: rev, laborPct: labPct })
+      }
+
+      setBranchKpi(bKpi)
+      setTotalBranchRevenue(totalBranchRev)
+      setTotalBranchGross(totalBranchRev - totalBranchLab - totalBranchExp)
+      const avgPct = totalBranchRev > 0 ? (totalBranchLab / totalBranchRev) * 100 : 0
+      setAvgLaborPct(avgPct)
+      setAlerts(alertCount)
+
+      // Previous period (comparison)
+      const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
+      const [pSalesFs, pSalesB2b, pLabor, pSupp] = await Promise.all([
+        supabase.from('factory_sales').select('amount').gte('date', pFrom).lt('date', pTo),
+        supabase.from('factory_b2b_sales').select('amount').gte('date', pFrom).lt('date', pTo),
+        supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', pFrom).lt('date', pTo),
+        supabase.from('supplier_invoices').select('amount').gte('date', pFrom).lt('date', pTo),
+      ])
+      const pFSales = (pSalesFs.data || []).reduce((s: any, r: any) => s + Number(r.amount), 0)
+                     + (pSalesB2b.data || []).reduce((s: any, r: any) => s + Number(r.amount), 0)
+      const pFLabor = (pLabor.data || []).reduce((s: any, r: any) => s + Number(r.employer_cost), 0)
+      const pFSupp = (pSupp.data || []).reduce((s: any, r: any) => s + Number(r.amount), 0)
+      setPrevFactoryRevenue(pFSales)
+      setPrevFactoryGross(pFSales - pFLabor - pFSupp)
+
+      let pTotalBranchRev = 0, pTotalBranchLab = 0, pTotalBranchExp = 0
+      for (const br of BRANCHES) {
+        const [pRevRes, pLabRes, pExpRes] = await Promise.all([
+          supabase.from('branch_revenue').select('amount').eq('branch_id', br.id).gte('date', pFrom).lt('date', pTo),
+          supabase.from('branch_labor').select('employer_cost').eq('branch_id', br.id).gte('date', pFrom).lt('date', pTo),
+          supabase.from('branch_expenses').select('amount').eq('branch_id', br.id).gte('date', pFrom).lt('date', pTo),
+        ])
+        pTotalBranchRev += (pRevRes.data || []).reduce((s: any, r: any) => s + Number(r.amount), 0)
+        pTotalBranchLab += (pLabRes.data || []).reduce((s: any, r: any) => s + Number(r.employer_cost), 0)
+        pTotalBranchExp += (pExpRes.data || []).reduce((s: any, r: any) => s + Number(r.amount), 0)
+      }
+      setPrevBranchRevenue(pTotalBranchRev)
+      setPrevBranchGross(pTotalBranchRev - pTotalBranchLab - pTotalBranchExp)
+      const pAvgPct = pTotalBranchRev > 0 ? (pTotalBranchLab / pTotalBranchRev) * 100 : 0
+      setPrevAvgLaborPct(pAvgPct)
+
+      // 6-month trend (optimized: single range query per table)
+      // Use the period's monthKey or derive month from period.from
+      const refMonth = period.monthKey || period.from.slice(0, 7)
+      const months6 = getLast6Months(refMonth)
+      const tFrom = months6[0] + '-01', tTo = monthEnd(months6[5])
+      const [tSalesFs, tSalesB2b, tLabor6, tSupp6] = await Promise.all([
+        supabase.from('factory_sales').select('date, amount').gte('date', tFrom).lt('date', tTo),
+        supabase.from('factory_b2b_sales').select('date, amount').gte('date', tFrom).lt('date', tTo),
+        supabase.from('labor').select('date, employer_cost').eq('entity_type', 'factory').gte('date', tFrom).lt('date', tTo),
+        supabase.from('supplier_invoices').select('date, amount').gte('date', tFrom).lt('date', tTo),
+      ])
+      const groupByMonth = (data: any[], field: string) => {
+        const map: Record<string, number> = {}
+        ;(data || []).forEach((r: any) => {
+          const m = r.date?.slice(0, 7)
+          if (m) map[m] = (map[m] || 0) + Number(r[field] || 0)
+        })
+        return map
+      }
+      const salesByM = groupByMonth([...(tSalesFs.data || []), ...(tSalesB2b.data || [])], 'amount')
+      const laborByM = groupByMonth(tLabor6.data || [], 'employer_cost')
+      const suppByM = groupByMonth(tSupp6.data || [], 'amount')
+      const hebrewMonths = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר']
+      setTrendData(months6.map(m => {
+        const rev = salesByM[m] || 0
+        const lab = laborByM[m] || 0
+        const sup = suppByM[m] || 0
+        return { month: m, label: hebrewMonths[parseInt(m.split('-')[1]) - 1], revenue: rev, labor: lab, profit: rev - lab - sup }
+      }))
+    }
+    loadKpi()
+  }, [from, to])
+
+  // close panel on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (openPanel && panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setOpenPanel(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [openPanel])
+
+  // ─── ניתוב מסכים (unchanged) ─────────────────────────────────────────────
   if (page === 'creams_production')    return <DailyProduction department="creams"    onBack={() => setPage(null)} />
   if (page === 'dough_production')     return <DailyProduction department="dough"     onBack={() => setPage(null)} />
   if (page === 'packaging_production') return <DailyProduction department="packaging" onBack={() => setPage(null)} />
 
-  // מכירות
-  if (page === 'creams_sales')         return <FactorySales department="creams"    onBack={() => setPage(null)} />
-  if (page === 'dough_sales')          return <FactorySales department="dough"     onBack={() => setPage(null)} />
-  if (page === 'packaging_sales')      return <FactorySales department="packaging" onBack={() => setPage(null)} />
-
-  // פחת
   if (page === 'creams_waste')         return <FactoryWaste department="creams"    onBack={() => setPage(null)} />
   if (page === 'dough_waste')          return <FactoryWaste department="dough"     onBack={() => setPage(null)} />
   if (page === 'packaging_waste')      return <FactoryWaste department="packaging" onBack={() => setPage(null)} />
 
-  // תיקונים
   if (page === 'creams_repairs')       return <FactoryRepairs department="creams"    onBack={() => setPage(null)} />
   if (page === 'dough_repairs')        return <FactoryRepairs department="dough"     onBack={() => setPage(null)} />
   if (page === 'packaging_repairs')    return <FactoryRepairs department="packaging" onBack={() => setPage(null)} />
   if (page === 'cleaning_repairs')     return <FactoryRepairs department="cleaning"  onBack={() => setPage(null)} />
 
-  // לייבור
   if (page === 'labor')                return <Labor onBack={() => setPage(null)} />
-  // לייבור מחלקתי
   if (page === 'creams_labor')         return <DepartmentLabor department="creams"    onBack={() => setPage(null)} />
   if (page === 'dough_labor')          return <DepartmentLabor department="dough"     onBack={() => setPage(null)} />
   if (page === 'packaging_labor')      return <DepartmentLabor department="packaging" onBack={() => setPage(null)} />
   if (page === 'cleaning_labor')       return <DepartmentLabor department="cleaning"  onBack={() => setPage(null)} />
 
-  // ספקים
   if (page === 'suppliers')            return <Suppliers onBack={() => setPage(null)} />
 
-  // דשבורד מחלקתי
   if (page === 'creams_dashboard')     return <DepartmentDashboard department="creams" onBack={() => setPage(null)} />
   if (page === 'dough_dashboard')      return <DepartmentDashboard department="dough"  onBack={() => setPage(null)} />
   if (page === 'factory_dashboard')    return <FactoryDashboard onBack={() => setPage(null)} />
   if (page === 'factory_b2b')          return <FactoryB2B onBack={() => setPage(null)} />
   if (page === 'settings')             return <FactorySettings onBack={() => setPage(null)} />
+  if (page === 'ceo_dashboard')        return <CEODashboard onBack={() => setPage(null)} />
+  if (page === 'data_import')          return <FactorySettings onBack={() => setPage(null)} />
 
-  // סניפים
+  if (page === 'dept_creams')    return <DepartmentHome department="creams"    onBack={() => setPage(null)} />
+  if (page === 'dept_dough')     return <DepartmentHome department="dough"     onBack={() => setPage(null)} />
+  if (page === 'dept_packaging') return <DepartmentHome department="packaging" onBack={() => setPage(null)} />
+  if (page === 'dept_cleaning')  return <DepartmentHome department="cleaning"  onBack={() => setPage(null)} />
+
   if (page === 'branch_1') return <BranchHome branch={{ id: 1, name: 'אברהם אבינו', color: '#3b82f6' }} onBack={() => setPage(null)} />
   if (page === 'branch_2') return <BranchHome branch={{ id: 2, name: 'הפועלים',     color: '#10b981' }} onBack={() => setPage(null)} />
   if (page === 'branch_3') return <BranchHome branch={{ id: 3, name: 'יעקב כהן',   color: '#a855f7' }} onBack={() => setPage(null)} />
 
-  // placeholders למסכים שטרם נבנו
   if (page) return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' }}>
       <div style={{ background: 'white', borderRadius: '20px', padding: '48px', textAlign: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
@@ -150,203 +266,432 @@ export default function Home() {
     </div>
   )
 
-  // ─── מסך הבית ─────────────────────────────────────────────────────────
+  // ─── DiffBadge ────────────────────────────────────────────────────────────
+  function DiffBadge({ curr, prev, inverse }: { curr: number; prev: number; inverse?: boolean }) {
+    if (prev === 0 && curr === 0) return null
+    if (prev === 0) return null
+    const d = ((curr - prev) / Math.abs(prev)) * 100
+    const up = d > 0
+    const good = inverse ? !up : up
+    const color = Math.abs(d) < 1 ? '#94a3b8' : good ? '#10b981' : '#ef4444'
+    const Icon = up ? TrendingUp : TrendingDown
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '12px', fontWeight: '700', color, marginTop: '4px' }}>
+        <Icon size={12} /> {Math.abs(d).toFixed(1)}%
+      </span>
+    )
+  }
+
+  // ─── Panel items helper ──────────────────────────────────────────────────
+  function renderPanelItems(items: typeof PANEL_FACTORY) {
+    return items.map(item => {
+      const Icon = item.Icon
+      return (
+        <button
+          key={item.page}
+          onClick={() => { setPage(item.page); setOpenPanel(null) }}
+          style={{
+            width: '100%', background: 'transparent', border: 'none', borderRadius: '10px',
+            padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '12px',
+            cursor: 'pointer', textAlign: 'right', transition: 'background 0.12s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          <div style={{ width: '36px', height: '36px', background: item.color + '15', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon size={18} color={item.color} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>{item.label}</div>
+            <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '1px' }}>{item.subtitle}</div>
+          </div>
+          <ChevronLeft size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
+        </button>
+      )
+    })
+  }
+
+  // ─── מסך הבית ─────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl', display: 'flex' }}>
 
-      {/* ══ סיידבר ══════════════════════════════════════════════════════ */}
+      {/* ══ סיידבר צר — 64px, אייקונים בלבד ════════════════════════════════ */}
       <aside style={{
-        width: '272px', minWidth: '272px', background: '#0f172a',
-        display: 'flex', flexDirection: 'column',
-        minHeight: '100vh', position: 'sticky', top: 0, height: '100vh', overflowY: 'auto'
+        width: '64px', minWidth: '64px', background: '#0f172a',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        minHeight: '100vh', position: 'sticky', top: 0, height: '100vh', zIndex: 200,
       }}>
         {/* לוגו */}
-        <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid #1e293b' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 14px rgba(59,130,246,0.4)' }}>
-              <Croissant size={22} color="white" />
-            </div>
-            <div>
-              <div style={{ color: 'white', fontWeight: '800', fontSize: '18px' }}>מרטין</div>
-              <div style={{ color: '#475569', fontSize: '12px' }}>מערכת ניהול</div>
-            </div>
+        <div style={{ padding: '18px 0 14px', borderBottom: '1px solid #1e293b', width: '100%', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ width: '38px', height: '38px', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(59,130,246,0.4)' }}>
+            <Croissant size={20} color="white" />
           </div>
         </div>
 
-        {/* ניווט */}
-        <nav style={{ flex: 1, padding: '12px 10px', overflowY: 'auto' }}>
-          {SECTIONS.map(section => (
-            <div key={section} style={{ marginBottom: '20px' }}>
-              <div style={{ color: '#334155', fontSize: '10px', fontWeight: '700', letterSpacing: '1.5px', textTransform: 'uppercase', padding: '0 10px', marginBottom: '4px' }}>
-                {section}
-              </div>
-
-              {modules.filter(m => m.section === section).map(mod => {
-                const Icon = mod.Icon
-                const hasSub = !!mod.sub
-                const isOpen = openDept === mod.title
-                const isHov  = hovNav === mod.title
-
-                return (
-                  <div key={mod.title}>
-                    {/* שורת מודול */}
-                    <button
-                      onClick={() => {
-                        if (hasSub) {
-                          setOpenDept(isOpen ? null : mod.title)
-                        } else if (mod.page) {
-                          setPage(mod.page)
-                        }
-                      }}
-                      onMouseEnter={() => setHovNav(mod.title)}
-                      onMouseLeave={() => setHovNav(null)}
-                      style={{
-                        width: '100%', background: isHov || isOpen ? '#1e293b' : 'transparent',
-                        border: 'none', borderRadius: '10px', padding: '9px 10px',
-                        display: 'flex', alignItems: 'center', gap: '10px',
-                        cursor: 'pointer', marginBottom: '1px', transition: 'background 0.12s'
-                      }}
-                    >
-                      <div style={{ width: '32px', height: '32px', background: mod.bg, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Icon size={16} color={mod.color} />
-                      </div>
-                      <div style={{ flex: 1, textAlign: 'right' }}>
-                        <div style={{ fontSize: '13px', fontWeight: '600', color: isHov || isOpen ? 'white' : '#cbd5e1' }}>{mod.title}</div>
-                        <div style={{ fontSize: '10px', color: '#475569', marginTop: '1px' }}>{mod.subtitle}</div>
-                      </div>
-                      {hasSub && (
-                        <ChevronDown size={14} color="#475569"
-                          style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
-                      )}
-                      {!hasSub && mod.page && <ChevronLeft size={13} color="#334155" style={{ flexShrink: 0 }} />}
-                    </button>
-
-                    {/* תפריט משנה */}
-                    {hasSub && isOpen && (
-                      <div style={{ marginBottom: '4px', paddingRight: '14px' }}>
-                        {mod.sub!.map(sub => {
-                          const SubIcon = sub.Icon
-                          const isSubHov = hovNav === sub.page
-                          return (
-                            <button
-                              key={sub.page}
-                              onClick={() => setPage(sub.page)}
-                              onMouseEnter={() => setHovNav(sub.page)}
-                              onMouseLeave={() => setHovNav(null)}
-                              style={{
-                                width: '100%', background: isSubHov ? '#1e293b' : 'transparent',
-                                border: 'none', borderRadius: '8px', padding: '7px 10px',
-                                display: 'flex', alignItems: 'center', gap: '8px',
-                                cursor: 'pointer', transition: 'background 0.12s'
-                              }}
-                            >
-                              <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: mod.color, flexShrink: 0, marginRight: '2px' }} />
-                              <SubIcon size={13} color={isSubHov ? mod.color : '#64748b'} />
-                              <span style={{ fontSize: '12px', fontWeight: '500', color: isSubHov ? 'white' : '#94a3b8' }}>
-                                {sub.label}
-                              </span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
+        {/* כפתורי ניווט */}
+        <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', paddingTop: '16px' }}>
+          {SIDEBAR_SECTIONS.map(sec => {
+            const Icon = sec.Icon
+            const isActive = openPanel === sec.key
+            const isHov = hovSidebar === sec.key
+            return (
+              <div key={sec.key} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setOpenPanel(openPanel === sec.key ? null : sec.key)}
+                  onMouseEnter={() => setHovSidebar(sec.key)}
+                  onMouseLeave={() => setHovSidebar(null)}
+                  style={{
+                    width: '44px', height: '44px', background: isActive ? sec.color : isHov ? '#1e293b' : 'transparent',
+                    border: 'none', borderRadius: '12px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <Icon size={20} color={isActive ? 'white' : isHov ? sec.color : '#64748b'} />
+                </button>
+                {/* Tooltip */}
+                {isHov && !openPanel && (
+                  <div style={{
+                    position: 'absolute', right: '52px', top: '50%', transform: 'translateY(-50%)',
+                    background: '#0f172a', color: 'white', padding: '5px 10px', borderRadius: '8px',
+                    fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap', zIndex: 300,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  }}>
+                    {sec.label}
                   </div>
-                )
-              })}
-            </div>
-          ))}
+                )}
+              </div>
+            )
+          })}
         </nav>
 
-        {/* התנתקות */}
-        <div style={{ padding: '12px 10px', borderTop: '1px solid #1e293b' }}>
+        {/* יציאה */}
+        <div style={{ padding: '14px 0', borderTop: '1px solid #1e293b', width: '100%', display: 'flex', justifyContent: 'center' }}>
           <button
             onClick={() => supabase.auth.signOut()}
-            style={{ width: '100%', background: 'transparent', color: '#64748b', border: '1px solid #1e293b', borderRadius: '10px', padding: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            style={{ width: '44px', height: '44px', background: 'transparent', border: 'none', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           >
-            <LogOut size={15} />יציאה מהמערכת
+            <LogOut size={18} color="#64748b" />
           </button>
         </div>
       </aside>
 
-      {/* ══ תוכן ראשי ════════════════════════════════════════════════════ */}
-      <main style={{ flex: 1, padding: '36px 40px', overflowY: 'auto' }}>
-
-        {/* כותרת */}
-        <div style={{ marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: '800', color: '#0f172a', margin: '0 0 4px' }}>שלום, מנהל ראשי 👋</h1>
-          <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
-            {new Date().toLocaleDateString('he-IL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          </p>
-        </div>
-
-        {/* כרטיסי KPI */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '40px' }}>
-          {stats.map(stat => {
-            const Icon = stat.Icon
-            return (
-              <div key={stat.label} style={{ background: 'white', borderRadius: '18px', padding: '20px 22px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: `1px solid ${stat.border}` }}>
-                <div style={{ width: '40px', height: '40px', background: stat.bg, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
-                  <Icon size={20} color={stat.color} />
-                </div>
-                <div style={{ fontSize: '26px', fontWeight: '800', color: '#0f172a' }}>{stat.value}</div>
-                <div style={{ fontSize: '13px', color: '#94a3b8', marginTop: '2px' }}>{stat.label}</div>
+      {/* ══ פאנל צף (Floating Panel) ═══════════════════════════════════════ */}
+      {openPanel && (
+        <>
+          {/* backdrop */}
+          <div
+            onClick={() => setOpenPanel(null)}
+            style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.15)' }}
+          />
+          {/* panel */}
+          <div
+            ref={panelRef}
+            style={{
+              position: 'fixed', top: 0, right: '64px', bottom: 0, width: '280px',
+              background: 'white', zIndex: 150, boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
+              display: 'flex', flexDirection: 'column', direction: 'rtl',
+              fontFamily: "'Segoe UI', Arial, sans-serif",
+            }}
+          >
+            {/* panel header */}
+            <div style={{ padding: '20px 18px 14px', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>
+                {openPanel === 'factory' ? 'מפעל' : openPanel === 'branches' ? 'סניפים' : 'ניהול'}
               </div>
-            )
-          })}
-        </div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                {openPanel === 'factory' ? 'ניווט מהיר לכל מחלקות המפעל' : openPanel === 'branches' ? 'בחר סניף לניהול' : 'הגדרות מערכת ודשבורד'}
+              </div>
+            </div>
 
-        {/* כרטיסי מודולים */}
-        {SECTIONS.map(section => (
-          <div key={section} style={{ marginBottom: '32px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 14px' }}>{section}</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '12px' }}>
-              {modules.filter(m => m.section === section).map(mod => {
-                const Icon = mod.Icon
-                const isHov = hovCard === mod.title
-                const hasSub = !!mod.sub
+            {/* panel content */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '10px 6px' }}>
+              {openPanel === 'factory' && renderPanelItems(PANEL_FACTORY)}
 
-                return (
-                  <button
-                    key={mod.title}
-                    onClick={() => {
-                      if (hasSub) {
-                        setOpenDept(openDept === mod.title ? null : mod.title)
-                        // גלול לסיידבר
-                      } else if (mod.page) {
-                        setPage(mod.page)
-                      }
-                    }}
-                    onMouseEnter={() => setHovCard(mod.title)}
-                    onMouseLeave={() => setHovCard(null)}
-                    style={{
-                      background: isHov ? mod.color : 'white',
-                      border: `1.5px solid ${isHov ? mod.color : '#e2e8f0'}`,
-                      borderRadius: '18px', padding: '20px',
-                      display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '14px',
-                      cursor: 'pointer', transition: 'all 0.18s',
-                      transform: isHov ? 'translateY(-3px)' : 'none',
-                      boxShadow: isHov ? `0 12px 30px ${mod.color}35` : '0 1px 3px rgba(0,0,0,0.05)',
-                      textAlign: 'right'
-                    }}
-                  >
-                    <div style={{ width: '46px', height: '46px', background: isHov ? 'rgba(255,255,255,0.22)' : mod.bg, borderRadius: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon size={23} color={isHov ? 'white' : mod.color} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '15px', fontWeight: '700', color: isHov ? 'white' : '#0f172a' }}>{mod.title}</div>
-                      <div style={{ fontSize: '11px', color: isHov ? 'rgba(255,255,255,0.65)' : '#94a3b8', marginTop: '3px' }}>{mod.subtitle}</div>
-                    </div>
-                    {hasSub && (
-                      <div style={{ fontSize: '10px', color: isHov ? 'rgba(255,255,255,0.5)' : '#cbd5e1', marginTop: '-6px' }}>
-                        לחץ לפתיחת תפריט ←
-                      </div>
-                    )}
-                  </button>
-                )
-              })}
+              {openPanel === 'branches' && BRANCHES.map(br => (
+                <button
+                  key={br.id}
+                  onClick={() => { setPage(br.page); setOpenPanel(null) }}
+                  style={{
+                    width: '100%', background: 'transparent', border: 'none', borderRadius: '10px',
+                    padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px',
+                    cursor: 'pointer', textAlign: 'right', transition: 'background 0.12s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <div style={{ width: '36px', height: '36px', background: br.color, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Store size={18} color="white" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>{br.name}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>הכנסות · הוצאות · KPI</div>
+                  </div>
+                  <ChevronLeft size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
+                </button>
+              ))}
+
+              {openPanel === 'manage' && renderPanelItems(PANEL_MANAGE)}
             </div>
           </div>
-        ))}
+        </>
+      )}
+
+      {/* ══ תוכן ראשי ════════════════════════════════════════════════════════ */}
+      <main style={{ flex: 1, padding: '28px 36px', overflowY: 'auto', minHeight: '100vh' }}>
+
+        {/* ─── כותרת ─────────────────────────────────────────────────────── */}
+        <div style={{ marginBottom: '28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h1 style={{ fontSize: '26px', fontWeight: '800', color: '#0f172a', margin: '0 0 4px' }}>שלום, מנהל ראשי 👋</h1>
+            <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
+              {new Date().toLocaleDateString('he-IL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
+          </div>
+          <PeriodPicker period={period} onChange={setPeriod} />
+        </div>
+
+        {/* ─── Row 1: KPI Bar ────────────────────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '32px' }}>
+          {/* הכנסות */}
+          {(() => { const grandRevenue = factoryRevenue + totalBranchRevenue; return (
+          <div style={{ background: 'white', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderTop: '3px solid #3b82f6' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              <div style={{ width: '34px', height: '34px', background: '#eff6ff', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Wallet size={17} color="#3b82f6" />
+              </div>
+              <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>סה"כ הכנסות · {period.label}</span>
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a' }}>{fmtK(grandRevenue)}</div>
+            <DiffBadge curr={factoryRevenue + totalBranchRevenue} prev={prevFactoryRevenue + prevBranchRevenue} />
+            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>מפעל {fmtK(factoryRevenue)} · סניפים {fmtK(totalBranchRevenue)}</div>
+          </div>
+          )})()}
+
+          {/* רווח גולמי */}
+          {(() => { const grandGross = factoryGross + totalBranchGross; return (
+          <div style={{ background: 'white', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderTop: `3px solid ${grandGross >= 0 ? '#10b981' : '#ef4444'}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              <div style={{ width: '34px', height: '34px', background: '#f0fdf4', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <TrendingUp size={17} color="#10b981" />
+              </div>
+              <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>רווח גולמי</span>
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: '800', color: grandGross >= 0 ? '#10b981' : '#ef4444' }}>{fmtK(grandGross)}</div>
+            <DiffBadge curr={factoryGross + totalBranchGross} prev={prevFactoryGross + prevBranchGross} />
+            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>מפעל {fmtK(factoryGross)} · סניפים {fmtK(totalBranchGross)}</div>
+          </div>
+          )})()}
+
+          {/* % לייבור */}
+          <div style={{ background: 'white', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderTop: '3px solid #f59e0b' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              <div style={{ width: '34px', height: '34px', background: '#fffbeb', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Users size={17} color="#f59e0b" />
+              </div>
+              <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>% לייבור ממוצע (סניפים)</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a' }}>{avgLaborPct.toFixed(1)}%</span>
+              <span style={{ fontSize: '16px', fontWeight: '700', color: avgLaborPct <= 28 ? '#10b981' : '#ef4444' }}>
+                {avgLaborPct <= 28 ? '✓' : '✗'}
+              </span>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>יעד 28%</span>
+            </div>
+            <DiffBadge curr={avgLaborPct} prev={prevAvgLaborPct} inverse />
+          </div>
+
+          {/* התראות */}
+          <div style={{ background: 'white', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderTop: `3px solid ${alerts > 0 ? '#ef4444' : '#10b981'}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              <div style={{ width: '34px', height: '34px', background: alerts > 0 ? '#fef2f2' : '#f0fdf4', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <AlertTriangle size={17} color={alerts > 0 ? '#ef4444' : '#10b981'} />
+              </div>
+              <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>התראות</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <span style={{ fontSize: '24px', fontWeight: '800', color: alerts > 0 ? '#ef4444' : '#10b981' }}>{alerts}</span>
+              <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                {alerts === 0 ? 'הכל תקין' : `סניפ${alerts > 1 ? 'ים' : ''} עם חריגת לייבור`}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Row 2: מפעל — גישה מהירה ─────────────────────────────────── */}
+        <div style={{ marginBottom: '32px' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Factory size={18} color="#64748b" /> מפעל
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '14px' }}>
+            {FACTORY_MODULES.map(mod => {
+              const Icon = mod.Icon
+              const isHov = hovFactory === mod.key
+              return (
+                <button
+                  key={mod.key}
+                  onClick={() => setPage(mod.key)}
+                  onMouseEnter={() => setHovFactory(mod.key)}
+                  onMouseLeave={() => setHovFactory(null)}
+                  style={{
+                    background: isHov ? mod.color : mod.color + '10',
+                    border: `2px solid ${isHov ? mod.color : mod.color + '30'}`,
+                    borderRadius: '18px',
+                    padding: '24px 18px', cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px',
+                    transition: 'all 0.15s',
+                    transform: isHov ? 'translateY(-3px)' : 'none',
+                    boxShadow: isHov ? `0 12px 28px ${mod.color}30` : '0 2px 6px rgba(0,0,0,0.06)',
+                  }}
+                >
+                  <div style={{ width: '52px', height: '52px', background: isHov ? 'rgba(255,255,255,0.22)' : mod.color + '18', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon size={26} color={isHov ? 'white' : mod.color} />
+                  </div>
+                  <span style={{ fontSize: '14px', fontWeight: '700', color: isHov ? 'white' : '#374151', whiteSpace: 'nowrap' }}>{mod.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ─── Row 3: סניפים ─────────────────────────────────────────────── */}
+        <div style={{ marginBottom: '32px' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Store size={18} color="#64748b" /> סניפים
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '18px' }}>
+            {BRANCHES.map(br => {
+              const kpi = branchKpi.find(b => b.id === br.id)
+              const rev = kpi?.revenue ?? 0
+              const labPct = kpi?.laborPct ?? 0
+              return (
+                <button
+                  key={br.id}
+                  onClick={() => setPage(br.page)}
+                  style={{
+                    background: br.color + '08', border: `2px solid ${br.color}25`,
+                    borderRadius: '22px', padding: '28px', cursor: 'pointer',
+                    textAlign: 'right', transition: 'all 0.18s',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = br.color; e.currentTarget.style.boxShadow = `0 12px 32px ${br.color}25`; e.currentTarget.style.transform = 'translateY(-3px)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = br.color + '25'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; e.currentTarget.style.transform = 'none' }}
+                >
+                  {/* header */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
+                    <div style={{ width: '52px', height: '52px', background: br.color, borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 4px 14px ${br.color}40` }}>
+                      <Store size={24} color="white" />
+                    </div>
+                    <span style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{br.name}</span>
+                  </div>
+                  {/* stats */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '3px' }}>הכנסות · {period.label}</div>
+                      <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>{fmtK(rev)}</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '3px' }}>לייבור</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ fontSize: '20px', fontWeight: '800', color: labPct <= 28 ? '#10b981' : '#ef4444' }}>
+                          {rev > 0 ? labPct.toFixed(1) + '%' : '—'}
+                        </span>
+                        {rev > 0 && (
+                          <span style={{ fontSize: '16px', fontWeight: '700', color: labPct <= 28 ? '#10b981' : '#ef4444' }}>
+                            {labPct <= 28 ? '✓' : '✗'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ─── Row 4: ניהול ──────────────────────────────────────────────── */}
+        <div style={{ marginBottom: '32px' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Building2 size={18} color="#64748b" /> ניהול
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '14px' }}>
+            {[
+              { key: 'ceo_dashboard', label: 'דשבורד מנכ"ל', Icon: Trophy,   color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
+              { key: 'settings',      label: 'הגדרות מערכת', Icon: Settings, color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
+              { key: 'data_import',   label: 'ייבוא נתונים', Icon: Database, color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
+            ].map(mod => {
+              const Icon = mod.Icon
+              return (
+                <button
+                  key={mod.key}
+                  onClick={() => setPage(mod.key)}
+                  style={{
+                    background: mod.bg, border: `2px solid ${mod.border}`, borderRadius: '18px',
+                    padding: '28px 20px', cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.06)', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 28px ${mod.color}30` }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.06)' }}
+                >
+                  <div style={{ width: '52px', height: '52px', background: mod.color + '18', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon size={26} color={mod.color} />
+                  </div>
+                  <span style={{ fontSize: '15px', fontWeight: '700', color: '#374151' }}>{mod.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ─── מגמות 6 חודשים ─── */}
+        {trendData.length > 0 && trendData.some(d => d.revenue > 0) && (
+          <div style={{ marginBottom: '32px' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              📊 מגמות 6 חודשים
+            </h2>
+            <div style={{ background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+              <div style={{ display: 'flex', gap: '24px', marginBottom: '16px', justifyContent: 'center' }}>
+                {[{ color: '#3b82f6', label: 'הכנסות' }, { color: '#f59e0b', label: 'לייבור' }, { color: '#10b981', label: 'רווח' }].map(m => (
+                  <span key={m.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b' }}>
+                    <span style={{ width: '12px', height: '12px', background: m.color, borderRadius: '3px', display: 'inline-block' }} />
+                    {m.label}
+                  </span>
+                ))}
+              </div>
+              {(() => {
+                const W = 650, H = 180, PL = 60, PR = 16, PT = 10, PB = 30
+                const metrics = [
+                  { key: 'revenue' as const, color: '#3b82f6' },
+                  { key: 'labor' as const, color: '#f59e0b' },
+                  { key: 'profit' as const, color: '#10b981' },
+                ]
+                const maxVal = Math.max(...trendData.flatMap(d => metrics.map(m => Math.abs(d[m.key]))), 1)
+                const groupW = (W - PL - PR) / trendData.length
+                const barW = groupW / (metrics.length + 1)
+                return (
+                  <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxHeight: '180px' }}>
+                    <line x1={PL} y1={H - PB} x2={W - PR} y2={H - PB} stroke="#e2e8f0" strokeWidth="1" />
+                    {trendData.map((d, di) => {
+                      const gx = PL + di * groupW
+                      return metrics.map((m, mi) => {
+                        const val = Math.abs(d[m.key])
+                        const h = (val / maxVal) * (H - PT - PB)
+                        return <rect key={`${di}-${mi}`} x={gx + (mi + 0.5) * barW} y={H - PB - h} width={barW * 0.8} height={h} rx={3} fill={m.color} opacity={0.85} />
+                      })
+                    })}
+                    {trendData.map((d, i) => (
+                      <text key={i} x={PL + i * groupW + groupW / 2} y={H - 8} textAnchor="middle" fontSize="11" fill="#64748b">{d.label}</text>
+                    ))}
+                  </svg>
+                )
+              })()}
+            </div>
+          </div>
+        )}
 
       </main>
     </div>
