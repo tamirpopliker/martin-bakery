@@ -113,6 +113,7 @@ export default function FactoryDashboard({ onBack }: Props) {
   const [salesDough, setSalesDough]     = useState(0)
   const [salesB2B, setSalesB2B]         = useState(0)
   const [salesMisc, setSalesMisc]       = useState(0)
+  const [salesInternal, setSalesInternal] = useState(0)
 
   // ספקים (מ-factory_b2b_sales misc, מקובץ לפי customer)
   const [supplierRows, setSupplierRows] = useState<{ name: string; total: number }[]>([])
@@ -158,8 +159,8 @@ export default function FactoryDashboard({ onBack }: Props) {
       globalEmpsData, wdData,
       prodRes,
     ] = await Promise.all([
-      supabase.from('factory_sales').select('department, amount').gte('date', from).lt('date', to),
-      supabase.from('factory_b2b_sales').select('sale_type, customer, amount').gte('date', from).lt('date', to),
+      supabase.from('factory_sales').select('department, amount, is_internal').gte('date', from).lt('date', to),
+      supabase.from('factory_b2b_sales').select('sale_type, customer, amount, is_internal').gte('date', from).lt('date', to),
       supabase.from('factory_waste').select('department, amount').gte('date', from).lt('date', to),
       supabase.from('factory_repairs').select('department, amount').gte('date', from).lt('date', to),
       supabase.from('labor').select('entity_id, hours_100, hours_125, hours_150, gross_salary, employer_cost').eq('entity_type', 'factory').gte('date', from).lt('date', to),
@@ -189,6 +190,11 @@ export default function FactoryDashboard({ onBack }: Props) {
     // שונות (misc) — הכנסה, לא ספקים
     const miscTotal = b2b.filter((r: any) => r.sale_type === 'misc').reduce((s: number, r: any) => s + Number(r.amount), 0)
     setSalesMisc(miscTotal)
+
+    // מכירות פנימיות לסניפים (subset of the above — for display)
+    const internalFsTotal = fs.filter((r: any) => r.is_internal).reduce((s: number, r: any) => s + Number(r.amount), 0)
+    const internalB2bTotal = b2b.filter((r: any) => r.is_internal).reduce((s: number, r: any) => s + Number(r.amount), 0)
+    setSalesInternal(internalFsTotal + internalB2bTotal)
 
     // ── ספקים (מטבלת supplier_invoices) ──
     const suppInvData = suppInvRes.data || []
@@ -460,6 +466,14 @@ export default function FactoryDashboard({ onBack }: Props) {
                 <span style={{ color: '#3b82f6', textAlign: 'left' as const }}>{fmtM(totalSales)}</span>
                 <span style={{ color: '#3b82f6', textAlign: 'left' as const }}>100%</span>
               </div>
+              {salesInternal > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 120px 80px', padding: '12px 18px', background: '#faf5ff', borderTop: '1px dashed #c084fc', alignItems: 'center' }}>
+                  <span style={{ fontWeight: '600', color: '#7c3aed', fontSize: '12px' }}>מתוכם — סניפים</span>
+                  <div />
+                  <span style={{ fontWeight: '700', color: '#7c3aed', textAlign: 'left' as const }}>{fmtM(salesInternal)}</span>
+                  <span style={{ fontSize: '12px', color: '#a78bfa', textAlign: 'left' as const }}>{fmtP(pct(salesInternal, totalSales))}</span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -553,14 +567,23 @@ export default function FactoryDashboard({ onBack }: Props) {
               <div style={{ display: 'grid', gridTemplateColumns: '120px repeat(3, 1fr)', padding: '10px 18px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
                 <span>מחלקה</span><span style={{ textAlign: 'center' }}>שעות</span><span style={{ textAlign: 'center' }}>ברוטו</span><span style={{ textAlign: 'center' }}>עלות מעסיק</span>
               </div>
-              {DEPTS.map((d, i) => (
-                <div key={d} style={{ display: 'grid', gridTemplateColumns: '120px repeat(3, 1fr)', padding: '12px 18px', borderBottom: i < 3 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa', alignItems: 'center' }}>
-                  <span style={{ fontWeight: '600', color: DEPT_COLORS[d] }}>{DEPT_LABELS[d]}</span>
-                  <span style={{ textAlign: 'center', color: '#64748b' }}>{laborDept[d].hours.toFixed(1)}</span>
-                  <span style={{ textAlign: 'center', fontWeight: '700', color: '#374151' }}>{fmtM(laborDept[d].gross)}</span>
-                  <span style={{ textAlign: 'center', fontWeight: '700', color: '#ef4444' }}>{fmtM(laborDept[d].employer)}</span>
-                </div>
-              ))}
+              {(() => {
+                const globalByDept: Record<Dept, number> = { creams: globalLaborCreams, dough: globalLaborDough, packaging: 0, cleaning: 0 }
+                return DEPTS.map((d, i) => {
+                  const deptTotal = laborDept[d].employer + globalByDept[d]
+                  return (
+                    <div key={d} style={{ display: 'grid', gridTemplateColumns: '120px repeat(3, 1fr)', padding: '12px 18px', borderBottom: i < 3 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa', alignItems: 'center' }}>
+                      <span style={{ fontWeight: '600', color: DEPT_COLORS[d] }}>{DEPT_LABELS[d]}</span>
+                      <span style={{ textAlign: 'center', color: '#64748b' }}>{laborDept[d].hours.toFixed(1)}</span>
+                      <span style={{ textAlign: 'center', fontWeight: '700', color: '#374151' }}>{fmtM(laborDept[d].gross)}</span>
+                      <span style={{ textAlign: 'center', fontWeight: '700', color: '#ef4444' }}>
+                        {fmtM(deptTotal)}
+                        {globalByDept[d] > 0 && <span style={{ fontSize: '10px', color: '#94a3b8', display: 'block' }}>כולל גלובלי {fmtM(globalByDept[d])}</span>}
+                      </span>
+                    </div>
+                  )
+                })
+              })()}
               <div style={{ display: 'grid', gridTemplateColumns: '120px repeat(3, 1fr)', padding: '14px 18px', background: '#fffbeb', borderTop: '2px solid #fde68a', fontWeight: '800' }}>
                 <span style={{ color: '#374151' }}>סה"כ</span>
                 <span style={{ textAlign: 'center', color: '#64748b' }}>{totalHours.toFixed(1)}</span>

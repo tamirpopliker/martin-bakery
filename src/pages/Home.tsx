@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabase, getLast6Months } from '../lib/supabase'
+import { supabase, getLast6Months, monthEnd } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import DailyProduction from './DailyProduction'
@@ -14,6 +14,7 @@ import FactoryB2B from './FactoryB2B'
 import FactorySettings from './FactorySettings'
 import CEODashboard from './CEODashboard'
 import BranchHome from './BranchHome'
+import BranchManagerDashboard from './BranchManagerDashboard'
 import DepartmentHome from './DepartmentHome'
 // DataImport is now embedded inside FactorySettings
 import {
@@ -98,8 +99,8 @@ export default function Home() {
     async function loadKpi() {
       // Factory data
       const [salesFs, salesB2b, laborRes, suppliersRes] = await Promise.all([
-        supabase.from('factory_sales').select('amount').gte('date', from).lt('date', to),
-        supabase.from('factory_b2b_sales').select('amount').gte('date', from).lt('date', to),
+        supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', from).lt('date', to),
+        supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', from).lt('date', to),
         supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', from).lt('date', to),
         supabase.from('supplier_invoices').select('amount').gte('date', from).lt('date', to),
       ])
@@ -142,8 +143,8 @@ export default function Home() {
       // Previous period (comparison)
       const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
       const [pSalesFs, pSalesB2b, pLabor, pSupp] = await Promise.all([
-        supabase.from('factory_sales').select('amount').gte('date', pFrom).lt('date', pTo),
-        supabase.from('factory_b2b_sales').select('amount').gte('date', pFrom).lt('date', pTo),
+        supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', pFrom).lt('date', pTo),
+        supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', pFrom).lt('date', pTo),
         supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', pFrom).lt('date', pTo),
         supabase.from('supplier_invoices').select('amount').gte('date', pFrom).lt('date', pTo),
       ])
@@ -176,8 +177,8 @@ export default function Home() {
       const months6 = getLast6Months(refMonth)
       const tFrom = months6[0] + '-01', tTo = monthEnd(months6[5])
       const [tSalesFs, tSalesB2b, tLabor6, tSupp6] = await Promise.all([
-        supabase.from('factory_sales').select('date, amount').gte('date', tFrom).lt('date', tTo),
-        supabase.from('factory_b2b_sales').select('date, amount').gte('date', tFrom).lt('date', tTo),
+        supabase.from('factory_sales').select('date, amount').eq('is_internal', false).gte('date', tFrom).lt('date', tTo),
+        supabase.from('factory_b2b_sales').select('date, amount').eq('is_internal', false).gte('date', tFrom).lt('date', tTo),
         supabase.from('labor').select('date, employer_cost').eq('entity_type', 'factory').gte('date', tFrom).lt('date', tTo),
         supabase.from('supplier_invoices').select('date, amount').gte('date', tFrom).lt('date', tTo),
       ])
@@ -249,6 +250,7 @@ export default function Home() {
   if (page === 'dept_packaging') return <DepartmentHome department="packaging" onBack={() => setPage(null)} />
   if (page === 'dept_cleaning')  return <DepartmentHome department="cleaning"  onBack={() => setPage(null)} />
 
+  if (page === 'branch_dashboard') return <BranchManagerDashboard onBack={() => setPage(null)} />
   if (page === 'branch_1') return <BranchHome branch={{ id: 1, name: 'אברהם אבינו', color: '#3b82f6' }} onBack={() => setPage(null)} />
   if (page === 'branch_2') return <BranchHome branch={{ id: 2, name: 'הפועלים',     color: '#10b981' }} onBack={() => setPage(null)} />
   if (page === 'branch_3') return <BranchHome branch={{ id: 3, name: 'יעקב כהן',   color: '#a855f7' }} onBack={() => setPage(null)} />
@@ -410,6 +412,31 @@ export default function Home() {
             <div style={{ flex: 1, overflowY: 'auto', padding: '10px 6px' }}>
               {openPanel === 'factory' && renderPanelItems(PANEL_FACTORY)}
 
+              {openPanel === 'branches' && (
+                <>
+                  <button
+                    onClick={() => { setPage('branch_dashboard'); setOpenPanel(null) }}
+                    style={{
+                      width: '100%', background: 'transparent', border: 'none', borderRadius: '10px',
+                      padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px',
+                      cursor: 'pointer', textAlign: 'right', transition: 'background 0.12s',
+                      marginBottom: '6px',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#f1f5f9')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <div style={{ width: '36px', height: '36px', background: 'linear-gradient(135deg, #3b82f6, #10b981)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <BarChart3 size={18} color="white" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>דשבורד מנהל</div>
+                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>השוואת סניפים · P&L · KPI</div>
+                    </div>
+                    <ChevronLeft size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
+                  </button>
+                  <div style={{ height: '1px', background: '#e2e8f0', margin: '0 14px 6px' }} />
+                </>
+              )}
               {openPanel === 'branches' && BRANCHES.map(br => (
                 <button
                   key={br.id}
@@ -562,6 +589,57 @@ export default function Home() {
             <Store size={18} color="#64748b" /> סניפים
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '18px' }}>
+            {/* כרטיסיית סיכום — כל הסניפים */}
+            <button
+              onClick={() => setPage('branch_dashboard')}
+              style={{
+                background: 'linear-gradient(135deg, #3b82f610, #10b98118)',
+                border: '2px solid #10b98130',
+                borderRadius: '22px', padding: '28px', cursor: 'pointer',
+                textAlign: 'right', transition: 'all 0.18s',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(16,185,129,0.15)'; e.currentTarget.style.transform = 'translateY(-3px)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#10b98130'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; e.currentTarget.style.transform = 'none' }}
+            >
+              {/* header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
+                <div style={{ width: '52px', height: '52px', background: 'linear-gradient(135deg, #3b82f6, #10b981)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(16,185,129,0.3)' }}>
+                  <BarChart3 size={24} color="white" />
+                </div>
+                <div>
+                  <span style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a', display: 'block' }}>כל הסניפים</span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>דשבורד מנהל סניפים →</span>
+                </div>
+              </div>
+              {/* stats */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '3px' }}>הכנסות · {period.label}</div>
+                  <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>{fmtK(totalBranchRevenue)}</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '3px' }}>לייבור</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ fontSize: '20px', fontWeight: '800', color: avgLaborPct <= 28 ? '#10b981' : '#ef4444' }}>
+                      {totalBranchRevenue > 0 ? avgLaborPct.toFixed(1) + '%' : '—'}
+                    </span>
+                    {totalBranchRevenue > 0 && (
+                      <span style={{ fontSize: '16px', fontWeight: '700', color: avgLaborPct <= 28 ? '#10b981' : '#ef4444' }}>
+                        {avgLaborPct <= 28 ? '✓' : '✗'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '3px' }}>רווח גולמי</div>
+                  <div style={{ fontSize: '20px', fontWeight: '800', color: totalBranchGross >= 0 ? '#10b981' : '#ef4444' }}>
+                    {fmtK(totalBranchGross)}
+                  </div>
+                </div>
+              </div>
+            </button>
+
             {BRANCHES.map(br => {
               const kpi = branchKpi.find(b => b.id === br.id)
               const rev = kpi?.revenue ?? 0

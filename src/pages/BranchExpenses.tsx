@@ -66,6 +66,7 @@ function AutocompleteInput({ value, onChange, options, placeholder, color }: {
 }
 
 export default function BranchExpenses({ branchId, branchName, branchColor, onBack }: Props) {
+  const { period, setPeriod, from, to } = usePeriod()
   const [entries, setEntries]         = useState<Entry[]>([])
   const [suppliers, setSuppliers]     = useState<Supplier[]>([])
   const [typeFilter, setTypeFilter]   = useState<ExpenseType | 'all'>('all')
@@ -176,9 +177,12 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>הוצאות — {branchName}</h1>
           <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>ספקים · תיקונים · תשתיות · משלוחים</p>
         </div>
-        <div style={{ marginRight: 'auto', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '8px 18px' }}>
-          <span style={{ fontSize: '18px', fontWeight: '800', color: '#ef4444' }}>₪{totalAll.toLocaleString()}</span>
-          <span style={{ fontSize: '12px', color: '#64748b', marginRight: '6px' }}>סה"כ החודש</span>
+        <div style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <PeriodPicker period={period} onChange={setPeriod} />
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '8px 18px' }}>
+            <span style={{ fontSize: '18px', fontWeight: '800', color: '#ef4444' }}>₪{totalAll.toLocaleString()}</span>
+            <span style={{ fontSize: '12px', color: '#64748b', marginRight: '6px' }}>סה"כ</span>
+          </div>
         </div>
       </div>
 
@@ -246,8 +250,6 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
 
         {/* פילטרים */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
-          <input type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)}
-            style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '8px 14px', fontSize: '14px', background: 'white', fontFamily: 'inherit' }} />
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' as const }}>
             <button onClick={() => setTypeFilter('all')} style={{ background: typeFilter === 'all' ? branchColor : '#f1f5f9', color: typeFilter === 'all' ? 'white' : '#64748b', border: 'none', borderRadius: '8px', padding: '6px 12px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>הכל</button>
             {Object.entries(TYPE_CONFIG).map(([k, v]) => (

@@ -202,6 +202,7 @@ function parseCashOnTab(items: PdfItem[]): { rows: ParsedRow[]; rawLines: string
 
 // ─── קומפוננטה ────────────────────────────────────────────────────────────────
 export default function BranchLabor({ branchId, branchName, branchColor, onBack }: Props) {
+  const { period, setPeriod, from, to } = usePeriod()
   const [entries, setEntries]           = useState<Entry[]>([])
   const [editId, setEditId]             = useState<number | null>(null)
   const [editData, setEditData]         = useState<Partial<Entry>>({})
@@ -367,7 +368,8 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>לייבור — {branchName}</h1>
           <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>העלאת CashOnTab · הזנה ידנית · עלות מעסיק ×1.3</p>
         </div>
-        <div style={{ marginRight: 'auto', display: 'flex', gap: '10px' }}>
+        <div style={{ marginRight: 'auto', display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <PeriodPicker period={period} onChange={setPeriod} />
           <div style={{ background: kpiOk ? '#f0fdf4' : '#fef2f2', border: `1px solid ${kpiOk ? '#bbf7d0' : '#fecaca'}`, borderRadius: '10px', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             {kpiOk ? <CheckCircle size={16} color="#10b981" /> : <AlertTriangle size={16} color="#ef4444" />}
             <div>
@@ -567,8 +569,6 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
         {tab === 'history' && (
           <>
             <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', alignItems: 'center' }}>
-              <input type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)}
-                style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '8px 14px', fontSize: '14px', background: 'white', fontFamily: 'inherit' }} />
               <div style={{ marginRight: 'auto', display: 'flex', gap: '16px', fontSize: '13px', color: '#64748b' }}>
                 <span>ברוטו: <strong style={{ color: branchColor }}>₪{Math.round(totalGross).toLocaleString()}</strong></span>
                 <span>עלות מעסיק: <strong style={{ color: '#ef4444' }}>₪{Math.round(totalEmployer).toLocaleString()}</strong></span>

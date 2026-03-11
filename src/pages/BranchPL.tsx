@@ -30,6 +30,11 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   const [laborEmployer, setLaborEmployer] = useState(0)
   const [wasteTotal, setWasteTotal]     = useState(0)
   const [fixedCosts, setFixedCosts]     = useState(0)
+  const [mgmtCosts, setMgmtCosts]      = useState(0)
+  const [overheadPct, setOverheadPct] = useState(() => {
+    const saved = localStorage.getItem('overhead_pct')
+    return saved ? Number(saved) : 5
+  })
 
   // KPI targets (dynamic)
   const [laborTarget, setLaborTarget] = useState(28)
@@ -59,10 +64,10 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
     const { data: expData } = await supabase.from('branch_expenses').select('expense_type, amount')
       .eq('branch_id', branchId).gte('date', from).lt('date', to)
     if (expData) {
-      setExpSuppliers(expData.filter(r => r.expense_type === 'supplier' || r.expense_type === 'inventory').reduce((s, r) => s + Number(r.amount), 0))
-      setExpRepairs(expData.filter(r => r.expense_type === 'repair').reduce((s, r) => s + Number(r.amount), 0))
+      setExpSuppliers(expData.filter(r => r.expense_type === 'suppliers' || r.expense_type === 'supplier' || r.expense_type === 'inventory').reduce((s, r) => s + Number(r.amount), 0))
+      setExpRepairs(expData.filter(r => r.expense_type === 'repairs' || r.expense_type === 'repair').reduce((s, r) => s + Number(r.amount), 0))
       setExpInfra(expData.filter(r => r.expense_type === 'infrastructure').reduce((s, r) => s + Number(r.amount), 0))
-      setExpDelivery(expData.filter(r => r.expense_type === 'delivery').reduce((s, r) => s + Number(r.amount), 0))
+      setExpDelivery(expData.filter(r => r.expense_type === 'deliveries' || r.expense_type === 'delivery').reduce((s, r) => s + Number(r.amount), 0))
       setExpOther(expData.filter(r => r.expense_type === 'other').reduce((s, r) => s + Number(r.amount), 0))
     }
 
@@ -76,10 +81,13 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
       .eq('branch_id', branchId).gte('date', from).lt('date', to)
     if (wasteData) setWasteTotal(wasteData.reduce((s, r) => s + Number(r.amount), 0))
 
-    // fixed costs
-    const { data: fcData } = await supabase.from('fixed_costs').select('amount')
+    // fixed costs + management
+    const { data: fcData } = await supabase.from('fixed_costs').select('amount, entity_id')
       .eq('entity_type', entityType).eq('month', monthKey || from.slice(0, 7))
-    if (fcData) setFixedCosts(fcData.reduce((s, r) => s + Number(r.amount), 0))
+    if (fcData) {
+      setFixedCosts(fcData.filter(r => r.entity_id !== 'mgmt').reduce((s, r) => s + Number(r.amount), 0))
+      setMgmtCosts(fcData.filter(r => r.entity_id === 'mgmt').reduce((s, r) => s + Number(r.amount), 0))
+    }
 
     // KPI targets
     const { data: kpiData } = await supabase.from('branch_kpi_targets').select('*').eq('branch_id', branchId).single()
@@ -110,12 +118,13 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
       .eq('branch_id', branchId).gte('date', pFrom).lt('date', pTo)
     const pWstTotal = prevWst ? prevWst.reduce((s, r) => s + Number(r.amount), 0) : 0
 
-    const { data: prevFc } = await supabase.from('fixed_costs').select('amount')
+    const { data: prevFc } = await supabase.from('fixed_costs').select('amount, entity_id')
       .eq('entity_type', entityType).eq('month', comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7))
-    const pFcTotal = prevFc ? prevFc.reduce((s, r) => s + Number(r.amount), 0) : 0
+    const pFcTotal = prevFc ? prevFc.filter(r => r.entity_id !== 'mgmt').reduce((s, r) => s + Number(r.amount), 0) : 0
+    const pMgmtTotal = prevFc ? prevFc.filter(r => r.entity_id === 'mgmt').reduce((s, r) => s + Number(r.amount), 0) : 0
 
     const prevGross = pRevTotal - pLabTotal - pExpTotal
-    setPrevProfit(prevGross - pFcTotal - pWstTotal)
+    setPrevProfit(prevGross - pFcTotal - pMgmtTotal - pWstTotal - (pRevTotal * overheadPct / 100))
 
     setLoading(false)
   }
@@ -126,7 +135,8 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   const totalRevenue   = revCashier + revWebsite + revCredit
   const totalExpenses  = expSuppliers + expRepairs + expInfra + expDelivery + expOther
   const grossProfit    = totalRevenue - laborEmployer - totalExpenses
-  const operatingProfit = grossProfit - fixedCosts - wasteTotal
+  const overheadAmount = totalRevenue * overheadPct / 100
+  const operatingProfit = grossProfit - fixedCosts - mgmtCosts - wasteTotal - overheadAmount
   const laborPct       = totalRevenue > 0 ? (laborEmployer / totalRevenue) * 100 : 0
   const wastePct       = totalRevenue > 0 ? (wasteTotal / totalRevenue) * 100 : 0
   const grossPct       = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0
@@ -238,7 +248,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                 <div style={{ fontSize: '20px', fontWeight: '800', color: grossProfit >= 0 ? '#10b981' : '#ef4444' }}>= רווח גולמי {fmtM(grossProfit)}</div>
               </div>
               <div style={{ background: 'white', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderRight: `4px solid ${operatingProfit >= 0 ? '#10b981' : '#ef4444'}` }}>
-                <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>רווח גולמי − עלויות קבועות − פחת</div>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>גולמי − קבועות − הנהלה − פחת − מטה</div>
                 <div style={{ fontSize: '20px', fontWeight: '800', color: operatingProfit >= 0 ? '#10b981' : '#ef4444' }}>= רווח תפעולי {fmtM(operatingProfit)}</div>
               </div>
             </div>
@@ -313,6 +323,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                 </div>
                 {[
                   { label: 'עלויות קבועות', amount: fixedCosts },
+                  { label: 'הנהלה וכלליות', amount: mgmtCosts },
                   { label: 'פחת', amount: wasteTotal },
                 ].map((l, i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
@@ -322,6 +333,26 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                     </span>
                   </div>
                 ))}
+                {/* העמסת מטה — editable % */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
+                  <span style={{ fontSize: '14px', color: '#374151', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    העמסת מטה
+                    <input
+                      type="number"
+                      value={overheadPct}
+                      onChange={e => {
+                        const v = Math.max(0, Math.min(100, Number(e.target.value) || 0))
+                        setOverheadPct(v)
+                        localStorage.setItem('overhead_pct', String(v))
+                      }}
+                      style={{ width: '44px', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '2px 6px', fontSize: '13px', textAlign: 'center' as const, fontWeight: '600', color: '#3b82f6', background: '#f8fafc' }}
+                    />
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>%</span>
+                  </span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: overheadAmount > 0 ? '#64748b' : '#94a3b8', textAlign: 'left' as const }}>
+                    {overheadAmount > 0 ? fmtM(overheadAmount) : '—'}
+                  </span>
+                </div>
 
                 {/* רווח תפעולי */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '16px 18px', background: operatingProfit >= 0 ? '#f0fdf4' : '#fef2f2' }}>

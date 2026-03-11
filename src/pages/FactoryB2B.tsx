@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { ArrowRight, Plus, Pencil, Trash2, Search, X, TrendingUp } from 'lucide-react'
+import { detectBranchId, getBranchNameById } from '../lib/internalCustomers'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Props { onBack: () => void }
@@ -16,6 +17,9 @@ interface Entry {
   amount: number
   doc_number: string
   notes: string
+  is_internal?: boolean
+  target_branch_id?: number | null
+  branch_status?: string | null
 }
 
 interface TabConfig {
@@ -130,12 +134,16 @@ export default function FactoryB2B({ onBack }: Props) {
   async function addEntry() {
     if (!amount || !date || !customer) return
     setLoading(true)
+    const branchId = detectBranchId(customer)
     const payload: any = {
       date, customer,
       amount: parseFloat(amount),
       doc_number: docNumber,
       notes,
       [cfg.filterCol]: cfg.filterVal,
+      is_internal: branchId !== null,
+      target_branch_id: branchId,
+      branch_status: branchId !== null ? 'pending' : null,
     }
     await supabase.from(cfg.table).insert(payload)
     if (!allCustomers.includes(customer)) setAllCustomers(p => [...p, customer].sort())
@@ -151,7 +159,15 @@ export default function FactoryB2B({ onBack }: Props) {
   }
 
   async function saveEdit(id: number) {
-    await supabase.from(cfg.table).update(editData).eq('id', id)
+    const updates: any = { ...editData }
+    // אם שם הלקוח שונה — בדוק מחדש אם פנימי
+    if (editData.customer) {
+      const branchId = detectBranchId(editData.customer)
+      updates.is_internal = branchId !== null
+      updates.target_branch_id = branchId
+      updates.branch_status = branchId !== null ? 'pending' : null
+    }
+    await supabase.from(cfg.table).update(updates).eq('id', id)
     setEditId(null)
     await fetchEntries()
   }
@@ -335,7 +351,19 @@ export default function FactoryB2B({ onBack }: Props) {
                 <>
                   <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(entry.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
                   <div>
-                    <div style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{entry.customer}</div>
+                    <div style={{ fontWeight: '600', color: '#374151', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      {entry.customer}
+                      {entry.is_internal && (
+                        <span style={{
+                          fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '6px',
+                          background: entry.branch_status === 'approved' ? '#dcfce7' : entry.branch_status === 'disputed' ? '#fef3c7' : '#e0e7ff',
+                          color: entry.branch_status === 'approved' ? '#16a34a' : entry.branch_status === 'disputed' ? '#d97706' : '#4f46e5',
+                        }}>
+                          פנימי · {entry.branch_status === 'approved' ? 'אושר' : entry.branch_status === 'disputed' ? 'נערך' : 'ממתין'}
+                          {entry.target_branch_id ? ` · ${getBranchNameById(entry.target_branch_id) || ''}` : ''}
+                        </span>
+                      )}
+                    </div>
                     {entry.notes && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{entry.notes}</div>}
                   </div>
                   <span style={{ fontSize: '13px', color: '#94a3b8' }}>{entry.doc_number || '—'}</span>

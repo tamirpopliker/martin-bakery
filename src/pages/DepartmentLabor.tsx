@@ -30,6 +30,7 @@ interface LaborEntry {
   hours_125: number
   hours_150: number
   gross_salary: number
+  employer_cost: number
   is_casual: boolean
   hourly_rate: number | null
 }
@@ -177,7 +178,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
   }
 
   // ─── חישובים ─────────────────────────────────────────────────────────────
-  const totalCost    = entries.reduce((s, e) => s + Number(e.gross_salary), 0)
+  const totalCost    = entries.reduce((s, e) => s + Number(e.employer_cost), 0)
   const totalH100    = entries.reduce((s, e) => s + Number(e.hours_100), 0)
   const totalH125    = entries.reduce((s, e) => s + Number(e.hours_125), 0)
   const totalH150    = entries.reduce((s, e) => s + Number(e.hours_150), 0)
@@ -188,7 +189,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
   const employeeSummary = entries.reduce<Record<string, { totalCost: number, totalHours: number, count: number, isCasual: boolean }>>((acc, e) => {
     const name = e.employee_name
     if (!acc[name]) acc[name] = { totalCost: 0, totalHours: 0, count: 0, isCasual: e.is_casual }
-    acc[name].totalCost += Number(e.gross_salary)
+    acc[name].totalCost += Number(e.employer_cost)
     acc[name].totalHours += Number(e.hours_100) + Number(e.hours_125) + Number(e.hours_150)
     acc[name].count += 1
     return acc
@@ -480,7 +481,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                       <input type="number" value={editData.hours_100 ?? ''} onChange={e => setEditData({ ...editData, hours_100: parseFloat(e.target.value) || 0 })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' }} />
                       <input type="number" value={editData.hours_125 ?? ''} onChange={e => setEditData({ ...editData, hours_125: parseFloat(e.target.value) || 0 })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' }} />
                       <input type="number" value={editData.hours_150 ?? ''} onChange={e => setEditData({ ...editData, hours_150: parseFloat(e.target.value) || 0 })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' }} />
-                      <input type="number" value={editData.gross_salary ?? ''} onChange={e => setEditData({ ...editData, gross_salary: parseFloat(e.target.value) || 0 })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
+                      <input type="number" value={editData.employer_cost ?? ''} onChange={e => setEditData({ ...editData, employer_cost: parseFloat(e.target.value) || 0 })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
                       <button onClick={() => saveEdit(entry.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                       <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                     </>
@@ -499,7 +500,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                       <span style={{ fontSize: '13px', color: '#64748b', textAlign: 'center' }}>{Number(entry.hours_100) > 0 ? entry.hours_100 : '—'}</span>
                       <span style={{ fontSize: '13px', color: '#64748b', textAlign: 'center' }}>{Number(entry.hours_125) > 0 ? entry.hours_125 : '—'}</span>
                       <span style={{ fontSize: '13px', color: '#64748b', textAlign: 'center' }}>{Number(entry.hours_150) > 0 ? entry.hours_150 : '—'}</span>
-                      <span style={{ fontWeight: '700', color: cfg.color, fontSize: '14px' }}>{fmtM(Number(entry.gross_salary))}</span>
+                      <span style={{ fontWeight: '700', color: cfg.color, fontSize: '14px' }}>{fmtM(Number(entry.employer_cost))}</span>
                       <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
                       <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
                     </>
@@ -595,7 +596,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                     <span style={{ fontSize: '13px', color: Number(entry.hours_125) > 0 ? '#f59e0b' : '#64748b', textAlign: 'center', fontWeight: Number(entry.hours_125) > 0 ? '600' : '400' }}>{Number(entry.hours_125) > 0 ? entry.hours_125 : '—'}</span>
                     <span style={{ fontSize: '13px', color: Number(entry.hours_150) > 0 ? '#ef4444' : '#64748b', textAlign: 'center', fontWeight: Number(entry.hours_150) > 0 ? '600' : '400' }}>{Number(entry.hours_150) > 0 ? entry.hours_150 : '—'}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontWeight: '700', color: cfg.color, fontSize: '14px' }}>{fmtM(Number(entry.gross_salary))}</span>
+                      <span style={{ fontWeight: '700', color: cfg.color, fontSize: '14px' }}>{fmtM(Number(entry.employer_cost))}</span>
                       <span style={{ fontSize: '11px', color: '#94a3b8' }}>{dayTotal.toFixed(1)} ש׳</span>
                     </div>
                   </div>

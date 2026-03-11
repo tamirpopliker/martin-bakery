@@ -1,10 +1,12 @@
 import { useState, useRef, useCallback } from 'react'
 import { supabase, monthEnd } from '../lib/supabase'
 import Papa from 'papaparse'
+import JSZip from 'jszip'
 import { Upload, CheckCircle, AlertCircle, XCircle, FileText, Loader2, Download, Trash2 } from 'lucide-react'
+import { detectBranchId } from '../lib/internalCustomers'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-interface Props { onBack?: () => void }
+interface Props { onBack?: () => void; branchOnly?: boolean }
 
 interface FileMapping {
   csvName: string
@@ -43,6 +45,30 @@ const DEPT_MAP: Record<string, string> = {
 const REPAIR_TYPE_MAP: Record<string, string> = {
   'תיקון': 'repair', 'repair': 'repair',
   'ציוד חדש': 'new_equipment', 'new_equipment': 'new_equipment', 'new equipment': 'new_equipment',
+}
+
+const BRANCH_MAP: Record<string, number> = {
+  'אברהם אבינו': 1,
+  'הפועלים': 2,
+  'יעקב כהן': 3,
+}
+function parseBranch(val: string | undefined): number | null {
+  if (!val) return null
+  const v = val.trim()
+  return BRANCH_MAP[v] ?? null
+}
+
+const SOURCE_MAP: Record<string, string> = {
+  'קופה': 'cashier', 'cashier': 'cashier', 'cash': 'cashier',
+  'אתר': 'website', 'website': 'website', 'web': 'website',
+  'הקפה': 'credit', 'אשראי': 'credit', 'credit': 'credit',
+}
+
+const EXPENSE_TYPES = ['suppliers', 'repairs', 'infrastructure', 'deliveries', 'other']
+
+const SUPPLIER_CAT_MAP: Record<string, string> = {
+  'ספקים/מלאי': 'מזון', 'מזון': 'מזון', 'ניקיון': 'ניקיון',
+  'ציוד': 'ציוד', 'תשתיות': 'תשתיות', 'אריזה': 'אריזה', 'שונות': 'שונות',
 }
 
 function parseDept(val: string | undefined): string {
@@ -94,6 +120,15 @@ function validateRows(tableName: string, mapped: Record<string, any>[], rawRows:
       if (val && !REPAIR_TYPE_MAP[val] && !REPAIR_TYPE_MAP[val.toLowerCase()]) badTypes.add(val)
     }
     if (badTypes.size > 0) warnings.push(`סוגי תיקון לא מזוהים (ישתמש ב-repair): ${[...badTypes].join(', ')}`)
+  }
+  // Unrecognized branches
+  if (['branch_revenue', 'branch_expenses', 'branch_labor', 'branch_waste', 'branch_suppliers', 'branch_credit_customers'].includes(tableName)) {
+    const badBranches = new Set<string>()
+    for (const r of rawRows) {
+      const bn = r.branch_name?.trim()
+      if (bn && !BRANCH_MAP[bn]) badBranches.add(bn)
+    }
+    if (badBranches.size > 0) warnings.push(`סניפים לא מזוהים: ${[...badBranches].join(', ')}`)
   }
   // Mixed months
   const months = new Set<string>()
@@ -148,10 +183,15 @@ const FILE_MAP: Record<string, TableDef> = {
     mapRow: (r) => {
       const date = parseDate(r.date); const amount = parseNum(r.amount)
       if (!date || amount === null) return null
+      const customerName = r.customer?.trim() || null
+      const branchId = customerName ? detectBranchId(customerName) : null
       return {
         date, department: parseDept(r.department),
-        customer: r.customer?.trim() || null, amount,
+        customer: customerName, amount,
         doc_number: r.doc_number?.trim() || null, notes: r.notes?.trim() || null,
+        is_internal: branchId !== null,
+        target_branch_id: branchId,
+        branch_status: branchId !== null ? 'pending' : null,
       }
     },
     dupeKey: (r) => `${r.date}_${r.customer}_${r.amount}_${r.doc_number}`,
@@ -164,9 +204,14 @@ const FILE_MAP: Record<string, TableDef> = {
       let st = r.sale_type?.trim().toLowerCase() || 'misc'
       if (st === 'שונות') st = 'misc'
       if (st === 'עסקי' || st === 'b2b') st = 'b2b'
+      const customerName = r.customer?.trim() || null
+      const branchId = customerName ? detectBranchId(customerName) : null
       return {
-        date, sale_type: st, customer: r.customer?.trim() || null,
+        date, sale_type: st, customer: customerName,
         amount, doc_number: r.doc_number?.trim() || null, notes: r.notes?.trim() || null,
+        is_internal: branchId !== null,
+        target_branch_id: branchId,
+        branch_status: branchId !== null ? 'pending' : null,
       }
     },
     dupeKey: (r) => `${r.date}_${r.customer}_${r.amount}`,
@@ -254,9 +299,113 @@ const FILE_MAP: Record<string, TableDef> = {
     },
     dupeKey: (r) => `${r.name}`,
   },
+  // ─── Branch tables ───────────────────────────────────────────────────────
+  'branch_revenue': {
+    table: 'branch_revenue', label: 'הכנסות סניפים', hasDate: true,
+    mapRow: (r) => {
+      const date = parseDate(r.date); const amount = parseNum(r.amount)
+      const branchId = parseBranch(r.branch_name)
+      if (!date || amount === null || !branchId) return null
+      const rawSrc = (r.source || '').trim()
+      const src = SOURCE_MAP[rawSrc] || SOURCE_MAP[rawSrc.toLowerCase()] || rawSrc.toLowerCase()
+      if (!['cashier', 'website', 'credit'].includes(src)) return null
+      return {
+        branch_id: branchId, date, source: src, amount,
+        transaction_count: parseNum(r.transaction_count) ?? 0,
+        customer: r.customer?.trim() || null,
+        doc_number: r.doc_number?.trim() || null,
+        notes: r.notes?.trim() || null,
+      }
+    },
+    dupeKey: (r) => `${r.branch_id}_${r.date}_${r.source}_${r.amount}`,
+  },
+  'branch_expenses': {
+    table: 'branch_expenses', label: 'הוצאות סניפים', hasDate: true,
+    mapRow: (r) => {
+      const date = parseDate(r.date); const amount = parseNum(r.amount)
+      const branchId = parseBranch(r.branch_name)
+      if (!date || amount === null || !branchId) return null
+      let et = (r.expense_type || 'suppliers').trim().toLowerCase()
+      if (!EXPENSE_TYPES.includes(et)) et = 'suppliers'
+      return {
+        branch_id: branchId, date, amount,
+        expense_type: et,
+        supplier: r.supplier?.trim() || '—',
+        doc_number: r.doc_number?.trim() || null,
+        notes: r.notes?.trim() || null,
+        from_factory: (r.supplier?.trim() || '').includes('מפעל'),
+      }
+    },
+    dupeKey: (r) => `${r.branch_id}_${r.date}_${r.supplier}_${r.amount}`,
+  },
+  'branch_labor': {
+    table: 'branch_labor', label: 'לייבור סניפים', hasDate: true,
+    mapRow: (r) => {
+      const date = parseDate(r.date)
+      const branchId = parseBranch(r.branch_name)
+      const gross = parseNum(r.gross_salary) ?? 0
+      if (!date || !branchId || gross === 0) return null
+      let empCost = parseNum(r.employer_cost)
+      if (!empCost || empCost === 0) empCost = Math.round(gross * 1.3 * 100) / 100
+      return {
+        branch_id: branchId, date,
+        employee_name: r.employee_name?.trim() || 'סיכום יומי',
+        hours: parseNum(r.hours) ?? 0,
+        gross_salary: gross,
+        employer_cost: empCost,
+        notes: r.notes?.trim() || null,
+      }
+    },
+    dupeKey: (r) => `${r.branch_id}_${r.date}_${r.employee_name}_${r.gross_salary}`,
+  },
+  'branch_waste': {
+    table: 'branch_waste', label: 'פחת סניפים', hasDate: true,
+    mapRow: (r) => {
+      const date = parseDate(r.date); const amount = parseNum(r.amount)
+      const branchId = parseBranch(r.branch_name)
+      if (!date || amount === null || !branchId) return null
+      let cat = (r.category || 'finished').trim().toLowerCase()
+      if (!['finished', 'raw', 'packaging'].includes(cat)) cat = 'finished'
+      return {
+        branch_id: branchId, date, amount, category: cat,
+        notes: r.notes?.trim() || null,
+      }
+    },
+    dupeKey: (r) => `${r.branch_id}_${r.date}_${r.amount}`,
+  },
+  'branch_suppliers': {
+    table: 'branch_suppliers', label: 'ספקי סניפים', hasDate: false,
+    mapRow: (r) => {
+      const branchId = parseBranch(r.branch_name)
+      if (!branchId || !r.name?.trim()) return null
+      const rawCat = r.category?.trim() || 'מזון'
+      const cat = SUPPLIER_CAT_MAP[rawCat] || rawCat
+      return {
+        branch_id: branchId, name: r.name.trim(),
+        phone: r.phone?.trim() || r.company_id?.trim() || null,
+        category: cat, notes: r.notes?.trim() || null, active: true,
+      }
+    },
+    dupeKey: (r) => `${r.branch_id}_${r.name}`,
+  },
+  'branch_customers': {
+    table: 'branch_credit_customers', label: 'לקוחות הקפה', hasDate: false,
+    mapRow: (r) => {
+      const branchId = parseBranch(r.branch_name)
+      if (!branchId || !r.name?.trim()) return null
+      return {
+        branch_id: branchId, name: r.name.trim(),
+        phone: r.phone?.trim() || null,
+        credit_limit: parseNum(r.credit_limit) ?? 0,
+        notes: r.notes?.trim() || null, active: true,
+      }
+    },
+    dupeKey: (r) => `${r.branch_id}_${r.name}`,
+  },
 }
 
 const SKIP_FILES = ['factory_customers', 'factory_packaging', 'factory_packaging_products']
+const BRANCH_FILE_KEYS = ['branch_revenue', 'branch_expenses', 'branch_labor', 'branch_waste', 'branch_suppliers', 'branch_customers']
 
 // ─── Auto-detect month from data ─────────────────────────────────────────────
 function detectMonth(allFiles: FileMapping[]): string {
@@ -277,7 +426,7 @@ function detectMonth(allFiles: FileMapping[]): string {
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
-export default function DataImport(_props: Props) {
+export default function DataImport({ branchOnly }: Props) {
   const [files, setFiles] = useState<FileMapping[]>([])
   const [importing, setImporting] = useState(false)
   const [done, setDone] = useState(false)
@@ -294,78 +443,112 @@ export default function DataImport(_props: Props) {
   // ─── Identify file ─────────────────────────────────────────────────────────
   function identifyFile(name: string): { key: string; def: TableDef } | { key: string; skip: true } | null {
     const base = name.replace(/\.csv$/i, '').toLowerCase().trim()
-    if (FILE_MAP[base]) return { key: base, def: FILE_MAP[base] }
+    if (FILE_MAP[base]) {
+      if (branchOnly && !BRANCH_FILE_KEYS.includes(base)) return { key: base, skip: true }
+      return { key: base, def: FILE_MAP[base] }
+    }
     if (SKIP_FILES.some(s => base.includes(s))) return { key: base, skip: true }
     for (const [key, def] of Object.entries(FILE_MAP)) {
-      if (base.includes(key) || key.includes(base)) return { key, def }
+      if (base.includes(key) || key.includes(base)) {
+        if (branchOnly && !BRANCH_FILE_KEYS.includes(key)) return { key, skip: true }
+        return { key, def }
+      }
     }
     return null
   }
 
-  // ─── Parse files ───────────────────────────────────────────────────────────
+  // ─── Parse a single CSV ────────────────────────────────────────────────────
+  function parseCsvContent(fileName: string, csvText: string) {
+    const identified = identifyFile(fileName)
+    if (!identified) {
+      setFiles(prev => {
+        if (prev.find(f => f.csvName === fileName)) return prev
+        return [...prev, { csvName: fileName, tableName: '', label: 'לא מזוהה', status: 'skip', rows: [], rowCount: 0, warning: 'קובץ לא מזוהה — ידולג' }]
+      })
+      return
+    }
+    if ('skip' in identified) {
+      setFiles(prev => {
+        if (prev.find(f => f.csvName === fileName)) return prev
+        return [...prev, { csvName: fileName, tableName: '', label: fileName, status: 'skip', rows: [], rowCount: 0, warning: 'קובץ ידולג (לא נתמך)' }]
+      })
+      return
+    }
+    const { def } = identified
+    // Add placeholder
+    setFiles(prev => {
+      if (prev.find(f => f.csvName === fileName)) return prev
+      return [...prev, { csvName: fileName, tableName: def.table, label: def.label, status: 'ready', rows: [], rowCount: 0 }]
+    })
+    // Parse CSV text
+    Papa.parse(csvText, {
+      header: true, skipEmptyLines: true,
+      complete: (results) => {
+        const mapped: Record<string, any>[] = []
+        const tempMonth = new Date().toISOString().slice(0, 7)
+        for (const row of results.data as Record<string, string>[]) {
+          const m = def.mapRow(row, { month: tempMonth })
+          if (m) {
+            if (def.autoInject) Object.assign(m, def.autoInject)
+            mapped.push(m)
+          }
+        }
+        const rawTotal = (results.data as any[]).length
+        const warnings = validateRows(def.table, mapped, results.data as Record<string, string>[])
+        const sampleRows = mapped.slice(0, 3)
+        setFiles(prev => prev.map(f =>
+          f.csvName === fileName
+            ? { ...f, rows: mapped, rowCount: mapped.length, rawCount: rawTotal, warnings, sampleRows, status: mapped.length > 0 ? 'ready' : 'warning', warning: mapped.length === 0 ? `0 שורות תקינות מתוך ${rawTotal} (mapRow החזיר null לכולן)` : undefined }
+            : f
+        ))
+      },
+    })
+  }
+
+  // ─── Parse files (CSV or ZIP) ─────────────────────────────────────────────
   const handleFiles = useCallback((fileList: FileList) => {
-    const newPlaceholders: FileMapping[] = []
+    setDone(false)
 
     Array.from(fileList).forEach(file => {
-      if (!file.name.toLowerCase().endsWith('.csv')) return
-      const identified = identifyFile(file.name)
+      const name = file.name.toLowerCase()
 
-      if (!identified) {
-        newPlaceholders.push({
-          csvName: file.name, tableName: '', label: 'לא מזוהה',
-          status: 'skip', rows: [], rowCount: 0, warning: 'קובץ לא מזוהה — ידולג',
-        })
-        return
-      }
-      if ('skip' in identified) {
-        newPlaceholders.push({
-          csvName: file.name, tableName: '', label: file.name,
-          status: 'skip', rows: [], rowCount: 0, warning: 'קובץ ידולג (לא נתמך)',
-        })
-        return
-      }
-
-      const { def } = identified
-
-      newPlaceholders.push({
-        csvName: file.name, tableName: def.table, label: def.label,
-        status: 'ready', rows: [], rowCount: 0,
-      })
-
-      // Parse async — month will be set during import
-      Papa.parse(file, {
-        header: true, encoding: 'UTF-8', skipEmptyLines: true,
-        complete: (results) => {
-          const mapped: Record<string, any>[] = []
-          // First pass: collect dates to detect month for fixed costs
-          const tempMonth = new Date().toISOString().slice(0, 7)
-          for (const row of results.data as Record<string, string>[]) {
-            const m = def.mapRow(row, { month: tempMonth })
-            if (m) {
-              if (def.autoInject) Object.assign(m, def.autoInject)
-              mapped.push(m)
+      // ── ZIP file: extract CSVs inside ──
+      if (name.endsWith('.zip')) {
+        file.arrayBuffer().then(buf => {
+          const zip = new JSZip()
+          zip.loadAsync(buf).then(z => {
+            const csvNames = Object.keys(z.files).filter(n => n.toLowerCase().endsWith('.csv') && !n.startsWith('__MACOSX'))
+            if (csvNames.length === 0) {
+              setFiles(prev => [...prev, { csvName: file.name, tableName: '', label: 'ZIP ריק', status: 'skip', rows: [], rowCount: 0, warning: 'לא נמצאו קבצי CSV ב-ZIP' }])
+              return
             }
-          }
-          const rawTotal = (results.data as any[]).length
-          const warnings = validateRows(def.table, mapped, results.data as Record<string, string>[])
-          const sampleRows = mapped.slice(0, 3)
-          setFiles(prev => prev.map(f =>
-            f.csvName === file.name
-              ? { ...f, rows: mapped, rowCount: mapped.length, rawCount: rawTotal, warnings, sampleRows, status: mapped.length > 0 ? 'ready' : 'warning', warning: mapped.length === 0 ? `0 שורות תקינות מתוך ${rawTotal} (mapRow החזיר null לכולן)` : undefined }
-              : f
-          ))
-        },
-      })
-    })
-
-    setFiles(prev => {
-      const merged = [...prev]
-      for (const p of newPlaceholders) {
-        if (!merged.find(f => f.csvName === p.csvName)) merged.push(p)
+            for (const csvName of csvNames) {
+              const shortName = csvName.includes('/') ? csvName.split('/').pop()! : csvName
+              z.files[csvName].async('string').then(text => {
+                parseCsvContent(shortName, text)
+              })
+            }
+          }).catch(() => {
+            setFiles(prev => [...prev, { csvName: file.name, tableName: '', label: 'שגיאת ZIP', status: 'skip', rows: [], rowCount: 0, warning: 'שגיאה בפתיחת ה-ZIP' }])
+          })
+        })
+        return
       }
-      return merged
+
+      // ── Individual CSV file ──
+      if (name.endsWith('.csv')) {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const text = e.target?.result as string
+          if (text) parseCsvContent(file.name, text)
+        }
+        reader.readAsText(file, 'UTF-8')
+        return
+      }
+
+      // ── Unknown file type ──
+      setFiles(prev => [...prev, { csvName: file.name, tableName: '', label: 'לא נתמך', status: 'skip', rows: [], rowCount: 0, warning: 'רק קבצי CSV או ZIP נתמכים' }])
     })
-    setDone(false)
   }, [])
 
   // ─── Check DB ────────────────────────────────────────────────────────────
@@ -375,7 +558,7 @@ export default function DataImport(_props: Props) {
     const from = m + '-01'
     const to = monthEnd(m)
     const tables: Record<string, { count: number; label: string; error?: string; sum?: number; sumLabel?: string }> = {}
-    const checks: { name: string; label: string; dateFilter?: boolean; extra?: Record<string, string>; monthFilter?: boolean; sumField?: string; sumLabel?: string }[] = [
+    const allChecks: { name: string; label: string; dateFilter?: boolean; extra?: Record<string, string>; monthFilter?: boolean; sumField?: string; sumLabel?: string }[] = [
       { name: 'daily_production', label: 'ייצור יומי', dateFilter: true, sumField: 'amount' },
       { name: 'labor', label: 'לייבור', dateFilter: true, extra: { entity_type: 'factory' }, sumField: 'employer_cost', sumLabel: 'עלות מעסיק' },
       { name: 'factory_sales', label: 'מכירות', dateFilter: true, sumField: 'amount' },
@@ -386,7 +569,15 @@ export default function DataImport(_props: Props) {
       { name: 'fixed_costs', label: 'עלויות קבועות', monthFilter: true, sumField: 'amount' },
       { name: 'kpi_targets', label: 'יעדי KPI' },
       { name: 'suppliers', label: 'ספקים' },
+      // Branch tables
+      { name: 'branch_revenue', label: 'הכנסות סניפים', dateFilter: true, sumField: 'amount' },
+      { name: 'branch_expenses', label: 'הוצאות סניפים', dateFilter: true, sumField: 'amount' },
+      { name: 'branch_labor', label: 'לייבור סניפים', dateFilter: true, sumField: 'employer_cost', sumLabel: 'עלות מעסיק' },
+      { name: 'branch_waste', label: 'פחת סניפים', dateFilter: true, sumField: 'amount' },
+      { name: 'branch_suppliers', label: 'ספקי סניפים' },
+      { name: 'branch_credit_customers', label: 'לקוחות הקפה' },
     ]
+    const checks = branchOnly ? allChecks.filter(c => c.name.startsWith('branch_')) : allChecks
     for (const t of checks) {
       // Count query
       let q = supabase.from(t.name).select('*', { count: 'exact', head: true })
@@ -418,7 +609,7 @@ export default function DataImport(_props: Props) {
 
     // Order matters: supplier_invoices BEFORE suppliers (FK constraint)
     // Use .not('id', 'is', null) as universal filter — matches ALL rows (id is PK, never null)
-    const purgeList: { table: string; label: string; filter: (q: any) => any }[] = [
+    const allPurgeList: { table: string; label: string; filter: (q: any) => any }[] = [
       { table: 'supplier_invoices', label: 'חשבוניות ספקים', filter: (q: any) => q.not('id', 'is', null) },
       { table: 'daily_production', label: 'ייצור יומי', filter: (q: any) => q.not('id', 'is', null) },
       { table: 'labor', label: 'לייבור (מפעל)', filter: (q: any) => q.eq('entity_type', 'factory') },
@@ -429,7 +620,15 @@ export default function DataImport(_props: Props) {
       { table: 'fixed_costs', label: 'עלויות קבועות', filter: (q: any) => q.eq('entity_type', 'factory') },
       { table: 'kpi_targets', label: 'יעדי KPI', filter: (q: any) => q.not('id', 'is', null) },
       { table: 'suppliers', label: 'ספקים', filter: (q: any) => q.not('id', 'is', null) },
+      // Branch tables
+      { table: 'branch_revenue', label: 'הכנסות סניפים', filter: (q: any) => q.not('id', 'is', null) },
+      { table: 'branch_expenses', label: 'הוצאות סניפים', filter: (q: any) => q.not('id', 'is', null) },
+      { table: 'branch_labor', label: 'לייבור סניפים', filter: (q: any) => q.not('id', 'is', null) },
+      { table: 'branch_waste', label: 'פחת סניפים', filter: (q: any) => q.not('id', 'is', null) },
+      { table: 'branch_suppliers', label: 'ספקי סניפים', filter: (q: any) => q.not('id', 'is', null) },
+      { table: 'branch_credit_customers', label: 'לקוחות הקפה', filter: (q: any) => q.not('id', 'is', null) },
     ]
+    const purgeList = branchOnly ? allPurgeList.filter(p => p.table.startsWith('branch_')) : allPurgeList
 
     for (const item of purgeList) {
       try {
@@ -629,7 +828,9 @@ export default function DataImport(_props: Props) {
           <div>
             <div style={{ fontSize: '15px', fontWeight: '700', color: '#991b1b' }}>🗑️ מחיקת כל הנתונים</div>
             <div style={{ fontSize: '12px', color: '#b91c1c', marginTop: '2px' }}>
-              מוחק את כל הנתונים מכל הטבלאות (ייצור, מכירות, לייבור, פחת, תיקונים, ספקים, עלויות קבועות, KPI)
+              {branchOnly
+                ? 'מוחק את כל נתוני הסניפים (הכנסות, הוצאות, לייבור, פחת, ספקים, לקוחות הקפה)'
+                : 'מוחק את כל הנתונים מכל הטבלאות (ייצור, מכירות, לייבור, פחת, תיקונים, ספקים, עלויות קבועות, KPI)'}
             </div>
           </div>
           {!confirmPurge ? (
@@ -692,13 +893,15 @@ export default function DataImport(_props: Props) {
         >
           <Upload size={48} color={dragOver ? '#3b82f6' : '#94a3b8'} style={{ marginBottom: '16px' }} />
           <div style={{ fontSize: '18px', fontWeight: '700', color: '#374151', marginBottom: '8px' }}>
-            גרור קבצי CSV לכאן
+            גרור קבצי CSV או ZIP לכאן
           </div>
           <div style={{ fontSize: '14px', color: '#94a3b8', marginBottom: '20px' }}>
-            או לחץ לבחירת קבצים · ניתן להעלות מספר קבצים בו-זמנית
+            או לחץ לבחירת קבצים · ניתן להעלות ZIP עם כל הקבצים, או CSVs בודדים
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
-            {Object.keys(FILE_MAP).map(key => (
+            {Object.keys(FILE_MAP)
+              .filter(key => !branchOnly || BRANCH_FILE_KEYS.includes(key))
+              .map(key => (
               <span key={key} style={{ background: '#f1f5f9', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: '#64748b' }}>
                 {key}.csv
               </span>
@@ -707,7 +910,7 @@ export default function DataImport(_props: Props) {
         </div>
       )}
 
-      <input ref={fileRef} type="file" accept=".csv" multiple style={{ display: 'none' }}
+      <input ref={fileRef} type="file" accept=".csv,.zip" multiple style={{ display: 'none' }}
         onChange={e => { if (e.target.files) handleFiles(e.target.files); e.target.value = '' }} />
 
       {/* File list */}

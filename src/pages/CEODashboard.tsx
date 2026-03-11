@@ -52,8 +52,8 @@ export default function CEODashboard({ onBack }: Props) {
 
     // ── נתוני מפעל ──
     const [fSalesFs, fSalesB2b, fLabor, fSupp, fWaste, fRepairs, fFixed, globalEmpsData, wdData] = await Promise.all([
-      supabase.from('factory_sales').select('amount').gte('date', from).lt('date', to),
-      supabase.from('factory_b2b_sales').select('amount').gte('date', from).lt('date', to),
+      supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', from).lt('date', to),
+      supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', from).lt('date', to),
       supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', from).lt('date', to),
       supabase.from('supplier_invoices').select('amount').gte('date', from).lt('date', to),
       supabase.from('factory_waste').select('amount').gte('date', from).lt('date', to),
@@ -175,8 +175,8 @@ export default function CEODashboard({ onBack }: Props) {
     }
     // Previous month factory data
     const [pfSalesFs2, pfSalesB2b2, pfLabor2, pfSupp2, pfWaste2, pfRepairs2, pfFixed2, pfWd] = await Promise.all([
-      supabase.from('factory_sales').select('amount').gte('date', pFrom).lt('date', pTo),
-      supabase.from('factory_b2b_sales').select('amount').gte('date', pFrom).lt('date', pTo),
+      supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', pFrom).lt('date', pTo),
+      supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', pFrom).lt('date', pTo),
       supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', pFrom).lt('date', pTo),
       supabase.from('supplier_invoices').select('amount').gte('date', pFrom).lt('date', pTo),
       supabase.from('factory_waste').select('amount').gte('date', pFrom).lt('date', pTo),

@@ -26,6 +26,7 @@ const CATEGORIES = {
 }
 
 export default function BranchWaste({ branchId, branchName, branchColor, onBack }: Props) {
+  const { period, setPeriod, from, to } = usePeriod()
   const [entries, setEntries]         = useState<Entry[]>([])
   const [catFilter, setCatFilter]     = useState<'finished' | 'raw' | 'packaging' | 'all'>('all')
   const [editId, setEditId]           = useState<number | null>(null)
@@ -107,9 +108,12 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>פחת — {branchName}</h1>
           <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>סחורה פגומה · חומרי גלם · אריזה</p>
         </div>
-        <div style={{ marginRight: 'auto', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '8px 18px' }}>
-          <span style={{ fontSize: '18px', fontWeight: '800', color: '#ef4444' }}>₪{total.toLocaleString()}</span>
-          <span style={{ fontSize: '12px', color: '#64748b', marginRight: '6px' }}>סה"כ החודש</span>
+        <div style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <PeriodPicker period={period} onChange={setPeriod} />
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '8px 18px' }}>
+            <span style={{ fontSize: '18px', fontWeight: '800', color: '#ef4444' }}>₪{total.toLocaleString()}</span>
+            <span style={{ fontSize: '12px', color: '#64748b', marginRight: '6px' }}>סה"כ</span>
+          </div>
         </div>
       </div>
 
@@ -160,10 +164,8 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
           </button>
         </div>
 
-        {/* פילטר חודש */}
+        {/* פילטרים */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', alignItems: 'center' }}>
-          <input type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)}
-            style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '8px 14px', fontSize: '14px', background: 'white', fontFamily: 'inherit' }} />
           {catFilter !== 'all' && (
             <button onClick={() => setCatFilter('all')}
               style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '13px', color: '#64748b', cursor: 'pointer', fontFamily: 'inherit' }}>

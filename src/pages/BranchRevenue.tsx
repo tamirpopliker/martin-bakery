@@ -179,8 +179,9 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
           <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>קופה · אתר · הקפה · ללא מע״מ</p>
         </div>
 
-        {/* 4 כרטיסי סיכום בכותרת */}
-        <div style={{ marginRight: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' as const }}>
+        {/* PeriodPicker + 4 כרטיסי סיכום בכותרת */}
+        <div style={{ marginRight: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
+          <PeriodPicker period={period} onChange={setPeriod} />
           {[
             { label: 'קופה',  val: totalCashier, color: '#3b82f6' },
             { label: 'אתר',   val: totalWebsite, color: '#8b5cf6' },
@@ -212,10 +213,8 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
       <div style={{ padding: '20px 32px', maxWidth: '1000px', margin: '0 auto' }}>
 
-        {/* פילטר חודש */}
+        {/* חיפוש */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
-          <input type="month" value={monthFilter} onChange={e => setMonthFilter(e.target.value)}
-            style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '8px 14px', fontSize: '14px', background: 'white', fontFamily: 'inherit' }} />
           {tab === 'credit' && (
             <div style={{ position: 'relative', flex: 1 }}>
               <Search size={15} color="#94a3b8" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }} />

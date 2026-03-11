@@ -186,7 +186,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
       supabase.from('factory_sales').select('date,amount').eq('department', department).gte('date', from).lt('date', to),
       supabase.from('factory_waste').select('date,amount').eq('department', department).gte('date', from).lt('date', to),
       supabase.from('factory_repairs').select('date,amount').eq('department', department).gte('date', from).lt('date', to),
-      supabase.from('labor').select('date,gross_salary').eq('entity_type', 'factory').eq('entity_id', department).gte('date', from).lt('date', to),
+      supabase.from('labor').select('date,employer_cost').eq('entity_type', 'factory').eq('entity_id', department).gte('date', from).lt('date', to),
     ])
 
     // קיבוץ לפי יום
@@ -207,7 +207,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
       sales:      sum(sales.data || [], date, 'amount'),
       waste:      sum(waste.data || [], date, 'amount'),
       repairs:    sum(repairs.data || [], date, 'amount'),
-      labor:      sum(labor.data || [], date, 'gross_salary'),
+      labor:      sum(labor.data || [], date, 'employer_cost'),
     }))
   }
 
