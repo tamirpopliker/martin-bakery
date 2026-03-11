@@ -10,14 +10,24 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Debug logging
+    console.log('=== AUTH DEBUG ===')
+    console.log('URL hash:', window.location.hash ? 'YES (length: ' + window.location.hash.length + ')' : 'NONE')
+    console.log('URL search:', window.location.search || 'NONE')
+
     // Get initial session (handles PKCE code exchange on OAuth redirect)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
+    supabase.auth.getSession().then(({ data, error }) => {
+      console.log('getSession:', { hasSession: !!data.session, error: error?.message || null })
+      if (data.session) {
+        console.log('Session user:', data.session.user?.email)
+      }
+      setSession(data.session)
       setLoading(false)
     })
 
     // Listen for subsequent auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('onAuthStateChange:', event, { hasSession: !!session })
       setSession(session)
       setLoading(false)
     })
