@@ -341,7 +341,7 @@ export default function Home() {
     <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl', display: 'flex' }}>
 
       {/* ══ סיידבר צר — 64px, אייקונים בלבד ════════════════════════════════ */}
-      <aside style={{
+      <aside className="app-sidebar" style={{
         width: '64px', minWidth: '64px', background: '#0f172a',
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         minHeight: '100vh', position: 'sticky', top: 0, height: '100vh', zIndex: 200,
@@ -408,11 +408,13 @@ export default function Home() {
         <>
           {/* backdrop */}
           <div
+            className="app-panel-backdrop"
             onClick={() => setOpenPanel(null)}
             style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.15)' }}
           />
           {/* panel */}
           <div
+            className="app-panel"
             ref={panelRef}
             style={{
               position: 'fixed', top: 0, right: '64px', bottom: 0, width: '280px',
@@ -490,7 +492,7 @@ export default function Home() {
       )}
 
       {/* ══ תוכן ראשי ════════════════════════════════════════════════════════ */}
-      <main style={{ flex: 1, padding: '28px 36px', overflowY: 'auto', minHeight: '100vh' }}>
+      <main className="app-main" style={{ flex: 1, padding: '28px 36px', overflowY: 'auto', minHeight: '100vh' }}>
 
         {/* ─── כותרת ─────────────────────────────────────────────────────── */}
         <div style={{ marginBottom: '28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
@@ -504,7 +506,7 @@ export default function Home() {
         </div>
 
         {/* ─── Row 1: KPI Bar ────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '32px' }}>
+        <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '32px' }}>
           {/* הכנסות */}
           {(() => { const grandRevenue = factoryRevenue + totalBranchRevenue; return (
           <div style={{ background: 'white', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderTop: '3px solid #3b82f6' }}>
@@ -575,7 +577,7 @@ export default function Home() {
           <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Factory size={18} color="#64748b" /> מפעל
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '14px' }}>
+          <div className="factory-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '14px' }}>
             {filteredFactoryModules.map(mod => {
               const Icon = mod.Icon
               const isHov = hovFactory === mod.key
@@ -611,7 +613,7 @@ export default function Home() {
           <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Store size={18} color="#64748b" /> סניפים
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '18px' }}>
+          <div className="branches-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '18px' }}>
             {/* כרטיסיית סיכום — כל הסניפים */}
             {canAccessPage('branch_dashboard') && <button
               onClick={() => setPage('branch_dashboard')}
@@ -718,7 +720,7 @@ export default function Home() {
           <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Building2 size={18} color="#64748b" /> ניהול
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '14px' }}>
+          <div className="manage-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '14px' }}>
             {[
               { key: 'ceo_dashboard', label: 'דשבורד מנכ"ל', Icon: Trophy,   color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
               { key: 'settings',      label: 'הגדרות מערכת', Icon: Settings, color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
@@ -755,7 +757,7 @@ export default function Home() {
             <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               📊 מגמות 6 חודשים
             </h2>
-            <div style={{ background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+            <div className="chart-container" style={{ background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
               <div style={{ display: 'flex', gap: '24px', marginBottom: '16px', justifyContent: 'center' }}>
                 {[{ color: '#3b82f6', label: 'הכנסות' }, { color: '#f59e0b', label: 'לייבור' }, { color: '#10b981', label: 'רווח' }].map(m => (
                   <span key={m.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b' }}>
@@ -796,6 +798,44 @@ export default function Home() {
         )}
 
       </main>
+
+      {/* Mobile Bottom Nav */}
+      <nav className="mobile-bottom-nav" style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, height: 56,
+        background: '#0f172a', display: 'none',
+        alignItems: 'center', justifyContent: 'space-around',
+        zIndex: 300, borderTop: '1px solid #1e293b',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}>
+        <button onClick={() => setOpenPanel(openPanel === 'factory' ? null : 'factory')} style={{
+          background: 'none', border: 'none', color: openPanel === 'factory' ? '#38bdf8' : '#94a3b8',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontSize: 10, cursor: 'pointer', padding: '6px 12px',
+        }}>
+          <BarChart3 size={22} />
+          <span>מפעל</span>
+        </button>
+        <button onClick={() => setOpenPanel(openPanel === 'branches' ? null : 'branches')} style={{
+          background: 'none', border: 'none', color: openPanel === 'branches' ? '#38bdf8' : '#94a3b8',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontSize: 10, cursor: 'pointer', padding: '6px 12px',
+        }}>
+          <Store size={22} />
+          <span>סניפים</span>
+        </button>
+        <button onClick={() => setOpenPanel(openPanel === 'manage' ? null : 'manage')} style={{
+          background: 'none', border: 'none', color: openPanel === 'manage' ? '#38bdf8' : '#94a3b8',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontSize: 10, cursor: 'pointer', padding: '6px 12px',
+        }}>
+          <Settings size={22} />
+          <span>הגדרות</span>
+        </button>
+        <button onClick={() => logout()} style={{
+          background: 'none', border: 'none', color: '#94a3b8',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontSize: 10, cursor: 'pointer', padding: '6px 12px',
+        }}>
+          <LogOut size={22} />
+          <span>יציאה</span>
+        </button>
+      </nav>
     </div>
   )
 }

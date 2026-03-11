@@ -8,3 +8,112 @@ body {
   direction: rtl;
   background-color: #f8fafc;
 }
+
+/* ─── Mobile Responsive ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Hide desktop sidebar on mobile */
+  .app-sidebar {
+    display: none !important;
+  }
+
+  /* Show mobile bottom nav */
+  .mobile-bottom-nav {
+    display: flex !important;
+  }
+
+  /* Main content: remove sidebar margin, reduce padding, add bottom padding for nav */
+  .app-main {
+    padding: 12px 14px 72px 14px !important;
+  }
+
+  /* Floating panel: full-screen on mobile */
+  .app-panel {
+    width: 100% !important;
+    right: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .app-panel-backdrop {
+    z-index: 250 !important;
+  }
+
+  .app-panel {
+    z-index: 260 !important;
+  }
+
+  /* KPI grid: 2 columns instead of 4 */
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* Factory modules: 2 columns */
+  .factory-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* Branch cards: single column */
+  .branches-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* Management grid: 2 columns */
+  .manage-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* Charts: responsive width */
+  .chart-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .chart-container svg {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Tables: horizontal scroll */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+
+  /* Section headings: smaller on mobile */
+  .app-main h2 {
+    font-size: 18px !important;
+  }
+
+  /* Greeting: smaller */
+  .app-main > div:first-child {
+    font-size: 16px !important;
+  }
+
+  /* Period selector bar */
+  .app-main > div:first-child > div {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+}
+
+/* Extra small phones */
+@media (max-width: 380px) {
+  .app-main {
+    padding: 8px 10px 72px 10px !important;
+  }
+
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  .factory-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
