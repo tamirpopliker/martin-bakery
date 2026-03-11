@@ -10,7 +10,13 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Listen for auth state changes (including OAuth redirect)
+    // Get initial session (handles PKCE code exchange on OAuth redirect)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setLoading(false)
+    })
+
+    // Listen for subsequent auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setLoading(false)
