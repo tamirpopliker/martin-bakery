@@ -3,7 +3,12 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = 'https://nlklndgmtmwoacipjyek.supabase.co'
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    flowType: 'implicit',
+    detectSessionInUrl: true,
+  }
+})
 
 /** Returns first day of next month — use with .lt('date', monthEnd(m)) instead of .lte('date', m+'-31') */
 export function monthEnd(yyyyMM: string): string {

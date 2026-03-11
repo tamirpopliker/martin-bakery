@@ -10,13 +10,13 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Listen for auth state changes (including OAuth redirect)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setLoading(false)
     })
-    supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-xl">טוען...</div>
