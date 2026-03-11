@@ -10,6 +10,19 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Debug: intercept auth API calls to see error responses
+    const origFetch = window.fetch
+    window.fetch = async (...args: Parameters<typeof fetch>) => {
+      const res = await origFetch(...args)
+      const url = typeof args[0] === 'string' ? args[0] : (args[0] as Request)?.url || ''
+      if (url.includes('/auth/v1/token') || url.includes('/auth/v1/user')) {
+        const clone = res.clone()
+        const body = await clone.text()
+        console.log(`AUTH API [${res.status}] ${url.split('?')[0]}:`, body)
+      }
+      return res
+    }
+
     // Debug logging
     console.log('=== AUTH DEBUG ===')
     console.log('URL hash:', window.location.hash ? 'YES (length: ' + window.location.hash.length + ')' : 'NONE')
