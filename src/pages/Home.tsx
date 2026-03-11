@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase, getLast6Months, monthEnd } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
+import { useAppUser } from '../lib/UserContext'
 import PeriodPicker from '../components/PeriodPicker'
 import DailyProduction from './DailyProduction'
 import FactoryWaste from './FactoryWaste'
@@ -16,11 +17,12 @@ import CEODashboard from './CEODashboard'
 import BranchHome from './BranchHome'
 import BranchManagerDashboard from './BranchManagerDashboard'
 import DepartmentHome from './DepartmentHome'
+import UserManagement from './UserManagement'
 // DataImport is now embedded inside FactorySettings
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Trophy, Settings, LogOut, TrendingUp, TrendingDown, Wallet,
-  AlertTriangle, Users, ClipboardList, Truck,
+  AlertTriangle, Users, ClipboardList, Truck, UserCog,
   Factory, Building2, ChevronLeft, Database
 } from 'lucide-react'
 
@@ -73,11 +75,31 @@ interface BranchKpi { id: number; name: string; color: string; revenue: number; 
 // ─── קומפוננטה ──────────────────────────────────────────────────────────────
 export default function Home() {
   const { period, setPeriod, from, to, comparisonPeriod } = usePeriod()
+  const { appUser, canAccessPage, logout } = useAppUser()
   const [page, setPage]         = useState<string | null>(null)
   const [openPanel, setOpenPanel] = useState<string | null>(null)
   const [hovSidebar, setHovSidebar] = useState<string | null>(null)
   const [hovFactory, setHovFactory] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+
+  // ─── Filtered navigation based on permissions ─────────────────────────────
+  const filteredFactoryModules = FACTORY_MODULES.filter(mod => canAccessPage(mod.key))
+  const filteredBranches = BRANCHES.filter(br => canAccessPage(br.page))
+  const filteredPanelFactory = PANEL_FACTORY.filter(item => canAccessPage(item.page))
+  const filteredPanelManage = PANEL_MANAGE.filter(item => canAccessPage(item.page))
+
+  // Add user management for admins
+  const managePanelItems = appUser?.role === 'admin'
+    ? [...filteredPanelManage, { label: 'ניהול משתמשים', subtitle: 'הרשאות · משתמשים', Icon: UserCog, color: '#8b5cf6', page: 'user_management' }]
+    : filteredPanelManage
+
+  // Determine which sidebar sections to show
+  const filteredSidebarSections = SIDEBAR_SECTIONS.filter(sec => {
+    if (sec.key === 'factory') return filteredPanelFactory.length > 0
+    if (sec.key === 'branches') return filteredBranches.length > 0 || canAccessPage('branch_dashboard')
+    if (sec.key === 'manage') return managePanelItems.length > 0
+    return true
+  })
 
   // KPI data
   const [factoryRevenue, setFactoryRevenue] = useState(0)
@@ -244,6 +266,7 @@ export default function Home() {
   if (page === 'settings')             return <FactorySettings onBack={() => setPage(null)} />
   if (page === 'ceo_dashboard')        return <CEODashboard onBack={() => setPage(null)} />
   if (page === 'data_import')          return <FactorySettings onBack={() => setPage(null)} />
+  if (page === 'user_management')      return <UserManagement onBack={() => setPage(null)} />
 
   if (page === 'dept_creams')    return <DepartmentHome department="creams"    onBack={() => setPage(null)} />
   if (page === 'dept_dough')     return <DepartmentHome department="dough"     onBack={() => setPage(null)} />
@@ -332,7 +355,7 @@ export default function Home() {
 
         {/* כפתורי ניווט */}
         <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', paddingTop: '16px' }}>
-          {SIDEBAR_SECTIONS.map(sec => {
+          {filteredSidebarSections.map(sec => {
             const Icon = sec.Icon
             const isActive = openPanel === sec.key
             const isHov = hovSidebar === sec.key
@@ -370,7 +393,7 @@ export default function Home() {
         {/* יציאה */}
         <div style={{ padding: '14px 0', borderTop: '1px solid #1e293b', width: '100%', display: 'flex', justifyContent: 'center' }}>
           <button
-            onClick={() => supabase.auth.signOut()}
+            onClick={() => logout()}
             style={{ width: '44px', height: '44px', background: 'transparent', border: 'none', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             onMouseEnter={e => (e.currentTarget.style.background = '#1e293b')}
             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
@@ -410,9 +433,9 @@ export default function Home() {
 
             {/* panel content */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '10px 6px' }}>
-              {openPanel === 'factory' && renderPanelItems(PANEL_FACTORY)}
+              {openPanel === 'factory' && renderPanelItems(filteredPanelFactory)}
 
-              {openPanel === 'branches' && (
+              {openPanel === 'branches' && canAccessPage('branch_dashboard') && (
                 <>
                   <button
                     onClick={() => { setPage('branch_dashboard'); setOpenPanel(null) }}
@@ -437,7 +460,7 @@ export default function Home() {
                   <div style={{ height: '1px', background: '#e2e8f0', margin: '0 14px 6px' }} />
                 </>
               )}
-              {openPanel === 'branches' && BRANCHES.map(br => (
+              {openPanel === 'branches' && filteredBranches.map(br => (
                 <button
                   key={br.id}
                   onClick={() => { setPage(br.page); setOpenPanel(null) }}
@@ -460,7 +483,7 @@ export default function Home() {
                 </button>
               ))}
 
-              {openPanel === 'manage' && renderPanelItems(PANEL_MANAGE)}
+              {openPanel === 'manage' && renderPanelItems(managePanelItems)}
             </div>
           </div>
         </>
@@ -472,7 +495,7 @@ export default function Home() {
         {/* ─── כותרת ─────────────────────────────────────────────────────── */}
         <div style={{ marginBottom: '28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <h1 style={{ fontSize: '26px', fontWeight: '800', color: '#0f172a', margin: '0 0 4px' }}>שלום, מנהל ראשי 👋</h1>
+            <h1 style={{ fontSize: '26px', fontWeight: '800', color: '#0f172a', margin: '0 0 4px' }}>שלום, {appUser?.name || 'משתמש'} 👋</h1>
             <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
               {new Date().toLocaleDateString('he-IL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
@@ -548,12 +571,12 @@ export default function Home() {
         </div>
 
         {/* ─── Row 2: מפעל — גישה מהירה ─────────────────────────────────── */}
-        <div style={{ marginBottom: '32px' }}>
+        {filteredFactoryModules.length > 0 && <div style={{ marginBottom: '32px' }}>
           <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Factory size={18} color="#64748b" /> מפעל
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '14px' }}>
-            {FACTORY_MODULES.map(mod => {
+            {filteredFactoryModules.map(mod => {
               const Icon = mod.Icon
               const isHov = hovFactory === mod.key
               return (
@@ -581,16 +604,16 @@ export default function Home() {
               )
             })}
           </div>
-        </div>
+        </div>}
 
         {/* ─── Row 3: סניפים ─────────────────────────────────────────────── */}
-        <div style={{ marginBottom: '32px' }}>
+        {(filteredBranches.length > 0 || canAccessPage('branch_dashboard')) && <div style={{ marginBottom: '32px' }}>
           <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Store size={18} color="#64748b" /> סניפים
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '18px' }}>
             {/* כרטיסיית סיכום — כל הסניפים */}
-            <button
+            {canAccessPage('branch_dashboard') && <button
               onClick={() => setPage('branch_dashboard')}
               style={{
                 background: 'linear-gradient(135deg, #3b82f610, #10b98118)',
@@ -638,9 +661,9 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-            </button>
+            </button>}
 
-            {BRANCHES.map(br => {
+            {filteredBranches.map(br => {
               const kpi = branchKpi.find(b => b.id === br.id)
               const rev = kpi?.revenue ?? 0
               const labPct = kpi?.laborPct ?? 0
@@ -688,10 +711,10 @@ export default function Home() {
               )
             })}
           </div>
-        </div>
+        </div>}
 
         {/* ─── Row 4: ניהול ──────────────────────────────────────────────── */}
-        <div style={{ marginBottom: '32px' }}>
+        {managePanelItems.length > 0 && <div style={{ marginBottom: '32px' }}>
           <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Building2 size={18} color="#64748b" /> ניהול
           </h2>
@@ -700,7 +723,8 @@ export default function Home() {
               { key: 'ceo_dashboard', label: 'דשבורד מנכ"ל', Icon: Trophy,   color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
               { key: 'settings',      label: 'הגדרות מערכת', Icon: Settings, color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
               { key: 'data_import',   label: 'ייבוא נתונים', Icon: Database, color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
-            ].map(mod => {
+              ...(appUser?.role === 'admin' ? [{ key: 'user_management', label: 'ניהול משתמשים', Icon: UserCog,  color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe' }] : []),
+            ].filter(mod => canAccessPage(mod.key)).map(mod => {
               const Icon = mod.Icon
               return (
                 <button
@@ -723,7 +747,7 @@ export default function Home() {
               )
             })}
           </div>
-        </div>
+        </div>}
 
         {/* ─── מגמות 6 חודשים ─── */}
         {trendData.length > 0 && trendData.some(d => d.revenue > 0) && (
