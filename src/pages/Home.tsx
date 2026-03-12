@@ -21,9 +21,9 @@ import UserManagement from './UserManagement'
 // DataImport is now embedded inside FactorySettings
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
-  Store, Trophy, Settings, LogOut, TrendingUp, TrendingDown, Wallet,
-  AlertTriangle, Users, ClipboardList, Truck, UserCog,
-  Factory, Building2, ChevronLeft, Database
+  Store, Trophy, Settings, LogOut, TrendingUp, TrendingDown,
+  AlertTriangle, ClipboardList, Truck, UserCog,
+  Factory, ChevronLeft, Database
 } from 'lucide-react'
 
 // ─── קבועים ─────────────────────────────────────────────────────────────────
@@ -79,7 +79,6 @@ export default function Home() {
   const [page, setPage]         = useState<string | null>(null)
   const [openPanel, setOpenPanel] = useState<string | null>(null)
   const [hovSidebar, setHovSidebar] = useState<string | null>(null)
-  const [hovFactory, setHovFactory] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
   // ─── Filtered navigation based on permissions ─────────────────────────────
@@ -492,116 +491,93 @@ export default function Home() {
       )}
 
       {/* ══ תוכן ראשי ════════════════════════════════════════════════════════ */}
-      <main className="app-main" style={{ flex: 1, padding: '28px 36px', overflowY: 'auto', minHeight: '100vh' }}>
+      <main className="app-main" style={{ flex: 1, padding: '20px 28px', overflowY: 'auto', minHeight: '100vh' }}>
 
         {/* ─── כותרת ─────────────────────────────────────────────────────── */}
-        <div style={{ marginBottom: '28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
           <div>
-            <h1 style={{ fontSize: '26px', fontWeight: '800', color: '#0f172a', margin: '0 0 4px' }}>שלום, {appUser?.name || 'משתמש'} 👋</h1>
-            <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>
+            <h1 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: '0' }}>שלום, {appUser?.name || 'משתמש'}</h1>
+            <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>
               {new Date().toLocaleDateString('he-IL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
           </div>
           <PeriodPicker period={period} onChange={setPeriod} />
         </div>
 
-        {/* ─── Row 1: KPI Bar ────────────────────────────────────────────── */}
-        <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '32px' }}>
+        {/* ─── Row 1: KPI Strip ──────────────────────────────────────────── */}
+        <div className="kpi-grid" style={{ background: 'white', borderRadius: '14px', padding: '14px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '0', flexWrap: 'wrap' }}>
           {/* הכנסות */}
           {(() => { const grandRevenue = factoryRevenue + totalBranchRevenue; return (
-          <div style={{ background: 'white', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderTop: '3px solid #3b82f6' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-              <div style={{ width: '34px', height: '34px', background: '#eff6ff', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Wallet size={17} color="#3b82f6" />
+          <div style={{ flex: 1, minWidth: '140px', display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 16px 4px 0', borderLeft: '1px solid #e2e8f0' }}>
+            <div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', marginBottom: '2px' }}>הכנסות</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                <span style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{fmtK(grandRevenue)}</span>
+                <DiffBadge curr={factoryRevenue + totalBranchRevenue} prev={prevFactoryRevenue + prevBranchRevenue} />
               </div>
-              <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>סה"כ הכנסות · {period.label}</span>
             </div>
-            <div style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a' }}>{fmtK(grandRevenue)}</div>
-            <DiffBadge curr={factoryRevenue + totalBranchRevenue} prev={prevFactoryRevenue + prevBranchRevenue} />
-            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>מפעל {fmtK(factoryRevenue)} · סניפים {fmtK(totalBranchRevenue)}</div>
           </div>
           )})()}
-
           {/* רווח גולמי */}
           {(() => { const grandGross = factoryGross + totalBranchGross; return (
-          <div style={{ background: 'white', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderTop: `3px solid ${grandGross >= 0 ? '#10b981' : '#ef4444'}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-              <div style={{ width: '34px', height: '34px', background: '#f0fdf4', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <TrendingUp size={17} color="#10b981" />
+          <div style={{ flex: 1, minWidth: '140px', display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 16px', borderLeft: '1px solid #e2e8f0' }}>
+            <div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', marginBottom: '2px' }}>רווח גולמי</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                <span style={{ fontSize: '18px', fontWeight: '800', color: grandGross >= 0 ? '#10b981' : '#ef4444' }}>{fmtK(grandGross)}</span>
+                <DiffBadge curr={factoryGross + totalBranchGross} prev={prevFactoryGross + prevBranchGross} />
               </div>
-              <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>רווח גולמי</span>
             </div>
-            <div style={{ fontSize: '24px', fontWeight: '800', color: grandGross >= 0 ? '#10b981' : '#ef4444' }}>{fmtK(grandGross)}</div>
-            <DiffBadge curr={factoryGross + totalBranchGross} prev={prevFactoryGross + prevBranchGross} />
-            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>מפעל {fmtK(factoryGross)} · סניפים {fmtK(totalBranchGross)}</div>
           </div>
           )})()}
-
           {/* % לייבור */}
-          <div style={{ background: 'white', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderTop: '3px solid #f59e0b' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-              <div style={{ width: '34px', height: '34px', background: '#fffbeb', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Users size={17} color="#f59e0b" />
+          <div style={{ flex: 1, minWidth: '140px', display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 16px', borderLeft: '1px solid #e2e8f0' }}>
+            <div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', marginBottom: '2px' }}>לייבור ממוצע</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                <span style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{avgLaborPct.toFixed(1)}%</span>
+                <span style={{ fontSize: '13px', fontWeight: '700', color: avgLaborPct <= 28 ? '#10b981' : '#ef4444' }}>{avgLaborPct <= 28 ? '✓' : '✗'}</span>
+                <DiffBadge curr={avgLaborPct} prev={prevAvgLaborPct} inverse />
               </div>
-              <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>% לייבור ממוצע (סניפים)</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-              <span style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a' }}>{avgLaborPct.toFixed(1)}%</span>
-              <span style={{ fontSize: '16px', fontWeight: '700', color: avgLaborPct <= 28 ? '#10b981' : '#ef4444' }}>
-                {avgLaborPct <= 28 ? '✓' : '✗'}
-              </span>
-              <span style={{ fontSize: '11px', color: '#94a3b8' }}>יעד 28%</span>
-            </div>
-            <DiffBadge curr={avgLaborPct} prev={prevAvgLaborPct} inverse />
           </div>
-
           {/* התראות */}
-          <div style={{ background: 'white', borderRadius: '16px', padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderTop: `3px solid ${alerts > 0 ? '#ef4444' : '#10b981'}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-              <div style={{ width: '34px', height: '34px', background: alerts > 0 ? '#fef2f2' : '#f0fdf4', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <AlertTriangle size={17} color={alerts > 0 ? '#ef4444' : '#10b981'} />
+          <div style={{ flex: 1, minWidth: '100px', display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 0 4px 16px' }}>
+            <div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', marginBottom: '2px' }}>התראות</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                <span style={{ fontSize: '18px', fontWeight: '800', color: alerts > 0 ? '#ef4444' : '#10b981' }}>{alerts}</span>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>{alerts === 0 ? 'תקין' : 'חריגה'}</span>
               </div>
-              <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>התראות</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-              <span style={{ fontSize: '24px', fontWeight: '800', color: alerts > 0 ? '#ef4444' : '#10b981' }}>{alerts}</span>
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                {alerts === 0 ? 'הכל תקין' : `סניפ${alerts > 1 ? 'ים' : ''} עם חריגת לייבור`}
-              </span>
             </div>
           </div>
         </div>
 
         {/* ─── Row 2: מפעל — גישה מהירה ─────────────────────────────────── */}
-        {filteredFactoryModules.length > 0 && <div style={{ marginBottom: '32px' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Factory size={18} color="#64748b" /> מפעל
+        {filteredFactoryModules.length > 0 && <div style={{ marginBottom: '20px' }}>
+          <h2 style={{ fontSize: '13px', fontWeight: '700', color: '#94a3b8', margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <Factory size={14} color="#94a3b8" /> מפעל
           </h2>
-          <div className="factory-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '14px' }}>
+          <div className="factory-grid" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             {filteredFactoryModules.map(mod => {
               const Icon = mod.Icon
-              const isHov = hovFactory === mod.key
               return (
                 <button
                   key={mod.key}
                   onClick={() => setPage(mod.key)}
-                  onMouseEnter={() => setHovFactory(mod.key)}
-                  onMouseLeave={() => setHovFactory(null)}
                   style={{
-                    background: isHov ? mod.color : mod.color + '10',
-                    border: `2px solid ${isHov ? mod.color : mod.color + '30'}`,
-                    borderRadius: '18px',
-                    padding: '24px 18px', cursor: 'pointer',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px',
-                    transition: 'all 0.15s',
-                    transform: isHov ? 'translateY(-3px)' : 'none',
-                    boxShadow: isHov ? `0 12px 28px ${mod.color}30` : '0 2px 6px rgba(0,0,0,0.06)',
+                    background: 'white', border: '1.5px solid #e2e8f0',
+                    borderRadius: '12px', padding: '10px 8px', cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+                    transition: 'all 0.12s', width: '72px',
                   }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = mod.color; e.currentTarget.style.background = mod.color + '08'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = 'white'; e.currentTarget.style.transform = 'none' }}
                 >
-                  <div style={{ width: '52px', height: '52px', background: isHov ? 'rgba(255,255,255,0.22)' : mod.color + '18', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon size={26} color={isHov ? 'white' : mod.color} />
+                  <div style={{ width: '36px', height: '36px', background: mod.color + '12', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon size={18} color={mod.color} />
                   </div>
-                  <span style={{ fontSize: '14px', fontWeight: '700', color: isHov ? 'white' : '#374151', whiteSpace: 'nowrap' }}>{mod.label}</span>
+                  <span style={{ fontSize: '11px', fontWeight: '600', color: '#374151', whiteSpace: 'nowrap' }}>{mod.label}</span>
                 </button>
               )
             })}
@@ -609,59 +585,33 @@ export default function Home() {
         </div>}
 
         {/* ─── Row 3: סניפים ─────────────────────────────────────────────── */}
-        {(filteredBranches.length > 0 || canAccessPage('branch_dashboard')) && <div style={{ marginBottom: '32px' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Store size={18} color="#64748b" /> סניפים
+        {(filteredBranches.length > 0 || canAccessPage('branch_dashboard')) && <div style={{ marginBottom: '20px' }}>
+          <h2 style={{ fontSize: '13px', fontWeight: '700', color: '#94a3b8', margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <Store size={14} color="#94a3b8" /> סניפים
           </h2>
-          <div className="branches-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '18px' }}>
+          <div className="branches-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
             {/* כרטיסיית סיכום — כל הסניפים */}
             {canAccessPage('branch_dashboard') && <button
               onClick={() => setPage('branch_dashboard')}
               style={{
-                background: 'linear-gradient(135deg, #3b82f610, #10b98118)',
-                border: '2px solid #10b98130',
-                borderRadius: '22px', padding: '28px', cursor: 'pointer',
-                textAlign: 'right', transition: 'all 0.18s',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                background: 'white', border: '1.5px solid #10b98140',
+                borderRadius: '12px', padding: '14px 16px', cursor: 'pointer',
+                textAlign: 'right', transition: 'all 0.12s',
               }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(16,185,129,0.15)'; e.currentTarget.style.transform = 'translateY(-3px)' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#10b98130'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; e.currentTarget.style.transform = 'none' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(16,185,129,0.12)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#10b98140'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
             >
-              {/* header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
-                <div style={{ width: '52px', height: '52px', background: 'linear-gradient(135deg, #3b82f6, #10b981)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(16,185,129,0.3)' }}>
-                  <BarChart3 size={24} color="white" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                <div style={{ width: '28px', height: '28px', background: 'linear-gradient(135deg, #3b82f6, #10b981)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <BarChart3 size={14} color="white" />
                 </div>
-                <div>
-                  <span style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a', display: 'block' }}>כל הסניפים</span>
-                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>דשבורד מנהל סניפים →</span>
-                </div>
+                <span style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>כל הסניפים</span>
               </div>
-              {/* stats */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '3px' }}>הכנסות · {period.label}</div>
-                  <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>{fmtK(totalBranchRevenue)}</div>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '3px' }}>לייבור</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ fontSize: '20px', fontWeight: '800', color: avgLaborPct <= 28 ? '#10b981' : '#ef4444' }}>
-                      {totalBranchRevenue > 0 ? avgLaborPct.toFixed(1) + '%' : '—'}
-                    </span>
-                    {totalBranchRevenue > 0 && (
-                      <span style={{ fontSize: '16px', fontWeight: '700', color: avgLaborPct <= 28 ? '#10b981' : '#ef4444' }}>
-                        {avgLaborPct <= 28 ? '✓' : '✗'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'left' }}>
-                  <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '3px' }}>רווח גולמי</div>
-                  <div style={{ fontSize: '20px', fontWeight: '800', color: totalBranchGross >= 0 ? '#10b981' : '#ef4444' }}>
-                    {fmtK(totalBranchGross)}
-                  </div>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a' }}>{fmtK(totalBranchRevenue)}</span>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: avgLaborPct <= 28 ? '#10b981' : '#ef4444' }}>
+                  {totalBranchRevenue > 0 ? avgLaborPct.toFixed(1) + '%' : '—'} {totalBranchRevenue > 0 ? (avgLaborPct <= 28 ? '✓' : '✗') : ''}
+                </span>
               </div>
             </button>}
 
@@ -674,77 +624,25 @@ export default function Home() {
                   key={br.id}
                   onClick={() => setPage(br.page)}
                   style={{
-                    background: br.color + '08', border: `2px solid ${br.color}25`,
-                    borderRadius: '22px', padding: '28px', cursor: 'pointer',
-                    textAlign: 'right', transition: 'all 0.18s',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                    background: 'white', border: `1.5px solid ${br.color}30`,
+                    borderRadius: '12px', padding: '14px 16px', cursor: 'pointer',
+                    textAlign: 'right', transition: 'all 0.12s',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = br.color; e.currentTarget.style.boxShadow = `0 12px 32px ${br.color}25`; e.currentTarget.style.transform = 'translateY(-3px)' }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = br.color + '25'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'; e.currentTarget.style.transform = 'none' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = br.color; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 16px ${br.color}18` }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = br.color + '30'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
                 >
-                  {/* header */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
-                    <div style={{ width: '52px', height: '52px', background: br.color, borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 4px 14px ${br.color}40` }}>
-                      <Store size={24} color="white" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                    <div style={{ width: '28px', height: '28px', background: br.color, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Store size={14} color="white" />
                     </div>
-                    <span style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{br.name}</span>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{br.name}</span>
                   </div>
-                  {/* stats */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '3px' }}>הכנסות · {period.label}</div>
-                      <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>{fmtK(rev)}</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '3px' }}>לייבור</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ fontSize: '20px', fontWeight: '800', color: labPct <= 28 ? '#10b981' : '#ef4444' }}>
-                          {rev > 0 ? labPct.toFixed(1) + '%' : '—'}
-                        </span>
-                        {rev > 0 && (
-                          <span style={{ fontSize: '16px', fontWeight: '700', color: labPct <= 28 ? '#10b981' : '#ef4444' }}>
-                            {labPct <= 28 ? '✓' : '✗'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a' }}>{fmtK(rev)}</span>
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: labPct <= 28 ? '#10b981' : '#ef4444' }}>
+                      {rev > 0 ? labPct.toFixed(1) + '%' : '—'} {rev > 0 ? (labPct <= 28 ? '✓' : '✗') : ''}
+                    </span>
                   </div>
-                </button>
-              )
-            })}
-          </div>
-        </div>}
-
-        {/* ─── Row 4: ניהול ──────────────────────────────────────────────── */}
-        {managePanelItems.length > 0 && <div style={{ marginBottom: '32px' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Building2 size={18} color="#64748b" /> ניהול
-          </h2>
-          <div className="manage-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '14px' }}>
-            {[
-              { key: 'ceo_dashboard', label: 'דשבורד מנכ"ל', Icon: Trophy,   color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
-              { key: 'settings',      label: 'הגדרות מערכת', Icon: Settings, color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
-              { key: 'data_import',   label: 'ייבוא נתונים', Icon: Database, color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
-              ...(appUser?.role === 'admin' ? [{ key: 'user_management', label: 'ניהול משתמשים', Icon: UserCog,  color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe' }] : []),
-            ].filter(mod => canAccessPage(mod.key)).map(mod => {
-              const Icon = mod.Icon
-              return (
-                <button
-                  key={mod.key}
-                  onClick={() => setPage(mod.key)}
-                  style={{
-                    background: mod.bg, border: `2px solid ${mod.border}`, borderRadius: '18px',
-                    padding: '28px 20px', cursor: 'pointer',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.06)', transition: 'all 0.15s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 28px ${mod.color}30` }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(0,0,0,0.06)' }}
-                >
-                  <div style={{ width: '52px', height: '52px', background: mod.color + '18', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon size={26} color={mod.color} />
-                  </div>
-                  <span style={{ fontSize: '15px', fontWeight: '700', color: '#374151' }}>{mod.label}</span>
                 </button>
               )
             })}
@@ -753,21 +651,21 @@ export default function Home() {
 
         {/* ─── מגמות 6 חודשים ─── */}
         {trendData.length > 0 && trendData.some(d => d.revenue > 0) && (
-          <div style={{ marginBottom: '32px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#374151', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              📊 מגמות 6 חודשים
-            </h2>
-            <div className="chart-container" style={{ background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-              <div style={{ display: 'flex', gap: '24px', marginBottom: '16px', justifyContent: 'center' }}>
-                {[{ color: '#3b82f6', label: 'הכנסות' }, { color: '#f59e0b', label: 'לייבור' }, { color: '#10b981', label: 'רווח' }].map(m => (
-                  <span key={m.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b' }}>
-                    <span style={{ width: '12px', height: '12px', background: m.color, borderRadius: '3px', display: 'inline-block' }} />
-                    {m.label}
-                  </span>
-                ))}
+          <div style={{ marginBottom: '20px' }}>
+            <div className="chart-container" style={{ background: 'white', borderRadius: '14px', padding: '16px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <span style={{ fontSize: '13px', fontWeight: '700', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>מגמות 6 חודשים</span>
+                <div style={{ display: 'flex', gap: '14px' }}>
+                  {[{ color: '#3b82f6', label: 'הכנסות' }, { color: '#f59e0b', label: 'לייבור' }, { color: '#10b981', label: 'רווח' }].map(m => (
+                    <span key={m.label} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#94a3b8' }}>
+                      <span style={{ width: '8px', height: '8px', background: m.color, borderRadius: '2px', display: 'inline-block' }} />
+                      {m.label}
+                    </span>
+                  ))}
+                </div>
               </div>
               {(() => {
-                const W = 650, H = 180, PL = 60, PR = 16, PT = 10, PB = 30
+                const W = 650, H = 140, PL = 50, PR = 12, PT = 8, PB = 24
                 const metrics = [
                   { key: 'revenue' as const, color: '#3b82f6' },
                   { key: 'labor' as const, color: '#f59e0b' },
@@ -777,7 +675,7 @@ export default function Home() {
                 const groupW = (W - PL - PR) / trendData.length
                 const barW = groupW / (metrics.length + 1)
                 return (
-                  <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxHeight: '180px' }}>
+                  <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxHeight: '140px' }}>
                     <line x1={PL} y1={H - PB} x2={W - PR} y2={H - PB} stroke="#e2e8f0" strokeWidth="1" />
                     {trendData.map((d, di) => {
                       const gx = PL + di * groupW
@@ -788,7 +686,7 @@ export default function Home() {
                       })
                     })}
                     {trendData.map((d, i) => (
-                      <text key={i} x={PL + i * groupW + groupW / 2} y={H - 8} textAnchor="middle" fontSize="11" fill="#64748b">{d.label}</text>
+                      <text key={i} x={PL + i * groupW + groupW / 2} y={H - 6} textAnchor="middle" fontSize="10" fill="#94a3b8">{d.label}</text>
                     ))}
                   </svg>
                 )

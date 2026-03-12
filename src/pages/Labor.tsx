@@ -46,29 +46,23 @@ const deptOptions = [
   { value: 'cleaning', label: 'ניקיון' },
 ]
 
-const EMPLOYER_COST = 1.3
+const EMPLOYER_RATE = 0.3
 
-function calcCost(emp: Employee, h100: number, h125: number, h150: number): number {
+function calcWage(emp: Employee, h100: number, h125: number, h150: number): { gross: number; employerCost: number; total: number } {
   if (emp.wage_type === 'global') {
-    // גלובלי: עלות מעביד רק על המשכורת, בונוס בלי ×1.3
-    const base = emp.global_daily_rate * EMPLOYER_COST
-    return emp.bonus ? base + emp.bonus : base
+    // שכר עובד = גלובלי חודשי + בונוס חודשי
+    const gross = emp.global_daily_rate + (emp.bonus || 0)
+    // עלות מעסיק = גלובלי × 0.3 (על הגלובלי בלבד, לא על הבונוס)
+    const employerCost = emp.global_daily_rate * EMPLOYER_RATE
+    return { gross, employerCost, total: gross + employerCost }
   }
-  // שעתי: עלות מעביד על בסיס, בונוס שעתי × סה"כ שעות (בלי ×1.3)
-  const base = emp.hourly_rate
-  const baseCost = ((h100 * base) + (h125 * base * 1.25) + (h150 * base * 1.5)) * EMPLOYER_COST
+  // שעתי:
+  // שכר עובד = (100% × שכר) + (125% × שכר × 1.25) + (150% × שכר × 1.5) + (סה"כ שעות × בונוס)
   const totalHours = h100 + h125 + h150
-  const hourlyBonus = (emp.bonus || 0) * totalHours
-  return baseCost + hourlyBonus
-}
-
-function calcGross(emp: Employee, h100: number, h125: number, h150: number): number {
-  if (emp.wage_type === 'global') {
-    return emp.bonus ? emp.global_daily_rate + emp.bonus : emp.global_daily_rate
-  }
-  const basePay = (h100 * emp.hourly_rate) + (h125 * emp.hourly_rate * 1.25) + (h150 * emp.hourly_rate * 1.5)
-  const totalHours = h100 + h125 + h150
-  return basePay + ((emp.bonus || 0) * totalHours)
+  const gross = (h100 * emp.hourly_rate) + (h125 * emp.hourly_rate * 1.25) + (h150 * emp.hourly_rate * 1.5) + ((emp.bonus || 0) * totalHours)
+  // עלות מעסיק = שעות 100% × שכר שעתי × 0.3 (על הבסיס בלבד, לא על נוספות ולא על בונוס)
+  const employerCost = h100 * emp.hourly_rate * EMPLOYER_RATE
+  return { gross, employerCost, total: gross + employerCost }
 }
 
 const emptyForm: AddForm = { name: '', employee_number: '', department: 'creams', wage_type: 'hourly', hourly_rate: '', global_daily_rate: '', bonus: '' }
@@ -175,8 +169,8 @@ export default function Labor({ onBack }: Props) {
       hours_125: r.hours_125,
       hours_150: r.hours_150,
       hourly_rate: r.employee!.hourly_rate,
-      gross_salary: calcGross(r.employee!, r.hours_100, r.hours_125, r.hours_150),
-      employer_cost: calcCost(r.employee!, r.hours_100, r.hours_125, r.hours_150)
+      gross_salary: calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150).gross,
+      employer_cost: calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150).total
     }))
     // insert בקבוצות של 100 כדי לא לעבור מגבלת API
     for (let i = 0; i < inserts.length; i += 100) {
@@ -216,7 +210,7 @@ export default function Labor({ onBack }: Props) {
 
   const knownRows = rows.filter(r => r.found && r.employee)
   const unknownRows = rows.filter(r => !r.found)
-  const totalCost = knownRows.reduce((s, r) => s + calcCost(r.employee!, r.hours_100, r.hours_125, r.hours_150), 0)
+  const totalCost = knownRows.reduce((s, r) => s + calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150).total, 0)
 
   const inpStyle = { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '9px 12px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', textAlign: 'right' as const, width: '100%', boxSizing: 'border-box' as const }
 
@@ -331,9 +325,19 @@ export default function Labor({ onBack }: Props) {
                           {row.date ? new Date(row.date + 'T12:00:00').toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' }) : '—'}
                         </span>
                       )}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {!row.found && <AlertTriangle size={14} color="#f59e0b" />}
-                        <span style={{ fontWeight: '600', color: row.found ? '#374151' : '#92400e', fontSize: '14px' }}>{row.name}</span>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {!row.found && <AlertTriangle size={14} color="#f59e0b" />}
+                          <span style={{ fontWeight: '600', color: row.found ? '#374151' : '#92400e', fontSize: '14px' }}>{row.name}</span>
+                        </div>
+                        {row.found && row.employee && (
+                          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                            {row.employee.wage_type === 'global'
+                              ? `גלובלי: ₪${Math.round(row.employee.global_daily_rate).toLocaleString()}/חודש${row.employee.bonus ? ` + בונוס ₪${Math.round(row.employee.bonus).toLocaleString()}/חודש` : ''}`
+                              : `₪${row.employee.hourly_rate}/ש׳${row.employee.bonus ? ` + בונוס ₪${row.employee.bonus}/ש׳` : ''}`
+                            }
+                          </div>
+                        )}
                       </div>
 
                       {row.editing ? (
@@ -343,7 +347,7 @@ export default function Labor({ onBack }: Props) {
                           <input type="number" value={row.hours_150} onChange={e => updateRow(row.id, 'hours_150', e.target.value)} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', width: '60px' }} />
                           <span style={{ fontSize: '12px', color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
                           <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>
-                            {row.employee ? '₪' + calcCost(row.employee, row.hours_100, row.hours_125, row.hours_150).toFixed(0) : '—'}
+                            {row.employee ? '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150).total.toFixed(0) : '—'}
                           </span>
                           <button onClick={() => saveRowEdit(row.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 6px', cursor: 'pointer' }}>
                             <Check size={14} />
@@ -359,7 +363,7 @@ export default function Labor({ onBack }: Props) {
                           <span style={{ fontSize: '13px', color: row.hours_150 > 0 ? '#ef4444' : '#64748b', fontWeight: row.hours_150 > 0 ? '600' : '400' }}>{row.hours_150 || '—'}</span>
                           <span style={{ fontSize: '12px', color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
                           <span style={{ fontWeight: '700', color: row.found ? '#0f172a' : '#94a3b8', fontSize: '14px' }}>
-                            {row.found && row.employee ? '₪' + calcCost(row.employee, row.hours_100, row.hours_125, row.hours_150).toFixed(0) : '—'}
+                            {row.found && row.employee ? '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150).total.toFixed(0) : '—'}
                           </span>
                           <button onClick={() => startEdit(row.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
                             <Pencil size={14} color="#94a3b8" />
@@ -402,13 +406,13 @@ export default function Labor({ onBack }: Props) {
               </button>
             </div>
             <div className="table-scroll"><div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 90px 100px 80px 40px 40px', padding: '12px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
-                <span>שם</span><span>מחלקה</span><span>סוג שכר</span><span>תעריף שעתי</span><span>גלובאלי/יום</span><span>בונוס</span><span></span><span></span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px 100px 40px 40px', padding: '12px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                <span>שם</span><span>מחלקה</span><span>סוג שכר</span><span>שכר</span><span>בונוס</span><span></span><span></span>
               </div>
               {employees.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין עובדים — הוסף עובד ראשון</div>
               ) : employees.map((emp, i) => (
-                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 90px 100px 80px 40px 40px', alignItems: 'center', padding: '13px 24px', borderBottom: i < employees.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px 100px 40px 40px', alignItems: 'center', padding: '13px 24px', borderBottom: i < employees.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                   {editEmpId === emp.id ? (
                     <>
                       <input value={editEmpData.name || ''} onChange={e => setEditEmpData({ ...editEmpData, name: e.target.value })} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 8px', fontSize: '13px', textAlign: 'right' }} />
@@ -419,9 +423,8 @@ export default function Labor({ onBack }: Props) {
                         <option value="hourly">שעתי</option>
                         <option value="global">גלובאלי</option>
                       </select>
-                      <input type="number" value={editEmpData.hourly_rate || ''} onChange={e => setEditEmpData({ ...editEmpData, hourly_rate: parseFloat(e.target.value) })} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 8px', fontSize: '13px' }} />
-                      <input type="number" value={editEmpData.global_daily_rate || ''} onChange={e => setEditEmpData({ ...editEmpData, global_daily_rate: parseFloat(e.target.value) })} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 8px', fontSize: '13px' }} />
-                      <input type="number" value={editEmpData.bonus || ''} onChange={e => setEditEmpData({ ...editEmpData, bonus: parseFloat(e.target.value) })} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 8px', fontSize: '13px' }} placeholder="0" />
+                      <input type="number" value={editEmpData.wage_type === 'global' ? (editEmpData.global_daily_rate || '') : (editEmpData.hourly_rate || '')} onChange={e => setEditEmpData(p => p.wage_type === 'global' ? { ...p, global_daily_rate: parseFloat(e.target.value) } : { ...p, hourly_rate: parseFloat(e.target.value) })} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 8px', fontSize: '13px' }} placeholder={editEmpData.wage_type === 'global' ? 'חודשי' : 'שעתי'} />
+                      <input type="number" value={editEmpData.bonus || ''} onChange={e => setEditEmpData({ ...editEmpData, bonus: parseFloat(e.target.value) })} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 8px', fontSize: '13px' }} placeholder={editEmpData.wage_type === 'hourly' ? 'בונוס/ש׳' : 'בונוס/חודש'} />
                       <button onClick={() => handleEditEmployee(emp.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✓</button>
                       <button onClick={() => setEditEmpId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✗</button>
                     </>
@@ -431,10 +434,19 @@ export default function Labor({ onBack }: Props) {
                       <span style={{ fontSize: '12px', background: '#eff6ff', color: '#3b82f6', padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>
                         {deptOptions.find(d => d.value === emp.department)?.label}
                       </span>
-                      <span style={{ fontSize: '13px', color: '#64748b' }}>{emp.wage_type === 'hourly' ? 'שעתי' : 'גלובאלי'}</span>
-                      <span style={{ fontSize: '13px', color: '#374151' }}>{emp.wage_type === 'hourly' ? '₪' + emp.hourly_rate : '—'}</span>
-                      <span style={{ fontSize: '13px', color: '#374151' }}>{emp.wage_type === 'global' ? '₪' + emp.global_daily_rate : '—'}</span>
-                      <span style={{ fontSize: '13px', color: emp.bonus ? '#f59e0b' : '#d1d5db' }}>{emp.bonus ? '₪' + emp.bonus : '—'}</span>
+                      <span style={{ fontSize: '11px', background: emp.wage_type === 'hourly' ? '#dbeafe' : '#d1fae5', color: emp.wage_type === 'hourly' ? '#1d4ed8' : '#065f46', padding: '2px 8px', borderRadius: '20px', fontWeight: '600', textAlign: 'center' }}>
+                        {emp.wage_type === 'hourly' ? 'שעתי' : 'גלובאלי'}
+                      </span>
+                      <span style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>
+                        {emp.wage_type === 'hourly'
+                          ? (emp.hourly_rate ? `₪${emp.hourly_rate}/ש׳` : '—')
+                          : (emp.global_daily_rate ? '₪' + Math.round(emp.global_daily_rate).toLocaleString() + '/חודש' : '—')}
+                      </span>
+                      <span style={{ fontSize: '12px', color: emp.bonus ? '#f59e0b' : '#d1d5db', fontWeight: '600' }}>
+                        {emp.bonus
+                          ? (emp.wage_type === 'hourly' ? `₪${emp.bonus}/ש׳` : '₪' + Math.round(emp.bonus).toLocaleString() + '/חודש')
+                          : '—'}
+                      </span>
                       <button onClick={() => { setEditEmpId(emp.id); setEditEmpData(emp) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
                         <Pencil size={15} color="#94a3b8" />
                       </button>
@@ -482,20 +494,27 @@ export default function Labor({ onBack }: Props) {
                 </select>
               </div>
               {addForm.wage_type === 'hourly' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>תעריף שעתי (₪)</label>
-                  <input type="number" value={addForm.hourly_rate} onChange={e => setAddForm(f => ({ ...f, hourly_rate: e.target.value }))} style={inpStyle} placeholder="0" />
-                </div>
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>תעריף שעתי (₪)</label>
+                    <input type="number" value={addForm.hourly_rate} onChange={e => setAddForm(f => ({ ...f, hourly_rate: e.target.value }))} style={inpStyle} placeholder="0" />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>בונוס שעתי (₪/ש׳) <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופציונלי)</span></label>
+                    <input type="number" value={addForm.bonus} onChange={e => setAddForm(f => ({ ...f, bonus: e.target.value }))} style={inpStyle} placeholder="0" />
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>סכום נוסף לשעה — לא מוכפל ב-×1.3</span>
+                  </div>
+                </>
               ) : (
                 <>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>עלות יומית גלובאלית (₪)</label>
+                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>משכורת חודשית (₪)</label>
                     <input type="number" value={addForm.global_daily_rate} onChange={e => setAddForm(f => ({ ...f, global_daily_rate: e.target.value }))} style={inpStyle} placeholder="0" />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>בונוס (₪)</label>
-                    <input type="number" value={addForm.bonus} onChange={e => setAddForm(f => ({ ...f, bonus: e.target.value }))} style={inpStyle} placeholder="0 — אופציונלי" />
-                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>חישוב: גלובאלי × 1.3 + בונוס</span>
+                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>בונוס חודשי (₪) <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופציונלי)</span></label>
+                    <input type="number" value={addForm.bonus} onChange={e => setAddForm(f => ({ ...f, bonus: e.target.value }))} style={inpStyle} placeholder="0" />
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>חישוב: (משכורת × 1.3) + בונוס</span>
                   </div>
                 </>
               )}
