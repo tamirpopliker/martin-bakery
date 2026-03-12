@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════
--- 005: Email Reports Setup — pg_cron, pg_net, new KPI columns, report log
+-- 005: Email Reports Setup — new KPI columns + report log
 -- ═══════════════════════════════════════════════════════════════════════
 
 -- 1. Add missing KPI target columns for branch email reports
@@ -19,21 +19,6 @@ CREATE TABLE IF NOT EXISTS report_log (
   report_date TEXT NOT NULL           -- the date/period the report covers
 );
 
--- 3. Enable pg_cron and pg_net extensions
-CREATE EXTENSION IF NOT EXISTS pg_cron;
-CREATE EXTENSION IF NOT EXISTS pg_net;
-
--- 4. Schedule daily email report trigger
--- Runs at 09:00 UTC (≈12:00 Israel summer / 11:00 Israel winter)
--- Days 0-5 = Sunday–Friday (Saturday is skipped)
-SELECT cron.schedule(
-  'daily-email-report',
-  '0 9 * * 0-5',
-  $$
-  SELECT net.http_post(
-    url := 'https://nlklndgmtmwoacipjyek.supabase.co/functions/v1/send-reports',
-    headers := '{"Content-Type": "application/json"}'::jsonb,
-    body := '{"cron_secret": "REPLACE_WITH_YOUR_CRON_SECRET"}'::jsonb
-  );
-  $$
-);
+-- NOTE: Scheduling is handled by external cron service (cron-job.org)
+-- that calls the Edge Function URL daily at 09:00 UTC.
+-- pg_cron is not available on Supabase Free plan.
