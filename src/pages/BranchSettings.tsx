@@ -19,6 +19,8 @@ interface BranchKpi {
   labor_pct: number
   waste_pct: number
   revenue_target: number
+  basket_target: number
+  transaction_target: number
 }
 
 interface FixedCost {
@@ -44,7 +46,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
   const [tab, setTab] = useState<Tab>('kpi')
 
   // ── KPI ──
-  const [kpi, setKpi] = useState<BranchKpi>({ branch_id: branchId, labor_pct: 28, waste_pct: 3, revenue_target: 0 })
+  const [kpi, setKpi] = useState<BranchKpi>({ branch_id: branchId, labor_pct: 28, waste_pct: 3, revenue_target: 0, basket_target: 0, transaction_target: 0 })
   const [kpiSaved, setKpiSaved] = useState(false)
 
   // ── עלויות קבועות ──
@@ -90,11 +92,13 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
   async function saveKpi() {
     if (kpi.id) {
       await supabase.from('branch_kpi_targets').update({
-        labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct, revenue_target: kpi.revenue_target
+        labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct, revenue_target: kpi.revenue_target,
+        basket_target: kpi.basket_target, transaction_target: kpi.transaction_target
       }).eq('id', kpi.id)
     } else {
       const { data } = await supabase.from('branch_kpi_targets').insert({
-        branch_id: branchId, labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct, revenue_target: kpi.revenue_target
+        branch_id: branchId, labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct, revenue_target: kpi.revenue_target,
+        basket_target: kpi.basket_target, transaction_target: kpi.transaction_target
       }).select().single()
       if (data) setKpi(data)
     }
@@ -260,6 +264,26 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
                     value={kpi.revenue_target}
                     onChange={e => setKpi(p => ({ ...p, revenue_target: parseFloat(e.target.value) || 0 }))}
                     style={{ ...S.input, width: '160px', textAlign: 'right' as const }} />
+                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '4px' }}>גבוה = טוב</span>
+                </div>
+
+                {/* יעד סל ממוצע */}
+                <div>
+                  <label style={S.label}>יעד סל ממוצע (₪)</label>
+                  <input type="number" min={0} step={1}
+                    value={kpi.basket_target}
+                    onChange={e => setKpi(p => ({ ...p, basket_target: parseFloat(e.target.value) || 0 }))}
+                    style={{ ...S.input, width: '120px', textAlign: 'right' as const }} />
+                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '4px' }}>גבוה = טוב</span>
+                </div>
+
+                {/* יעד עסקאות */}
+                <div>
+                  <label style={S.label}>יעד עסקאות יומי</label>
+                  <input type="number" min={0} step={1}
+                    value={kpi.transaction_target}
+                    onChange={e => setKpi(p => ({ ...p, transaction_target: parseInt(e.target.value) || 0 }))}
+                    style={{ ...S.input, width: '120px', textAlign: 'right' as const }} />
                   <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '4px' }}>גבוה = טוב</span>
                 </div>
               </div>
