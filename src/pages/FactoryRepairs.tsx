@@ -72,7 +72,7 @@ export default function FactoryRepairs({ department, onBack }: Props) {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' }}>
-      <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
+      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
         <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
           onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
           onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
@@ -86,7 +86,7 @@ export default function FactoryRepairs({ department, onBack }: Props) {
         </div>
       </div>
 
-      <div style={{ padding: '32px', maxWidth: '900px', margin: '0 auto' }}>
+      <div className="page-container" style={{ padding: '32px', maxWidth: '900px', margin: '0 auto' }}>
         <div style={{ background: 'white', borderRadius: '20px', padding: '28px', marginBottom: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <h2 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: '700', color: '#374151' }}>הוספת רשומה</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
@@ -126,7 +126,7 @@ export default function FactoryRepairs({ department, onBack }: Props) {
           </div>
         </div>
 
-        <div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div className="table-scroll"><div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '120px 120px 1fr 130px 36px 36px', padding: '12px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
             <span>תאריך</span><span>סוג</span><span>תיאור</span><span>סכום</span><span></span><span></span>
           </div>
@@ -163,7 +163,7 @@ export default function FactoryRepairs({ department, onBack }: Props) {
               )}
             </div>
           ))}
-        </div>
+        </div></div>
       </div>
     </div>
   )

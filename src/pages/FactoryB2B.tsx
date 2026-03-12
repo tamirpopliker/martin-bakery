@@ -203,7 +203,7 @@ export default function FactoryB2B({ onBack }: Props) {
     <div style={S.page}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
+      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
         <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
           onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
           onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
@@ -234,7 +234,7 @@ export default function FactoryB2B({ onBack }: Props) {
         ))}
       </div>
 
-      <div style={{ padding: '28px 32px', maxWidth: '960px', margin: '0 auto' }}>
+      <div className="page-container" style={{ padding: '28px 32px', maxWidth: '960px', margin: '0 auto' }}>
 
         {/* ─── תיאור ────────────────────────────────────────────────────── */}
         <div style={{ background: cfg.bg, border: `1px solid ${cfg.color}22`, borderRadius: '12px', padding: '12px 18px', marginBottom: '20px', fontSize: '13px', color: cfg.color, fontWeight: '600' }}>
@@ -329,7 +329,7 @@ export default function FactoryB2B({ onBack }: Props) {
         )}
 
         {/* ─── טבלת רשומות ──────────────────────────────────────────────── */}
-        <div style={S.card}>
+        <div className="table-scroll"><div style={S.card}>
           <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 130px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
             <span>תאריך</span><span>לקוח</span><span>תעודה</span><span style={{ textAlign: 'left' }}>סכום</span><span /><span />
           </div>
@@ -381,7 +381,7 @@ export default function FactoryB2B({ onBack }: Props) {
               <span style={{ fontSize: '20px', fontWeight: '800', color: cfg.color }}>₪{total.toLocaleString()}</span>
             </div>
           )}
-        </div>
+        </div></div>
 
       </div>
     </div>

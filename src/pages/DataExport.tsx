@@ -255,7 +255,7 @@ export default function DataExport() {
   }
 
   return (
-    <div style={{ direction: 'rtl', fontFamily: "'Segoe UI', Arial, sans-serif", display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div className="page-container" style={{ direction: 'rtl', fontFamily: "'Segoe UI', Arial, sans-serif", display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
       {/* Controls */}
       <div style={S.card}>

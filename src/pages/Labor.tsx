@@ -223,7 +223,7 @@ export default function Labor({ onBack }: Props) {
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' }}>
 
-      <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
+      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
         <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
           onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
           onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
@@ -245,7 +245,7 @@ export default function Labor({ onBack }: Props) {
         </div>
       </div>
 
-      <div style={{ padding: '32px', maxWidth: '1000px', margin: '0 auto' }}>
+      <div className="page-container" style={{ padding: '32px', maxWidth: '1000px', margin: '0 auto' }}>
 
         {tab === 'upload' && (
           <>
@@ -401,7 +401,7 @@ export default function Labor({ onBack }: Props) {
                 <Plus size={16} />הוסף עובד
               </button>
             </div>
-            <div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+            <div className="table-scroll"><div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 90px 100px 80px 40px 40px', padding: '12px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
                 <span>שם</span><span>מחלקה</span><span>סוג שכר</span><span>תעריף שעתי</span><span>גלובאלי/יום</span><span>בונוס</span><span></span><span></span>
               </div>
@@ -445,7 +445,7 @@ export default function Labor({ onBack }: Props) {
                   )}
                 </div>
               ))}
-            </div>
+            </div></div>
           </>
         )}
       </div>

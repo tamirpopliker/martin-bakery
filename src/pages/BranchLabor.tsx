@@ -353,7 +353,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
     <div style={S.page}>
 
       {/* כותרת */}
-      <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' as const }}>
+      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' as const }}>
         <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
           onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
           onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
@@ -394,7 +394,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
         ))}
       </div>
 
-      <div style={{ padding: '24px 32px', maxWidth: '1000px', margin: '0 auto' }}>
+      <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1000px', margin: '0 auto' }}>
 
         {/* ══ העלאת PDF ════════════════════════════════════════════════════ */}
         {tab === 'upload' && (
@@ -456,7 +456,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
             {/* ── טבלת אישור ── */}
             {uploadStatus === 'confirm' && parsedRows.length > 0 && (
-              <div style={S.card}>
+              <div className="table-scroll"><div style={S.card}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                   <div>
                     <h3 style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>
@@ -508,7 +508,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                     <CheckCircle size={16} />שמור {parsedRows.filter(r => r.selected).length} עובדים
                   </button>
                 </div>
-              </div>
+              </div></div>
             )}
 
             {uploadStatus === 'done' && (
@@ -575,7 +575,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                 <span>שעות: <strong>{totalHours.toFixed(1)}</strong></span>
               </div>
             </div>
-            <div style={S.card}>
+            <div className="table-scroll"><div style={S.card}>
               <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
                 <span>תאריך</span><span>עובד</span>
                 <span style={{ textAlign: 'center' }}>שעות</span>
@@ -622,7 +622,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                   <span /><span />
                 </div>
               )}
-            </div>
+            </div></div>
           </>
         )}
 

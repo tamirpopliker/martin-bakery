@@ -163,7 +163,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
     <div style={S.page}>
 
       {/* כותרת + 4 כרטיסי סיכום */}
-      <div style={{ background: 'white', padding: '16px 32px', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' as const }}>
+      <div className="page-header" style={{ background: 'white', padding: '16px 32px', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' as const }}>
         <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
           onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
           onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
@@ -211,7 +211,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         )}
       </div>
 
-      <div style={{ padding: '20px 32px', maxWidth: '1000px', margin: '0 auto' }}>
+      <div className="page-container" style={{ padding: '20px 32px', maxWidth: '1000px', margin: '0 auto' }}>
 
         {/* חיפוש */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
@@ -283,7 +283,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         </div>
 
         {/* טבלת רשומות */}
-        <div style={{ ...S.card, marginBottom: '16px' }}>
+        <div className="table-scroll"><div style={{ ...S.card, marginBottom: '16px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: tab === 'credit' ? '110px 1fr 110px 130px 36px 36px' : '110px 1fr 80px 130px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
             <span>תאריך</span>
             <span>{tab === 'credit' ? 'לקוח' : 'הערות'}</span>
@@ -327,11 +327,11 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
               <span style={{ fontWeight: '800', color: cfg.color, fontSize: '18px' }}>₪{tabTotal.toLocaleString()}</span>
             </div>
           )}
-        </div>
+        </div></div>
 
         {/* סיכום יומי */}
         {dailySummary.length > 0 && (
-          <div style={S.card}>
+          <div className="table-scroll"><div style={S.card}>
             <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>📅 סיכום יומי — כל המקורות</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr 110px 70px', padding: '9px 18px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
               <span>תאריך</span><span>קופה</span><span>אתר</span><span>הקפה</span><span>סה"כ</span><span style={{ textAlign: 'center' }}>עסקאות</span>
@@ -354,7 +354,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
               <span style={{ color: branchColor, fontSize: '15px' }}>₪{totalRevenue.toLocaleString()}</span>
               <span style={{ textAlign: 'center', color: '#64748b' }}>{totalTx || '—'}</span>
             </div>
-          </div>
+          </div></div>
         )}
 
       </div>

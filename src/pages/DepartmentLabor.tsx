@@ -232,7 +232,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
     <div style={S.page}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
+      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
         <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
           onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
           onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
@@ -273,7 +273,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
         ))}
       </div>
 
-      <div style={{ padding: '28px 32px', maxWidth: '900px', margin: '0 auto' }}>
+      <div className="page-container" style={{ padding: '28px 32px', maxWidth: '900px', margin: '0 auto' }}>
 
         {/* ══ הזנה ידנית ══════════════════════════════════════════════════ */}
         {tab === 'manual' && (
@@ -459,7 +459,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
               </div>
             )}
 
-            <div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+            <div className="table-scroll"><div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
               {/* כותרת */}
               <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 70px 70px 110px 36px 36px', padding: '10px 20px', background: '#f8fafc', fontSize: '11px', fontWeight: '700', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
                 <span>תאריך</span><span>עובד</span>
@@ -520,7 +520,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                   <span /><span />
                 </div>
               )}
-            </div>
+            </div></div>
           </>
         )}
 

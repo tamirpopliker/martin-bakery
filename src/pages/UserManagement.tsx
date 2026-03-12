@@ -118,9 +118,9 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl', padding: '28px 36px' }}>
+    <div className="page-container" style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl', padding: '28px 36px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px' }}>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px' }}>
         <button onClick={onBack} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
           <ChevronRight size={20} color="#64748b" />
         </button>
@@ -233,7 +233,7 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
       {loading ? (
         <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8', fontSize: '16px' }}>טוען...</div>
       ) : (
-        <div style={{ background: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+        <div className="table-scroll"><div style={{ background: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
           {/* Header row */}
           <div style={{ display: 'grid', gridTemplateColumns: '180px 200px 90px 160px 180px 80px 100px', padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
             <span>שם</span>
@@ -353,7 +353,7 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
               )}
             </div>
           ))}
-        </div>
+        </div></div>
       )}
     </div>
   )

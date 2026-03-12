@@ -223,7 +223,7 @@ export default function DailyProduction({ department, onBack }: Props) {
     <div style={S.page}>
 
       {/* ─── כותרת ─────────────────────────────────────────────── */}
-      <div style={S.header}>
+      <div className="page-header" style={S.header}>
         <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
           onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
           onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
@@ -257,7 +257,7 @@ export default function DailyProduction({ department, onBack }: Props) {
         </div>
       </div>
 
-      <div style={{ padding: '28px 32px', maxWidth: '960px', margin: '0 auto' }}>
+      <div className="page-container" style={{ padding: '28px 32px', maxWidth: '960px', margin: '0 auto' }}>
 
         {/* ─── כרטיסי סיכום ──────────────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
@@ -334,7 +334,7 @@ export default function DailyProduction({ department, onBack }: Props) {
         </div>
 
         {/* ─── טבלת היסטוריה ─────────────────────────────────────── */}
-        <div style={S.card}>
+        <div className="table-scroll"><div style={S.card}>
           {/* כותרת טבלה */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px 60px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '0' }}>
             <span>תאריך</span>
@@ -409,7 +409,7 @@ export default function DailyProduction({ department, onBack }: Props) {
               <span /><span />
             </div>
           )}
-        </div>
+        </div></div>
 
       </div>
     </div>

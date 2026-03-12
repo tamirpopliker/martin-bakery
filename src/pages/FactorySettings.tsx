@@ -278,7 +278,7 @@ export default function FactorySettings({ onBack }: Props) {
     <div style={S.page}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
+      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
         <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
           onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
           onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
@@ -311,7 +311,7 @@ export default function FactorySettings({ onBack }: Props) {
         ))}
       </div>
 
-      <div style={{ padding: '28px 32px', maxWidth: '960px', margin: '0 auto' }}>
+      <div className="page-container" style={{ padding: '28px 32px', maxWidth: '960px', margin: '0 auto' }}>
 
         {/* ══ יעדי KPI ════════════════════════════════════════════════════ */}
         {tab === 'kpi' && (
@@ -567,7 +567,7 @@ export default function FactorySettings({ onBack }: Props) {
             )}
 
             {/* רשימת עובדים */}
-            <div style={S.card}>
+            <div className="table-scroll"><div style={S.card}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 90px 70px 110px 90px 50px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
                 <span>שם</span><span>מ.עובד</span><span>מחלקה</span><span>סוג</span><span style={{ textAlign: 'center' }}>שכר</span><span style={{ textAlign: 'center' }}>בונוס</span><span style={{ textAlign: 'center' }}>פעיל</span><span /><span />
               </div>
@@ -634,7 +634,7 @@ export default function FactorySettings({ onBack }: Props) {
                   )}
                 </div>
               )}
-            </div>
+            </div></div>
 
             {/* ── ימי עבודה לפי חודש ── */}
             <div style={{ borderTop: '2px solid #e2e8f0', marginTop: '32px', paddingTop: '24px' }}>
@@ -664,7 +664,7 @@ export default function FactorySettings({ onBack }: Props) {
               </div>
 
               {/* טבלת ימי עבודה */}
-              <div style={S.card}>
+              <div className="table-scroll"><div style={S.card}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
                   <span>חודש</span><span style={{ textAlign: 'center' }}>ימי עבודה</span><span /><span />
                 </div>
@@ -690,7 +690,7 @@ export default function FactorySettings({ onBack }: Props) {
                     )}
                   </div>
                 ))}
-              </div>
+              </div></div>
             </div>
           </>
         )}

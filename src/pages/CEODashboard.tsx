@@ -288,7 +288,7 @@ export default function CEODashboard({ onBack }: Props) {
         </div>
       </div>
 
-      <div style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
+      <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>טוען נתונים...</div>
@@ -393,7 +393,7 @@ export default function CEODashboard({ onBack }: Props) {
             )}
 
             {/* Ranking table — branches + factory */}
-            <div style={S.card}>
+            <div className="table-scroll"><div style={S.card}>
               <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>דירוג יחידות לפי רווחיות</h3>
               <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 100px 80px 70px 100px 100px', padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
@@ -462,7 +462,7 @@ export default function CEODashboard({ onBack }: Props) {
                   <span style={{ fontSize: '14px', fontWeight: '800', color: grandOperating >= 0 ? '#10b981' : '#ef4444' }}>₪{Math.round(grandOperating).toLocaleString()}</span>
                 </div>
               </div>
-            </div>
+            </div></div>
           </>
         )}
       </div>

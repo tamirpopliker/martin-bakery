@@ -85,6 +85,31 @@ body {
     white-space: nowrap;
   }
 
+  /* Sub-page containers: reduce padding */
+  .page-container {
+    padding: 14px 12px 72px 12px !important;
+  }
+
+  /* Sub-page headers: compact + sticky */
+  .page-header {
+    padding: 10px 14px !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 100 !important;
+  }
+
+  /* Table scroll wrapper: horizontal scroll for data grids */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -12px;
+    padding: 0 12px;
+  }
+
+  .table-scroll > div {
+    min-width: 600px;
+  }
+
   /* Section headings: smaller on mobile */
   .app-main h2 {
     font-size: 18px !important;
