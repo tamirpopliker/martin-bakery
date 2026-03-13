@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept } from '../lib/supabase'
-import { ArrowRight, Trophy, TrendingUp, TrendingDown, Minus, DollarSign, Users, Receipt, Store, BarChart3, Globe, CreditCard } from 'lucide-react'
+import { ArrowRight, Trophy, TrendingUp, TrendingDown, Minus, DollarSign, Users, Receipt, Store, BarChart3, Globe, CreditCard, Building2 } from 'lucide-react'
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -19,6 +19,7 @@ interface BranchData {
   id: number; name: string; color: string
   revenue: number; expenses: number; labor: number; waste: number
   fixedCosts: number; grossProfit: number; operatingProfit: number
+  revCashier: number; revCredit: number; revWebsite: number
 }
 
 export default function CEODashboard({ onBack }: Props) {
@@ -100,13 +101,14 @@ export default function CEODashboard({ onBack }: Props) {
       const { data: revData } = await supabase.from('branch_revenue').select('source, amount')
         .eq('branch_id', br.id).gte('date', from).lt('date', to)
       const revenue = revData ? revData.reduce((s, r) => s + Number(r.amount), 0) : 0
-      // Accumulate by source
+      // Accumulate by source (total + per-branch)
+      let brCashier = 0, brCredit = 0, brWebsite = 0
       if (revData) {
         for (const r of revData) {
           const amt = Number(r.amount)
-          if (r.source === 'cashier') totalCashier += amt
-          else if (r.source === 'credit') totalCredit += amt
-          else if (r.source === 'website') totalWebsite += amt
+          if (r.source === 'cashier') { totalCashier += amt; brCashier += amt }
+          else if (r.source === 'credit') { totalCredit += amt; brCredit += amt }
+          else if (r.source === 'website') { totalWebsite += amt; brWebsite += amt }
         }
       }
 
@@ -142,7 +144,7 @@ export default function CEODashboard({ onBack }: Props) {
       const grossProfit = revenue - labor - expenses
       const operatingProfit = grossProfit - fixedCosts - waste
 
-      branchResults.push({ ...br, revenue, expenses, labor, waste, fixedCosts, grossProfit, operatingProfit })
+      branchResults.push({ ...br, revenue, expenses, labor, waste, fixedCosts, grossProfit, operatingProfit, revCashier: brCashier, revCredit: brCredit, revWebsite: brWebsite })
     }
 
     setBranches(branchResults)
@@ -357,6 +359,57 @@ export default function CEODashboard({ onBack }: Props) {
               </div>
             </div>
 
+            {/* KPI cards row 2 — costs + revenue breakdown */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+              <div style={{ ...S.card, padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <Building2 size={15} color="#64748b" />
+                  <span style={{ fontSize: '11px', fontWeight: '600', color: '#64748b' }}>סה"כ עלויות קבועות</span>
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>₪{Math.round(totalFixed + factoryFixed).toLocaleString()}</div>
+              </div>
+
+              <div style={{ ...S.card, padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <Users size={15} color="#f59e0b" />
+                  <span style={{ fontSize: '11px', fontWeight: '600', color: '#64748b' }}>סה"כ לייבור</span>
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>₪{Math.round(grandLabor).toLocaleString()}</div>
+              </div>
+
+              <div style={{ ...S.card, padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <Receipt size={15} color="#3b82f6" />
+                  <span style={{ fontSize: '11px', fontWeight: '600', color: '#64748b' }}>הכנסות קופה</span>
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>₪{Math.round(revCashier).toLocaleString()}</div>
+              </div>
+
+              <div style={{ ...S.card, padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <CreditCard size={15} color="#f59e0b" />
+                  <span style={{ fontSize: '11px', fontWeight: '600', color: '#64748b' }}>הכנסות הקפה</span>
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>₪{Math.round(revCredit + factoryB2b).toLocaleString()}</div>
+              </div>
+
+              <div style={{ ...S.card, padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <Globe size={15} color="#8b5cf6" />
+                  <span style={{ fontSize: '11px', fontWeight: '600', color: '#64748b' }}>הכנסות אתר</span>
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>₪{Math.round(revWebsite).toLocaleString()}</div>
+              </div>
+
+              <div style={{ ...S.card, padding: '16px', border: '2px solid #10b98122' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <TrendingUp size={15} color="#10b981" />
+                  <span style={{ fontSize: '11px', fontWeight: '600', color: '#64748b' }}>סה"כ הכנסות כולל</span>
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: '800', color: '#10b981' }}>₪{Math.round(revCashier + revCredit + factoryB2b + revWebsite).toLocaleString()}</div>
+              </div>
+            </div>
+
             {/* Revenue breakdown cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '24px' }}>
               <div style={{ ...S.card, padding: '18px', borderTop: '3px solid #3b82f6' }}>
@@ -520,6 +573,51 @@ export default function CEODashboard({ onBack }: Props) {
                   <span style={{ fontSize: '13px', color: '#f59e0b' }}>₪{Math.round(grandLabor).toLocaleString()}</span>
                   <span style={{ fontSize: '12px', color: grandLaborPct <= avgLaborTarget ? '#10b981' : '#ef4444', textAlign: 'center' }}>{grandLaborPct.toFixed(1)}%</span>
                   <span style={{ fontSize: '13px', fontWeight: '700', color: grandGross >= 0 ? '#10b981' : '#ef4444' }}>₪{Math.round(grandGross).toLocaleString()}</span>
+                  <span style={{ fontSize: '14px', fontWeight: '800', color: grandOperating >= 0 ? '#10b981' : '#ef4444' }}>₪{Math.round(grandOperating).toLocaleString()}</span>
+                </div>
+              </div>
+            </div></div>
+
+            {/* Branch revenue breakdown table */}
+            <div className="table-scroll" style={{ marginTop: '24px' }}><div style={S.card}>
+              <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>פירוק הכנסות לפי סניף</h3>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 95px 95px 95px 100px 90px 100px 110px', padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                  <span>סניף</span>
+                  <span>הכנסות קופה</span>
+                  <span>הכנסות הקפה</span>
+                  <span>הכנסות אתר</span>
+                  <span>סה"כ הכנסות</span>
+                  <span>לייבור</span>
+                  <span>עלויות קבועות</span>
+                  <span>רווח תפעולי</span>
+                </div>
+
+                {branches.map((br, i) => (
+                  <div key={br.id} style={{ display: 'grid', gridTemplateColumns: '1fr 95px 95px 95px 100px 90px 100px 110px', alignItems: 'center', padding: '12px 16px', borderBottom: i < branches.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: br.color }} />
+                      <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>{br.name}</span>
+                    </div>
+                    <span style={{ fontSize: '13px', color: '#374151' }}>₪{Math.round(br.revCashier).toLocaleString()}</span>
+                    <span style={{ fontSize: '13px', color: '#374151' }}>₪{Math.round(br.revCredit).toLocaleString()}</span>
+                    <span style={{ fontSize: '13px', color: '#374151' }}>₪{Math.round(br.revWebsite).toLocaleString()}</span>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#374151' }}>₪{Math.round(br.revenue).toLocaleString()}</span>
+                    <span style={{ fontSize: '13px', color: '#f59e0b' }}>₪{Math.round(br.labor).toLocaleString()}</span>
+                    <span style={{ fontSize: '13px', color: '#64748b' }}>₪{Math.round(br.fixedCosts).toLocaleString()}</span>
+                    <span style={{ fontSize: '14px', fontWeight: '800', color: br.operatingProfit >= 0 ? '#10b981' : '#ef4444' }}>₪{Math.round(br.operatingProfit).toLocaleString()}</span>
+                  </div>
+                ))}
+
+                {/* Grand total */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 95px 95px 95px 100px 90px 100px 110px', padding: '13px 16px', background: '#fef3c7', borderTop: '2px solid #fde68a', fontWeight: '700' }}>
+                  <span style={{ fontSize: '14px', color: '#374151' }}>סה"כ כולל</span>
+                  <span style={{ fontSize: '13px', color: '#374151' }}>₪{Math.round(revCashier).toLocaleString()}</span>
+                  <span style={{ fontSize: '13px', color: '#374151' }}>₪{Math.round(revCredit + factoryB2b).toLocaleString()}</span>
+                  <span style={{ fontSize: '13px', color: '#374151' }}>₪{Math.round(revWebsite).toLocaleString()}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#374151' }}>₪{Math.round(grandRevenue).toLocaleString()}</span>
+                  <span style={{ fontSize: '13px', color: '#f59e0b' }}>₪{Math.round(grandLabor).toLocaleString()}</span>
+                  <span style={{ fontSize: '13px', color: '#64748b' }}>₪{Math.round(totalFixed + factoryFixed).toLocaleString()}</span>
                   <span style={{ fontSize: '14px', fontWeight: '800', color: grandOperating >= 0 ? '#10b981' : '#ef4444' }}>₪{Math.round(grandOperating).toLocaleString()}</span>
                 </div>
               </div>
