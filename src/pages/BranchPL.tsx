@@ -263,29 +263,33 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
               <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
 
                 {/* הכנסות */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '11px 18px', background: '#f0fdf4', borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '11px 18px', background: '#f0fdf4', borderBottom: '1px solid #e2e8f0' }}>
                   <span style={{ fontSize: '13px', fontWeight: '700', color: '#10b981' }}>הכנסות</span>
                   <span style={{ fontSize: '13px', fontWeight: '700', color: '#10b981', textAlign: 'left' as const }}>סכום (₪)</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#10b981', textAlign: 'left' as const }}>%</span>
                 </div>
                 {[
                   { label: 'קופה', amount: revCashier },
                   { label: 'אתר', amount: revWebsite },
                   { label: 'הקפה', amount: revCredit },
                 ].map((l, i) => (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                     <span style={{ fontSize: '14px', color: '#374151' }}>{l.label}</span>
                     <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151', textAlign: 'left' as const }}>{fmtM(l.amount)}</span>
+                    <span style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'left' as const }}>{totalRevenue > 0 ? (l.amount / totalRevenue * 100).toFixed(1) + '%' : '—'}</span>
                   </div>
                 ))}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '12px 18px', background: '#f0fdf4', borderBottom: '2px solid #bbf7d0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '12px 18px', background: '#f0fdf4', borderBottom: '2px solid #bbf7d0' }}>
                   <span style={{ fontSize: '14px', fontWeight: '800', color: '#10b981' }}>סה"כ הכנסות</span>
                   <span style={{ fontSize: '16px', fontWeight: '800', color: '#10b981', textAlign: 'left' as const }}>{fmtM(totalRevenue)}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#10b981', textAlign: 'left' as const }}>100%</span>
                 </div>
 
                 {/* הוצאות */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '11px 18px', background: '#fef2f2', borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '11px 18px', background: '#fef2f2', borderBottom: '1px solid #e2e8f0' }}>
                   <span style={{ fontSize: '13px', fontWeight: '700', color: '#ef4444' }}>הוצאות</span>
                   <span style={{ fontSize: '13px', fontWeight: '700', color: '#ef4444', textAlign: 'left' as const }}>סכום (₪)</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#ef4444', textAlign: 'left' as const }}>%</span>
                 </div>
                 {[
                   { label: 'ספקים / מלאי', amount: expSuppliers },
@@ -295,30 +299,31 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                   { label: 'אחר', amount: expOther },
                   { label: 'לייבור (עלות מעסיק)', amount: laborEmployer },
                 ].map((l, i) => (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                     <span style={{ fontSize: '14px', color: '#374151' }}>{l.label}</span>
                     <span style={{ fontSize: '14px', fontWeight: '600', color: l.amount > 0 ? '#ef4444' : '#94a3b8', textAlign: 'left' as const }}>
                       {l.amount > 0 ? fmtM(l.amount) : '—'}
                     </span>
+                    <span style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'left' as const }}>{totalRevenue > 0 && l.amount > 0 ? (l.amount / totalRevenue * 100).toFixed(1) + '%' : '—'}</span>
                   </div>
                 ))}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '12px 18px', background: '#fef2f2', borderBottom: '2px solid #fecaca' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '12px 18px', background: '#fef2f2', borderBottom: '2px solid #fecaca' }}>
                   <span style={{ fontSize: '14px', fontWeight: '800', color: '#ef4444' }}>סה"כ הוצאות + לייבור</span>
                   <span style={{ fontSize: '16px', fontWeight: '800', color: '#ef4444', textAlign: 'left' as const }}>{fmtM(totalExpenses + laborEmployer)}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#ef4444', textAlign: 'left' as const }}>{totalRevenue > 0 ? ((totalExpenses + laborEmployer) / totalRevenue * 100).toFixed(1) + '%' : '—'}</span>
                 </div>
 
                 {/* רווח גולמי */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '14px 18px', background: grossProfit >= 0 ? '#f0fdf4' : '#fef2f2', borderBottom: '2px solid #e2e8f0' }}>
-                  <div>
-                    <span style={{ fontSize: '15px', fontWeight: '800', color: grossProfit >= 0 ? '#10b981' : '#ef4444' }}>רווח גולמי</span>
-                    <span style={{ fontSize: '11px', color: '#94a3b8', marginRight: '10px' }}>{grossPct.toFixed(1)}%</span>
-                  </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '14px 18px', background: grossProfit >= 0 ? '#f0fdf4' : '#fef2f2', borderBottom: '2px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '15px', fontWeight: '800', color: grossProfit >= 0 ? '#10b981' : '#ef4444' }}>רווח גולמי</span>
                   <span style={{ fontSize: '18px', fontWeight: '800', color: grossProfit >= 0 ? '#10b981' : '#ef4444', textAlign: 'left' as const }}>{fmtM(grossProfit)}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: grossProfit >= 0 ? '#10b981' : '#ef4444', textAlign: 'left' as const }}>{grossPct.toFixed(1)}%</span>
                 </div>
 
                 {/* עלויות קבועות + פחת */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '11px 18px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '11px 18px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                   <span style={{ fontSize: '13px', fontWeight: '700', color: '#64748b' }}>ניכויים נוספים</span>
+                  <span />
                   <span />
                 </div>
                 {[
@@ -326,15 +331,16 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                   { label: 'הנהלה וכלליות', amount: mgmtCosts },
                   { label: 'פחת', amount: wasteTotal },
                 ].map((l, i) => (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                     <span style={{ fontSize: '14px', color: '#374151' }}>{l.label}</span>
                     <span style={{ fontSize: '14px', fontWeight: '600', color: l.amount > 0 ? '#64748b' : '#94a3b8', textAlign: 'left' as const }}>
                       {l.amount > 0 ? fmtM(l.amount) : '—'}
                     </span>
+                    <span style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'left' as const }}>{totalRevenue > 0 && l.amount > 0 ? (l.amount / totalRevenue * 100).toFixed(1) + '%' : '—'}</span>
                   </div>
                 ))}
                 {/* העמסת מטה — editable % */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
                   <span style={{ fontSize: '14px', color: '#374151', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     העמסת מטה
                     <input
@@ -352,15 +358,14 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                   <span style={{ fontSize: '14px', fontWeight: '600', color: overheadAmount > 0 ? '#64748b' : '#94a3b8', textAlign: 'left' as const }}>
                     {overheadAmount > 0 ? fmtM(overheadAmount) : '—'}
                   </span>
+                  <span style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'left' as const }}>{totalRevenue > 0 && overheadAmount > 0 ? (overheadAmount / totalRevenue * 100).toFixed(1) + '%' : '—'}</span>
                 </div>
 
                 {/* רווח תפעולי */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', padding: '16px 18px', background: operatingProfit >= 0 ? '#f0fdf4' : '#fef2f2' }}>
-                  <div>
-                    <span style={{ fontSize: '16px', fontWeight: '800', color: operatingProfit >= 0 ? '#10b981' : '#ef4444' }}>רווח תפעולי</span>
-                    <span style={{ fontSize: '12px', color: '#94a3b8', marginRight: '10px' }}>{operatingPct.toFixed(1)}% מהכנסות</span>
-                  </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '16px 18px', background: operatingProfit >= 0 ? '#f0fdf4' : '#fef2f2' }}>
+                  <span style={{ fontSize: '16px', fontWeight: '800', color: operatingProfit >= 0 ? '#10b981' : '#ef4444' }}>רווח תפעולי</span>
                   <span style={{ fontSize: '20px', fontWeight: '800', color: operatingProfit >= 0 ? '#10b981' : '#ef4444', textAlign: 'left' as const }}>{fmtM(operatingProfit)}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: operatingProfit >= 0 ? '#10b981' : '#ef4444', textAlign: 'left' as const }}>{operatingPct.toFixed(1)}%</span>
                 </div>
               </div>
             </div>
