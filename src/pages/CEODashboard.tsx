@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept } from '../lib/supabase'
-import { ArrowRight, Trophy, TrendingUp, TrendingDown, Minus, DollarSign, Users, Receipt, Store, BarChart3 } from 'lucide-react'
+import { ArrowRight, Trophy, TrendingUp, TrendingDown, Minus, DollarSign, Users, Receipt, Store, BarChart3, Globe, CreditCard } from 'lucide-react'
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -40,6 +40,12 @@ export default function CEODashboard({ onBack }: Props) {
   const [factoryRepairs, setFactoryRepairs] = useState(0)
   const [factoryFixed, setFactoryFixed]     = useState(0)
 
+  // Revenue breakdown
+  const [revCashier, setRevCashier] = useState(0)
+  const [revCredit, setRevCredit]   = useState(0)
+  const [revWebsite, setRevWebsite] = useState(0)
+  const [factoryB2b, setFactoryB2b] = useState(0)
+
   async function fetchData() {
     setLoading(true)
 
@@ -63,8 +69,9 @@ export default function CEODashboard({ onBack }: Props) {
       getWorkingDays(monthKey || from.slice(0, 7)),
     ])
 
-    const fSalesTotal = (fSalesFs.data || []).reduce((s, r) => s + Number(r.amount), 0)
-                      + (fSalesB2b.data || []).reduce((s, r) => s + Number(r.amount), 0)
+    const fSalesDirect = (fSalesFs.data || []).reduce((s, r) => s + Number(r.amount), 0)
+    const fSalesB2bTotal = (fSalesB2b.data || []).reduce((s, r) => s + Number(r.amount), 0)
+    const fSalesTotal = fSalesDirect + fSalesB2bTotal
     // סינון עובדים גלובליים מלייבור כדי למנוע ספירה כפולה
     const globalNames = new Set(globalEmpsData.map(e => e.name))
     const fHourlyLabor = (fLabor.data || []).filter((r: any) => !globalNames.has(r.employee_name)).reduce((s, r) => s + Number(r.employer_cost), 0)
@@ -82,15 +89,26 @@ export default function CEODashboard({ onBack }: Props) {
     setFactoryWaste(fWasteTotal)
     setFactoryRepairs(fRepairsTotal)
     setFactoryFixed(fFixedTotal)
+    setFactoryB2b(fSalesB2bTotal)
 
     const branchResults: BranchData[] = []
     let totalExpByType: Record<string, number> = {}
+    let totalCashier = 0, totalCredit = 0, totalWebsite = 0
 
     for (const br of BRANCHES) {
-      // revenue
-      const { data: revData } = await supabase.from('branch_revenue').select('amount')
+      // revenue (with source breakdown)
+      const { data: revData } = await supabase.from('branch_revenue').select('source, amount')
         .eq('branch_id', br.id).gte('date', from).lt('date', to)
       const revenue = revData ? revData.reduce((s, r) => s + Number(r.amount), 0) : 0
+      // Accumulate by source
+      if (revData) {
+        for (const r of revData) {
+          const amt = Number(r.amount)
+          if (r.source === 'cashier') totalCashier += amt
+          else if (r.source === 'credit') totalCredit += amt
+          else if (r.source === 'website') totalWebsite += amt
+        }
+      }
 
       // expenses
       const { data: expData } = await supabase.from('branch_expenses').select('expense_type, amount')
@@ -128,6 +146,9 @@ export default function CEODashboard({ onBack }: Props) {
     }
 
     setBranches(branchResults)
+    setRevCashier(totalCashier)
+    setRevCredit(totalCredit)
+    setRevWebsite(totalWebsite)
 
     // expense breakdown for pie
     const typeLabels: Record<string, string> = {
@@ -336,6 +357,39 @@ export default function CEODashboard({ onBack }: Props) {
               </div>
             </div>
 
+            {/* Revenue breakdown cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '24px' }}>
+              <div style={{ ...S.card, padding: '18px', borderTop: '3px solid #3b82f6' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <Receipt size={16} color="#3b82f6" />
+                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>קופות סניפים</span>
+                </div>
+                <div style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>₪{Math.round(revCashier).toLocaleString()}</div>
+                {grandRevenue > 0 && <span style={{ fontSize: '12px', color: '#94a3b8' }}>{((revCashier / grandRevenue) * 100).toFixed(1)}% מסה"כ הכנסות</span>}
+              </div>
+
+              <div style={{ ...S.card, padding: '18px', borderTop: '3px solid #f59e0b' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <CreditCard size={16} color="#f59e0b" />
+                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>הקפה (סניפים + B2B מפעל)</span>
+                </div>
+                <div style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>₪{Math.round(revCredit + factoryB2b).toLocaleString()}</div>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>סניפים: ₪{Math.round(revCredit).toLocaleString()}</span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>B2B: ₪{Math.round(factoryB2b).toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div style={{ ...S.card, padding: '18px', borderTop: '3px solid #8b5cf6' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <Globe size={16} color="#8b5cf6" />
+                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>הכנסות מהאתר</span>
+                </div>
+                <div style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>₪{Math.round(revWebsite).toLocaleString()}</div>
+                {grandRevenue > 0 && <span style={{ fontSize: '12px', color: '#94a3b8' }}>{((revWebsite / grandRevenue) * 100).toFixed(1)}% מסה"כ הכנסות</span>}
+              </div>
+            </div>
+
             {/* Charts row */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
 
@@ -351,7 +405,11 @@ export default function CEODashboard({ onBack }: Props) {
                     <Legend wrapperStyle={{ fontSize: '12px' }} />
                     <Bar dataKey="הכנסות" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="הוצאות" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="רווח תפעולי" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="רווח תפעולי" radius={[4, 4, 0, 0]}>
+                      {barData.map((entry, index) => (
+                        <Cell key={index} fill={entry['רווח תפעולי'] >= 0 ? '#10b981' : '#ef4444'} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
