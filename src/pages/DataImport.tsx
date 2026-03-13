@@ -138,7 +138,7 @@ function validateRows(tableName: string, mapped: Record<string, any>[], rawRows:
       if (/^\d{4}-\d{2}$/.test(m)) months.add(m)
     }
   }
-  if (months.size > 1) warnings.push(`תאריכים מחודשים שונים: ${[...months].join(', ')}`)
+  if (months.size > 1) warnings.push(`ייבוא מרובה חודשים: ${[...months].join(', ')}`)
   // Rejected rows
   const rejected = rawRows.length - mapped.length
   if (rejected > 0) warnings.push(`${rejected} שורות נדחו (שדות חסרים: תאריך, סכום וכו')`)
@@ -425,6 +425,19 @@ function detectMonth(allFiles: FileMapping[]): string {
   return best || new Date().toISOString().slice(0, 7)
 }
 
+function detectAllMonths(allFiles: FileMapping[]): string[] {
+  const months = new Set<string>()
+  for (const f of allFiles) {
+    for (const row of f.rows) {
+      if (row.date && typeof row.date === 'string') {
+        const m = row.date.slice(0, 7)
+        if (/^\d{4}-\d{2}$/.test(m)) months.add(m)
+      }
+    }
+  }
+  return [...months].sort()
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function DataImport({ branchOnly }: Props) {
   const [files, setFiles] = useState<FileMapping[]>([])
@@ -673,10 +686,9 @@ export default function DataImport({ branchOnly }: Props) {
     const totalRows = readyFiles.reduce((s, f) => s + f.rows.length, 0)
     let globalCurrent = 0
 
-    // Auto-detect month from data dates
-    const dataMonth = detectMonth(readyFiles)
-    const from = dataMonth + '-01'
-    const to = monthEnd(dataMonth)
+    // Auto-detect months from data dates
+    const allMonths = detectAllMonths(readyFiles)
+    const dataMonth = detectMonth(readyFiles) // fallback for fixed_costs without month
 
     // Ensure suppliers imported before supplier_invoices (FK dependency)
     readyFiles.sort((a, b) => {
@@ -685,12 +697,12 @@ export default function DataImport({ branchOnly }: Props) {
       return 0
     })
 
-    // Update fixed costs month with detected month (always override — CSV month is usually empty)
+    // Update fixed costs month — keep original if valid, otherwise use detected month as fallback
     for (const fm of readyFiles) {
       if (fm.csvName.toLowerCase().includes('fixed_costs')) {
         fm.rows = fm.rows.map(r => ({
           ...r,
-          month: dataMonth,
+          month: r.month && /^\d{4}-\d{2}$/.test(r.month) ? r.month : dataMonth,
         }))
       }
     }
@@ -732,23 +744,33 @@ export default function DataImport({ branchOnly }: Props) {
 
       let deleteError = ''
 
-      // Clear existing data if toggle is ON
+      // Clear existing data if toggle is ON — clear ALL months found in data
       if (clearExisting) {
-        let delRes: { error: any } | null = null
-        if (fm.tableName === 'labor') {
-          delRes = await supabase.from('labor').delete().eq('entity_type', 'factory').gte('date', from).lt('date', to)
-        } else if (fm.tableName === 'fixed_costs') {
-          delRes = await supabase.from('fixed_costs').delete().eq('entity_type', 'factory').eq('month', dataMonth)
-        } else if (fm.tableName === 'kpi_targets') {
-          delRes = await supabase.from('kpi_targets').delete().neq('department', '__never__')
+        if (fm.tableName === 'kpi_targets') {
+          const delRes = await supabase.from('kpi_targets').delete().neq('department', '__never__')
+          if (delRes?.error) {
+            deleteError = `מחיקה: ${delRes.error.message}`
+            console.error(`[Delete ${fm.tableName}]`, delRes.error)
+          }
         } else if (fm.tableName === 'suppliers') {
           // Don't delete suppliers — just skip dupes
-        } else if (defEntry.hasDate) {
-          delRes = await supabase.from(fm.tableName).delete().gte('date', from).lt('date', to)
-        }
-        if (delRes?.error) {
-          deleteError = `מחיקה: ${delRes.error.message}`
-          console.error(`[Delete ${fm.tableName}]`, delRes.error)
+        } else {
+          for (const m of allMonths) {
+            const mFrom = m + '-01'
+            const mTo = monthEnd(m)
+            let delRes: { error: any } | null = null
+            if (fm.tableName === 'labor') {
+              delRes = await supabase.from('labor').delete().eq('entity_type', 'factory').gte('date', mFrom).lt('date', mTo)
+            } else if (fm.tableName === 'fixed_costs') {
+              delRes = await supabase.from('fixed_costs').delete().eq('entity_type', 'factory').eq('month', m)
+            } else if (defEntry.hasDate) {
+              delRes = await supabase.from(fm.tableName).delete().gte('date', mFrom).lt('date', mTo)
+            }
+            if (delRes?.error) {
+              deleteError = `מחיקה (${m}): ${delRes.error.message}`
+              console.error(`[Delete ${fm.tableName} ${m}]`, delRes.error)
+            }
+          }
         }
       }
 
