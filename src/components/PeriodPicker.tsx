@@ -1,17 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Calendar } from 'lucide-react'
 import { computePeriod, type PeriodRange, type PeriodType } from '../lib/period'
+import { Button } from '@/components/ui/button'
 
 interface Props {
   period: PeriodRange
   onChange: (p: PeriodRange) => void
 }
 
-// ─── Preset definitions ─────────────────────────────────────────────────────
 interface Preset {
   type: PeriodType
   label: string
-  group: number // for visual separators
+  group: number
 }
 
 const PRESETS: Preset[] = [
@@ -25,12 +25,10 @@ const PRESETS: Preset[] = [
   { type: 'last_year',          label: 'שנה שעברה',         group: 3 },
 ]
 
-// ─── Component ──────────────────────────────────────────────────────────────
 export default function PeriodPicker({ period, onChange }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  // Close dropdown on outside click
   useEffect(() => {
     if (!open) return
     function handleClick(e: MouseEvent) {
@@ -53,14 +51,15 @@ export default function PeriodPicker({ period, onChange }: Props) {
     setOpen(false)
   }
 
-  // Determine the month value for the custom input
   const customMonthValue = period.type === 'custom_month' ? (period.customMonth || '') : ''
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '6px', fontFamily: "'Segoe UI', Arial, sans-serif" }}>
+    <div ref={ref} className="relative inline-flex items-center gap-2">
 
-      {/* ─── Quick button: חודש שעבר ─────────────────────────────────── */}
-      <button
+      {/* Quick toggle: חודש שעבר */}
+      <Button
+        variant={isLastMonth ? 'default' : 'outline'}
+        size="sm"
         onClick={() => {
           if (isLastMonth) {
             onChange(computePeriod('month'))
@@ -68,68 +67,29 @@ export default function PeriodPicker({ period, onChange }: Props) {
             onChange(computePeriod('last_month'))
           }
         }}
-        style={{
-          background: isLastMonth ? '#3b82f6' : '#f1f5f9',
-          color: isLastMonth ? 'white' : '#64748b',
-          border: isLastMonth ? '1.5px solid #3b82f6' : '1.5px solid #e2e8f0',
-          borderRadius: '10px',
-          padding: '7px 14px',
-          fontSize: '13px',
-          fontWeight: '600',
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-          transition: 'all 0.15s',
-          whiteSpace: 'nowrap',
-        }}
+        className={`rounded-lg text-[13px] font-semibold ${isLastMonth ? 'bg-indigo-500 hover:bg-indigo-600 text-white' : ''}`}
       >
         חודש שעבר
-      </button>
+      </Button>
 
-      {/* ─── Period label + dropdown trigger ──────────────────────────── */}
-      <button
+      {/* Period label + dropdown trigger */}
+      <Button
+        variant="outline"
+        size="sm"
         onClick={() => setOpen(!open)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          background: 'white',
-          border: '1.5px solid #e2e8f0',
-          borderRadius: '10px',
-          padding: '7px 12px',
-          fontSize: '13px',
-          fontWeight: '700',
-          color: '#0f172a',
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-          transition: 'all 0.15s',
-          whiteSpace: 'nowrap',
-        }}
+        className="rounded-lg gap-1.5 text-[13px] font-bold text-slate-800"
       >
+        <Calendar size={14} className="text-slate-400" />
         {period.label}
         <ChevronDown
           size={14}
-          color="#94a3b8"
-          style={{
-            transition: 'transform 0.15s',
-            transform: open ? 'rotate(180deg)' : 'none',
-          }}
+          className={`text-slate-400 transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
         />
-      </button>
+      </Button>
 
-      {/* ─── Dropdown panel ──────────────────────────────────────────── */}
+      {/* Dropdown panel */}
       {open && (
-        <div style={{
-          position: 'absolute',
-          top: 'calc(100% + 6px)',
-          left: 0,
-          background: 'white',
-          borderRadius: '14px',
-          boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
-          border: '1px solid #e2e8f0',
-          zIndex: 100,
-          minWidth: '260px',
-          overflow: 'hidden',
-        }}>
+        <div className="absolute top-[calc(100%+6px)] left-0 bg-white/95 backdrop-blur-sm rounded-xl shadow-xl border border-slate-200 z-[100] min-w-[280px] overflow-hidden">
           {PRESETS.map((preset, i) => {
             const computed = computePeriod(preset.type)
             const isActive =
@@ -140,47 +100,24 @@ export default function PeriodPicker({ period, onChange }: Props) {
 
             return (
               <div key={preset.type}>
-                {showSep && <div style={{ height: '1px', background: '#e2e8f0' }} />}
+                {showSep && <div className="h-px bg-slate-100 mx-3" />}
                 <button
                   onClick={() => selectPreset(preset.type)}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 16px',
-                    background: isActive ? '#eff6ff' : 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    textAlign: 'right',
-                    transition: 'background 0.1s',
-                  }}
-                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#f8fafc' }}
-                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 text-right transition-colors duration-100
+                    ${isActive ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}
+                  style={{ border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{
-                      width: '8px',
-                      height: '8px',
-                      borderRadius: '50%',
-                      background: isActive ? '#3b82f6' : '#e2e8f0',
-                      border: isActive ? '2px solid #3b82f6' : '2px solid #cbd5e1',
-                      flexShrink: 0,
-                    }} />
-                    <span style={{
-                      fontSize: '13px',
-                      fontWeight: isActive ? '700' : '500',
-                      color: isActive ? '#1e40af' : '#374151',
-                    }}>
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={`w-2 h-2 rounded-full flex-shrink-0 transition-colors ${isActive ? 'bg-indigo-500' : 'bg-slate-200'}`}
+                    />
+                    <span
+                      className={`text-[13px] ${isActive ? 'font-bold text-indigo-700' : 'font-medium text-slate-600'}`}
+                    >
                       {preset.label}
                     </span>
                   </div>
-                  <span style={{
-                    fontSize: '11px',
-                    color: '#94a3b8',
-                    fontWeight: '500',
-                  }}>
+                  <span className="text-[11px] text-slate-400 font-medium">
                     {computed.label}
                   </span>
                 </button>
@@ -188,26 +125,18 @@ export default function PeriodPicker({ period, onChange }: Props) {
             )
           })}
 
-          {/* ─── Custom month input ────────────────────────────────── */}
-          <div style={{ height: '1px', background: '#e2e8f0' }} />
-          <div style={{ padding: '10px 16px' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', marginBottom: '6px' }}>
+          {/* Custom month input */}
+          <div className="h-px bg-slate-100 mx-3" />
+          <div className="px-4 py-3">
+            <div className="text-[11px] text-slate-400 font-semibold mb-2">
               חודש ספציפי
             </div>
             <input
               type="month"
               value={customMonthValue}
               onChange={e => handleCustomMonth(e.target.value)}
-              style={{
-                width: '100%',
-                border: '1.5px solid #e2e8f0',
-                borderRadius: '8px',
-                padding: '6px 10px',
-                fontSize: '13px',
-                fontFamily: 'inherit',
-                background: '#f8fafc',
-                boxSizing: 'border-box',
-              }}
+              className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-[13px] bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all"
+              style={{ fontFamily: 'inherit', boxSizing: 'border-box' }}
             />
           </div>
         </div>

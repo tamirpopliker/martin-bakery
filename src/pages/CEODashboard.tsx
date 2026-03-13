@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept } from '../lib/supabase'
 import { ArrowRight, Trophy, TrendingUp, TrendingDown, Minus, DollarSign, Users, Receipt, Store, BarChart3, Globe, CreditCard, Building2, Truck } from 'lucide-react'
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,13 +10,19 @@ import { Button } from '@/components/ui/button'
 
 interface Props { onBack: () => void }
 
+// Softer color palette: indigo / emerald / violet
 const BRANCHES = [
-  { id: 1, name: 'אברהם אבינו', color: '#3b82f6' },
-  { id: 2, name: 'הפועלים',     color: '#10b981' },
-  { id: 3, name: 'יעקב כהן',   color: '#a855f7' },
+  { id: 1, name: 'אברהם אבינו', color: '#818cf8' },
+  { id: 2, name: 'הפועלים',     color: '#34d399' },
+  { id: 3, name: 'יעקב כהן',   color: '#c084fc' },
 ]
 
-const PIE_COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#0ea5e9', '#64748b']
+const PIE_COLORS = ['#818cf8', '#fb7185', '#fbbf24', '#34d399', '#c084fc', '#38bdf8', '#94a3b8']
+
+// Soft chart palette
+const CHART_INDIGO  = '#818cf8'
+const CHART_ROSE    = '#fb7185'
+const CHART_EMERALD = '#34d399'
 
 interface BranchData {
   id: number; name: string; color: string
@@ -26,6 +32,39 @@ interface BranchData {
 }
 
 function fmtN(n: number) { return '₪' + Math.round(n).toLocaleString() }
+
+// ─── Custom styled tooltip ──────────────────────────────────────────────────
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-slate-100 px-4 py-3 min-w-[160px]">
+      <p className="text-[11px] font-bold text-slate-500 mb-1.5 border-b border-slate-100 pb-1.5">{label}</p>
+      {payload.map((entry: any, i: number) => (
+        <div key={i} className="flex items-center justify-between gap-6 py-0.5">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full" style={{ background: entry.color || entry.fill }} />
+            <span className="text-[11px] text-slate-600">{entry.name}</span>
+          </div>
+          <span className="text-[12px] font-bold text-slate-800">₪{Number(entry.value).toLocaleString()}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PieTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null
+  const d = payload[0]
+  return (
+    <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-slate-100 px-4 py-3">
+      <div className="flex items-center gap-2">
+        <div className="w-2.5 h-2.5 rounded-full" style={{ background: d.payload.fill }} />
+        <span className="text-[12px] font-semibold text-slate-700">{d.name}</span>
+      </div>
+      <div className="text-[13px] font-bold text-slate-900 mt-1">₪{Number(d.value).toLocaleString()}</div>
+    </div>
+  )
+}
 
 export default function CEODashboard({ onBack }: Props) {
   const { period, setPeriod, from, to, monthKey, comparisonPeriod } = usePeriod()
@@ -56,14 +95,12 @@ export default function CEODashboard({ onBack }: Props) {
   async function fetchData() {
     setLoading(true)
 
-    // טעינת יעדי KPI מכל הסניפים
     const { data: kpiData } = await supabase.from('branch_kpi_targets').select('labor_pct')
     if (kpiData && kpiData.length > 0) {
       const avg = kpiData.reduce((s, r) => s + Number(r.labor_pct || 28), 0) / kpiData.length
       setAvgLaborTarget(avg)
     }
 
-    // ── נתוני מפעל ──
     const [fSalesFs, fSalesB2b, fLabor, fSupp, fWaste, fRepairs, fFixed, globalEmpsData, wdData] = await Promise.all([
       supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', from).lt('date', to),
       supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', from).lt('date', to),
@@ -79,7 +116,6 @@ export default function CEODashboard({ onBack }: Props) {
     const fSalesDirect = (fSalesFs.data || []).reduce((s, r) => s + Number(r.amount), 0)
     const fSalesB2bTotal = (fSalesB2b.data || []).reduce((s, r) => s + Number(r.amount), 0)
     const fSalesTotal = fSalesDirect + fSalesB2bTotal
-    // סינון עובדים גלובליים מלייבור כדי למנוע ספירה כפולה
     const globalNames = new Set(globalEmpsData.map(e => e.name))
     const fHourlyLabor = (fLabor.data || []).filter((r: any) => !globalNames.has(r.employee_name)).reduce((s, r) => s + Number(r.employer_cost), 0)
     const fGlobalLaborCreams = calcGlobalLaborForDept(globalEmpsData, 'creams', wdData)
@@ -103,11 +139,9 @@ export default function CEODashboard({ onBack }: Props) {
     let totalCashier = 0, totalCredit = 0, totalWebsite = 0
 
     for (const br of BRANCHES) {
-      // revenue (with source breakdown)
       const { data: revData } = await supabase.from('branch_revenue').select('source, amount')
         .eq('branch_id', br.id).gte('date', from).lt('date', to)
       const revenue = revData ? revData.reduce((s, r) => s + Number(r.amount), 0) : 0
-      // Accumulate by source (total + per-branch)
       let brCashier = 0, brCredit = 0, brWebsite = 0
       if (revData) {
         for (const r of revData) {
@@ -118,7 +152,6 @@ export default function CEODashboard({ onBack }: Props) {
         }
       }
 
-      // expenses
       const { data: expData } = await supabase.from('branch_expenses').select('expense_type, amount')
         .eq('branch_id', br.id).gte('date', from).lt('date', to)
       const expenses = expData ? expData.reduce((s, r) => s + Number(r.amount), 0) : 0
@@ -129,19 +162,16 @@ export default function CEODashboard({ onBack }: Props) {
         }
       }
 
-      // labor
       const { data: labData } = await supabase.from('branch_labor').select('employer_cost')
         .eq('branch_id', br.id).gte('date', from).lt('date', to)
       const labor = labData ? labData.reduce((s, r) => s + Number(r.employer_cost), 0) : 0
       totalExpByType['labor'] = (totalExpByType['labor'] || 0) + labor
 
-      // waste
       const { data: wstData } = await supabase.from('branch_waste').select('amount')
         .eq('branch_id', br.id).gte('date', from).lt('date', to)
       const waste = wstData ? wstData.reduce((s, r) => s + Number(r.amount), 0) : 0
       totalExpByType['waste'] = (totalExpByType['waste'] || 0) + waste
 
-      // fixed costs
       const { data: fcData } = await supabase.from('fixed_costs').select('amount')
         .eq('entity_type', `branch_${br.id}`).eq('month', monthKey || from.slice(0, 7))
       const fixedCosts = fcData ? fcData.reduce((s, r) => s + Number(r.amount), 0) : 0
@@ -159,7 +189,6 @@ export default function CEODashboard({ onBack }: Props) {
     setRevWebsite(totalWebsite)
     setBranchSuppliers((totalExpByType['supplier'] || 0) + (totalExpByType['inventory'] || 0))
 
-    // expense breakdown for pie
     const typeLabels: Record<string, string> = {
       supplier: 'ספקים/מלאי', inventory: 'ספקים/מלאי', repair: 'תיקונים',
       infrastructure: 'תשתיות', delivery: 'משלוחים', other: 'אחר',
@@ -172,7 +201,6 @@ export default function CEODashboard({ onBack }: Props) {
     }
     setExpenseBreakdown(Object.entries(merged).filter(([, v]) => v > 0).map(([name, value]) => ({ name, value: Math.round(value) })))
 
-    // daily revenue for line chart
     const { data: dailyData } = await supabase.from('branch_revenue').select('branch_id, date, amount')
       .in('branch_id', BRANCHES.map(b => b.id)).gte('date', from).lt('date', to)
       .order('date')
@@ -189,7 +217,6 @@ export default function CEODashboard({ onBack }: Props) {
       })))
     }
 
-    // previous month totals
     const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
     const pm = comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)
     let pRev = 0, pExp = 0, pLab = 0, pWst = 0, pFc = 0
@@ -205,7 +232,6 @@ export default function CEODashboard({ onBack }: Props) {
       const { data: fc } = await supabase.from('fixed_costs').select('amount').eq('entity_type', `branch_${br.id}`).eq('month', pm)
       pFc += fc ? fc.reduce((s, x) => s + Number(x.amount), 0) : 0
     }
-    // Previous month factory data
     const [pfSalesFs2, pfSalesB2b2, pfLabor2, pfSupp2, pfWaste2, pfRepairs2, pfFixed2, pfWd] = await Promise.all([
       supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', pFrom).lt('date', pTo),
       supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', pFrom).lt('date', pTo),
@@ -218,7 +244,6 @@ export default function CEODashboard({ onBack }: Props) {
     ])
     const pfSalesTotal = (pfSalesFs2.data || []).reduce((s, r) => s + Number(r.amount), 0)
                         + (pfSalesB2b2.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    // סינון עובדים גלובליים מלייבור חודש קודם
     const pfHourlyLabor = (pfLabor2.data || []).filter((r: any) => !globalNames.has(r.employee_name)).reduce((s, r) => s + Number(r.employer_cost), 0)
     const pfGlobalLaborCreams = calcGlobalLaborForDept(globalEmpsData, 'creams', pfWd)
     const pfGlobalLaborDough  = calcGlobalLaborForDept(globalEmpsData, 'dough', pfWd)
@@ -248,18 +273,15 @@ export default function CEODashboard({ onBack }: Props) {
   const totalGross      = branches.reduce((s, b) => s + b.grossProfit, 0)
   const totalOperating  = branches.reduce((s, b) => s + b.operatingProfit, 0)
 
-  // Factory profits
   const factoryGrossProfit     = factorySales - factoryLabor - factorySuppliers
   const factoryOperatingProfit = factoryGrossProfit - factoryFixed - factoryWaste - factoryRepairs
 
-  // Grand totals (factory + branches)
   const grandRevenue   = totalRevenue + factorySales
   const grandLabor     = totalLabor + factoryLabor
   const grandGross     = totalGross + factoryGrossProfit
   const grandOperating = totalOperating + factoryOperatingProfit
   const grandLaborPct  = grandRevenue > 0 ? (grandLabor / grandRevenue) * 100 : 0
 
-  // bar chart data — branches + factory
   const barData = [
     ...branches.map(b => ({
       name: b.name,
@@ -275,29 +297,28 @@ export default function CEODashboard({ onBack }: Props) {
     },
   ]
 
-  // sorted by operating profit
   const ranked = [...branches].sort((a, b) => b.operatingProfit - a.operatingProfit)
 
   function DiffBadge({ current, previous }: { current: number; previous: number }) {
     if (previous === 0 && current === 0) return <Minus size={12} className="text-slate-400" />
-    if (previous === 0) return <TrendingUp size={12} className="text-emerald-500" />
+    if (previous === 0) return <TrendingUp size={12} className="text-emerald-400" />
     const pct = ((current - previous) / Math.abs(previous)) * 100
     const isUp = pct > 0
     return (
-      <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${isUp ? 'text-emerald-500' : 'text-red-500'}`}>
+      <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${isUp ? 'text-emerald-500' : 'text-rose-500'}`}>
         {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
         {Math.abs(pct).toFixed(1)}%
       </span>
     )
   }
 
-  // KPI card helper
-  function KpiCard({ icon, label, value, valueColor, diff, border }: {
+  // KPI card with hover + colored right border (appears on visual left in RTL)
+  function KpiCard({ icon, label, value, valueColor, diff, borderColor }: {
     icon: React.ReactNode; label: string; value: string; valueColor?: string
-    diff?: React.ReactNode; border?: string
+    diff?: React.ReactNode; borderColor: string
   }) {
     return (
-      <Card className="shadow-sm" style={border ? { border } : undefined}>
+      <Card className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default border-r-4 overflow-hidden" style={{ borderRightColor: borderColor }}>
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-2">
             {icon}
@@ -310,12 +331,11 @@ export default function CEODashboard({ onBack }: Props) {
     )
   }
 
-  // Small KPI card helper for row 2
-  function KpiCardSm({ icon, label, value, valueColor, border }: {
-    icon: React.ReactNode; label: string; value: string; valueColor?: string; border?: string
+  function KpiCardSm({ icon, label, value, valueColor, borderColor }: {
+    icon: React.ReactNode; label: string; value: string; valueColor?: string; borderColor: string
   }) {
     return (
-      <Card className="shadow-sm" style={border ? { border } : undefined}>
+      <Card className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default border-r-4 overflow-hidden" style={{ borderRightColor: borderColor }}>
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-1.5">
             {icon}
@@ -330,7 +350,7 @@ export default function CEODashboard({ onBack }: Props) {
   return (
     <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
-      {/* כותרת */}
+      {/* Header */}
       <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
         <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
           <ArrowRight size={22} />
@@ -357,59 +377,61 @@ export default function CEODashboard({ onBack }: Props) {
             {/* KPI cards — Row 1 */}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5 mb-6">
               <KpiCard
-                icon={<Store size={16} className="text-blue-500" />}
+                icon={<Store size={16} className="text-indigo-400" />}
                 label="סה&quot;כ הכנסות"
                 value={fmtN(grandRevenue)}
+                borderColor="#818cf8"
                 diff={<DiffBadge current={grandRevenue} previous={prevTotalRev} />}
               />
               <KpiCard
-                icon={<DollarSign size={16} style={{ color: grandGross >= 0 ? '#10b981' : '#ef4444' }} />}
+                icon={<DollarSign size={16} style={{ color: grandGross >= 0 ? '#34d399' : '#fb7185' }} />}
                 label="רווח גולמי"
                 value={fmtN(grandGross)}
-                valueColor={grandGross >= 0 ? '#10b981' : '#ef4444'}
-                border={`2px solid ${grandGross >= 0 ? '#10b981' : '#ef4444'}22`}
+                valueColor={grandGross >= 0 ? '#059669' : '#e11d48'}
+                borderColor={grandGross >= 0 ? '#34d399' : '#fb7185'}
                 diff={<DiffBadge current={grandGross} previous={prevTotalGross} />}
               />
               <KpiCard
-                icon={<BarChart3 size={16} style={{ color: grandOperating >= 0 ? '#10b981' : '#ef4444' }} />}
+                icon={<BarChart3 size={16} style={{ color: grandOperating >= 0 ? '#34d399' : '#fb7185' }} />}
                 label="רווח תפעולי"
                 value={fmtN(grandOperating)}
-                valueColor={grandOperating >= 0 ? '#10b981' : '#ef4444'}
-                border={`2px solid ${grandOperating >= 0 ? '#10b981' : '#ef4444'}22`}
+                valueColor={grandOperating >= 0 ? '#059669' : '#e11d48'}
+                borderColor={grandOperating >= 0 ? '#34d399' : '#fb7185'}
                 diff={<DiffBadge current={grandOperating} previous={prevTotalOperating} />}
               />
               <KpiCard
-                icon={<Users size={16} className="text-amber-500" />}
+                icon={<Users size={16} className="text-amber-400" />}
                 label="% לייבור כולל"
                 value={`${grandLaborPct.toFixed(1)}%`}
-                valueColor={grandLaborPct <= avgLaborTarget ? '#10b981' : '#ef4444'}
+                valueColor={grandLaborPct <= avgLaborTarget ? '#059669' : '#e11d48'}
+                borderColor="#fbbf24"
                 diff={<span className="text-xs text-slate-400">יעד {avgLaborTarget.toFixed(0)}%</span>}
               />
             </div>
 
-            {/* KPI cards — Row 2: costs + revenue breakdown */}
+            {/* KPI cards — Row 2 */}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(155px,1fr))] gap-3.5 mb-6">
-              <KpiCardSm icon={<Building2 size={15} className="text-slate-500" />} label='סה"כ עלויות קבועות' value={fmtN(totalFixed + factoryFixed)} />
-              <KpiCardSm icon={<Users size={15} className="text-amber-500" />} label='סה"כ לייבור' value={fmtN(grandLabor)} />
-              <KpiCardSm icon={<Truck size={15} className="text-red-500" />} label='סה"כ ספקים' value={fmtN(factorySuppliers + branchSuppliers)} />
-              <KpiCardSm icon={<Receipt size={15} className="text-blue-500" />} label="הכנסות קופה" value={fmtN(revCashier)} />
-              <KpiCardSm icon={<CreditCard size={15} className="text-amber-500" />} label="הכנסות הקפה" value={fmtN(revCredit + factoryB2b)} />
-              <KpiCardSm icon={<Globe size={15} className="text-violet-500" />} label="הכנסות אתר" value={fmtN(revWebsite)} />
+              <KpiCardSm icon={<Building2 size={15} className="text-slate-400" />} label='סה"כ עלויות קבועות' value={fmtN(totalFixed + factoryFixed)} borderColor="#94a3b8" />
+              <KpiCardSm icon={<Users size={15} className="text-amber-400" />} label='סה"כ לייבור' value={fmtN(grandLabor)} borderColor="#fbbf24" />
+              <KpiCardSm icon={<Truck size={15} className="text-rose-400" />} label='סה"כ ספקים' value={fmtN(factorySuppliers + branchSuppliers)} borderColor="#fb7185" />
+              <KpiCardSm icon={<Receipt size={15} className="text-indigo-400" />} label="הכנסות קופה" value={fmtN(revCashier)} borderColor="#818cf8" />
+              <KpiCardSm icon={<CreditCard size={15} className="text-amber-400" />} label="הכנסות הקפה" value={fmtN(revCredit + factoryB2b)} borderColor="#fbbf24" />
+              <KpiCardSm icon={<Globe size={15} className="text-violet-400" />} label="הכנסות אתר" value={fmtN(revWebsite)} borderColor="#c084fc" />
               <KpiCardSm
-                icon={<TrendingUp size={15} className="text-emerald-500" />}
+                icon={<TrendingUp size={15} className="text-emerald-400" />}
                 label='סה"כ הכנסות כולל'
                 value={fmtN(revCashier + revCredit + factoryB2b + revWebsite)}
-                valueColor="#10b981"
-                border="2px solid #10b98122"
+                valueColor="#059669"
+                borderColor="#34d399"
               />
             </div>
 
             {/* Revenue breakdown cards */}
             <div className="grid grid-cols-3 gap-3.5 mb-6">
-              <Card className="shadow-sm border-t-[3px] border-t-blue-500">
+              <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-t-[3px] border-t-indigo-400">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <Receipt size={16} className="text-blue-500" />
+                    <Receipt size={16} className="text-indigo-400" />
                     <span className="text-xs font-semibold text-slate-500">קופות סניפים</span>
                   </div>
                   <div className="text-[22px] font-extrabold text-slate-900">{fmtN(revCashier)}</div>
@@ -417,10 +439,10 @@ export default function CEODashboard({ onBack }: Props) {
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm border-t-[3px] border-t-amber-500">
+              <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-t-[3px] border-t-amber-400">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <CreditCard size={16} className="text-amber-500" />
+                    <CreditCard size={16} className="text-amber-400" />
                     <span className="text-xs font-semibold text-slate-500">הקפה (סניפים + B2B מפעל)</span>
                   </div>
                   <div className="text-[22px] font-extrabold text-slate-900">{fmtN(revCredit + factoryB2b)}</div>
@@ -431,10 +453,10 @@ export default function CEODashboard({ onBack }: Props) {
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm border-t-[3px] border-t-violet-500">
+              <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-t-[3px] border-t-violet-400">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <Globe size={16} className="text-violet-500" />
+                    <Globe size={16} className="text-violet-400" />
                     <span className="text-xs font-semibold text-slate-500">הכנסות מהאתר</span>
                   </div>
                   <div className="text-[22px] font-extrabold text-slate-900">{fmtN(revWebsite)}</div>
@@ -445,7 +467,7 @@ export default function CEODashboard({ onBack }: Props) {
 
             {/* Charts row */}
             <div className="grid grid-cols-2 gap-5 mb-6">
-              {/* Bar chart — revenue by branch */}
+              {/* Bar chart */}
               <Card className="shadow-sm">
                 <CardHeader className="pb-0">
                   <CardTitle className="text-sm font-bold text-slate-700">הכנסות/הוצאות לפי יחידה</CardTitle>
@@ -453,16 +475,15 @@ export default function CEODashboard({ onBack }: Props) {
                 <CardContent>
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={barData} barGap={4}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₪${(v / 1000).toFixed(0)}K`} />
-                      <Tooltip formatter={(v: number) => `₪${v.toLocaleString()}`} />
+                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => `₪${(v / 1000).toFixed(0)}K`} axisLine={false} tickLine={false} />
+                      <Tooltip content={<ChartTooltip />} cursor={{ fill: '#f1f5f9', radius: 8 }} />
                       <Legend wrapperStyle={{ fontSize: '12px' }} />
-                      <Bar dataKey="הכנסות" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="הוצאות" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="רווח תפעולי" radius={[4, 4, 0, 0]}>
+                      <Bar dataKey="הכנסות" fill={CHART_INDIGO} radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="הוצאות" fill={CHART_ROSE} radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="רווח תפעולי" radius={[8, 8, 0, 0]}>
                         {barData.map((entry, index) => (
-                          <Cell key={index} fill={entry['רווח תפעולי'] >= 0 ? '#10b981' : '#ef4444'} />
+                          <Cell key={index} fill={entry['רווח תפעולי'] >= 0 ? CHART_EMERALD : CHART_ROSE} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -470,7 +491,7 @@ export default function CEODashboard({ onBack }: Props) {
                 </CardContent>
               </Card>
 
-              {/* Pie chart — expense breakdown */}
+              {/* Pie chart */}
               <Card className="shadow-sm">
                 <CardHeader className="pb-0">
                   <CardTitle className="text-sm font-bold text-slate-700">התפלגות הוצאות</CardTitle>
@@ -479,12 +500,12 @@ export default function CEODashboard({ onBack }: Props) {
                   {expenseBreakdown.length > 0 ? (
                     <ResponsiveContainer width="100%" height={250}>
                       <PieChart>
-                        <Pie data={expenseBreakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} style={{ fontSize: '11px' }}>
+                        <Pie data={expenseBreakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={40} paddingAngle={2} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} style={{ fontSize: '11px' }}>
                           {expenseBreakdown.map((_, i) => (
                             <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(v: number) => `₪${v.toLocaleString()}`} />
+                        <Tooltip content={<PieTooltip />} />
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
@@ -494,7 +515,7 @@ export default function CEODashboard({ onBack }: Props) {
               </Card>
             </div>
 
-            {/* Line chart — daily revenue */}
+            {/* Area chart — daily revenue with gradient fill */}
             {dailyRevenue.length > 0 && (
               <Card className="shadow-sm mb-6">
                 <CardHeader className="pb-0">
@@ -502,22 +523,29 @@ export default function CEODashboard({ onBack }: Props) {
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={280}>
-                    <LineChart data={dailyRevenue}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₪${(v / 1000).toFixed(0)}K`} />
-                      <Tooltip formatter={(v: number) => `₪${v.toLocaleString()}`} />
+                    <AreaChart data={dailyRevenue}>
+                      <defs>
+                        {BRANCHES.map(br => (
+                          <linearGradient key={br.id} id={`grad-${br.id}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={br.color} stopOpacity={0.3} />
+                            <stop offset="95%" stopColor={br.color} stopOpacity={0.02} />
+                          </linearGradient>
+                        ))}
+                      </defs>
+                      <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => `₪${(v / 1000).toFixed(0)}K`} axisLine={false} tickLine={false} />
+                      <Tooltip content={<ChartTooltip />} />
                       <Legend wrapperStyle={{ fontSize: '12px' }} />
                       {BRANCHES.map(br => (
-                        <Line key={br.id} type="monotone" dataKey={br.name} stroke={br.color} strokeWidth={2} dot={{ r: 3 }} />
+                        <Area key={br.id} type="monotone" dataKey={br.name} stroke={br.color} strokeWidth={2.5} fill={`url(#grad-${br.id})`} dot={{ r: 3, fill: 'white', stroke: br.color, strokeWidth: 2 }} activeDot={{ r: 5, fill: br.color, stroke: 'white', strokeWidth: 2 }} />
                       ))}
-                    </LineChart>
+                    </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
             )}
 
-            {/* Ranking table — branches + factory */}
+            {/* Ranking table */}
             <Card className="shadow-sm mb-6">
               <CardHeader className="pb-0">
                 <CardTitle className="text-sm font-bold text-slate-700">דירוג יחידות לפי רווחיות</CardTitle>
@@ -537,36 +565,34 @@ export default function CEODashboard({ onBack }: Props) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {/* Factory row */}
                     {(() => {
                       const fLabPct = factorySales > 0 ? (factoryLabor / factorySales) * 100 : 0
                       const fExpenses = factoryLabor + factorySuppliers
                       return (
-                        <TableRow className="bg-blue-50 hover:bg-blue-100 border-b-2 border-blue-200">
+                        <TableRow className="bg-indigo-50/50 hover:bg-indigo-50 border-b-2 border-indigo-200">
                           <TableCell className="text-sm">🏭</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2.5">
-                              <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                              <div className="w-2.5 h-2.5 rounded-full bg-indigo-400" />
                               <span className="text-sm font-bold text-slate-700">מפעל</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-[13px] font-semibold text-slate-700">{fmtN(factorySales)}</TableCell>
-                          <TableCell className="text-[13px] text-red-500">{fmtN(fExpenses)}</TableCell>
+                          <TableCell className="text-[13px] text-rose-500">{fmtN(fExpenses)}</TableCell>
                           <TableCell className="text-[13px] text-amber-500">{fmtN(factoryLabor)}</TableCell>
                           <TableCell className="text-center">
-                            <span className={`text-xs font-bold ${fLabPct <= avgLaborTarget ? 'text-emerald-500' : 'text-red-500'}`}>{fLabPct.toFixed(1)}%</span>
+                            <span className={`text-xs font-bold ${fLabPct <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>{fLabPct.toFixed(1)}%</span>
                           </TableCell>
                           <TableCell>
-                            <span className={`text-[13px] font-bold ${factoryGrossProfit >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{fmtN(factoryGrossProfit)}</span>
+                            <span className={`text-[13px] font-bold ${factoryGrossProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(factoryGrossProfit)}</span>
                           </TableCell>
                           <TableCell>
-                            <span className={`text-sm font-extrabold ${factoryOperatingProfit >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{fmtN(factoryOperatingProfit)}</span>
+                            <span className={`text-sm font-extrabold ${factoryOperatingProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(factoryOperatingProfit)}</span>
                           </TableCell>
                         </TableRow>
                       )
                     })()}
 
-                    {/* Branch rows */}
                     {ranked.map((br, i) => {
                       const labPct = br.revenue > 0 ? (br.labor / br.revenue) * 100 : 0
                       return (
@@ -583,36 +609,35 @@ export default function CEODashboard({ onBack }: Props) {
                             </div>
                           </TableCell>
                           <TableCell className="text-[13px] font-semibold text-slate-700">{fmtN(br.revenue)}</TableCell>
-                          <TableCell className="text-[13px] text-red-500">{fmtN(br.expenses + br.labor)}</TableCell>
+                          <TableCell className="text-[13px] text-rose-500">{fmtN(br.expenses + br.labor)}</TableCell>
                           <TableCell className="text-[13px] text-amber-500">{fmtN(br.labor)}</TableCell>
                           <TableCell className="text-center">
-                            <span className={`text-xs font-bold ${labPct <= avgLaborTarget ? 'text-emerald-500' : 'text-red-500'}`}>{labPct.toFixed(1)}%</span>
+                            <span className={`text-xs font-bold ${labPct <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>{labPct.toFixed(1)}%</span>
                           </TableCell>
                           <TableCell>
-                            <span className={`text-[13px] font-bold ${br.grossProfit >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{fmtN(br.grossProfit)}</span>
+                            <span className={`text-[13px] font-bold ${br.grossProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(br.grossProfit)}</span>
                           </TableCell>
                           <TableCell>
-                            <span className={`text-sm font-extrabold ${br.operatingProfit >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{fmtN(br.operatingProfit)}</span>
+                            <span className={`text-sm font-extrabold ${br.operatingProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(br.operatingProfit)}</span>
                           </TableCell>
                         </TableRow>
                       )
                     })}
 
-                    {/* Grand total */}
                     <TableRow className="bg-amber-50 hover:bg-amber-100 border-t-2 border-amber-200 font-bold">
                       <TableCell />
                       <TableCell className="text-sm text-slate-700">סה"כ כולל</TableCell>
                       <TableCell className="text-[13px] text-slate-700">{fmtN(grandRevenue)}</TableCell>
-                      <TableCell className="text-[13px] text-red-500">{fmtN(totalExpenses + totalLabor + factoryLabor + factorySuppliers)}</TableCell>
+                      <TableCell className="text-[13px] text-rose-500">{fmtN(totalExpenses + totalLabor + factoryLabor + factorySuppliers)}</TableCell>
                       <TableCell className="text-[13px] text-amber-500">{fmtN(grandLabor)}</TableCell>
                       <TableCell className="text-center">
-                        <span className={`text-xs ${grandLaborPct <= avgLaborTarget ? 'text-emerald-500' : 'text-red-500'}`}>{grandLaborPct.toFixed(1)}%</span>
+                        <span className={`text-xs ${grandLaborPct <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>{grandLaborPct.toFixed(1)}%</span>
                       </TableCell>
                       <TableCell>
-                        <span className={`text-[13px] font-bold ${grandGross >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{fmtN(grandGross)}</span>
+                        <span className={`text-[13px] font-bold ${grandGross >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(grandGross)}</span>
                       </TableCell>
                       <TableCell>
-                        <span className={`text-sm font-extrabold ${grandOperating >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{fmtN(grandOperating)}</span>
+                        <span className={`text-sm font-extrabold ${grandOperating >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(grandOperating)}</span>
                       </TableCell>
                     </TableRow>
                   </TableBody>
@@ -620,7 +645,7 @@ export default function CEODashboard({ onBack }: Props) {
               </CardContent>
             </Card>
 
-            {/* Branch revenue breakdown table */}
+            {/* Revenue breakdown table */}
             <Card className="shadow-sm">
               <CardHeader className="pb-0">
                 <CardTitle className="text-sm font-bold text-slate-700">פירוק הכנסות לפי סניף</CardTitle>
@@ -655,12 +680,11 @@ export default function CEODashboard({ onBack }: Props) {
                         <TableCell className="text-[13px] text-amber-500">{fmtN(br.labor)}</TableCell>
                         <TableCell className="text-[13px] text-slate-500">{fmtN(br.fixedCosts)}</TableCell>
                         <TableCell>
-                          <span className={`text-sm font-extrabold ${br.operatingProfit >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{fmtN(br.operatingProfit)}</span>
+                          <span className={`text-sm font-extrabold ${br.operatingProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(br.operatingProfit)}</span>
                         </TableCell>
                       </TableRow>
                     ))}
 
-                    {/* Grand total */}
                     <TableRow className="bg-amber-50 hover:bg-amber-100 border-t-2 border-amber-200 font-bold">
                       <TableCell className="text-sm text-slate-700">סה"כ כולל</TableCell>
                       <TableCell className="text-[13px] text-slate-700">{fmtN(revCashier)}</TableCell>
@@ -670,7 +694,7 @@ export default function CEODashboard({ onBack }: Props) {
                       <TableCell className="text-[13px] text-amber-500">{fmtN(grandLabor)}</TableCell>
                       <TableCell className="text-[13px] text-slate-500">{fmtN(totalFixed + factoryFixed)}</TableCell>
                       <TableCell>
-                        <span className={`text-sm font-extrabold ${grandOperating >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{fmtN(grandOperating)}</span>
+                        <span className={`text-sm font-extrabold ${grandOperating >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(grandOperating)}</span>
                       </TableCell>
                     </TableRow>
                   </TableBody>
