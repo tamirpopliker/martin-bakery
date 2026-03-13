@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { fetchGlobalEmployees, getWorkingDays, countWorkingDaysInRange, type GlobalEmployee } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Plus, Trash2, Pencil, Users, UserPlus, Clock, ChevronDown, ChevronUp, X, Briefcase } from 'lucide-react'
+import { ArrowRight, Plus, Trash2, Pencil, Users, UserPlus, Clock, ChevronDown, ChevronUp, X, Briefcase, AlertTriangle } from 'lucide-react'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 type Department = 'creams' | 'dough' | 'packaging' | 'cleaning'
@@ -192,14 +192,19 @@ export default function DepartmentLabor({ department, onBack }: Props) {
   }
 
   // ─── חישובים ─────────────────────────────────────────────────────────────
-  const hourlyCost   = entries.reduce((s, e) => s + Number(e.employer_cost), 0)
+  // זיהוי שמות עובדים גלובליים — לא נספור אותם בעלות שעתיים (נספור אותם בנפרד)
+  const globalEmpNames = new Set(globalEmps.map(e => e.name))
+  const hourlyEntries = entries.filter(e => !globalEmpNames.has(e.employee_name))
+  const globalEntries = entries.filter(e => globalEmpNames.has(e.employee_name))
+
+  const hourlyCost   = hourlyEntries.reduce((s, e) => s + Number(e.employer_cost), 0)
   const totalH100    = entries.reduce((s, e) => s + Number(e.hours_100), 0)
   const totalH125    = entries.reduce((s, e) => s + Number(e.hours_125), 0)
   const totalH150    = entries.reduce((s, e) => s + Number(e.hours_150), 0)
   const totalHours   = totalH100 + totalH125 + totalH150
   const casualCount  = entries.filter(e => e.is_casual).length
 
-  // עלות עובדים גלובליים לתקופה
+  // עלות עובדים גלובליים לתקופה — מחושב מהמשכורת החודשית, לא מרשומות יומיות
   const workingDaysInPeriod = countWorkingDaysInRange(from, to)
   const globalCostTotal = globalEmps.reduce((sum, emp) => {
     const isBoth = emp.department === 'both'
@@ -209,16 +214,26 @@ export default function DepartmentLabor({ department, onBack }: Props) {
   }, 0)
   const totalCost = hourlyCost + globalCostTotal
 
-  // קיבוץ לפי עובד
+  // זיהוי כפילויות — אותו עובד + תאריך מופיע יותר מפעם אחת
+  const dupeCheck = new Map<string, number>()
+  for (const e of entries) {
+    const key = `${e.date}_${e.employee_name}`
+    dupeCheck.set(key, (dupeCheck.get(key) || 0) + 1)
+  }
+  const duplicateCount = [...dupeCheck.values()].filter(v => v > 1).reduce((s, v) => s + (v - 1), 0)
+
+  // קיבוץ לפי עובד — עובדים גלובליים: עלות מהמשכורת, לא מרשומות
   const employeeSummary = entries.reduce<Record<string, { totalCost: number, totalHours: number, count: number, isCasual: boolean, isGlobal: boolean }>>((acc, e) => {
     const name = e.employee_name
-    if (!acc[name]) acc[name] = { totalCost: 0, totalHours: 0, count: 0, isCasual: e.is_casual, isGlobal: false }
-    acc[name].totalCost += Number(e.employer_cost)
+    const isGlobal = globalEmpNames.has(name)
+    if (!acc[name]) acc[name] = { totalCost: 0, totalHours: 0, count: 0, isCasual: e.is_casual, isGlobal }
+    // עובדים גלובליים — לא נצבור עלות מרשומות (מחשבים מהמשכורת)
+    if (!isGlobal) acc[name].totalCost += Number(e.employer_cost)
     acc[name].totalHours += Number(e.hours_100) + Number(e.hours_125) + Number(e.hours_150)
     acc[name].count += 1
     return acc
   }, {})
-  // הוסף עובדים גלובליים לסיכום
+  // הוסף עובדים גלובליים לסיכום — עלות מחושבת מהמשכורת החודשית
   for (const emp of globalEmps) {
     const isBoth = emp.department === 'both'
     const factor = isBoth ? 0.5 : 1
@@ -227,7 +242,8 @@ export default function DepartmentLabor({ department, onBack }: Props) {
     if (!employeeSummary[emp.name]) {
       employeeSummary[emp.name] = { totalCost: periodCost, totalHours: 0, count: 0, isCasual: false, isGlobal: true }
     } else {
-      employeeSummary[emp.name].totalCost += periodCost
+      // כבר קיים מרשומות — מחליפים את העלות בעלות הגלובלית (לא מצרפים)
+      employeeSummary[emp.name].totalCost = periodCost
       employeeSummary[emp.name].isGlobal = true
     }
   }
@@ -450,6 +466,21 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                 <span>מזדמנים: <strong>{casualCount}</strong></span>
               </div>
             </div>
+
+            {/* אזהרת כפילויות */}
+            {duplicateCount > 0 && (
+              <div style={{ background: '#fef2f2', border: '2px solid #fca5a5', borderRadius: '12px', padding: '14px 18px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <AlertTriangle size={20} color="#ef4444" />
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#991b1b' }}>
+                    נמצאו {duplicateCount} רשומות כפולות (אותו עובד + תאריך)
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#b91c1c', marginTop: '2px' }}>
+                    ייבא מחדש את נתוני הלייבור עם "נקה נתונים קודמים" מסומן כדי לתקן
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ── פירוט לפי עובד ── */}
             {sortedEmployees.length > 0 && (

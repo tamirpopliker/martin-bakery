@@ -188,7 +188,7 @@ const FILE_MAP: Record<string, TableDef> = {
         _empCostSource: empCostFromCsv ? 'csv' : 'calc',
       }
     },
-    dupeKey: (r) => `${r.date}_${r.employee_name}_${r.gross_salary}`,
+    dupeKey: (r) => `${r.date}_${r.employee_name}`,
   },
   'factory_sales': {
     table: 'factory_sales', label: 'מכירות מפעל', hasDate: true,
@@ -370,7 +370,7 @@ const FILE_MAP: Record<string, TableDef> = {
         _empCostSource: empCostFromCsv ? 'csv' : 'calc',
       }
     },
-    dupeKey: (r) => `${r.branch_id}_${r.date}_${r.employee_name}_${r.gross_salary}`,
+    dupeKey: (r) => `${r.branch_id}_${r.date}_${r.employee_name}`,
   },
   'branch_waste': {
     table: 'branch_waste', label: 'פחת סניפים', hasDate: true,
