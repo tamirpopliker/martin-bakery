@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept } from '../lib/supabase'
-import { ArrowRight, Trophy, TrendingUp, TrendingDown, Minus, DollarSign, Users, Receipt, Store, BarChart3, Globe, CreditCard, Building2 } from 'lucide-react'
+import { ArrowRight, Trophy, TrendingUp, TrendingDown, Minus, DollarSign, Users, Receipt, Store, BarChart3, Globe, CreditCard, Building2, Truck } from 'lucide-react'
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -46,6 +46,7 @@ export default function CEODashboard({ onBack }: Props) {
   const [revCredit, setRevCredit]   = useState(0)
   const [revWebsite, setRevWebsite] = useState(0)
   const [factoryB2b, setFactoryB2b] = useState(0)
+  const [branchSuppliers, setBranchSuppliers] = useState(0)
 
   async function fetchData() {
     setLoading(true)
@@ -151,6 +152,7 @@ export default function CEODashboard({ onBack }: Props) {
     setRevCashier(totalCashier)
     setRevCredit(totalCredit)
     setRevWebsite(totalWebsite)
+    setBranchSuppliers((totalExpByType['supplier'] || 0) + (totalExpByType['inventory'] || 0))
 
     // expense breakdown for pie
     const typeLabels: Record<string, string> = {
@@ -375,6 +377,14 @@ export default function CEODashboard({ onBack }: Props) {
                   <span style={{ fontSize: '11px', fontWeight: '600', color: '#64748b' }}>סה"כ לייבור</span>
                 </div>
                 <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>₪{Math.round(grandLabor).toLocaleString()}</div>
+              </div>
+
+              <div style={{ ...S.card, padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <Truck size={15} color="#ef4444" />
+                  <span style={{ fontSize: '11px', fontWeight: '600', color: '#64748b' }}>סה"כ ספקים</span>
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>₪{Math.round(factorySuppliers + branchSuppliers).toLocaleString()}</div>
               </div>
 
               <div style={{ ...S.card, padding: '16px' }}>
