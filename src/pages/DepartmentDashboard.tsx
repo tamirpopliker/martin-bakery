@@ -180,14 +180,17 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
 
 
   // ─── שליפת נתונים ────────────────────────────────────────────────────────
-  async function fetchRange(from: string, to: string): Promise<DayData[]> {
+  async function fetchRange(from: string, to: string, globalNames: Set<string> = new Set()): Promise<DayData[]> {
     const [prod, sales, waste, repairs, labor] = await Promise.all([
       supabase.from('daily_production').select('date,amount').eq('department', department).gte('date', from).lt('date', to),
       supabase.from('factory_sales').select('date,amount').eq('department', department).gte('date', from).lt('date', to),
       supabase.from('factory_waste').select('date,amount').eq('department', department).gte('date', from).lt('date', to),
       supabase.from('factory_repairs').select('date,amount').eq('department', department).gte('date', from).lt('date', to),
-      supabase.from('labor').select('date,employer_cost').eq('entity_type', 'factory').eq('entity_id', department).gte('date', from).lt('date', to),
+      supabase.from('labor').select('date,employee_name,employer_cost').eq('entity_type', 'factory').eq('entity_id', department).gte('date', from).lt('date', to),
     ])
+
+    // סינון עובדים גלובליים מלייבור כדי למנוע ספירה כפולה
+    const laborData = (labor.data || []).filter((r: any) => !globalNames.has(r.employee_name))
 
     // קיבוץ לפי יום
     const allDates = new Set([
@@ -195,7 +198,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
       ...(sales.data || []).map((r: any) => r.date),
       ...(waste.data || []).map((r: any) => r.date),
       ...(repairs.data || []).map((r: any) => r.date),
-      ...(labor.data || []).map((r: any) => r.date),
+      ...laborData.map((r: any) => r.date),
     ])
 
     const sum = (arr: any[], dateStr: string, field: string) =>
@@ -207,7 +210,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
       sales:      sum(sales.data || [], date, 'amount'),
       waste:      sum(waste.data || [], date, 'amount'),
       repairs:    sum(repairs.data || [], date, 'amount'),
-      labor:      sum(labor.data || [], date, 'employer_cost'),
+      labor:      sum(laborData, date, 'employer_cost'),
     }))
   }
 
@@ -216,12 +219,18 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
       setLoading(true)
       const prevFrom = comparisonPeriod.from
       const prevTo = comparisonPeriod.to
-      const [cur, prv, kpiRes, gEmps, wDays] = await Promise.all([
-        fetchRange(from, to),
-        fetchRange(prevFrom, prevTo),
+      // שליפת עובדים גלובליים ו-KPI תחילה כדי לסנן ספירה כפולה מלייבור
+      const [kpiRes, gEmps, wDays] = await Promise.all([
         supabase.from('kpi_targets').select('*').eq('department', department).single(),
         fetchGlobalEmployees(),
         getWorkingDays(monthKey || from.slice(0, 7)),
+      ])
+      const globalNames = new Set(
+        gEmps.filter(e => e.department === department || e.department === 'both').map(e => e.name)
+      )
+      const [cur, prv] = await Promise.all([
+        fetchRange(from, to, globalNames),
+        fetchRange(prevFrom, prevTo, globalNames),
       ])
       setDays(cur)
       setPrevDays(prv)

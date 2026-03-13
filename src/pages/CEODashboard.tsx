@@ -54,7 +54,7 @@ export default function CEODashboard({ onBack }: Props) {
     const [fSalesFs, fSalesB2b, fLabor, fSupp, fWaste, fRepairs, fFixed, globalEmpsData, wdData] = await Promise.all([
       supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', from).lt('date', to),
       supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', from).lt('date', to),
-      supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', from).lt('date', to),
+      supabase.from('labor').select('employee_name, employer_cost').eq('entity_type', 'factory').gte('date', from).lt('date', to),
       supabase.from('supplier_invoices').select('amount').gte('date', from).lt('date', to),
       supabase.from('factory_waste').select('amount').gte('date', from).lt('date', to),
       supabase.from('factory_repairs').select('amount').gte('date', from).lt('date', to),
@@ -65,7 +65,9 @@ export default function CEODashboard({ onBack }: Props) {
 
     const fSalesTotal = (fSalesFs.data || []).reduce((s, r) => s + Number(r.amount), 0)
                       + (fSalesB2b.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    const fHourlyLabor = (fLabor.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+    // סינון עובדים גלובליים מלייבור כדי למנוע ספירה כפולה
+    const globalNames = new Set(globalEmpsData.map(e => e.name))
+    const fHourlyLabor = (fLabor.data || []).filter((r: any) => !globalNames.has(r.employee_name)).reduce((s, r) => s + Number(r.employer_cost), 0)
     const fGlobalLaborCreams = calcGlobalLaborForDept(globalEmpsData, 'creams', wdData)
     const fGlobalLaborDough  = calcGlobalLaborForDept(globalEmpsData, 'dough', wdData)
     const fLaborTotal = fHourlyLabor + fGlobalLaborCreams + fGlobalLaborDough
@@ -177,7 +179,7 @@ export default function CEODashboard({ onBack }: Props) {
     const [pfSalesFs2, pfSalesB2b2, pfLabor2, pfSupp2, pfWaste2, pfRepairs2, pfFixed2, pfWd] = await Promise.all([
       supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', pFrom).lt('date', pTo),
       supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', pFrom).lt('date', pTo),
-      supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', pFrom).lt('date', pTo),
+      supabase.from('labor').select('employee_name, employer_cost').eq('entity_type', 'factory').gte('date', pFrom).lt('date', pTo),
       supabase.from('supplier_invoices').select('amount').gte('date', pFrom).lt('date', pTo),
       supabase.from('factory_waste').select('amount').gte('date', pFrom).lt('date', pTo),
       supabase.from('factory_repairs').select('amount').gte('date', pFrom).lt('date', pTo),
@@ -186,7 +188,8 @@ export default function CEODashboard({ onBack }: Props) {
     ])
     const pfSalesTotal = (pfSalesFs2.data || []).reduce((s, r) => s + Number(r.amount), 0)
                         + (pfSalesB2b2.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    const pfHourlyLabor = (pfLabor2.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+    // סינון עובדים גלובליים מלייבור חודש קודם
+    const pfHourlyLabor = (pfLabor2.data || []).filter((r: any) => !globalNames.has(r.employee_name)).reduce((s, r) => s + Number(r.employer_cost), 0)
     const pfGlobalLaborCreams = calcGlobalLaborForDept(globalEmpsData, 'creams', pfWd)
     const pfGlobalLaborDough  = calcGlobalLaborForDept(globalEmpsData, 'dough', pfWd)
     const pfLaborTotal = pfHourlyLabor + pfGlobalLaborCreams + pfGlobalLaborDough

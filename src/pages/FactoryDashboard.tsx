@@ -163,7 +163,7 @@ export default function FactoryDashboard({ onBack }: Props) {
       supabase.from('factory_b2b_sales').select('sale_type, customer, amount, is_internal').gte('date', from).lt('date', to),
       supabase.from('factory_waste').select('department, amount').gte('date', from).lt('date', to),
       supabase.from('factory_repairs').select('department, amount').gte('date', from).lt('date', to),
-      supabase.from('labor').select('entity_id, hours_100, hours_125, hours_150, gross_salary, employer_cost').eq('entity_type', 'factory').gte('date', from).lt('date', to),
+      supabase.from('labor').select('entity_id, employee_name, hours_100, hours_125, hours_150, gross_salary, employer_cost').eq('entity_type', 'factory').gte('date', from).lt('date', to),
       monthKey
         ? supabase.from('fixed_costs').select('amount').eq('entity_type', 'factory').eq('month', monthKey)
         : supabase.from('fixed_costs').select('amount').eq('entity_type', 'factory').in('month', getMonthsInRange(from, to)),
@@ -230,13 +230,15 @@ export default function FactoryDashboard({ onBack }: Props) {
     rData.forEach((r: any) => { if (rDept[r.department as Dept] !== undefined) rDept[r.department as Dept] += Number(r.amount) })
     setRepairsDept(rDept)
 
-    // ── לייבור ──
+    // ── לייבור (סינון עובדים גלובליים כדי למנוע ספירה כפולה) ──
     const lData = laborRes.data || []
+    const globalNames = new Set(globalEmpsData.map(e => e.name))
+    const hourlyLaborData = lData.filter((r: any) => !globalNames.has(r.employee_name))
     const lDept: Record<Dept, { hours: number; gross: number; employer: number }> = {
       creams: { hours: 0, gross: 0, employer: 0 }, dough: { hours: 0, gross: 0, employer: 0 },
       packaging: { hours: 0, gross: 0, employer: 0 }, cleaning: { hours: 0, gross: 0, employer: 0 },
     }
-    lData.forEach((r: any) => {
+    hourlyLaborData.forEach((r: any) => {
       const d = r.entity_id as Dept
       if (lDept[d]) {
         lDept[d].hours    += Number(r.hours_100 || 0) + Number(r.hours_125 || 0) + Number(r.hours_150 || 0)
@@ -270,7 +272,7 @@ export default function FactoryDashboard({ onBack }: Props) {
       supabase.from('factory_b2b_sales').select('amount').gte('date', pFrom).lt('date', pTo),
       supabase.from('factory_waste').select('amount').gte('date', pFrom).lt('date', pTo),
       supabase.from('factory_repairs').select('amount').gte('date', pFrom).lt('date', pTo),
-      supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', pFrom).lt('date', pTo),
+      supabase.from('labor').select('employee_name, employer_cost').eq('entity_type', 'factory').gte('date', pFrom).lt('date', pTo),
       supabase.from('supplier_invoices').select('amount').gte('date', pFrom).lt('date', pTo),
       getWorkingDays(comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)),
       supabase.from('daily_production').select('amount').gte('date', pFrom).lt('date', pTo),
@@ -280,7 +282,9 @@ export default function FactoryDashboard({ onBack }: Props) {
     const pGlobalLaborCreams = calcGlobalLaborForDept(globalEmpsData, 'creams', pWd)
     const pGlobalLaborDough = calcGlobalLaborForDept(globalEmpsData, 'dough', pWd)
     const pTotalGlobalLabor = pGlobalLaborCreams + pGlobalLaborDough
-    setPrev({ sales: pSalesTotal, suppliers: sum(pSupp), waste: sum(pWaste), repairs: sum(pRepairs), labor: sum(pLabor) + pTotalGlobalLabor, production: sum(pProd) })
+    // סינון עובדים גלובליים מלייבור חודש קודם כדי למנוע ספירה כפולה
+    const pHourlyLabor = (pLabor.data || []).filter((r: any) => !globalNames.has(r.employee_name)).reduce((s: number, r: any) => s + Number(r.employer_cost || 0), 0)
+    setPrev({ sales: pSalesTotal, suppliers: sum(pSupp), waste: sum(pWaste), repairs: sum(pRepairs), labor: pHourlyLabor + pTotalGlobalLabor, production: sum(pProd) })
 
     setLoading(false)
   }
