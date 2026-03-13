@@ -18,7 +18,7 @@ import BranchHome from './BranchHome'
 import BranchManagerDashboard from './BranchManagerDashboard'
 import DepartmentHome from './DepartmentHome'
 import UserManagement from './UserManagement'
-// DataImport is now embedded inside FactorySettings
+import DataImport from './DataImport'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Trophy, Settings, LogOut, TrendingUp, TrendingDown,
@@ -231,7 +231,8 @@ export default function Home() {
     if (page === 'factory_b2b')          return <FactoryB2B onBack={() => setPage(null)} />
     if (page === 'settings')             return <FactorySettings onBack={() => setPage(null)} />
     if (page === 'ceo_dashboard')        return <CEODashboard onBack={() => setPage(null)} />
-    if (page === 'data_import')          return <FactorySettings onBack={() => setPage(null)} />
+    if (page === 'data_import')          return <DataImport onBack={() => setPage(null)} />
+    if (page === 'branch_import')        return <DataImport onBack={() => setPage(null)} branchOnly />
     if (page === 'user_management')      return <UserManagement onBack={() => setPage(null)} />
 
     if (page === 'dept_creams')    return <DepartmentHome department="creams"    onBack={() => setPage(null)} />
@@ -544,6 +545,28 @@ export default function Home() {
                     )
                   })}
                 </div>
+
+                {/* Branch data import button */}
+                <button
+                  onClick={() => setPage('branch_import')}
+                  style={{
+                    width: '100%', background: '#f8fafc', border: '1.5px solid #3b82f630',
+                    borderRadius: '12px', padding: '12px 16px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    textAlign: 'right', transition: 'all 0.12s', marginTop: '12px',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59,130,246,0.12)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#3b82f630'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
+                >
+                  <div style={{ width: '38px', height: '38px', background: '#3b82f615', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Database size={18} color="#3b82f6" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>ייבוא נתוני סניפים</div>
+                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>CSV מ-Base44 · כל הסניפים ביחד</div>
+                  </div>
+                  <ChevronLeft size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
+                </button>
               </div>
             )}
           </div>
