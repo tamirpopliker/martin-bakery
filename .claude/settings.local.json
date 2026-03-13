@@ -118,7 +118,31 @@
       "Bash(npx vercel env rm VITE_SUPABASE_ANON_KEY development --yes)",
       "Bash(npx vercel env add VITE_SUPABASE_ANON_KEY development)",
       "Bash(curl -s -H \"apikey: sb_publishable_uMtPcUxfJEdYzzjMv1LeCw_dLW2FM9A\" \"https://nlklndgmtmwoacipjyek.supabase.co/rest/v1/app_users?select=email,role&limit=3\")",
-      "Bash(git add src/index.css src/pages/Home.tsx)"
+      "Bash(git add src/index.css src/pages/Home.tsx)",
+      "Bash(npx vite --port 5177 --host)",
+      "Bash(git add src/pages/Home.tsx src/pages/Labor.tsx)",
+      "Bash(git add src/pages/BranchSettings.tsx sql/005_email_reports_setup.sql supabase/)",
+      "Bash(supabase --version)",
+      "Bash(npm install -g supabase)",
+      "Bash(where scoop)",
+      "Bash(where choco)",
+      "Bash(where winget)",
+      "Bash(npx supabase link --project-ref nlklndgmtmwoacipjyek)",
+      "Bash(git add sql/005_email_reports_setup.sql)",
+      "Bash(git add src/pages/DataImport.tsx)",
+      "Bash(git add src/pages/DataImport.tsx src/pages/DepartmentLabor.tsx)",
+      "Bash(git add src/pages/DepartmentLabor.tsx src/pages/DataImport.tsx)",
+      "Bash(xargs ls -la)",
+      "Bash(grep -n \"fixed_costs\\\\|fixed cost\" /c/Users/USER/martin-bakery/sql/*.sql)",
+      "Bash(npm run build)",
+      "Bash(git add src/pages/FactorySettings.tsx)",
+      "Bash(git add src/pages/FactoryDashboard.tsx src/pages/CEODashboard.tsx src/pages/DepartmentDashboard.tsx)",
+      "Bash(git add src/pages/Home.tsx)",
+      "Bash(find /c/Users/USER/martin-bakery -name \"*.sql\" -type f -exec grep -l \"CREATE TABLE.*branch_revenue\\\\|CREATE TABLE.*factory_sales\\\\|CREATE TABLE.*factory_b2b\" {} ;)",
+      "Bash(git add src/pages/CEODashboard.tsx)",
+      "Bash(git add src/pages/BranchOrders.tsx)",
+      "Bash(git add src/pages/BranchPL.tsx)",
+      "Bash(npx shadcn@latest init -d -y)"
     ]
   }
 }
