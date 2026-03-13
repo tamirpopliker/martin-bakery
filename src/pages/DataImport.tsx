@@ -139,6 +139,16 @@ function validateRows(tableName: string, mapped: Record<string, any>[], rawRows:
     }
   }
   if (months.size > 1) warnings.push(`ייבוא מרובה חודשים: ${[...months].join(', ')}`)
+  // Employer cost source tracking for labor tables
+  if (['labor', 'branch_labor'].includes(tableName)) {
+    const fromCsv = mapped.filter(r => r._empCostSource === 'csv').length
+    const fromCalc = mapped.filter(r => r._empCostSource === 'calc').length
+    if (fromCalc > 0 && fromCsv > 0) {
+      warnings.push(`עלות מעסיק: ${fromCsv} שורות מהקובץ, ${fromCalc} שורות חושבו (×1.3)`)
+    } else if (fromCalc > 0) {
+      warnings.push(`עלות מעסיק: כל ${fromCalc} השורות חושבו אוטומטית (שכר ברוטו ×1.3)`)
+    }
+  }
   // Rejected rows
   const rejected = rawRows.length - mapped.length
   if (rejected > 0) warnings.push(`${rejected} שורות נדחו (שדות חסרים: תאריך, סכום וכו')`)
@@ -166,7 +176,8 @@ const FILE_MAP: Record<string, TableDef> = {
       const date = parseDate(r.date); const dept = parseDept(r.department)
       if (!date || !r.employee_name?.trim()) return null
       const gross = parseNum(r.gross_salary) ?? 0
-      let empCost = parseNum(r.employer_cost)
+      let empCost = parseNum(r.employer_cost) ?? parseNum(r['עלות מעסיק']) ?? parseNum(r['עלות_מעסיק'])
+      const empCostFromCsv = !!empCost
       if (!empCost || empCost === 0) empCost = Math.round(gross * 1.3 * 100) / 100
       return {
         date, entity_id: dept, entity_type: 'factory',
@@ -174,6 +185,7 @@ const FILE_MAP: Record<string, TableDef> = {
         hours_100: parseNum(r.hours) ?? 0, hours_125: 0, hours_150: 0,
         gross_salary: gross, employer_cost: empCost,
         hourly_rate: parseNum(r.hourly_rate) ?? 0, bonus: parseNum(r.bonus) ?? 0,
+        _empCostSource: empCostFromCsv ? 'csv' : 'calc',
       }
     },
     dupeKey: (r) => `${r.date}_${r.employee_name}_${r.gross_salary}`,
@@ -345,7 +357,8 @@ const FILE_MAP: Record<string, TableDef> = {
       const branchId = parseBranch(r.branch_name)
       const gross = parseNum(r.gross_salary) ?? 0
       if (!date || !branchId || gross === 0) return null
-      let empCost = parseNum(r.employer_cost)
+      let empCost = parseNum(r.employer_cost) ?? parseNum(r['עלות מעסיק']) ?? parseNum(r['עלות_מעסיק'])
+      const empCostFromCsv = !!empCost
       if (!empCost || empCost === 0) empCost = Math.round(gross * 1.3 * 100) / 100
       return {
         branch_id: branchId, date,
@@ -354,6 +367,7 @@ const FILE_MAP: Record<string, TableDef> = {
         gross_salary: gross,
         employer_cost: empCost,
         notes: r.notes?.trim() || null,
+        _empCostSource: empCostFromCsv ? 'csv' : 'calc',
       }
     },
     dupeKey: (r) => `${r.branch_id}_${r.date}_${r.employee_name}_${r.gross_salary}`,
@@ -452,6 +466,9 @@ export default function DataImport({ branchOnly }: Props) {
   const [confirmPurge, setConfirmPurge] = useState(false)
   const [purgingAll, setPurgingAll] = useState(false)
   const [purgeResult, setPurgeResult] = useState<{ table: string; label: string; ok: boolean; error?: string }[] | null>(null)
+  const [importMode, setImportMode] = useState<'zip' | 'single'>('zip')
+  const singleFileRef = useRef<HTMLInputElement>(null)
+  const [selectedTable, setSelectedTable] = useState<string | null>(null)
 
   // ─── Identify file ─────────────────────────────────────────────────────────
   function identifyFile(name: string): { key: string; def: TableDef } | { key: string; skip: true } | null {
@@ -793,7 +810,11 @@ export default function DataImport({ branchOnly }: Props) {
         for (const row of batch) {
           const key = defEntry.dupeKey(row)
           if (existingKeys.has(key)) { skipped++ }
-          else { toInsert.push(row); existingKeys.add(key) }
+          else {
+            // Strip internal tracking fields before DB insert
+            const { _empCostSource, ...cleanRow } = row
+            toInsert.push(cleanRow); existingKeys.add(key)
+          }
         }
 
         if (toInsert.length > 0) {
@@ -900,8 +921,36 @@ export default function DataImport({ branchOnly }: Props) {
         </div>
       )}
 
-      {/* Drop zone */}
+      {/* Import mode toggle */}
       {files.length === 0 && (
+        <div style={{ display: 'flex', gap: '0', marginBottom: '0' }}>
+          <button onClick={() => { setImportMode('zip'); setSelectedTable(null) }}
+            style={{
+              flex: 1, padding: '14px 20px', border: 'none', cursor: 'pointer',
+              borderRadius: '12px 0 0 12px', fontSize: '15px', fontWeight: '700',
+              background: importMode === 'zip' ? '#0f172a' : '#f1f5f9',
+              color: importMode === 'zip' ? 'white' : '#64748b',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              transition: 'all 0.2s',
+            }}>
+            <Download size={18} /> ייבוא ZIP מלא
+          </button>
+          <button onClick={() => { setImportMode('single'); setSelectedTable(null) }}
+            style={{
+              flex: 1, padding: '14px 20px', border: 'none', cursor: 'pointer',
+              borderRadius: '0 12px 12px 0', fontSize: '15px', fontWeight: '700',
+              background: importMode === 'single' ? '#0f172a' : '#f1f5f9',
+              color: importMode === 'single' ? 'white' : '#64748b',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              transition: 'all 0.2s',
+            }}>
+            <FileText size={18} /> החלפת קובץ בודד
+          </button>
+        </div>
+      )}
+
+      {/* ZIP mode: Drop zone */}
+      {files.length === 0 && importMode === 'zip' && (
         <div
           onDragOver={e => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
@@ -932,6 +981,44 @@ export default function DataImport({ branchOnly }: Props) {
         </div>
       )}
 
+      {/* Single file mode: Table selection grid */}
+      {files.length === 0 && importMode === 'single' && (
+        <div style={S.card}>
+          <div style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
+            בחר טבלה להחלפה
+          </div>
+          <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '16px' }}>
+            בחר את הטבלה שברצונך לעדכן — הנתונים הקיימים יימחקו ויוחלפו בקובץ החדש
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
+            {Object.entries(FILE_MAP)
+              .filter(([key]) => !branchOnly || BRANCH_FILE_KEYS.includes(key))
+              .map(([key, def]) => (
+              <div key={key}
+                onClick={() => { setSelectedTable(key); singleFileRef.current?.click() }}
+                style={{
+                  background: selectedTable === key ? '#eff6ff' : '#fafafa',
+                  border: `2px solid ${selectedTable === key ? '#3b82f6' : '#e2e8f0'}`,
+                  borderRadius: '12px', padding: '16px 12px', textAlign: 'center',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}>
+                <FileText size={24} color={selectedTable === key ? '#3b82f6' : '#94a3b8'} style={{ marginBottom: '8px' }} />
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#374151' }}>{def.label}</div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', direction: 'ltr' as const }}>{key}.csv</div>
+              </div>
+            ))}
+          </div>
+          <input ref={singleFileRef} type="file" accept=".csv" style={{ display: 'none' }}
+            onChange={e => {
+              if (e.target.files && selectedTable) {
+                setClearExisting(true)
+                handleFiles(e.target.files)
+              }
+              e.target.value = ''
+            }} />
+        </div>
+      )}
+
       <input ref={fileRef} type="file" accept=".csv,.zip" multiple style={{ display: 'none' }}
         onChange={e => { if (e.target.files) handleFiles(e.target.files); e.target.value = '' }} />
 
@@ -957,7 +1044,7 @@ export default function DataImport({ branchOnly }: Props) {
               )}
             </div>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-              {!done && !importing && (
+              {!done && !importing && importMode === 'zip' && (
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#64748b', cursor: 'pointer' }}>
                   <input type="checkbox" checked={clearExisting} onChange={e => setClearExisting(e.target.checked)}
                     style={{ accentColor: '#ef4444', width: '16px', height: '16px' }} />
@@ -965,15 +1052,21 @@ export default function DataImport({ branchOnly }: Props) {
                   נקה נתונים קודמים
                 </label>
               )}
+              {!done && !importing && importMode === 'single' && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#ef4444', fontWeight: '600' }}>
+                  <Trash2 size={14} color="#ef4444" />
+                  הנתונים הקיימים יוחלפו
+                </span>
+              )}
               <button onClick={() => checkDb()} disabled={checkingDb}
                 style={{ background: '#dbeafe', color: '#2563eb', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '600', cursor: checkingDb ? 'default' : 'pointer', opacity: checkingDb ? 0.6 : 1 }}>
                 {checkingDb ? '⏳ בודק...' : '🔍 בדוק מסד נתונים'}
               </button>
-              <button onClick={() => { setFiles([]); setDone(false); setDbStatus(null) }}
+              <button onClick={() => { setFiles([]); setDone(false); setDbStatus(null); setSelectedTable(null) }}
                 style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
                 איפוס
               </button>
-              {!done && (
+              {!done && importMode === 'zip' && (
                 <button onClick={() => fileRef.current?.click()}
                   style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
                   + הוסף קבצים
@@ -986,7 +1079,12 @@ export default function DataImport({ branchOnly }: Props) {
                     border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700',
                     cursor: canImport ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: '8px',
                   }}>
-                  {importing ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> מייבא...</> : <><Download size={18} /> ייבא הכל</>}
+                  {importing
+                    ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> מייבא...</>
+                    : importMode === 'single'
+                      ? <><Download size={18} /> החלף {readyFiles.length > 0 ? readyFiles[0].label : 'נתונים'}</>
+                      : <><Download size={18} /> ייבא הכל</>
+                  }
                 </button>
               )}
             </div>

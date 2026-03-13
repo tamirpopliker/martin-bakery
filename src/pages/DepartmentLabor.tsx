@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchGlobalEmployees, getWorkingDays, countWorkingDaysInRange, type GlobalEmployee } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Plus, Trash2, Pencil, Users, UserPlus, Clock, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { ArrowRight, Plus, Trash2, Pencil, Users, UserPlus, Clock, ChevronDown, ChevronUp, X, Briefcase } from 'lucide-react'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 type Department = 'creams' | 'dough' | 'packaging' | 'cleaning'
@@ -96,6 +97,10 @@ export default function DepartmentLabor({ department, onBack }: Props) {
   // ── פירוט עובד ──
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null)
 
+  // ── עובדים גלובליים ──
+  const [globalEmps, setGlobalEmps] = useState<GlobalEmployee[]>([])
+  const [workingDaysMonth, setWorkingDaysMonth] = useState(26)
+
   // ─── שליפות ──────────────────────────────────────────────────────────────
   async function fetchEmployees() {
     const { data } = await supabase
@@ -116,8 +121,17 @@ export default function DepartmentLabor({ department, onBack }: Props) {
     if (data) setEntries(data)
   }
 
+  async function fetchGlobals() {
+    const [gEmps, wDays] = await Promise.all([
+      fetchGlobalEmployees(),
+      getWorkingDays(from.slice(0, 7)),
+    ])
+    setGlobalEmps(gEmps.filter(e => e.department === department || e.department === 'both'))
+    setWorkingDaysMonth(wDays)
+  }
+
   useEffect(() => { fetchEmployees() }, [department])
-  useEffect(() => { fetchEntries() },  [from, to, department])
+  useEffect(() => { fetchEntries(); fetchGlobals() }, [from, to, department])
 
   // ─── הזנה ידנית ──────────────────────────────────────────────────────────
   async function addManual() {
@@ -178,22 +192,45 @@ export default function DepartmentLabor({ department, onBack }: Props) {
   }
 
   // ─── חישובים ─────────────────────────────────────────────────────────────
-  const totalCost    = entries.reduce((s, e) => s + Number(e.employer_cost), 0)
+  const hourlyCost   = entries.reduce((s, e) => s + Number(e.employer_cost), 0)
   const totalH100    = entries.reduce((s, e) => s + Number(e.hours_100), 0)
   const totalH125    = entries.reduce((s, e) => s + Number(e.hours_125), 0)
   const totalH150    = entries.reduce((s, e) => s + Number(e.hours_150), 0)
   const totalHours   = totalH100 + totalH125 + totalH150
   const casualCount  = entries.filter(e => e.is_casual).length
 
+  // עלות עובדים גלובליים לתקופה
+  const workingDaysInPeriod = countWorkingDaysInRange(from, to)
+  const globalCostTotal = globalEmps.reduce((sum, emp) => {
+    const isBoth = emp.department === 'both'
+    const factor = isBoth ? 0.5 : 1
+    const monthlyEmployerCost = (emp.global_daily_rate || 0) * 1.3 + (emp.bonus || 0)
+    return sum + monthlyEmployerCost * factor * (workingDaysInPeriod / (workingDaysMonth || 26))
+  }, 0)
+  const totalCost = hourlyCost + globalCostTotal
+
   // קיבוץ לפי עובד
-  const employeeSummary = entries.reduce<Record<string, { totalCost: number, totalHours: number, count: number, isCasual: boolean }>>((acc, e) => {
+  const employeeSummary = entries.reduce<Record<string, { totalCost: number, totalHours: number, count: number, isCasual: boolean, isGlobal: boolean }>>((acc, e) => {
     const name = e.employee_name
-    if (!acc[name]) acc[name] = { totalCost: 0, totalHours: 0, count: 0, isCasual: e.is_casual }
+    if (!acc[name]) acc[name] = { totalCost: 0, totalHours: 0, count: 0, isCasual: e.is_casual, isGlobal: false }
     acc[name].totalCost += Number(e.employer_cost)
     acc[name].totalHours += Number(e.hours_100) + Number(e.hours_125) + Number(e.hours_150)
     acc[name].count += 1
     return acc
   }, {})
+  // הוסף עובדים גלובליים לסיכום
+  for (const emp of globalEmps) {
+    const isBoth = emp.department === 'both'
+    const factor = isBoth ? 0.5 : 1
+    const monthlyEmployerCost = (emp.global_daily_rate || 0) * 1.3 + (emp.bonus || 0)
+    const periodCost = monthlyEmployerCost * factor * (workingDaysInPeriod / (workingDaysMonth || 26))
+    if (!employeeSummary[emp.name]) {
+      employeeSummary[emp.name] = { totalCost: periodCost, totalHours: 0, count: 0, isCasual: false, isGlobal: true }
+    } else {
+      employeeSummary[emp.name].totalCost += periodCost
+      employeeSummary[emp.name].isGlobal = true
+    }
+  }
   const sortedEmployees = Object.entries(employeeSummary).sort((a, b) => b[1].totalCost - a[1].totalCost)
   const maxEmpCost = sortedEmployees.length > 0 ? sortedEmployees[0][1].totalCost : 1
 
@@ -403,10 +440,12 @@ export default function DepartmentLabor({ department, onBack }: Props) {
         {/* ══ היסטוריה ════════════════════════════════════════════════════ */}
         {tab === 'history' && (
           <>
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
               <PeriodPicker period={period} onChange={setPeriod} />
-              <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: '#64748b', marginRight: 'auto' }}>
+              <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: '#64748b', marginRight: 'auto', flexWrap: 'wrap' }}>
                 <span>סה"כ: <strong style={{ color: cfg.color }}>{fmtM(totalCost)}</strong></span>
+                {globalEmps.length > 0 && <span>שעתיים: <strong>{fmtM(hourlyCost)}</strong></span>}
+                {globalEmps.length > 0 && <span>גלובליים: <strong style={{ color: '#2563eb' }}>{fmtM(globalCostTotal)}</strong></span>}
                 <span>שעות: <strong>{totalHours.toFixed(1)}</strong></span>
                 <span>מזדמנים: <strong>{casualCount}</strong></span>
               </div>
@@ -439,8 +478,9 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                         <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px', flex: 1 }}>
                           {name}
                           {data.isCasual && <span style={{ fontSize: '11px', background: '#fef3c7', color: '#d97706', padding: '1px 6px', borderRadius: '10px', marginRight: '6px', fontWeight: '600' }}>מזדמן</span>}
+                          {data.isGlobal && <span style={{ fontSize: '11px', background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: '10px', marginRight: '6px', fontWeight: '600' }}>גלובלי</span>}
                         </span>
-                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>{data.totalHours.toFixed(1)} ש׳ · {data.count} רשומות</span>
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>{data.isGlobal && data.count === 0 ? 'משכורת חודשית' : `${data.totalHours.toFixed(1)} ש׳ · ${data.count} רשומות`}</span>
                         <span style={{ fontWeight: '800', color: cfg.color, fontSize: '15px', minWidth: '90px', textAlign: 'left' }}>{fmtM(data.totalCost)}</span>
                         <span style={{ fontSize: '12px', color: '#64748b', minWidth: '45px', textAlign: 'left' }}>{pct.toFixed(1)}%</span>
                         <ChevronDown size={16} color="#94a3b8" />
@@ -508,19 +548,71 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                 </div>
               ))}
 
-              {/* סה"כ */}
+              {/* סה"כ שעתיים */}
               {entries.length > 0 && (
                 <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 70px 70px 110px 36px 36px', padding: '13px 20px', background: cfg.bg, borderTop: `2px solid ${cfg.color}33`, fontWeight: '700', fontSize: '13px' }}>
-                  <span style={{ color: '#374151' }}>סה"כ</span>
+                  <span style={{ color: '#374151' }}>סה"כ שעתיים</span>
                   <span style={{ color: '#64748b' }}>{entries.length} רשומות</span>
                   <span style={{ color: '#64748b', textAlign: 'center' }}>{totalH100.toFixed(1)}</span>
                   <span style={{ color: '#64748b', textAlign: 'center' }}>{totalH125.toFixed(1)}</span>
                   <span style={{ color: '#64748b', textAlign: 'center' }}>{totalH150.toFixed(1)}</span>
-                  <span style={{ color: cfg.color, fontSize: '15px' }}>{fmtM(totalCost)}</span>
+                  <span style={{ color: cfg.color, fontSize: '15px' }}>{fmtM(hourlyCost)}</span>
                   <span /><span />
                 </div>
               )}
             </div></div>
+
+            {/* ── עובדים גלובליים ── */}
+            {globalEmps.length > 0 && (
+              <div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginTop: '20px' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '32px', height: '32px', background: '#dbeafe', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Briefcase size={16} color="#2563eb" />
+                  </div>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#374151' }}>עובדים גלובליים (משכורת חודשית)</h3>
+                  <span style={{ fontSize: '12px', color: '#94a3b8', marginRight: 'auto' }}>{globalEmps.length} עובדים · {workingDaysInPeriod} ימי עבודה מתוך {workingDaysMonth}</span>
+                </div>
+                {/* כותרת */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px 120px', padding: '10px 20px', background: '#f8fafc', fontSize: '11px', fontWeight: '700', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
+                  <span>עובד</span>
+                  <span style={{ textAlign: 'center' }}>משכורת חודשית</span>
+                  <span style={{ textAlign: 'center' }}>בונוס</span>
+                  <span style={{ textAlign: 'left' }}>עלות מעסיק לתקופה</span>
+                </div>
+                {globalEmps.map((emp, i) => {
+                  const isBoth = emp.department === 'both'
+                  const factor = isBoth ? 0.5 : 1
+                  const monthlyEmployerCost = (emp.global_daily_rate || 0) * 1.3 + (emp.bonus || 0)
+                  const periodCost = monthlyEmployerCost * factor * (workingDaysInPeriod / (workingDaysMonth || 26))
+                  return (
+                    <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px 120px', alignItems: 'center', padding: '14px 20px', borderBottom: i < globalEmps.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                      <div>
+                        <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{emp.name}</span>
+                        <span style={{ fontSize: '11px', background: '#dbeafe', color: '#2563eb', padding: '1px 6px', borderRadius: '10px', marginRight: '6px', fontWeight: '600' }}>גלובלי</span>
+                        {isBoth && <span style={{ fontSize: '11px', background: '#fef3c7', color: '#d97706', padding: '1px 6px', borderRadius: '10px', marginRight: '4px', fontWeight: '600' }}>50% מחלקה</span>}
+                      </div>
+                      <span style={{ fontSize: '13px', color: '#64748b', textAlign: 'center' }}>{fmtM(emp.global_daily_rate || 0)}</span>
+                      <span style={{ fontSize: '13px', color: '#64748b', textAlign: 'center' }}>{emp.bonus ? fmtM(emp.bonus) : '—'}</span>
+                      <span style={{ fontWeight: '700', color: '#2563eb', fontSize: '14px' }}>{fmtM(periodCost)}</span>
+                    </div>
+                  )
+                })}
+                {/* סה"כ גלובליים */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px 120px', padding: '13px 20px', background: '#dbeafe', borderTop: '2px solid #3b82f633', fontWeight: '700', fontSize: '13px' }}>
+                  <span style={{ color: '#374151' }}>סה"כ גלובליים</span>
+                  <span /><span />
+                  <span style={{ color: '#2563eb', fontSize: '15px' }}>{fmtM(globalCostTotal)}</span>
+                </div>
+              </div>
+            )}
+
+            {/* סה"כ כולל */}
+            {(entries.length > 0 || globalEmps.length > 0) && globalEmps.length > 0 && (
+              <div style={{ background: cfg.bg, borderRadius: '16px', padding: '16px 20px', marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: `2px solid ${cfg.color}33` }}>
+                <span style={{ fontWeight: '800', color: '#374151', fontSize: '15px' }}>סה"כ עלות לייבור מחלקתית (שעתיים + גלובליים)</span>
+                <span style={{ fontWeight: '800', color: cfg.color, fontSize: '20px' }}>{fmtM(totalCost)}</span>
+              </div>
+            )}
           </>
         )}
 
