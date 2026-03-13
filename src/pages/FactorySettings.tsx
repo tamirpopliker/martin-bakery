@@ -54,7 +54,18 @@ const ALL_DEPTS = [
 ]
 
 
-const DEFAULT_FIXED_COSTS = ['ארנונה', 'שכירות', 'גז', 'חשמל', 'מים', 'אינטרנט', 'ביטוח']
+const DEFAULT_FIXED_COSTS: { name: string; amount: number }[] = [
+  { name: 'אינטרנט',       amount: 400 },
+  { name: 'ארנונה',        amount: 7500 },
+  { name: 'ביטוח',         amount: 6000 },
+  { name: 'גז',            amount: 5000 },
+  { name: 'חשמל',          amount: 18000 },
+  { name: 'מים',            amount: 2000 },
+  { name: 'משגיח כשרות',   amount: 2000 },
+  { name: 'פינוי קרטוניה', amount: 400 },
+  { name: 'שכירות',        amount: 60000 },
+  { name: 'שמירה',         amount: 2000 },
+]
 
 const KPI_FIELDS: { key: keyof KpiTarget; label: string; higher: boolean; hint: string }[] = [
   { key: 'labor_pct',       label: 'לייבור / הכנסות %',     higher: false, hint: 'נמוך יותר = טוב יותר' },
@@ -193,6 +204,22 @@ export default function FactorySettings({ onBack }: Props) {
     setLoadingCost(true)
     for (const c of data) {
       await supabase.from('fixed_costs').insert({ name: c.name, amount: c.amount, month: costMonth, entity_type: 'factory', entity_id: 'factory' })
+    }
+    await fetchCosts()
+    setLoadingCost(false)
+  }
+
+  async function loadDefaults() {
+    if (costs.length > 0 && !confirm('כבר קיימות עלויות לחודש זה. לטעון ברירות מחדל בנוסף?')) return
+    setLoadingCost(true)
+    const existingNames = new Set(costs.map(c => c.name))
+    for (const d of DEFAULT_FIXED_COSTS) {
+      if (!existingNames.has(d.name)) {
+        await supabase.from('fixed_costs').insert({
+          name: d.name, amount: d.amount,
+          month: costMonth, entity_type: 'factory', entity_id: 'factory'
+        })
+      }
     }
     await fetchCosts()
     setLoadingCost(false)
@@ -373,6 +400,10 @@ export default function FactorySettings({ onBack }: Props) {
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '20px' }}>
               <input type="month" value={costMonth} onChange={e => setCostMonth(e.target.value)}
                 style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '8px 14px', fontSize: '14px', background: 'white', fontFamily: 'inherit' }} />
+              <button onClick={loadDefaults} disabled={loadingCost}
+                style={{ background: '#0f172a', color: 'white', border: 'none', borderRadius: '10px', padding: '9px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                ⚡ טען ברירות מחדל
+              </button>
               <button onClick={copyFromPrevMonth}
                 style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '9px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
                 📋 העתק מחודש קודם
@@ -388,10 +419,10 @@ export default function FactorySettings({ onBack }: Props) {
 
               {/* כפתורי ברירת מחדל */}
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, marginBottom: '14px' }}>
-                {DEFAULT_FIXED_COSTS.map(name => (
-                  <button key={name} onClick={() => setNewCostName(name)}
-                    style={{ background: newCostName === name ? '#0f172a' : '#f1f5f9', color: newCostName === name ? 'white' : '#64748b', border: 'none', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                    {name}
+                {DEFAULT_FIXED_COSTS.map(d => (
+                  <button key={d.name} onClick={() => { setNewCostName(d.name); setNewCostAmount(String(d.amount)) }}
+                    style={{ background: newCostName === d.name ? '#0f172a' : '#f1f5f9', color: newCostName === d.name ? 'white' : '#64748b', border: 'none', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {d.name}
                   </button>
                 ))}
               </div>
@@ -425,7 +456,15 @@ export default function FactorySettings({ onBack }: Props) {
 
               {costs.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
-                  אין עלויות לחודש זה — הוסף או העתק מחודש קודם
+                  <div style={{ marginBottom: '16px' }}>אין עלויות לחודש זה</div>
+                  <button onClick={loadDefaults} disabled={loadingCost}
+                    style={{ background: '#0f172a', color: 'white', border: 'none', borderRadius: '12px', padding: '12px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', marginLeft: '8px' }}>
+                    ⚡ טען ברירות מחדל ({fmtM(DEFAULT_FIXED_COSTS.reduce((s, d) => s + d.amount, 0))})
+                  </button>
+                  <button onClick={copyFromPrevMonth}
+                    style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '12px', padding: '12px 28px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' }}>
+                    📋 העתק מחודש קודם
+                  </button>
                 </div>
               ) : costs.map((cost, i) => (
                 <div key={cost.id} style={{ display: 'grid', gridTemplateColumns: '1fr 150px 36px 36px', alignItems: 'center', padding: '13px 20px', borderBottom: i < costs.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
