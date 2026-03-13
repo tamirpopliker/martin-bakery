@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Package, CheckCircle, Pencil, Check, X, AlertTriangle } from 'lucide-react'
+import { ArrowRight, Package, CheckCircle, Pencil, Check, X, AlertTriangle, CheckSquare, Square } from 'lucide-react'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Props {
@@ -49,6 +49,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
   const [editAmount, setEditAmount]     = useState('')
   const [loading, setLoading]           = useState(false)
   const [bulkLoading, setBulkLoading]   = useState(false)
+  const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set())
 
   // ─── שליפת הזמנות ──────────────────────────────────────────────────────────
   async function fetchOrders() {
@@ -103,14 +104,47 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
     await fetchOrders()
   }
 
+  function toggleSelect(order: Order) {
+    const key = `${order.source_table}_${order.id}`
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    const pendingFiltered = filtered.filter(o => o.branch_status === 'pending')
+    const allKeys = pendingFiltered.map(o => `${o.source_table}_${o.id}`)
+    const allSelected = allKeys.length > 0 && allKeys.every(k => selectedIds.has(k))
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(allKeys))
+    }
+  }
+
   async function bulkApprove() {
     if (!confirm('לאשר את כל ההזמנות הממתינות?')) return
     setBulkLoading(true)
     const pending = orders.filter(o => o.branch_status === 'pending')
+    await approveOrders(pending)
+    setBulkLoading(false)
+  }
 
-    // Group by table for efficiency
-    const fsPending = pending.filter(o => o.source_table === 'factory_sales').map(o => o.id)
-    const b2bPending = pending.filter(o => o.source_table === 'factory_b2b_sales').map(o => o.id)
+  async function approveSelected() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`לאשר ${selectedIds.size} הזמנות נבחרות?`)) return
+    setBulkLoading(true)
+    const selected = orders.filter(o => selectedIds.has(`${o.source_table}_${o.id}`))
+    await approveOrders(selected)
+    setSelectedIds(new Set())
+    setBulkLoading(false)
+  }
+
+  async function approveOrders(list: Order[]) {
+    const fsPending = list.filter(o => o.source_table === 'factory_sales').map(o => o.id)
+    const b2bPending = list.filter(o => o.source_table === 'factory_b2b_sales').map(o => o.id)
 
     const updates = []
     if (fsPending.length > 0) {
@@ -124,7 +158,6 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
       )
     }
     await Promise.all(updates)
-    setBulkLoading(false)
     await fetchOrders()
   }
 
@@ -136,6 +169,10 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
   const total = filtered.reduce((s, o) => s + Number(o.amount), 0)
   const pendingCount = orders.filter(o => o.branch_status === 'pending').length
   const pendingTotal = orders.filter(o => o.branch_status === 'pending').reduce((s, o) => s + Number(o.amount), 0)
+
+  const pendingFiltered = filtered.filter(o => o.branch_status === 'pending')
+  const allPendingSelected = pendingFiltered.length > 0 && pendingFiltered.every(o => selectedIds.has(`${o.source_table}_${o.id}`))
+  const selectedCount = selectedIds.size
 
   const statusTabs: { key: StatusFilter; label: string; count: number }[] = [
     { key: 'all',      label: 'הכל',     count: orders.length },
@@ -187,11 +224,25 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
                 </div>
               </div>
             </div>
-            <button onClick={bulkApprove} disabled={bulkLoading}
-              style={{ background: '#16a34a', color: 'white', border: 'none', borderRadius: '12px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', opacity: bulkLoading ? 0.6 : 1 }}>
-              <CheckCircle size={18} />
-              אשר הכל
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={toggleSelectAll}
+                style={{ background: allPendingSelected ? '#e0e7ff' : '#f1f5f9', color: allPendingSelected ? '#4f46e5' : '#64748b', border: `1.5px solid ${allPendingSelected ? '#818cf8' : '#e2e8f0'}`, borderRadius: '12px', padding: '10px 20px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {allPendingSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                {allPendingSelected ? 'בטל סימון' : 'סמן הכל'}
+              </button>
+              {selectedCount > 0 && (
+                <button onClick={approveSelected} disabled={bulkLoading}
+                  style={{ background: '#16a34a', color: 'white', border: 'none', borderRadius: '12px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', opacity: bulkLoading ? 0.6 : 1 }}>
+                  <CheckCircle size={18} />
+                  אשר נבחרים ({selectedCount})
+                </button>
+              )}
+              <button onClick={bulkApprove} disabled={bulkLoading}
+                style={{ background: selectedCount > 0 ? '#f1f5f9' : '#16a34a', color: selectedCount > 0 ? '#64748b' : 'white', border: selectedCount > 0 ? '1.5px solid #e2e8f0' : 'none', borderRadius: '12px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', opacity: bulkLoading ? 0.6 : 1 }}>
+                <CheckCircle size={18} />
+                אשר הכל
+              </button>
+            </div>
           </div>
         )}
 
@@ -220,7 +271,8 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
 
         {/* ─── טבלת הזמנות ────────────────────────────────────────────────── */}
         <div className="table-scroll"><div style={S.card}>
-          <div style={{ display: 'grid', gridTemplateColumns: '100px 80px 1fr 120px 100px 100px 80px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '36px 100px 80px 1fr 120px 100px 100px 80px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b', alignItems: 'center' }}>
+            <span />
             <span>תאריך</span>
             <span>מקור</span>
             <span>לקוח</span>
@@ -243,11 +295,17 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
 
             return (
               <div key={editKey} style={{
-                display: 'grid', gridTemplateColumns: '100px 80px 1fr 120px 100px 100px 80px',
+                display: 'grid', gridTemplateColumns: '36px 100px 80px 1fr 120px 100px 100px 80px',
                 alignItems: 'center', padding: '13px 20px',
                 borderBottom: i < filtered.length - 1 ? '1px solid #f1f5f9' : 'none',
-                background: i % 2 === 0 ? 'white' : '#fafafa',
+                background: selectedIds.has(editKey) ? '#eff6ff' : i % 2 === 0 ? 'white' : '#fafafa',
               }}>
+                {/* checkbox */}
+                {order.branch_status === 'pending' ? (
+                  <button onClick={() => toggleSelect(order)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
+                    {selectedIds.has(editKey) ? <CheckSquare size={18} color="#4f46e5" /> : <Square size={18} color="#94a3b8" />}
+                  </button>
+                ) : <span />}
                 <span style={{ fontSize: '13px', color: '#64748b' }}>
                   {new Date(order.date + 'T12:00:00').toLocaleDateString('he-IL')}
                 </span>
