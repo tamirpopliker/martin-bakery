@@ -623,24 +623,40 @@ export default function Home() {
                 </div>
               </div>
               {(() => {
-                const W = 650, H = 140, PL = 50, PR = 12, PT = 8, PB = 24
+                const W = 650, H = 160, PL = 50, PR = 12, PT = 8, PB = 24
                 const metrics = [
                   { key: 'revenue' as const, color: '#3b82f6' },
                   { key: 'labor' as const, color: '#f59e0b' },
                   { key: 'profit' as const, color: '#10b981' },
                 ]
-                const maxVal = Math.max(...trendData.flatMap(d => metrics.map(m => Math.abs(d[m.key]))), 1)
+                const allVals = trendData.flatMap(d => metrics.map(m => d[m.key]))
+                const maxPos = Math.max(...allVals, 0)
+                const minNeg = Math.min(...allVals, 0)
+                const totalRange = (maxPos - minNeg) || 1
+                const chartH = H - PT - PB
+                // Zero line position: fraction of chart height from top
+                const zeroY = PT + (maxPos / totalRange) * chartH
                 const groupW = (W - PL - PR) / trendData.length
                 const barW = groupW / (metrics.length + 1)
                 return (
-                  <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxHeight: '140px' }}>
-                    <line x1={PL} y1={H - PB} x2={W - PR} y2={H - PB} stroke="#e2e8f0" strokeWidth="1" />
+                  <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxHeight: '160px' }}>
+                    {/* Zero / baseline */}
+                    <line x1={PL} y1={zeroY} x2={W - PR} y2={zeroY} stroke="#cbd5e1" strokeWidth="1" />
+                    {/* Dashed line for negative zone */}
+                    {minNeg < 0 && <text x={PL - 4} y={zeroY + 3} textAnchor="end" fontSize="9" fill="#94a3b8">0</text>}
                     {trendData.map((d, di) => {
                       const gx = PL + di * groupW
                       return metrics.map((m, mi) => {
-                        const val = Math.abs(d[m.key])
-                        const h = (val / maxVal) * (H - PT - PB)
-                        return <rect key={`${di}-${mi}`} x={gx + (mi + 0.5) * barW} y={H - PB - h} width={barW * 0.8} height={h} rx={3} fill={m.color} opacity={0.85} />
+                        const val = d[m.key]
+                        if (val === 0) return null
+                        const barX = gx + (mi + 0.5) * barW
+                        if (val >= 0) {
+                          const h = (val / totalRange) * chartH
+                          return <rect key={`${di}-${mi}`} x={barX} y={zeroY - h} width={barW * 0.8} height={h} rx={3} fill={m.color} opacity={0.85} />
+                        } else {
+                          const h = (Math.abs(val) / totalRange) * chartH
+                          return <rect key={`${di}-${mi}`} x={barX} y={zeroY} width={barW * 0.8} height={h} rx={3} fill="#ef4444" opacity={0.6} />
+                        }
                       })
                     })}
                     {trendData.map((d, i) => (
