@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import CountUp from 'react-countup'
 import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept } from '../lib/supabase'
 import { ArrowRight, Trophy, TrendingUp, TrendingDown, Minus, DollarSign, Users, Receipt, Store, BarChart3, Globe, CreditCard, Building2, Truck } from 'lucide-react'
 import { BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
@@ -23,6 +25,20 @@ const PIE_COLORS = ['#818cf8', '#fb7185', '#fbbf24', '#34d399', '#c084fc', '#38b
 const CHART_INDIGO  = '#818cf8'
 const CHART_ROSE    = '#fb7185'
 const CHART_EMERALD = '#34d399'
+
+// Animation variants
+const staggerContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.1 } }
+}
+const fadeUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } }
+}
+const fadeIn = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } }
+}
 
 interface BranchData {
   id: number; name: string; color: string
@@ -313,9 +329,9 @@ export default function CEODashboard({ onBack }: Props) {
   }
 
   // KPI card with hover + colored right border (appears on visual left in RTL)
-  function KpiCard({ icon, label, value, valueColor, diff, borderColor }: {
-    icon: React.ReactNode; label: string; value: string; valueColor?: string
-    diff?: React.ReactNode; borderColor: string
+  function KpiCard({ icon, label, numericValue, prefix = '₪', suffix = '', decimals = 0, valueColor, diff, borderColor }: {
+    icon: React.ReactNode; label: string; numericValue: number; prefix?: string; suffix?: string; decimals?: number
+    valueColor?: string; diff?: React.ReactNode; borderColor: string
   }) {
     return (
       <Card className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default border-r-4 overflow-hidden" style={{ borderRightColor: borderColor }}>
@@ -324,15 +340,18 @@ export default function CEODashboard({ onBack }: Props) {
             {icon}
             <span className="text-xs font-semibold text-slate-500">{label}</span>
           </div>
-          <div className="text-2xl font-extrabold" style={{ color: valueColor || '#0f172a' }}>{value}</div>
+          <div className="text-2xl font-extrabold" style={{ color: valueColor || '#0f172a' }}>
+            <CountUp end={numericValue} duration={1.5} separator="," prefix={prefix} suffix={suffix} decimals={decimals} />
+          </div>
           {diff}
         </CardContent>
       </Card>
     )
   }
 
-  function KpiCardSm({ icon, label, value, valueColor, borderColor }: {
-    icon: React.ReactNode; label: string; value: string; valueColor?: string; borderColor: string
+  function KpiCardSm({ icon, label, numericValue, prefix = '₪', suffix = '', decimals = 0, valueColor, borderColor }: {
+    icon: React.ReactNode; label: string; numericValue: number; prefix?: string; suffix?: string; decimals?: number
+    valueColor?: string; borderColor: string
   }) {
     return (
       <Card className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default border-r-4 overflow-hidden" style={{ borderRightColor: borderColor }}>
@@ -341,7 +360,9 @@ export default function CEODashboard({ onBack }: Props) {
             {icon}
             <span className="text-[11px] font-semibold text-slate-500">{label}</span>
           </div>
-          <div className="text-xl font-extrabold" style={{ color: valueColor || '#0f172a' }}>{value}</div>
+          <div className="text-xl font-extrabold" style={{ color: valueColor || '#0f172a' }}>
+            <CountUp end={numericValue} duration={1.5} separator="," prefix={prefix} suffix={suffix} decimals={decimals} />
+          </div>
         </CardContent>
       </Card>
     )
@@ -375,98 +396,123 @@ export default function CEODashboard({ onBack }: Props) {
         ) : (
           <>
             {/* KPI cards — Row 1 */}
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5 mb-6">
-              <KpiCard
-                icon={<Store size={16} className="text-indigo-400" />}
-                label="סה&quot;כ הכנסות"
-                value={fmtN(grandRevenue)}
-                borderColor="#818cf8"
-                diff={<DiffBadge current={grandRevenue} previous={prevTotalRev} />}
-              />
-              <KpiCard
-                icon={<DollarSign size={16} style={{ color: grandGross >= 0 ? '#34d399' : '#fb7185' }} />}
-                label="רווח גולמי"
-                value={fmtN(grandGross)}
-                valueColor={grandGross >= 0 ? '#059669' : '#e11d48'}
-                borderColor={grandGross >= 0 ? '#34d399' : '#fb7185'}
-                diff={<DiffBadge current={grandGross} previous={prevTotalGross} />}
-              />
-              <KpiCard
-                icon={<BarChart3 size={16} style={{ color: grandOperating >= 0 ? '#34d399' : '#fb7185' }} />}
-                label="רווח תפעולי"
-                value={fmtN(grandOperating)}
-                valueColor={grandOperating >= 0 ? '#059669' : '#e11d48'}
-                borderColor={grandOperating >= 0 ? '#34d399' : '#fb7185'}
-                diff={<DiffBadge current={grandOperating} previous={prevTotalOperating} />}
-              />
-              <KpiCard
-                icon={<Users size={16} className="text-amber-400" />}
-                label="% לייבור כולל"
-                value={`${grandLaborPct.toFixed(1)}%`}
-                valueColor={grandLaborPct <= avgLaborTarget ? '#059669' : '#e11d48'}
-                borderColor="#fbbf24"
-                diff={<span className="text-xs text-slate-400">יעד {avgLaborTarget.toFixed(0)}%</span>}
-              />
-            </div>
+            <motion.div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5 mb-6" variants={staggerContainer} initial="hidden" animate="visible">
+              <motion.div variants={fadeUp}>
+                <KpiCard
+                  icon={<Store size={16} className="text-indigo-400" />}
+                  label="סה&quot;כ הכנסות"
+                  numericValue={Math.round(grandRevenue)}
+                  borderColor="#818cf8"
+                  diff={<DiffBadge current={grandRevenue} previous={prevTotalRev} />}
+                />
+              </motion.div>
+              <motion.div variants={fadeUp}>
+                <KpiCard
+                  icon={<DollarSign size={16} style={{ color: grandGross >= 0 ? '#34d399' : '#fb7185' }} />}
+                  label="רווח גולמי"
+                  numericValue={Math.round(grandGross)}
+                  valueColor={grandGross >= 0 ? '#059669' : '#e11d48'}
+                  borderColor={grandGross >= 0 ? '#34d399' : '#fb7185'}
+                  diff={<DiffBadge current={grandGross} previous={prevTotalGross} />}
+                />
+              </motion.div>
+              <motion.div variants={fadeUp}>
+                <KpiCard
+                  icon={<BarChart3 size={16} style={{ color: grandOperating >= 0 ? '#34d399' : '#fb7185' }} />}
+                  label="רווח תפעולי"
+                  numericValue={Math.round(grandOperating)}
+                  valueColor={grandOperating >= 0 ? '#059669' : '#e11d48'}
+                  borderColor={grandOperating >= 0 ? '#34d399' : '#fb7185'}
+                  diff={<DiffBadge current={grandOperating} previous={prevTotalOperating} />}
+                />
+              </motion.div>
+              <motion.div variants={fadeUp}>
+                <KpiCard
+                  icon={<Users size={16} className="text-amber-400" />}
+                  label="% לייבור כולל"
+                  numericValue={grandLaborPct}
+                  prefix=""
+                  suffix="%"
+                  decimals={1}
+                  valueColor={grandLaborPct <= avgLaborTarget ? '#059669' : '#e11d48'}
+                  borderColor="#fbbf24"
+                  diff={<span className="text-xs text-slate-400">יעד {avgLaborTarget.toFixed(0)}%</span>}
+                />
+              </motion.div>
+            </motion.div>
 
             {/* KPI cards — Row 2 */}
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(155px,1fr))] gap-3.5 mb-6">
-              <KpiCardSm icon={<Building2 size={15} className="text-slate-400" />} label='סה"כ עלויות קבועות' value={fmtN(totalFixed + factoryFixed)} borderColor="#94a3b8" />
-              <KpiCardSm icon={<Users size={15} className="text-amber-400" />} label='סה"כ לייבור' value={fmtN(grandLabor)} borderColor="#fbbf24" />
-              <KpiCardSm icon={<Truck size={15} className="text-rose-400" />} label='סה"כ ספקים' value={fmtN(factorySuppliers + branchSuppliers)} borderColor="#fb7185" />
-              <KpiCardSm icon={<Receipt size={15} className="text-indigo-400" />} label="הכנסות קופה" value={fmtN(revCashier)} borderColor="#818cf8" />
-              <KpiCardSm icon={<CreditCard size={15} className="text-amber-400" />} label="הכנסות הקפה" value={fmtN(revCredit + factoryB2b)} borderColor="#fbbf24" />
-              <KpiCardSm icon={<Globe size={15} className="text-violet-400" />} label="הכנסות אתר" value={fmtN(revWebsite)} borderColor="#c084fc" />
-              <KpiCardSm
-                icon={<TrendingUp size={15} className="text-emerald-400" />}
-                label='סה"כ הכנסות כולל'
-                value={fmtN(revCashier + revCredit + factoryB2b + revWebsite)}
-                valueColor="#059669"
-                borderColor="#34d399"
-              />
-            </div>
+            <motion.div className="grid grid-cols-[repeat(auto-fill,minmax(155px,1fr))] gap-3.5 mb-6" variants={staggerContainer} initial="hidden" animate="visible">
+              <motion.div variants={fadeUp}><KpiCardSm icon={<Building2 size={15} className="text-slate-400" />} label='סה"כ עלויות קבועות' numericValue={Math.round(totalFixed + factoryFixed)} borderColor="#94a3b8" /></motion.div>
+              <motion.div variants={fadeUp}><KpiCardSm icon={<Users size={15} className="text-amber-400" />} label='סה"כ לייבור' numericValue={Math.round(grandLabor)} borderColor="#fbbf24" /></motion.div>
+              <motion.div variants={fadeUp}><KpiCardSm icon={<Truck size={15} className="text-rose-400" />} label='סה"כ ספקים' numericValue={Math.round(factorySuppliers + branchSuppliers)} borderColor="#fb7185" /></motion.div>
+              <motion.div variants={fadeUp}><KpiCardSm icon={<Receipt size={15} className="text-indigo-400" />} label="הכנסות קופה" numericValue={Math.round(revCashier)} borderColor="#818cf8" /></motion.div>
+              <motion.div variants={fadeUp}><KpiCardSm icon={<CreditCard size={15} className="text-amber-400" />} label="הכנסות הקפה" numericValue={Math.round(revCredit + factoryB2b)} borderColor="#fbbf24" /></motion.div>
+              <motion.div variants={fadeUp}><KpiCardSm icon={<Globe size={15} className="text-violet-400" />} label="הכנסות אתר" numericValue={Math.round(revWebsite)} borderColor="#c084fc" /></motion.div>
+              <motion.div variants={fadeUp}>
+                <KpiCardSm
+                  icon={<TrendingUp size={15} className="text-emerald-400" />}
+                  label='סה"כ הכנסות כולל'
+                  numericValue={Math.round(revCashier + revCredit + factoryB2b + revWebsite)}
+                  valueColor="#059669"
+                  borderColor="#34d399"
+                />
+              </motion.div>
+            </motion.div>
 
             {/* Revenue breakdown cards */}
-            <div className="grid grid-cols-3 gap-3.5 mb-6">
-              <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-t-[3px] border-t-indigo-400">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Receipt size={16} className="text-indigo-400" />
-                    <span className="text-xs font-semibold text-slate-500">קופות סניפים</span>
-                  </div>
-                  <div className="text-[22px] font-extrabold text-slate-900">{fmtN(revCashier)}</div>
-                  {grandRevenue > 0 && <span className="text-xs text-slate-400">{((revCashier / grandRevenue) * 100).toFixed(1)}% מסה"כ הכנסות</span>}
-                </CardContent>
-              </Card>
+            <motion.div className="grid grid-cols-3 gap-3.5 mb-6" variants={staggerContainer} initial="hidden" animate="visible">
+              <motion.div variants={fadeUp}>
+                <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-t-[3px] border-t-indigo-400 h-full">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Receipt size={16} className="text-indigo-400" />
+                      <span className="text-xs font-semibold text-slate-500">קופות סניפים</span>
+                    </div>
+                    <div className="text-[22px] font-extrabold text-slate-900">
+                      <CountUp end={Math.round(revCashier)} duration={1.5} separator="," prefix="₪" />
+                    </div>
+                    {grandRevenue > 0 && <span className="text-xs text-slate-400">{((revCashier / grandRevenue) * 100).toFixed(1)}% מסה"כ הכנסות</span>}
+                  </CardContent>
+                </Card>
+              </motion.div>
 
-              <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-t-[3px] border-t-amber-400">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CreditCard size={16} className="text-amber-400" />
-                    <span className="text-xs font-semibold text-slate-500">הקפה (סניפים + B2B מפעל)</span>
-                  </div>
-                  <div className="text-[22px] font-extrabold text-slate-900">{fmtN(revCredit + factoryB2b)}</div>
-                  <div className="flex gap-3 mt-1">
-                    <span className="text-[11px] text-slate-400">סניפים: {fmtN(revCredit)}</span>
-                    <span className="text-[11px] text-slate-400">B2B: {fmtN(factoryB2b)}</span>
-                  </div>
-                </CardContent>
-              </Card>
+              <motion.div variants={fadeUp}>
+                <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-t-[3px] border-t-amber-400 h-full">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CreditCard size={16} className="text-amber-400" />
+                      <span className="text-xs font-semibold text-slate-500">הקפה (סניפים + B2B מפעל)</span>
+                    </div>
+                    <div className="text-[22px] font-extrabold text-slate-900">
+                      <CountUp end={Math.round(revCredit + factoryB2b)} duration={1.5} separator="," prefix="₪" />
+                    </div>
+                    <div className="flex gap-3 mt-1">
+                      <span className="text-[11px] text-slate-400">סניפים: {fmtN(revCredit)}</span>
+                      <span className="text-[11px] text-slate-400">B2B: {fmtN(factoryB2b)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
 
-              <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-t-[3px] border-t-violet-400">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Globe size={16} className="text-violet-400" />
-                    <span className="text-xs font-semibold text-slate-500">הכנסות מהאתר</span>
-                  </div>
-                  <div className="text-[22px] font-extrabold text-slate-900">{fmtN(revWebsite)}</div>
-                  {grandRevenue > 0 && <span className="text-xs text-slate-400">{((revWebsite / grandRevenue) * 100).toFixed(1)}% מסה"כ הכנסות</span>}
-                </CardContent>
-              </Card>
-            </div>
+              <motion.div variants={fadeUp}>
+                <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-t-[3px] border-t-violet-400 h-full">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Globe size={16} className="text-violet-400" />
+                      <span className="text-xs font-semibold text-slate-500">הכנסות מהאתר</span>
+                    </div>
+                    <div className="text-[22px] font-extrabold text-slate-900">
+                      <CountUp end={Math.round(revWebsite)} duration={1.5} separator="," prefix="₪" />
+                    </div>
+                    {grandRevenue > 0 && <span className="text-xs text-slate-400">{((revWebsite / grandRevenue) * 100).toFixed(1)}% מסה"כ הכנסות</span>}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </motion.div>
 
             {/* Charts row */}
-            <div className="grid grid-cols-2 gap-5 mb-6">
+            <motion.div className="grid grid-cols-2 gap-5 mb-6" variants={fadeIn} initial="hidden" animate="visible">
               {/* Bar chart */}
               <Card className="shadow-sm">
                 <CardHeader className="pb-0">
@@ -513,10 +559,11 @@ export default function CEODashboard({ onBack }: Props) {
                   )}
                 </CardContent>
               </Card>
-            </div>
+            </motion.div>
 
             {/* Area chart — daily revenue with gradient fill */}
             {dailyRevenue.length > 0 && (
+              <motion.div variants={fadeIn} initial="hidden" animate="visible">
               <Card className="shadow-sm mb-6">
                 <CardHeader className="pb-0">
                   <CardTitle className="text-sm font-bold text-slate-700">הכנסות יומיות לפי סניף</CardTitle>
@@ -543,9 +590,11 @@ export default function CEODashboard({ onBack }: Props) {
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
+              </motion.div>
             )}
 
             {/* Ranking table */}
+            <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <Card className="shadow-sm mb-6">
               <CardHeader className="pb-0">
                 <CardTitle className="text-sm font-bold text-slate-700">דירוג יחידות לפי רווחיות</CardTitle>
@@ -644,8 +693,10 @@ export default function CEODashboard({ onBack }: Props) {
                 </Table>
               </CardContent>
             </Card>
+            </motion.div>
 
             {/* Revenue breakdown table */}
+            <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <Card className="shadow-sm">
               <CardHeader className="pb-0">
                 <CardTitle className="text-sm font-bold text-slate-700">פירוק הכנסות לפי סניף</CardTitle>
@@ -701,6 +752,7 @@ export default function CEODashboard({ onBack }: Props) {
                 </Table>
               </CardContent>
             </Card>
+            </motion.div>
           </>
         )}
       </div>
