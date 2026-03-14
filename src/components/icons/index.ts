@@ -1,0 +1,5 @@
+export { RevenueIcon } from './RevenueIcon'
+export { ProfitIcon } from './ProfitIcon'
+export { LaborIcon } from './LaborIcon'
+export { FixedCostIcon } from './FixedCostIcon'
+export { TrophyIcon } from './TrophyIcon'

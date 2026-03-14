@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Plus, Pencil, Trash2, CheckCircle, XCircle, TrendingUp, Package } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, CheckCircle, XCircle, TrendingUp } from 'lucide-react'
+import { RevenueIcon } from '@/components/icons'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 // ─── טיפוסים ───────────────────────────────────────────────────────────────
 type Department = 'creams' | 'dough' | 'packaging'
@@ -20,8 +24,8 @@ interface Entry {
 
 // ─── קונפיגורציה לפי מחלקה ─────────────────────────────────────────────────
 const DEPT_CONFIG = {
-  creams:    { label: 'קרמים',  color: '#3b82f6', bg: '#dbeafe', unit: '₪',   fieldLabel: 'סכום ייצור (₪)',   isQty: false },
-  dough:     { label: 'בצקים',  color: '#8b5cf6', bg: '#ede9fe', unit: '₪',   fieldLabel: 'סכום ייצור (₪)',   isQty: false },
+  creams:    { label: 'קרמים',  color: '#818cf8', bg: '#dbeafe', unit: '₪',   fieldLabel: 'סכום ייצור (₪)',   isQty: false },
+  dough:     { label: 'בצקים',  color: '#c084fc', bg: '#ede9fe', unit: '₪',   fieldLabel: 'סכום ייצור (₪)',   isQty: false },
   packaging: { label: 'אריזה',  color: '#0ea5e9', bg: '#e0f2fe', unit: 'יח׳', fieldLabel: 'כמות אריזות (יח׳)', isQty: true  },
 }
 
@@ -37,6 +41,8 @@ function hebrewDate(dateStr: string) {
     weekday: 'short', day: 'numeric', month: 'numeric'
   })
 }
+
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
 
 // ─── גרף קו פשוט (SVG) ─────────────────────────────────────────────────────
 function LineChart({ entries, color, isQty, previousData }: { entries: Entry[]; color: string; isQty: boolean; previousData?: Entry[] }) {
@@ -204,9 +210,6 @@ export default function DailyProduction({ department, onBack }: Props) {
 
   // ─── סגנונות ────────────────────────────────────────────────────────────
   const S = {
-    page:    { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' as const },
-    header:  { background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' },
-    card:    { background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
     label:   { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
     input:   { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
     btnPrimary: (disabled: boolean) => ({
@@ -220,20 +223,17 @@ export default function DailyProduction({ department, onBack }: Props) {
   }
 
   return (
-    <div style={S.page}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* ─── כותרת ─────────────────────────────────────────────── */}
-      <div className="page-header" style={S.header}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
+        </Button>
 
-        <div style={{ width: '40px', height: '40px', background: cfg.bg, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {cfg.isQty ? <Package size={20} color={cfg.color} /> : <TrendingUp size={20} color={cfg.color} />}
+        <div style={{ width: '40px', height: '40px', background: cfg.bg, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <RevenueIcon size={20} color={cfg.color} />
         </div>
 
         <div>
@@ -247,12 +247,12 @@ export default function DailyProduction({ department, onBack }: Props) {
 
         {/* אינדיקטור היום */}
         <div style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '8px',
-          background: todayEntered ? '#f0fdf4' : '#fef2f2',
-          border: `1px solid ${todayEntered ? '#bbf7d0' : '#fecaca'}`,
+          background: todayEntered ? '#f0fdf4' : '#fff1f2',
+          border: `1px solid ${todayEntered ? '#bbf7d0' : '#fecdd3'}`,
           borderRadius: '10px', padding: '8px 16px' }}>
           {todayEntered
-            ? <><CheckCircle size={18} color="#10b981" /><span style={{ color: '#10b981', fontWeight: '700', fontSize: '14px' }}>הוזן היום ✓</span></>
-            : <><XCircle    size={18} color="#ef4444" /><span style={{ color: '#ef4444', fontWeight: '700', fontSize: '14px' }}>לא הוזן היום</span></>
+            ? <><CheckCircle size={18} color="#34d399" /><span style={{ color: '#34d399', fontWeight: '700', fontSize: '14px' }}>הוזן היום ✓</span></>
+            : <><XCircle    size={18} color="#fb7185" /><span style={{ color: '#fb7185', fontWeight: '700', fontSize: '14px' }}>לא הוזן היום</span></>
           }
         </div>
       </div>
@@ -263,153 +263,163 @@ export default function DailyProduction({ department, onBack }: Props) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
           {[
             { label: `סה"כ החודש`, val: formatVal(total, cfg.isQty), color: cfg.color, bg: cfg.bg },
-            { label: 'ממוצע יומי',   val: formatVal(Math.round(avg), cfg.isQty), color: '#10b981', bg: '#f0fdf4' },
-            { label: 'שיא יומי',     val: formatVal(maxVal, cfg.isQty),           color: '#f59e0b', bg: '#fffbeb' },
+            { label: 'ממוצע יומי',   val: formatVal(Math.round(avg), cfg.isQty), color: '#34d399', bg: '#f0fdf4' },
+            { label: 'שיא יומי',     val: formatVal(maxVal, cfg.isQty),           color: '#fbbf24', bg: '#fffbeb' },
           ].map(stat => (
-            <div key={stat.label} style={{ ...S.card, background: stat.bg, border: `1px solid ${stat.color}22` }}>
-              <div style={{ fontSize: '22px', fontWeight: '800', color: stat.color }}>{stat.val}</div>
-              <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>{stat.label}</div>
-            </div>
+            <Card key={stat.label} className="shadow-sm" style={{ background: stat.bg, border: `1px solid ${stat.color}22` }}>
+              <CardContent className="p-6">
+                <div style={{ fontSize: '22px', fontWeight: '800', color: stat.color }}>{stat.val}</div>
+                <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>{stat.label}</div>
+              </CardContent>
+            </Card>
           ))}
         </div>
 
         {/* ─── טופס הזנה ─────────────────────────────────────────── */}
-        <div style={{ ...S.card, marginBottom: '20px' }}>
-          <h2 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הזנת {cfg.isQty ? 'כמות' : 'ייצור'} יומי</h2>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' as const, alignItems: 'flex-end' }}>
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>תאריך</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                style={{ ...S.input, width: '160px' }} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' as const, flex: 1, minWidth: '180px' }}>
-              <label style={S.label}>{cfg.fieldLabel}</label>
-              <input
-                type="number" placeholder="הכנס ערך..." value={amount}
-                onChange={e => setAmount(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAdd()}
-                style={{ ...S.input, textAlign: 'right' }}
-              />
-            </div>
-            <button onClick={handleAdd} disabled={loading || !amount} style={S.btnPrimary(loading || !amount)}>
-              <Plus size={18} />הוסף
-            </button>
-          </div>
-        </div>
-
-        {/* ─── גרף + פילטר ───────────────────────────────────────── */}
-        <div style={{ ...S.card, marginBottom: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <TrendingUp size={18} color={cfg.color} />
-              <span style={{ fontSize: '15px', fontWeight: '700', color: '#374151' }}>גרף ייצור</span>
-            </div>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <PeriodPicker period={period} onChange={setPeriod} />
-              <button
-                onClick={() => setShowChart(v => !v)}
-                style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '13px', cursor: 'pointer', color: '#64748b' }}
-              >
-                {showChart ? 'הסתר גרף' : 'הצג גרף'}
+        <Card className="shadow-sm" style={{ marginBottom: '20px' }}>
+          <CardContent className="p-6">
+            <h2 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הזנת {cfg.isQty ? 'כמות' : 'ייצור'} יומי</h2>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' as const, alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                <label style={S.label}>תאריך</label>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                  style={{ ...S.input, width: '160px' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' as const, flex: 1, minWidth: '180px' }}>
+                <label style={S.label}>{cfg.fieldLabel}</label>
+                <input
+                  type="number" placeholder="הכנס ערך..." value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                  style={{ ...S.input, textAlign: 'right' }}
+                />
+              </div>
+              <button onClick={handleAdd} disabled={loading || !amount} style={S.btnPrimary(loading || !amount)}>
+                <Plus size={18} />הוסף
               </button>
             </div>
-          </div>
-          {showChart && (
-            <>
-              <div style={{ background: '#fafafa', borderRadius: '12px', padding: '12px', minHeight: '180px', display: 'flex', alignItems: 'center' }}>
-                <LineChart entries={entries} color={cfg.color} isQty={cfg.isQty} previousData={prevEntries} />
+          </CardContent>
+        </Card>
+
+        {/* ─── גרף + פילטר ───────────────────────────────────────── */}
+        <Card className="shadow-sm" style={{ marginBottom: '20px' }}>
+          <CardContent className="p-6">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <TrendingUp size={18} color={cfg.color} />
+                <span style={{ fontSize: '15px', fontWeight: '700', color: '#374151' }}>גרף ייצור</span>
               </div>
-              <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '20px', height: '3px', background: cfg.color, borderRadius: '2px', display: 'inline-block' }} />
-                  חודש נוכחי
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '20px', height: '3px', background: '#94a3b8', borderRadius: '2px', display: 'inline-block', borderTop: '1.5px dashed #94a3b8' }} />
-                  חודש קודם
-                </span>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <PeriodPicker period={period} onChange={setPeriod} />
+                <button
+                  onClick={() => setShowChart(v => !v)}
+                  style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '13px', cursor: 'pointer', color: '#64748b' }}
+                >
+                  {showChart ? 'הסתר גרף' : 'הצג גרף'}
+                </button>
               </div>
-            </>
-          )}
-        </div>
+            </div>
+            {showChart && (
+              <>
+                <div style={{ background: '#fafafa', borderRadius: '12px', padding: '12px', minHeight: '180px', display: 'flex', alignItems: 'center' }}>
+                  <LineChart entries={entries} color={cfg.color} isQty={cfg.isQty} previousData={prevEntries} />
+                </div>
+                <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ width: '20px', height: '3px', background: cfg.color, borderRadius: '2px', display: 'inline-block' }} />
+                    חודש נוכחי
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ width: '20px', height: '3px', background: '#94a3b8', borderRadius: '2px', display: 'inline-block', borderTop: '1.5px dashed #94a3b8' }} />
+                    חודש קודם
+                  </span>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         {/* ─── טבלת היסטוריה ─────────────────────────────────────── */}
-        <div className="table-scroll"><div style={S.card}>
-          {/* כותרת טבלה */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px 60px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '0' }}>
-            <span>תאריך</span>
-            <span style={{ textAlign: 'left' }}>{cfg.isQty ? 'כמות' : 'סכום'}</span>
-            <span></span><span></span>
-          </div>
+        <motion.div variants={fadeIn} initial="hidden" animate="visible">
+          <div className="table-scroll"><Card className="shadow-sm">
+            <CardContent className="p-0">
+              {/* כותרת טבלה */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px 60px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '0' }}>
+                <span>תאריך</span>
+                <span style={{ textAlign: 'left' }}>{cfg.isQty ? 'כמות' : 'סכום'}</span>
+                <span></span><span></span>
+              </div>
 
-          {entries.length === 0 ? (
-            <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>אין רשומות לחודש זה</div>
-          ) : entries.map((entry, i) => (
-            <div key={entry.id} style={{
-              display: 'grid', gridTemplateColumns: '1fr 1fr 60px 60px',
-              alignItems: 'center', padding: '13px 20px',
-              borderBottom: i < entries.length - 1 ? '1px solid #f1f5f9' : 'none',
-              background: i % 2 === 0 ? 'white' : '#fafafa'
-            }}>
-              {editId === entry.id ? (
-                <>
-                  <span style={{ fontSize: '13px', color: '#374151', fontWeight: '600' }}>
-                    {hebrewDate(entry.date)}
+              {entries.length === 0 ? (
+                <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>אין רשומות לחודש זה</div>
+              ) : entries.map((entry, i) => (
+                <div key={entry.id} style={{
+                  display: 'grid', gridTemplateColumns: '1fr 1fr 60px 60px',
+                  alignItems: 'center', padding: '13px 20px',
+                  borderBottom: i < entries.length - 1 ? '1px solid #f1f5f9' : 'none',
+                  background: i % 2 === 0 ? 'white' : '#fafafa'
+                }}>
+                  {editId === entry.id ? (
+                    <>
+                      <span style={{ fontSize: '13px', color: '#374151', fontWeight: '600' }}>
+                        {hebrewDate(entry.date)}
+                      </span>
+                      <input
+                        type="number" value={editAmount}
+                        onChange={e => setEditAmount(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleEdit(entry.id)}
+                        autoFocus
+                        style={{ border: '1.5px solid ' + cfg.color, borderRadius: '8px', padding: '6px 10px', fontSize: '14px', width: '120px' }}
+                      />
+                      <button onClick={() => handleEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '7px', padding: '5px 10px', cursor: 'pointer', fontSize: '13px', fontWeight: '700' }}>✓</button>
+                      <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '7px', padding: '5px 10px', cursor: 'pointer', fontSize: '13px' }}>✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: '14px', color: '#374151', fontWeight: '600' }}>
+                        {hebrewDate(entry.date)}
+                      </span>
+                      <span style={{ fontSize: '16px', fontWeight: '800', color: cfg.color }}>
+                        {formatVal(Number(entry.amount), cfg.isQty)}
+                      </span>
+                      <button
+                        onClick={() => { setEditId(entry.id); setEditAmount(String(entry.amount)) }}
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', borderRadius: '6px' }}
+                        title="עריכה"
+                      >
+                        <Pencil size={15} color="#94a3b8" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(entry.id)}
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', borderRadius: '6px' }}
+                        title="מחיקה"
+                      >
+                        <Trash2 size={15} color="#fb7185" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+
+              {/* שורת סה"כ */}
+              {entries.length > 0 && (
+                <div style={{
+                  display: 'grid', gridTemplateColumns: '1fr 1fr 60px 60px',
+                  padding: '14px 20px', background: cfg.bg,
+                  borderTop: `2px solid ${cfg.color}33`, borderRadius: '0 0 10px 10px'
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>
+                    סה"כ — {entries.length} ימים
                   </span>
-                  <input
-                    type="number" value={editAmount}
-                    onChange={e => setEditAmount(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleEdit(entry.id)}
-                    autoFocus
-                    style={{ border: '1.5px solid ' + cfg.color, borderRadius: '8px', padding: '6px 10px', fontSize: '14px', width: '120px' }}
-                  />
-                  <button onClick={() => handleEdit(entry.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '7px', padding: '5px 10px', cursor: 'pointer', fontSize: '13px', fontWeight: '700' }}>✓</button>
-                  <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '7px', padding: '5px 10px', cursor: 'pointer', fontSize: '13px' }}>✕</button>
-                </>
-              ) : (
-                <>
-                  <span style={{ fontSize: '14px', color: '#374151', fontWeight: '600' }}>
-                    {hebrewDate(entry.date)}
+                  <span style={{ fontSize: '17px', fontWeight: '800', color: cfg.color }}>
+                    {formatVal(total, cfg.isQty)}
                   </span>
-                  <span style={{ fontSize: '16px', fontWeight: '800', color: cfg.color }}>
-                    {formatVal(Number(entry.amount), cfg.isQty)}
-                  </span>
-                  <button
-                    onClick={() => { setEditId(entry.id); setEditAmount(String(entry.amount)) }}
-                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', borderRadius: '6px' }}
-                    title="עריכה"
-                  >
-                    <Pencil size={15} color="#94a3b8" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(entry.id)}
-                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', borderRadius: '6px' }}
-                    title="מחיקה"
-                  >
-                    <Trash2 size={15} color="#ef4444" />
-                  </button>
-                </>
+                  <span /><span />
+                </div>
               )}
-            </div>
-          ))}
-
-          {/* שורת סה"כ */}
-          {entries.length > 0 && (
-            <div style={{
-              display: 'grid', gridTemplateColumns: '1fr 1fr 60px 60px',
-              padding: '14px 20px', background: cfg.bg,
-              borderTop: `2px solid ${cfg.color}33`, borderRadius: '0 0 10px 10px'
-            }}>
-              <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>
-                סה"כ — {entries.length} ימים
-              </span>
-              <span style={{ fontSize: '17px', fontWeight: '800', color: cfg.color }}>
-                {formatVal(total, cfg.isQty)}
-              </span>
-              <span /><span />
-            </div>
-          )}
-        </div></div>
+            </CardContent>
+          </Card></div>
+        </motion.div>
 
       </div>
     </div>

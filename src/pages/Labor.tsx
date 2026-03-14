@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { supabase, monthEnd } from '../lib/supabase'
-import { ArrowRight, Plus, Pencil, Trash2, Upload, Users, AlertTriangle, X, Check, Save, Calendar } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save, Calendar } from 'lucide-react'
+import { LaborIcon } from '@/components/icons'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 interface Props { onBack: () => void }
 
@@ -66,6 +70,8 @@ function calcWage(emp: Employee, h100: number, h125: number, h150: number): { gr
 }
 
 const emptyForm: AddForm = { name: '', employee_number: '', department: 'creams', wage_type: 'hourly', hourly_rate: '', global_daily_rate: '', bonus: '' }
+
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
 
 export default function Labor({ onBack }: Props) {
   const [tab, setTab] = useState<'upload' | 'employees'>('upload')
@@ -215,25 +221,25 @@ export default function Labor({ onBack }: Props) {
   const inpStyle = { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '9px 12px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', textAlign: 'right' as const, width: '100%', boxSizing: 'border-box' as const }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' }}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
-      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
+        </Button>
+        <div style={{ width: '40px', height: '40px', background: '#818cf820', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <LaborIcon size={20} color="#818cf8" />
+        </div>
         <div>
           <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>לייבור מרוכז</h1>
           <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>העלאת נוכחות וניהול עובדים</p>
         </div>
         <div style={{ marginRight: 'auto', display: 'flex', gap: '8px' }}>
-          <button onClick={() => setTab('upload')} style={{ background: tab === 'upload' ? '#3b82f6' : '#f1f5f9', color: tab === 'upload' ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 20px', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
+          <button onClick={() => setTab('upload')} style={{ background: tab === 'upload' ? '#818cf8' : '#f1f5f9', color: tab === 'upload' ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 20px', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
             העלאת קובץ
           </button>
-          <button onClick={() => setTab('employees')} style={{ background: tab === 'employees' ? '#3b82f6' : '#f1f5f9', color: tab === 'employees' ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 20px', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
+          <button onClick={() => setTab('employees')} style={{ background: tab === 'employees' ? '#818cf8' : '#f1f5f9', color: tab === 'employees' ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 20px', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
             עובדים ({employees.length})
           </button>
         </div>
@@ -243,24 +249,26 @@ export default function Labor({ onBack }: Props) {
 
         {tab === 'upload' && (
           <>
-            <div style={{ background: 'white', borderRadius: '20px', padding: '28px', marginBottom: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-              <h2 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: '700', color: '#374151' }}>העלאת קובץ נוכחות</h2>
-              <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                {!isMonthly && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>תאריך</label>
-                    <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                      style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }} />
+            <Card className="shadow-sm" style={{ marginBottom: '24px' }}>
+              <CardContent className="p-6">
+                <h2 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: '700', color: '#374151' }}>העלאת קובץ נוכחות</h2>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  {!isMonthly && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>תאריך</label>
+                      <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                        style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }} />
+                    </div>
+                  )}
+                  <div>
+                    <input type="file" accept=".csv" ref={fileRef} onChange={handleFile} style={{ display: 'none' }} />
+                    <button onClick={() => fileRef.current?.click()} style={{ background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Upload size={18} />בחר קובץ CSV
+                    </button>
                   </div>
-                )}
-                <div>
-                  <input type="file" accept=".csv" ref={fileRef} onChange={handleFile} style={{ display: 'none' }} />
-                  <button onClick={() => fileRef.current?.click()} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Upload size={18} />בחר קובץ CSV
-                  </button>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             {/* באנר קובץ חודשי */}
             {isMonthly && rows.length > 0 && (() => {
@@ -269,16 +277,16 @@ export default function Labor({ onBack }: Props) {
               const uniqueEmps = new Set(rows.map(r => r.name)).size
               return (
                 <div style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: '16px', padding: '16px 24px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                  <Calendar size={20} color="#3b82f6" />
+                  <Calendar size={20} color="#818cf8" />
                   <span style={{ fontWeight: '700', color: '#1e40af', fontSize: '14px' }}>
                     קובץ חודשי — {knownRows.length} רשומות, {uniqueEmps} עובדים
                   </span>
-                  <span style={{ fontSize: '13px', color: '#3b82f6' }}>
+                  <span style={{ fontSize: '13px', color: '#818cf8' }}>
                     {firstD && new Date(firstD + 'T12:00:00').toLocaleDateString('he-IL')} – {lastD && new Date(lastD + 'T12:00:00').toLocaleDateString('he-IL')}
                   </span>
                   <label style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                     <input type="checkbox" checked={replaceMode} onChange={e => setReplaceMode(e.target.checked)}
-                      style={{ width: '18px', height: '18px', accentColor: '#ef4444', cursor: 'pointer' }} />
+                      style={{ width: '18px', height: '18px', accentColor: '#fb7185', cursor: 'pointer' }} />
                     <span style={{ fontSize: '13px', fontWeight: '600', color: replaceMode ? '#dc2626' : '#64748b' }}>
                       מחק נתונים קיימים לחודש זה לפני ייבוא
                     </span>
@@ -290,7 +298,7 @@ export default function Labor({ onBack }: Props) {
             {unknownRows.length > 0 && (
               <div style={{ background: '#fef3c7', border: '1.5px solid #fde68a', borderRadius: '16px', padding: '20px 24px', marginBottom: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                  <AlertTriangle size={20} color="#f59e0b" />
+                  <AlertTriangle size={20} color="#fbbf24" />
                   <span style={{ fontWeight: '700', color: '#92400e', fontSize: '15px' }}>עובדים לא מזוהים — ניתן להקים או למחוק מהרשימה</span>
                 </div>
                 {unknownRows.map(row => (
@@ -298,11 +306,11 @@ export default function Labor({ onBack }: Props) {
                     <span style={{ fontWeight: '600', color: '#374151' }}>{row.name}</span>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button onClick={() => { setShowAddEmp(true); setAddForm(f => ({ ...f, name: row.name })) }}
-                        style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontWeight: '700', cursor: 'pointer', fontSize: '13px' }}>
+                        style={{ background: '#fbbf24', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontWeight: '700', cursor: 'pointer', fontSize: '13px' }}>
                         הקם עובד
                       </button>
                       <button onClick={() => deleteRow(row.id)}
-                        style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer' }}>
+                        style={{ background: '#fee2e2', color: '#fb7185', border: 'none', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer' }}>
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -313,7 +321,8 @@ export default function Labor({ onBack }: Props) {
 
             {rows.length > 0 && (
               <>
-                <div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: '20px' }}>
+                <motion.div variants={fadeIn} initial="hidden" animate="visible">
+                <Card className="shadow-sm" style={{ overflow: 'hidden', marginBottom: '20px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: isMonthly ? '80px 1fr 70px 70px 70px 90px 110px 36px 36px' : '1fr 90px 90px 90px 110px 130px 36px 36px', padding: '12px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
                     {isMonthly && <span>תאריך</span>}
                     <span>עובד</span><span>100%</span><span>125%</span><span>150%</span><span>מחלקה</span><span>עלות מעביד</span><span></span><span></span>
@@ -327,7 +336,7 @@ export default function Labor({ onBack }: Props) {
                       )}
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {!row.found && <AlertTriangle size={14} color="#f59e0b" />}
+                          {!row.found && <AlertTriangle size={14} color="#fbbf24" />}
                           <span style={{ fontWeight: '600', color: row.found ? '#374151' : '#92400e', fontSize: '14px' }}>{row.name}</span>
                         </div>
                         {row.found && row.employee && (
@@ -342,25 +351,25 @@ export default function Labor({ onBack }: Props) {
 
                       {row.editing ? (
                         <>
-                          <input type="number" value={row.hours_100} onChange={e => updateRow(row.id, 'hours_100', e.target.value)} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', width: '60px' }} />
-                          <input type="number" value={row.hours_125} onChange={e => updateRow(row.id, 'hours_125', e.target.value)} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', width: '60px' }} />
-                          <input type="number" value={row.hours_150} onChange={e => updateRow(row.id, 'hours_150', e.target.value)} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', width: '60px' }} />
+                          <input type="number" value={row.hours_100} onChange={e => updateRow(row.id, 'hours_100', e.target.value)} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', width: '60px' }} />
+                          <input type="number" value={row.hours_125} onChange={e => updateRow(row.id, 'hours_125', e.target.value)} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', width: '60px' }} />
+                          <input type="number" value={row.hours_150} onChange={e => updateRow(row.id, 'hours_150', e.target.value)} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', width: '60px' }} />
                           <span style={{ fontSize: '12px', color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
                           <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>
                             {row.employee ? '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150).total.toFixed(0) : '—'}
                           </span>
-                          <button onClick={() => saveRowEdit(row.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 6px', cursor: 'pointer' }}>
+                          <button onClick={() => saveRowEdit(row.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 6px', cursor: 'pointer' }}>
                             <Check size={14} />
                           </button>
                           <button onClick={() => deleteRow(row.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                            <Trash2 size={14} color="#ef4444" />
+                            <Trash2 size={14} color="#fb7185" />
                           </button>
                         </>
                       ) : (
                         <>
                           <span style={{ fontSize: '13px', color: '#64748b' }}>{row.hours_100}</span>
-                          <span style={{ fontSize: '13px', color: row.hours_125 > 0 ? '#f59e0b' : '#64748b', fontWeight: row.hours_125 > 0 ? '600' : '400' }}>{row.hours_125 || '—'}</span>
-                          <span style={{ fontSize: '13px', color: row.hours_150 > 0 ? '#ef4444' : '#64748b', fontWeight: row.hours_150 > 0 ? '600' : '400' }}>{row.hours_150 || '—'}</span>
+                          <span style={{ fontSize: '13px', color: row.hours_125 > 0 ? '#fbbf24' : '#64748b', fontWeight: row.hours_125 > 0 ? '600' : '400' }}>{row.hours_125 || '—'}</span>
+                          <span style={{ fontSize: '13px', color: row.hours_150 > 0 ? '#fb7185' : '#64748b', fontWeight: row.hours_150 > 0 ? '600' : '400' }}>{row.hours_150 || '—'}</span>
                           <span style={{ fontSize: '12px', color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
                           <span style={{ fontWeight: '700', color: row.found ? '#0f172a' : '#94a3b8', fontSize: '14px' }}>
                             {row.found && row.employee ? '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150).total.toFixed(0) : '—'}
@@ -369,16 +378,17 @@ export default function Labor({ onBack }: Props) {
                             <Pencil size={14} color="#94a3b8" />
                           </button>
                           <button onClick={() => deleteRow(row.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                            <Trash2 size={14} color="#ef4444" />
+                            <Trash2 size={14} color="#fb7185" />
                           </button>
                         </>
                       )}
                     </div>
                   ))}
-                </div>
+                </Card>
+                </motion.div>
 
                 {isMonthly && replaceMode && (
-                  <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: '12px', padding: '12px 20px', marginBottom: '12px', fontSize: '13px', color: '#dc2626', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ background: '#fff1f2', border: '1.5px solid #fecdd3', borderRadius: '12px', padding: '12px 20px', marginBottom: '12px', fontSize: '13px', color: '#dc2626', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <AlertTriangle size={16} />
                     שים לב: כל נתוני הלייבור הקיימים לחודש זה יימחקו ויוחלפו בנתונים החדשים
                   </div>
@@ -389,7 +399,7 @@ export default function Labor({ onBack }: Props) {
                     {isMonthly && <span style={{ fontSize: '13px', fontWeight: '500', marginRight: '12px', opacity: 0.7 }}>{knownRows.length} רשומות</span>}
                   </div>
                   <button onClick={handleSave} disabled={saving || saved || knownRows.length === 0}
-                    style={{ background: saved ? '#10b981' : saving || knownRows.length === 0 ? '#e2e8f0' : replaceMode ? '#dc2626' : '#3b82f6', color: saved || knownRows.length > 0 ? 'white' : '#94a3b8', border: 'none', borderRadius: '12px', padding: '12px 32px', fontWeight: '700', fontSize: '16px', cursor: knownRows.length > 0 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    style={{ background: saved ? '#34d399' : saving || knownRows.length === 0 ? '#e2e8f0' : replaceMode ? '#dc2626' : '#818cf8', color: saved || knownRows.length > 0 ? 'white' : '#94a3b8', border: 'none', borderRadius: '12px', padding: '12px 32px', fontWeight: '700', fontSize: '16px', cursor: knownRows.length > 0 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {saved ? <><Check size={18} />נשמר!</> : saving ? 'שומר...' : replaceMode ? <><Save size={18} />מחק והחלף</> : <><Save size={18} />אשר ושמור</>}
                   </button>
                 </div>
@@ -401,11 +411,12 @@ export default function Labor({ onBack }: Props) {
         {tab === 'employees' && (
           <>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-              <button onClick={() => setShowAddEmp(true)} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontWeight: '700', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button onClick={() => setShowAddEmp(true)} style={{ background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontWeight: '700', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Plus size={16} />הוסף עובד
               </button>
             </div>
-            <div className="table-scroll"><div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+            <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <div className="table-scroll"><Card className="shadow-sm" style={{ overflow: 'hidden' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px 100px 40px 40px', padding: '12px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
                 <span>שם</span><span>מחלקה</span><span>סוג שכר</span><span>שכר</span><span>בונוס</span><span></span><span></span>
               </div>
@@ -415,23 +426,23 @@ export default function Labor({ onBack }: Props) {
                 <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px 100px 40px 40px', alignItems: 'center', padding: '13px 24px', borderBottom: i < employees.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                   {editEmpId === emp.id ? (
                     <>
-                      <input value={editEmpData.name || ''} onChange={e => setEditEmpData({ ...editEmpData, name: e.target.value })} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 8px', fontSize: '13px', textAlign: 'right' }} />
-                      <select value={editEmpData.department || ''} onChange={e => setEditEmpData({ ...editEmpData, department: e.target.value })} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px', fontSize: '12px' }}>
+                      <input value={editEmpData.name || ''} onChange={e => setEditEmpData({ ...editEmpData, name: e.target.value })} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 8px', fontSize: '13px', textAlign: 'right' }} />
+                      <select value={editEmpData.department || ''} onChange={e => setEditEmpData({ ...editEmpData, department: e.target.value })} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px', fontSize: '12px' }}>
                         {deptOptions.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
                       </select>
-                      <select value={editEmpData.wage_type || ''} onChange={e => setEditEmpData({ ...editEmpData, wage_type: e.target.value as any })} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px', fontSize: '12px' }}>
+                      <select value={editEmpData.wage_type || ''} onChange={e => setEditEmpData({ ...editEmpData, wage_type: e.target.value as any })} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px', fontSize: '12px' }}>
                         <option value="hourly">שעתי</option>
                         <option value="global">גלובאלי</option>
                       </select>
-                      <input type="number" value={editEmpData.wage_type === 'global' ? (editEmpData.global_daily_rate || '') : (editEmpData.hourly_rate || '')} onChange={e => setEditEmpData(p => p.wage_type === 'global' ? { ...p, global_daily_rate: parseFloat(e.target.value) } : { ...p, hourly_rate: parseFloat(e.target.value) })} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 8px', fontSize: '13px' }} placeholder={editEmpData.wage_type === 'global' ? 'חודשי' : 'שעתי'} />
-                      <input type="number" value={editEmpData.bonus || ''} onChange={e => setEditEmpData({ ...editEmpData, bonus: parseFloat(e.target.value) })} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '4px 8px', fontSize: '13px' }} placeholder={editEmpData.wage_type === 'hourly' ? 'בונוס/ש׳' : 'בונוס/חודש'} />
-                      <button onClick={() => handleEditEmployee(emp.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✓</button>
+                      <input type="number" value={editEmpData.wage_type === 'global' ? (editEmpData.global_daily_rate || '') : (editEmpData.hourly_rate || '')} onChange={e => setEditEmpData(p => p.wage_type === 'global' ? { ...p, global_daily_rate: parseFloat(e.target.value) } : { ...p, hourly_rate: parseFloat(e.target.value) })} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 8px', fontSize: '13px' }} placeholder={editEmpData.wage_type === 'global' ? 'חודשי' : 'שעתי'} />
+                      <input type="number" value={editEmpData.bonus || ''} onChange={e => setEditEmpData({ ...editEmpData, bonus: parseFloat(e.target.value) })} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 8px', fontSize: '13px' }} placeholder={editEmpData.wage_type === 'hourly' ? 'בונוס/ש׳' : 'בונוס/חודש'} />
+                      <button onClick={() => handleEditEmployee(emp.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✓</button>
                       <button onClick={() => setEditEmpId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✗</button>
                     </>
                   ) : (
                     <>
                       <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{emp.name}</span>
-                      <span style={{ fontSize: '12px', background: '#eff6ff', color: '#3b82f6', padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>
+                      <span style={{ fontSize: '12px', background: '#eff6ff', color: '#818cf8', padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>
                         {deptOptions.find(d => d.value === emp.department)?.label}
                       </span>
                       <span style={{ fontSize: '11px', background: emp.wage_type === 'hourly' ? '#dbeafe' : '#d1fae5', color: emp.wage_type === 'hourly' ? '#1d4ed8' : '#065f46', padding: '2px 8px', borderRadius: '20px', fontWeight: '600', textAlign: 'center' }}>
@@ -442,7 +453,7 @@ export default function Labor({ onBack }: Props) {
                           ? (emp.hourly_rate ? `₪${emp.hourly_rate}/ש׳` : '—')
                           : (emp.global_daily_rate ? '₪' + Math.round(emp.global_daily_rate).toLocaleString() + '/חודש' : '—')}
                       </span>
-                      <span style={{ fontSize: '12px', color: emp.bonus ? '#f59e0b' : '#d1d5db', fontWeight: '600' }}>
+                      <span style={{ fontSize: '12px', color: emp.bonus ? '#fbbf24' : '#d1d5db', fontWeight: '600' }}>
                         {emp.bonus
                           ? (emp.wage_type === 'hourly' ? `₪${emp.bonus}/ש׳` : '₪' + Math.round(emp.bonus).toLocaleString() + '/חודש')
                           : '—'}
@@ -451,13 +462,14 @@ export default function Labor({ onBack }: Props) {
                         <Pencil size={15} color="#94a3b8" />
                       </button>
                       <button onClick={() => handleDeleteEmployee(emp.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                        <Trash2 size={15} color="#ef4444" />
+                        <Trash2 size={15} color="#fb7185" />
                       </button>
                     </>
                   )}
                 </div>
               ))}
-            </div></div>
+            </Card></div>
+            </motion.div>
           </>
         )}
       </div>
@@ -519,7 +531,7 @@ export default function Labor({ onBack }: Props) {
                 </>
               )}
               <button onClick={handleAddEmployee} disabled={!addForm.name}
-                style={{ background: !addForm.name ? '#e2e8f0' : '#3b82f6', color: !addForm.name ? '#94a3b8' : 'white', border: 'none', borderRadius: '12px', padding: '12px', fontSize: '16px', fontWeight: '700', cursor: addForm.name ? 'pointer' : 'not-allowed', marginTop: '8px' }}>
+                style={{ background: !addForm.name ? '#e2e8f0' : '#818cf8', color: !addForm.name ? '#94a3b8' : 'white', border: 'none', borderRadius: '12px', padding: '12px', fontSize: '16px', fontWeight: '700', cursor: addForm.name ? 'pointer' : 'not-allowed', marginTop: '8px' }}>
                 הוסף עובד
               </button>
             </div>

@@ -2,8 +2,13 @@ import { useState, useEffect } from 'react'
 import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept, countWorkingDaysInRange } from '../lib/supabase'
 import type { GlobalEmployee } from '../lib/supabase'
 import { ArrowRight, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle } from 'lucide-react'
+import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon } from '@/components/icons'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
+import { motion } from 'framer-motion'
+import CountUp from 'react-countup'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 type Department = 'creams' | 'dough'
@@ -31,8 +36,8 @@ interface KpiTarget {
 
 // ─── קונפיגורציה ────────────────────────────────────────────────────────────
 const DEPT_CONFIG = {
-  creams: { label: 'קרמים', color: '#3b82f6', bg: '#dbeafe' },
-  dough:  { label: 'בצקים', color: '#8b5cf6', bg: '#ede9fe' },
+  creams: { label: 'קרמים', color: '#818cf8', bg: '#dbeafe' },
+  dough:  { label: 'בצקים', color: '#c084fc', bg: '#ede9fe' },
 }
 
 // יעדי ברירת מחדל — יוחלפו מהגדרות בעתיד
@@ -54,11 +59,16 @@ function fmtMoney(n: number) { return '₪' + Math.round(n).toLocaleString() }
 // צבע KPI לפי חריגה — 4 רמות
 function kpiColor(actual: number, target: number, higherIsBetter = false): { color: string; bg: string; label: string } {
   const diff = higherIsBetter ? actual - target : target - actual
-  if (diff >= 0)              return { color: '#10b981', bg: '#f0fdf4', label: 'תקין' }
-  if (diff >= -3)             return { color: '#f59e0b', bg: '#fffbeb', label: 'סביר' }
-  if (diff >= -7)             return { color: '#f97316', bg: '#fff7ed', label: 'חריגה' }
-  return                             { color: '#ef4444', bg: '#fef2f2', label: 'חריגה קריטית' }
+  if (diff >= 0)              return { color: '#34d399', bg: '#f0fdf4', label: 'תקין' }
+  if (diff >= -3)             return { color: '#fbbf24', bg: '#fffbeb', label: 'סביר' }
+  if (diff >= -7)             return { color: '#fb923c', bg: '#fff7ed', label: 'חריגה' }
+  return                             { color: '#fb7185', bg: '#fef2f2', label: 'חריגה קריטית' }
 }
+
+// ─── Animation variants ─────────────────────────────────────────────────────
+const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.1 } } }
+const fadeUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
 
 // ─── KpiTooltip ──────────────────────────────────────────────────────────────
 function KpiTooltip({ text, children }: { text: string; children: React.ReactNode }) {
@@ -302,31 +312,24 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
   }))
 
   // ─── רינדור ─────────────────────────────────────────────────────────────
-  const S = {
-    page:  { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' as const },
-    card:  { background: 'white', borderRadius: '20px', padding: '22px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
-  }
 
   if (loading) return (
-    <div style={{ ...S.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center" style={{ direction: 'rtl' }}>
       <div style={{ color: '#94a3b8', fontSize: '16px' }}>טוען נתונים...</div>
     </div>
   )
 
   return (
-    <div style={S.page}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* ─── כותרת ────────────────────────────────────────────────────── */}
-      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
+        </Button>
         <div style={{ width: '40px', height: '40px', background: cfg.bg, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <TrendingUp size={20} color={cfg.color} />
+          <ProfitIcon size={20} color={cfg.color} />
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>דשבורד — {cfg.label}</h1>
@@ -342,237 +345,289 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
       <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
 
         {/* ─── סיכום כספי ────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}
+        >
           {[
-            { label: 'מכירות',       val: totalSales,      color: cfg.color,  bg: cfg.bg, tooltip: 'סה״כ מה שנמכר — לפני שמחסירים הוצאות' },
-            { label: 'ייצור (עלות)', val: totalProd,       color: '#64748b',  bg: '#f1f5f9', tooltip: 'עלות חומרי הגלם שנצרכו בייצור — ספקים וחומרים' },
-            { label: 'לייבור',       val: totalLabor,      color: '#f59e0b',  bg: '#fffbeb', tooltip: 'שכר ברוטו × 1.3 עלות מעביד + בונוסים — כולל שעתיים וגלובליים' },
-            { label: 'פחת + תיקונים', val: totalWaste + totalRepairs, color: '#ef4444', bg: '#fef2f2', tooltip: 'סחורה שהלכה לפח וציוד שהתקלקל — שתי הוצאות שכדאי לצמצם' },
-            { label: 'רווח גולמי',   val: grossProfit,     color: grossProfit >= 0 ? '#10b981' : '#ef4444', bg: grossProfit >= 0 ? '#f0fdf4' : '#fef2f2', tooltip: 'מכירות פחות עלות ייצור ולייבור — הרווח לפני הוצאות נוספות' },
-            { label: 'רווח תפעולי',  val: operatingProfit, color: operatingProfit >= 0 ? '#10b981' : '#ef4444', bg: operatingProfit >= 0 ? '#f0fdf4' : '#fef2f2', tooltip: 'הרווח הסופי אחרי כל ההוצאות — השורה התחתונה' },
+            { label: 'מכירות',       val: totalSales,      color: cfg.color,  bg: cfg.bg, tooltip: 'סה״כ מה שנמכר — לפני שמחסירים הוצאות', borderColor: cfg.color, icon: <RevenueIcon size={15} color="#10B981" />, iconBg: '#10B981' },
+            { label: 'ייצור (עלות)', val: totalProd,       color: '#64748b',  bg: '#f1f5f9', tooltip: 'עלות חומרי הגלם שנצרכו בייצור — ספקים וחומרים', borderColor: '#64748b', icon: <FixedCostIcon size={15} color="#64748b" />, iconBg: '#64748b' },
+            { label: 'לייבור',       val: totalLabor,      color: '#fbbf24',  bg: '#fffbeb', tooltip: 'שכר ברוטו × 1.3 עלות מעביד + בונוסים — כולל שעתיים וגלובליים', borderColor: '#fbbf24', icon: <LaborIcon size={15} color="#3B82F6" />, iconBg: '#3B82F6' },
+            { label: 'פחת + תיקונים', val: totalWaste + totalRepairs, color: '#fb7185', bg: '#fef2f2', tooltip: 'סחורה שהלכה לפח וציוד שהתקלקל — שתי הוצאות שכדאי לצמצם', borderColor: '#fb7185', icon: <FixedCostIcon size={15} color="#fb7185" />, iconBg: '#fb7185' },
+            { label: 'רווח גולמי',   val: grossProfit,     color: grossProfit >= 0 ? '#34d399' : '#fb7185', bg: grossProfit >= 0 ? '#f0fdf4' : '#fef2f2', tooltip: 'מכירות פחות עלות ייצור ולייבור — הרווח לפני הוצאות נוספות', borderColor: grossProfit >= 0 ? '#34d399' : '#fb7185', icon: <ProfitIcon size={15} color="#7C3AED" />, iconBg: '#7C3AED' },
+            { label: 'רווח תפעולי',  val: operatingProfit, color: operatingProfit >= 0 ? '#34d399' : '#fb7185', bg: operatingProfit >= 0 ? '#f0fdf4' : '#fef2f2', tooltip: 'הרווח הסופי אחרי כל ההוצאות — השורה התחתונה', borderColor: operatingProfit >= 0 ? '#34d399' : '#fb7185', icon: <ProfitIcon size={15} color="#7C3AED" />, iconBg: '#7C3AED' },
           ].map(s => (
-            <KpiTooltip key={s.label} text={s.tooltip}>
-              <div style={{ ...S.card, background: s.bg, border: `1px solid ${s.color}22`, padding: '16px 18px' }}>
-                <div style={{ fontSize: '20px', fontWeight: '800', color: s.color }}>{fmtMoney(s.val)}</div>
-                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>{s.label}</div>
-              </div>
-            </KpiTooltip>
+            <motion.div key={s.label} variants={fadeUp}>
+              <KpiTooltip text={s.tooltip}>
+                <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-r-4 py-0" style={{ background: s.bg, borderRightColor: s.borderColor }}>
+                  <CardContent className="p-4">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                      <div style={{ width: '26px', height: '26px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: `${s.iconBg}15` }}>
+                        {s.icon}
+                      </div>
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: '#64748b' }}>{s.label}</span>
+                    </div>
+                    <div style={{ fontSize: '20px', fontWeight: '800', color: s.color }}>
+                      <CountUp end={Math.round(s.val)} prefix="₪" separator="," duration={1} preserveValue />
+                    </div>
+                  </CardContent>
+                </Card>
+              </KpiTooltip>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
 
         {/* ─── KPI cards ─────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}>
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}
+        >
           {kpis.map(kpi => {
             const style = kpiColor(kpi.actual, kpi.target, kpi.higherIsBetter)
             const diff = kpi.actual - kpi.target
             const Icon = diff === 0 ? Minus : (kpi.higherIsBetter ? (diff > 0 ? TrendingUp : TrendingDown) : (diff < 0 ? TrendingUp : TrendingDown))
             const iconColor = style.color
             return (
-              <KpiTooltip key={kpi.label} text={kpi.tooltip}>
-                <div style={{ ...S.card, background: style.bg, border: `1.5px solid ${style.color}33` }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: '700', color: style.color, background: style.color + '20', padding: '2px 8px', borderRadius: '20px' }}>{style.label}</span>
-                    <Icon size={18} color={iconColor} />
-                  </div>
-                  <div style={{ fontSize: '28px', fontWeight: '800', color: style.color }}>{fmtPct(kpi.actual)}</div>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{kpi.label}</div>
-                  <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
-                    יעד: {fmtPct(kpi.target)} · {fmtMoney(kpi.amount)}
-                  </div>
-                </div>
-              </KpiTooltip>
+              <motion.div key={kpi.label} variants={fadeUp}>
+                <KpiTooltip text={kpi.tooltip}>
+                  <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-r-4 py-0" style={{ background: style.bg, borderRightColor: style.color }}>
+                    <CardContent className="p-4">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: '700', color: style.color, background: style.color + '20', padding: '2px 8px', borderRadius: '20px' }}>{style.label}</span>
+                        <Icon size={18} color={iconColor} />
+                      </div>
+                      <div style={{ fontSize: '28px', fontWeight: '800', color: style.color }}>
+                        <CountUp end={parseFloat(kpi.actual.toFixed(1))} decimals={1} suffix="%" duration={1} preserveValue />
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{kpi.label}</div>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                        יעד: {fmtPct(kpi.target)} · {fmtMoney(kpi.amount)}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </KpiTooltip>
+              </motion.div>
             )
           })}
-        </div>
+        </motion.div>
 
         {/* ─── גרפים ─────────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}
+        >
 
           {/* מכירות יומיות */}
-          <div style={S.card}>
-            <div style={{ fontSize: '14px', fontWeight: '700', color: '#374151', marginBottom: '12px' }}>📊 מכירות יומיות</div>
-            <BarChart data={chartDays} color={cfg.color} labelKey="label" valueKey="sales" />
-          </div>
+          <motion.div variants={fadeIn}>
+            <Card className="shadow-sm hover:shadow-md transition-all duration-200">
+              <CardContent className="p-5">
+                <div style={{ fontSize: '14px', fontWeight: '700', color: '#374151', marginBottom: '12px' }}>מכירות יומיות</div>
+                <BarChart data={chartDays} color={cfg.color} labelKey="label" valueKey="sales" />
+              </CardContent>
+            </Card>
+          </motion.div>
 
           {/* לייבור יומי */}
-          <div style={S.card}>
-            <div style={{ fontSize: '14px', fontWeight: '700', color: '#374151', marginBottom: '12px' }}>👷 לייבור יומי</div>
-            <BarChart data={chartDays} color="#f59e0b" labelKey="label" valueKey="labor" />
-          </div>
+          <motion.div variants={fadeIn}>
+            <Card className="shadow-sm hover:shadow-md transition-all duration-200">
+              <CardContent className="p-5">
+                <div style={{ fontSize: '14px', fontWeight: '700', color: '#374151', marginBottom: '12px' }}>לייבור יומי</div>
+                <BarChart data={chartDays} color="#fbbf24" labelKey="label" valueKey="labor" />
+              </CardContent>
+            </Card>
+          </motion.div>
 
           {/* השוואה לתקופה קודמת */}
-          <div style={{ ...S.card, gridColumn: '1 / -1' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>📈 השוואה לתקופה קודמת — מכירות</span>
-              <div style={{ display: 'flex', gap: '16px', fontSize: '12px' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ width: '20px', height: '2px', background: cfg.color, display: 'inline-block', borderRadius: '2px' }} />
-                  תקופה נוכחית
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ width: '20px', height: '2px', background: '#cbd5e1', display: 'inline-block', borderRadius: '2px', borderTop: '2px dashed #cbd5e1' }} />
-                  תקופה קודמת
-                </span>
+          <motion.div variants={fadeIn} style={{ gridColumn: '1 / -1' }}>
+            <Card className="shadow-sm hover:shadow-md transition-all duration-200">
+              <CardContent className="p-5">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>השוואה לתקופה קודמת — מכירות</span>
+                  <div style={{ display: 'flex', gap: '16px', fontSize: '12px' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ width: '20px', height: '2px', background: cfg.color, display: 'inline-block', borderRadius: '2px' }} />
+                      תקופה נוכחית
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ width: '20px', height: '2px', background: '#cbd5e1', display: 'inline-block', borderRadius: '2px', borderTop: '2px dashed #cbd5e1' }} />
+                      תקופה קודמת
+                    </span>
+                  </div>
+                </div>
+                <CompareLineChart
+                  current={days.map(d => d.sales)}
+                  previous={prevDays.map(d => d.sales)}
+                  color={cfg.color}
+                />
+                {/* השוואה מספרית */}
+                <div style={{ display: 'flex', gap: '20px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f1f5f9' }}>
+                  {[
+                    { label: 'מכירות', cur: totalSales, prev: prevSales },
+                    { label: 'רווח גולמי', cur: grossProfit, prev: prevGross },
+                    { label: 'רווח תפעולי', cur: operatingProfit, prev: prevOperating },
+                  ].map(c => {
+                    const chg = c.prev !== 0 ? ((c.cur - c.prev) / Math.abs(c.prev)) * 100 : 0
+                    return (
+                      <div key={c.label} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '13px', color: '#64748b' }}>{c.label}:</span>
+                        <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>{fmtMoney(c.cur)}</span>
+                        {c.prev > 0 && (
+                          <span style={{ fontSize: '12px', fontWeight: '700', color: chg >= 0 ? '#34d399' : '#fb7185' }}>
+                            {chg >= 0 ? '↑' : '↓'}{Math.abs(chg).toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </motion.div>
+
+        {/* ─── טבלת פירוט יומי ───────────────────────────────────────── */}
+        <motion.div variants={fadeIn} initial="hidden" animate="visible">
+          <Card className="shadow-sm hover:shadow-md transition-all duration-200">
+            <CardContent className="p-5">
+              <div style={{ fontSize: '15px', fontWeight: '700', color: '#374151', marginBottom: '16px' }}>פירוט יומי</div>
+
+              {/* כותרת */}
+              <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr', padding: '10px 16px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                <span>תאריך</span>
+                <span style={{ textAlign: 'left' }}>מכירות</span>
+                <span style={{ textAlign: 'left' }}>ייצור</span>
+                <span style={{ textAlign: 'left' }}>לייבור</span>
+                <span style={{ textAlign: 'left' }}>פחת</span>
+                <span style={{ textAlign: 'left' }}>תיקונים</span>
+                <span style={{ textAlign: 'left' }}>רווח גולמי</span>
+                <span style={{ textAlign: 'left' }}>רווח תפעולי</span>
               </div>
-            </div>
-            <CompareLineChart
-              current={days.map(d => d.sales)}
-              previous={prevDays.map(d => d.sales)}
-              color={cfg.color}
-            />
-            {/* השוואה מספרית */}
-            <div style={{ display: 'flex', gap: '20px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f1f5f9' }}>
-              {[
-                { label: 'מכירות', cur: totalSales, prev: prevSales },
-                { label: 'רווח גולמי', cur: grossProfit, prev: prevGross },
-                { label: 'רווח תפעולי', cur: operatingProfit, prev: prevOperating },
-              ].map(c => {
-                const chg = c.prev !== 0 ? ((c.cur - c.prev) / Math.abs(c.prev)) * 100 : 0
+
+              {days.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>אין נתונים לתקופה זו</div>
+              ) : [...days].reverse().map((d, i) => {
+                const gp = d.sales - d.production - d.labor
+                const op = gp - d.waste - d.repairs
+                const gpStyle = kpiColor(pct(gp, d.sales), targets.gross_profit_pct, true)
+                const opStyle = kpiColor(pct(op, d.sales), targets.gross_profit_pct - 10, true)
                 return (
-                  <div key={c.label} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', color: '#64748b' }}>{c.label}:</span>
-                    <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>{fmtMoney(c.cur)}</span>
-                    {c.prev > 0 && (
-                      <span style={{ fontSize: '12px', fontWeight: '700', color: chg >= 0 ? '#10b981' : '#ef4444' }}>
-                        {chg >= 0 ? '↑' : '↓'}{Math.abs(chg).toFixed(1)}%
-                      </span>
-                    )}
+                  <div key={d.date} style={{
+                    display: 'grid', gridTemplateColumns: '100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr',
+                    alignItems: 'center', padding: '12px 16px',
+                    borderBottom: i < days.length - 1 ? '1px solid #f1f5f9' : 'none',
+                    background: i % 2 === 0 ? 'white' : '#fafafa'
+                  }}>
+                    <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
+                      {new Date(d.date + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })}
+                    </span>
+                    <span style={{ fontSize: '14px', fontWeight: '700', color: cfg.color }}>{d.sales > 0 ? fmtMoney(d.sales) : '—'}</span>
+                    <span style={{ fontSize: '13px', color: '#64748b' }}>{d.production > 0 ? fmtMoney(d.production) : '—'}</span>
+                    <span style={{ fontSize: '13px', color: '#fbbf24', fontWeight: d.labor > 0 ? '600' : '400' }}>{d.labor > 0 ? fmtMoney(d.labor) : '—'}</span>
+                    <span style={{ fontSize: '13px', color: '#fb7185', fontWeight: d.waste > 0 ? '600' : '400' }}>{d.waste > 0 ? fmtMoney(d.waste) : '—'}</span>
+                    <span style={{ fontSize: '13px', color: '#fb923c', fontWeight: d.repairs > 0 ? '600' : '400' }}>{d.repairs > 0 ? fmtMoney(d.repairs) : '—'}</span>
+                    <span style={{
+                      fontSize: '13px', fontWeight: '700',
+                      color: gpStyle.color,
+                      background: gpStyle.bg,
+                      padding: '2px 8px', borderRadius: '6px', display: 'inline-block'
+                    }}>
+                      {d.sales > 0 ? fmtMoney(gp) : '—'}
+                    </span>
+                    <span style={{
+                      fontSize: '13px', fontWeight: '700',
+                      color: opStyle.color,
+                      background: opStyle.bg,
+                      padding: '2px 8px', borderRadius: '6px', display: 'inline-block'
+                    }}>
+                      {d.sales > 0 ? fmtMoney(op) : '—'}
+                    </span>
                   </div>
                 )
               })}
-            </div>
-          </div>
-        </div>
 
-        {/* ─── טבלת פירוט יומי ───────────────────────────────────────── */}
-        <div style={S.card}>
-          <div style={{ fontSize: '15px', fontWeight: '700', color: '#374151', marginBottom: '16px' }}>📋 פירוט יומי</div>
-
-          {/* כותרת */}
-          <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr', padding: '10px 16px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
-            <span>תאריך</span>
-            <span style={{ textAlign: 'left' }}>מכירות</span>
-            <span style={{ textAlign: 'left' }}>ייצור</span>
-            <span style={{ textAlign: 'left' }}>לייבור</span>
-            <span style={{ textAlign: 'left' }}>פחת</span>
-            <span style={{ textAlign: 'left' }}>תיקונים</span>
-            <span style={{ textAlign: 'left' }}>רווח גולמי</span>
-            <span style={{ textAlign: 'left' }}>רווח תפעולי</span>
-          </div>
-
-          {days.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>אין נתונים לתקופה זו</div>
-          ) : [...days].reverse().map((d, i) => {
-            const gp = d.sales - d.production - d.labor
-            const op = gp - d.waste - d.repairs
-            const gpStyle = kpiColor(pct(gp, d.sales), targets.gross_profit_pct, true)
-            const opStyle = kpiColor(pct(op, d.sales), targets.gross_profit_pct - 10, true)
-            return (
-              <div key={d.date} style={{
-                display: 'grid', gridTemplateColumns: '100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr',
-                alignItems: 'center', padding: '12px 16px',
-                borderBottom: i < days.length - 1 ? '1px solid #f1f5f9' : 'none',
-                background: i % 2 === 0 ? 'white' : '#fafafa'
-              }}>
-                <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
-                  {new Date(d.date + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })}
-                </span>
-                <span style={{ fontSize: '14px', fontWeight: '700', color: cfg.color }}>{d.sales > 0 ? fmtMoney(d.sales) : '—'}</span>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>{d.production > 0 ? fmtMoney(d.production) : '—'}</span>
-                <span style={{ fontSize: '13px', color: '#f59e0b', fontWeight: d.labor > 0 ? '600' : '400' }}>{d.labor > 0 ? fmtMoney(d.labor) : '—'}</span>
-                <span style={{ fontSize: '13px', color: '#ef4444', fontWeight: d.waste > 0 ? '600' : '400' }}>{d.waste > 0 ? fmtMoney(d.waste) : '—'}</span>
-                <span style={{ fontSize: '13px', color: '#f97316', fontWeight: d.repairs > 0 ? '600' : '400' }}>{d.repairs > 0 ? fmtMoney(d.repairs) : '—'}</span>
-                <span style={{
-                  fontSize: '13px', fontWeight: '700',
-                  color: gpStyle.color,
-                  background: gpStyle.bg,
-                  padding: '2px 8px', borderRadius: '6px', display: 'inline-block'
-                }}>
-                  {d.sales > 0 ? fmtMoney(gp) : '—'}
-                </span>
-                <span style={{
-                  fontSize: '13px', fontWeight: '700',
-                  color: opStyle.color,
-                  background: opStyle.bg,
-                  padding: '2px 8px', borderRadius: '6px', display: 'inline-block'
-                }}>
-                  {d.sales > 0 ? fmtMoney(op) : '—'}
-                </span>
-              </div>
-            )
-          })}
-
-          {/* שורת סה"כ */}
-          {days.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr', padding: '14px 16px', background: cfg.bg, borderTop: `2px solid ${cfg.color}33`, borderRadius: '0 0 20px 20px', fontWeight: '700' }}>
-              <span style={{ fontSize: '13px', color: '#374151' }}>סה"כ</span>
-              <span style={{ color: cfg.color }}>{fmtMoney(totalSales)}</span>
-              <span style={{ color: '#64748b' }}>{fmtMoney(totalProd)}</span>
-              <span style={{ color: '#f59e0b' }}>{fmtMoney(totalLabor)}</span>
-              <span style={{ color: '#ef4444' }}>{fmtMoney(totalWaste)}</span>
-              <span style={{ color: '#f97316' }}>{fmtMoney(totalRepairs)}</span>
-              <span style={{ color: grossProfit >= 0 ? '#10b981' : '#ef4444' }}>{fmtMoney(grossProfit)}</span>
-              <span style={{ color: operatingProfit >= 0 ? '#10b981' : '#ef4444' }}>{fmtMoney(operatingProfit)}</span>
-            </div>
-          )}
-        </div>
+              {/* שורת סה"כ */}
+              {days.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr', padding: '14px 16px', background: cfg.bg, borderTop: `2px solid ${cfg.color}33`, borderRadius: '0 0 20px 20px', fontWeight: '700' }}>
+                  <span style={{ fontSize: '13px', color: '#374151' }}>סה"כ</span>
+                  <span style={{ color: cfg.color }}>{fmtMoney(totalSales)}</span>
+                  <span style={{ color: '#64748b' }}>{fmtMoney(totalProd)}</span>
+                  <span style={{ color: '#fbbf24' }}>{fmtMoney(totalLabor)}</span>
+                  <span style={{ color: '#fb7185' }}>{fmtMoney(totalWaste)}</span>
+                  <span style={{ color: '#fb923c' }}>{fmtMoney(totalRepairs)}</span>
+                  <span style={{ color: grossProfit >= 0 ? '#34d399' : '#fb7185' }}>{fmtMoney(grossProfit)}</span>
+                  <span style={{ color: operatingProfit >= 0 ? '#34d399' : '#fb7185' }}>{fmtMoney(operatingProfit)}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
 
         {/* ─── פירוט לייבור — עובדים גלובליים ──────────────────────── */}
         {relevantGlobalEmps.length > 0 && (
-          <div style={{ ...S.card, marginTop: '20px' }}>
-            <div style={{ fontSize: '15px', fontWeight: '700', color: '#374151', marginBottom: '16px' }}>👷 פירוט לייבור — עובדים גלובליים</div>
+          <motion.div variants={fadeIn} initial="hidden" animate="visible" style={{ marginTop: '20px' }}>
+            <Card className="shadow-sm hover:shadow-md transition-all duration-200">
+              <CardContent className="p-5">
+                <div style={{ fontSize: '15px', fontWeight: '700', color: '#374151', marginBottom: '16px' }}>פירוט לייבור — עובדים גלובליים</div>
 
-            {/* כותרת */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 80px 70px 70px 70px 110px 120px', padding: '10px 16px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
-              <span>עובד</span>
-              <span style={{ textAlign: 'center' }}>ימים</span>
-              <span style={{ textAlign: 'center' }}>100%</span>
-              <span style={{ textAlign: 'center' }}>125%</span>
-              <span style={{ textAlign: 'center' }}>150%</span>
-              <span style={{ textAlign: 'left' }}>ברוטו</span>
-              <span style={{ textAlign: 'left' }}>עלות מעסיק</span>
-            </div>
-
-            {relevantGlobalEmps.map((emp, i) => {
-              const isBoth = emp.department === 'both'
-              const factor = isBoth ? 0.5 : 1
-              const bruto = emp.global_daily_rate
-              const employerCost = bruto * 1.3 * factor * (workingDaysInPeriod / (workingDaysMonth || 1))
-              return (
-                <div key={emp.id} style={{
-                  display: 'grid', gridTemplateColumns: '1.5fr 80px 70px 70px 70px 110px 120px',
-                  alignItems: 'center', padding: '12px 16px',
-                  borderBottom: i < relevantGlobalEmps.length - 1 ? '1px solid #f1f5f9' : 'none',
-                  background: i % 2 === 0 ? 'white' : '#fafafa'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{emp.name}</span>
-                    <span style={{ fontSize: '11px', background: '#f0fdf4', color: '#166534', padding: '1px 8px', borderRadius: '10px', fontWeight: '600' }}>גלובלי</span>
-                    {isBoth && (
-                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>(50%)</span>
-                    )}
-                  </div>
-                  <span style={{ fontSize: '13px', color: '#64748b', textAlign: 'center' }}>{workingDaysInPeriod}</span>
-                  <span style={{ fontSize: '13px', color: '#cbd5e1', textAlign: 'center' }}>—</span>
-                  <span style={{ fontSize: '13px', color: '#cbd5e1', textAlign: 'center' }}>—</span>
-                  <span style={{ fontSize: '13px', color: '#cbd5e1', textAlign: 'center' }}>—</span>
-                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>{fmtMoney(bruto)}</span>
-                  <span style={{ fontSize: '14px', fontWeight: '700', color: cfg.color }}>{fmtMoney(employerCost)}</span>
+                {/* כותרת */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 80px 70px 70px 70px 110px 120px', padding: '10px 16px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                  <span>עובד</span>
+                  <span style={{ textAlign: 'center' }}>ימים</span>
+                  <span style={{ textAlign: 'center' }}>100%</span>
+                  <span style={{ textAlign: 'center' }}>125%</span>
+                  <span style={{ textAlign: 'center' }}>150%</span>
+                  <span style={{ textAlign: 'left' }}>ברוטו</span>
+                  <span style={{ textAlign: 'left' }}>עלות מעסיק</span>
                 </div>
-              )
-            })}
 
-            {/* שורת סה"כ */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 80px 70px 70px 70px 110px 120px', padding: '14px 16px', background: cfg.bg, borderTop: `2px solid ${cfg.color}33`, borderRadius: '0 0 20px 20px', fontWeight: '700' }}>
-              <span style={{ fontSize: '13px', color: '#374151' }}>סה"כ גלובלי</span>
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-              <span style={{ color: cfg.color, fontSize: '15px' }}>{fmtMoney(globalLaborCost)}</span>
-            </div>
-          </div>
+                {relevantGlobalEmps.map((emp, i) => {
+                  const isBoth = emp.department === 'both'
+                  const factor = isBoth ? 0.5 : 1
+                  const bruto = emp.global_daily_rate
+                  const employerCost = bruto * 1.3 * factor * (workingDaysInPeriod / (workingDaysMonth || 1))
+                  return (
+                    <div key={emp.id} style={{
+                      display: 'grid', gridTemplateColumns: '1.5fr 80px 70px 70px 70px 110px 120px',
+                      alignItems: 'center', padding: '12px 16px',
+                      borderBottom: i < relevantGlobalEmps.length - 1 ? '1px solid #f1f5f9' : 'none',
+                      background: i % 2 === 0 ? 'white' : '#fafafa'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{emp.name}</span>
+                        <span style={{ fontSize: '11px', background: '#f0fdf4', color: '#166534', padding: '1px 8px', borderRadius: '10px', fontWeight: '600' }}>גלובלי</span>
+                        {isBoth && (
+                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>(50%)</span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '13px', color: '#64748b', textAlign: 'center' }}>{workingDaysInPeriod}</span>
+                      <span style={{ fontSize: '13px', color: '#cbd5e1', textAlign: 'center' }}>—</span>
+                      <span style={{ fontSize: '13px', color: '#cbd5e1', textAlign: 'center' }}>—</span>
+                      <span style={{ fontSize: '13px', color: '#cbd5e1', textAlign: 'center' }}>—</span>
+                      <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>{fmtMoney(bruto)}</span>
+                      <span style={{ fontSize: '14px', fontWeight: '700', color: cfg.color }}>{fmtMoney(employerCost)}</span>
+                    </div>
+                  )
+                })}
+
+                {/* שורת סה"כ */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 80px 70px 70px 70px 110px 120px', padding: '14px 16px', background: cfg.bg, borderTop: `2px solid ${cfg.color}33`, borderRadius: '0 0 20px 20px', fontWeight: '700' }}>
+                  <span style={{ fontSize: '13px', color: '#374151' }}>סה"כ גלובלי</span>
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span style={{ color: cfg.color, fontSize: '15px' }}>{fmtMoney(globalLaborCost)}</span>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
         )}
 
       </div>

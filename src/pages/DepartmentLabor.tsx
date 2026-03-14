@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { fetchGlobalEmployees, getWorkingDays, countWorkingDaysInRange, type GlobalEmployee } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { ArrowRight, Plus, Trash2, Pencil, Users, UserPlus, Clock, ChevronDown, ChevronUp, X, Briefcase, AlertTriangle } from 'lucide-react'
+import { LaborIcon } from '@/components/icons'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 type Department = 'creams' | 'dough' | 'packaging' | 'cleaning'
@@ -38,8 +42,8 @@ interface LaborEntry {
 
 // ─── קונפיגורציה ────────────────────────────────────────────────────────────
 const DEPT_CONFIG = {
-  creams:   { label: 'קרמים',     color: '#3b82f6', bg: '#dbeafe' },
-  dough:    { label: 'בצקים',     color: '#8b5cf6', bg: '#ede9fe' },
+  creams:   { label: 'קרמים',     color: '#818cf8', bg: '#dbeafe' },
+  dough:    { label: 'בצקים',     color: '#c084fc', bg: '#ede9fe' },
   packaging:{ label: 'אריזה',     color: '#0ea5e9', bg: '#e0f2fe' },
   cleaning: { label: 'ניקיון/נהג', color: '#64748b', bg: '#f1f5f9' },
 }
@@ -64,6 +68,8 @@ function calcGross(emp: Employee | null, h100: number, h125: number, h150: numbe
 }
 
 function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString() }
+
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
 
 // ─── קומפוננטה ראשית ─────────────────────────────────────────────────────────
 export default function DepartmentLabor({ department, onBack }: Props) {
@@ -267,8 +273,6 @@ export default function DepartmentLabor({ department, onBack }: Props) {
 
   // ─── סגנונות ─────────────────────────────────────────────────────────────
   const S = {
-    page:   { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' as const },
-    card:   { background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
     label:  { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
     input:  { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const, textAlign: 'right' as const },
     btnAdd: (disabled: boolean) => ({
@@ -282,19 +286,16 @@ export default function DepartmentLabor({ department, onBack }: Props) {
   }
 
   return (
-    <div style={S.page}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
+        </Button>
         <div style={{ width: '40px', height: '40px', background: cfg.bg, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Users size={20} color={cfg.color} />
+          <LaborIcon size={20} color={cfg.color} />
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>לייבור — {cfg.label}</h1>
@@ -331,7 +332,8 @@ export default function DepartmentLabor({ department, onBack }: Props) {
         {/* ══ הזנה ידנית ══════════════════════════════════════════════════ */}
         {tab === 'manual' && (
           <>
-            <div style={{ ...S.card, marginBottom: '20px' }}>
+            <Card className="shadow-sm mb-5">
+              <CardContent className="p-6">
               <h2 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הזנת שעות לעובד</h2>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
@@ -393,17 +395,19 @@ export default function DepartmentLabor({ department, onBack }: Props) {
               </button>
 
               {employees.length === 0 && (
-                <div style={{ marginTop: '12px', fontSize: '13px', color: '#f59e0b', background: '#fffbeb', borderRadius: '8px', padding: '10px 14px' }}>
+                <div style={{ marginTop: '12px', fontSize: '13px', color: '#fbbf24', background: '#fffbeb', borderRadius: '8px', padding: '10px 14px' }}>
                   ⚠️ אין עובדים רשומים למחלקה זו — הוסף עובדים בלייבור המרוכז
                 </div>
               )}
-            </div>
+              </CardContent>
+            </Card>
           </>
         )}
 
         {/* ══ עובד מזדמן ══════════════════════════════════════════════════ */}
         {tab === 'casual' && (
-          <div style={{ ...S.card, marginBottom: '20px' }}>
+          <Card className="shadow-sm mb-5">
+            <CardContent className="p-6">
             <h2 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>עובד מזדמן</h2>
             <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#94a3b8' }}>שעות + שכר שעתי → עלות מחושבת ×1.3 אוטומטית</p>
 
@@ -450,7 +454,8 @@ export default function DepartmentLabor({ department, onBack }: Props) {
               style={S.btnAdd(loading || !casName || !casRate || (parseFloat(casH100)||0) + (parseFloat(casH125)||0) + (parseFloat(casH150)||0) === 0)}>
               <Plus size={18} />הוסף עובד מזדמן
             </button>
-          </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* ══ היסטוריה ════════════════════════════════════════════════════ */}
@@ -469,8 +474,8 @@ export default function DepartmentLabor({ department, onBack }: Props) {
 
             {/* אזהרת כפילויות */}
             {duplicateCount > 0 && (
-              <div style={{ background: '#fef2f2', border: '2px solid #fca5a5', borderRadius: '12px', padding: '14px 18px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <AlertTriangle size={20} color="#ef4444" />
+              <div style={{ background: '#fff1f2', border: '2px solid #fecdd3', borderRadius: '12px', padding: '14px 18px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <AlertTriangle size={20} color="#fb7185" />
                 <div>
                   <div style={{ fontSize: '14px', fontWeight: '700', color: '#991b1b' }}>
                     נמצאו {duplicateCount} רשומות כפולות (אותו עובד + תאריך)
@@ -484,7 +489,8 @@ export default function DepartmentLabor({ department, onBack }: Props) {
 
             {/* ── פירוט לפי עובד ── */}
             {sortedEmployees.length > 0 && (
-              <div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: '20px' }}>
+              <motion.div variants={fadeIn} initial="hidden" animate="visible">
+              <Card className="shadow-sm mb-5 overflow-hidden">
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ width: '32px', height: '32px', background: cfg.bg, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Users size={16} color={cfg.color} />
@@ -499,8 +505,6 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                     <div key={name}
                       onClick={() => setSelectedEmployee(name)}
                       style={{ padding: '14px 20px', borderBottom: i < sortedEmployees.length - 1 ? '1px solid #f1f5f9' : 'none', cursor: 'pointer', background: i % 2 === 0 ? 'white' : '#fafafa', transition: 'background 0.15s' }}
-                      onMouseEnter={e => e.currentTarget.style.background = cfg.bg}
-                      onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'white' : '#fafafa'}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
                         <div style={{ width: '28px', height: '28px', background: data.isCasual ? '#fef3c7' : cfg.bg, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', color: data.isCasual ? '#d97706' : cfg.color }}>
@@ -517,7 +521,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                         <ChevronDown size={16} color="#94a3b8" />
                       </div>
                       <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${barW}%`, background: data.isCasual ? '#f59e0b' : cfg.color, borderRadius: '3px', transition: 'width 0.3s' }} />
+                        <div style={{ height: '100%', width: `${barW}%`, background: data.isCasual ? '#fbbf24' : cfg.color, borderRadius: '3px', transition: 'width 0.3s' }} />
                       </div>
                     </div>
                   )
@@ -527,10 +531,12 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                   <span style={{ fontWeight: '700', color: '#374151', fontSize: '13px', flex: 1 }}>סה"כ עלות מחלקתית</span>
                   <span style={{ fontWeight: '800', color: cfg.color, fontSize: '17px' }}>{fmtM(totalCost)}</span>
                 </div>
-              </div>
+              </Card>
+              </motion.div>
             )}
 
-            <div className="table-scroll"><div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+            <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <div className="table-scroll"><Card className="shadow-sm overflow-hidden">
               {/* כותרת */}
               <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 70px 70px 110px 36px 36px', padding: '10px 20px', background: '#f8fafc', fontSize: '11px', fontWeight: '700', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
                 <span>תאריך</span><span>עובד</span>
@@ -553,7 +559,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                       <input type="number" value={editData.hours_125 ?? ''} onChange={e => setEditData({ ...editData, hours_125: parseFloat(e.target.value) || 0 })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' }} />
                       <input type="number" value={editData.hours_150 ?? ''} onChange={e => setEditData({ ...editData, hours_150: parseFloat(e.target.value) || 0 })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' }} />
                       <input type="number" value={editData.employer_cost ?? ''} onChange={e => setEditData({ ...editData, employer_cost: parseFloat(e.target.value) || 0 })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                      <button onClick={() => saveEdit(entry.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
+                      <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                       <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                     </>
                   ) : (
@@ -573,7 +579,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                       <span style={{ fontSize: '13px', color: '#64748b', textAlign: 'center' }}>{Number(entry.hours_150) > 0 ? entry.hours_150 : '—'}</span>
                       <span style={{ fontWeight: '700', color: cfg.color, fontSize: '14px' }}>{fmtM(Number(entry.employer_cost))}</span>
                       <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                      <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
+                      <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
                     </>
                   )}
                 </div>
@@ -591,11 +597,13 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                   <span /><span />
                 </div>
               )}
-            </div></div>
+            </Card></div>
+            </motion.div>
 
             {/* ── עובדים גלובליים ── */}
             {globalEmps.length > 0 && (
-              <div style={{ background: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginTop: '20px' }}>
+              <motion.div variants={fadeIn} initial="hidden" animate="visible">
+              <Card className="shadow-sm mt-5 overflow-hidden">
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ width: '32px', height: '32px', background: '#dbeafe', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Briefcase size={16} color="#2563eb" />
@@ -629,12 +637,13 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                   )
                 })}
                 {/* סה"כ גלובליים */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px 120px', padding: '13px 20px', background: '#dbeafe', borderTop: '2px solid #3b82f633', fontWeight: '700', fontSize: '13px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 100px 120px', padding: '13px 20px', background: '#dbeafe', borderTop: '2px solid #818cf833', fontWeight: '700', fontSize: '13px' }}>
                   <span style={{ color: '#374151' }}>סה"כ גלובליים</span>
                   <span /><span />
                   <span style={{ color: '#2563eb', fontSize: '15px' }}>{fmtM(globalCostTotal)}</span>
                 </div>
-              </div>
+              </Card>
+              </motion.div>
             )}
 
             {/* סה"כ כולל */}
@@ -685,11 +694,11 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                 <div style={{ fontSize: '11px', color: '#94a3b8' }}>שעות 100%</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '16px', fontWeight: '800', color: '#f59e0b' }}>{selectedEntries.reduce((s, e) => s + Number(e.hours_125), 0).toFixed(1)}</div>
+                <div style={{ fontSize: '16px', fontWeight: '800', color: '#fbbf24' }}>{selectedEntries.reduce((s, e) => s + Number(e.hours_125), 0).toFixed(1)}</div>
                 <div style={{ fontSize: '11px', color: '#94a3b8' }}>שעות 125%</div>
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '16px', fontWeight: '800', color: '#ef4444' }}>{selectedEntries.reduce((s, e) => s + Number(e.hours_150), 0).toFixed(1)}</div>
+                <div style={{ fontSize: '16px', fontWeight: '800', color: '#fb7185' }}>{selectedEntries.reduce((s, e) => s + Number(e.hours_150), 0).toFixed(1)}</div>
                 <div style={{ fontSize: '11px', color: '#94a3b8' }}>שעות 150%</div>
               </div>
             </div>
@@ -716,8 +725,8 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                     <span style={{ fontSize: '13px', color: '#374151', fontWeight: '600' }}>{dayNum}</span>
                     <span style={{ fontSize: '12px', color: '#94a3b8' }}>{dayName}</span>
                     <span style={{ fontSize: '13px', color: '#64748b', textAlign: 'center' }}>{Number(entry.hours_100) > 0 ? entry.hours_100 : '—'}</span>
-                    <span style={{ fontSize: '13px', color: Number(entry.hours_125) > 0 ? '#f59e0b' : '#64748b', textAlign: 'center', fontWeight: Number(entry.hours_125) > 0 ? '600' : '400' }}>{Number(entry.hours_125) > 0 ? entry.hours_125 : '—'}</span>
-                    <span style={{ fontSize: '13px', color: Number(entry.hours_150) > 0 ? '#ef4444' : '#64748b', textAlign: 'center', fontWeight: Number(entry.hours_150) > 0 ? '600' : '400' }}>{Number(entry.hours_150) > 0 ? entry.hours_150 : '—'}</span>
+                    <span style={{ fontSize: '13px', color: Number(entry.hours_125) > 0 ? '#fbbf24' : '#64748b', textAlign: 'center', fontWeight: Number(entry.hours_125) > 0 ? '600' : '400' }}>{Number(entry.hours_125) > 0 ? entry.hours_125 : '—'}</span>
+                    <span style={{ fontSize: '13px', color: Number(entry.hours_150) > 0 ? '#fb7185' : '#64748b', textAlign: 'center', fontWeight: Number(entry.hours_150) > 0 ? '600' : '400' }}>{Number(entry.hours_150) > 0 ? entry.hours_150 : '—'}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ fontWeight: '700', color: cfg.color, fontSize: '14px' }}>{fmtM(Number(entry.employer_cost))}</span>
                       <span style={{ fontSize: '11px', color: '#94a3b8' }}>{dayTotal.toFixed(1)} ש׳</span>
@@ -731,8 +740,8 @@ export default function DepartmentLabor({ department, onBack }: Props) {
                   <span style={{ color: '#374151' }}>סה"כ</span>
                   <span />
                   <span style={{ color: '#64748b', textAlign: 'center' }}>{selectedEntries.reduce((s, e) => s + Number(e.hours_100), 0).toFixed(1)}</span>
-                  <span style={{ color: '#f59e0b', textAlign: 'center' }}>{selectedEntries.reduce((s, e) => s + Number(e.hours_125), 0).toFixed(1)}</span>
-                  <span style={{ color: '#ef4444', textAlign: 'center' }}>{selectedEntries.reduce((s, e) => s + Number(e.hours_150), 0).toFixed(1)}</span>
+                  <span style={{ color: '#fbbf24', textAlign: 'center' }}>{selectedEntries.reduce((s, e) => s + Number(e.hours_125), 0).toFixed(1)}</span>
+                  <span style={{ color: '#fb7185', textAlign: 'center' }}>{selectedEntries.reduce((s, e) => s + Number(e.hours_150), 0).toFixed(1)}</span>
                   <span style={{ color: cfg.color, fontSize: '16px' }}>{fmtM(employeeSummary[selectedEmployee]?.totalCost || 0)}</span>
                 </div>
               )}

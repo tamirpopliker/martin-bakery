@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -6,6 +7,9 @@ import {
   ArrowRight, Plus, Pencil, Trash2, Search, X,
   Building2, FileText, ChevronDown
 } from 'lucide-react'
+import { FixedCostIcon } from '@/components/icons'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Supplier { id: number; name: string; created_at: string }
@@ -22,8 +26,10 @@ interface Invoice {
 
 // ─── קבועים ─────────────────────────────────────────────────────────────────
 const DOC_TYPES = ['חשבונית מס', 'חשבונית עסקה', 'תעודת משלוח', 'קבלה', 'אחר']
-const COLOR = '#10b981'
+const COLOR = '#34d399'
 const BG    = '#d1fae5'
+
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
 
 // ─── Autocomplete ────────────────────────────────────────────────────────────
 function AutocompleteInput({ value, onChange, options, placeholder }: {
@@ -189,27 +195,22 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
 
   // ─── סגנונות ─────────────────────────────────────────────────────────────
   const S = {
-    page:  { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' as const },
-    card:  { background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
     label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
     input: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
     select: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', background: 'white', width: '100%' },
   }
 
   return (
-    <div style={S.page}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* ─── כותרת ──────────────────────────────────────────────────────── */}
-      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
-        <div style={{ width: '40px', height: '40px', background: BG, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Building2 size={20} color={COLOR} />
+        </Button>
+        <div style={{ width: '40px', height: '40px', background: BG, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <FixedCostIcon size={20} color={COLOR} />
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>ספקים וחשבוניות</h1>
@@ -237,50 +238,52 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
         {tab === 'invoices' && (
           <>
             {/* טופס הוספה */}
-            <div style={{ ...S.card, marginBottom: '20px' }}>
-              <h2 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת חשבונית</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
+            <Card className="shadow-sm" style={{ marginBottom: '20px' }}>
+              <CardContent className="p-6">
+                <h2 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת חשבונית</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
 
-                <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                  <label style={S.label}>תאריך</label>
-                  <input type="date" value={invDate} onChange={e => setInvDate(e.target.value)} style={S.input} />
+                  <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                    <label style={S.label}>תאריך</label>
+                    <input type="date" value={invDate} onChange={e => setInvDate(e.target.value)} style={S.input} />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                    <label style={S.label}>ספק</label>
+                    <AutocompleteInput value={invSupplier} onChange={setInvSupplier} options={supplierNames} placeholder="בחר ספק..." />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                    <label style={S.label}>סוג מסמך</label>
+                    <select value={invDocType} onChange={e => setInvDocType(e.target.value)} style={S.select}>
+                      {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                    <label style={S.label}>מספר מסמך <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
+                    <input type="text" placeholder="מס׳ חשבונית" value={invDocNum} onChange={e => setInvDocNum(e.target.value)} style={S.input} />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                    <label style={S.label}>סכום ללא מע״מ (₪)</label>
+                    <input type="number" placeholder="0" value={invAmount} onChange={e => setInvAmount(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && addInvoice()}
+                      style={{ ...S.input, textAlign: 'right' }} />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                    <label style={S.label}>הערות <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
+                    <input type="text" placeholder="הערה..." value={invNotes} onChange={e => setInvNotes(e.target.value)} style={S.input} />
+                  </div>
+
                 </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                  <label style={S.label}>ספק</label>
-                  <AutocompleteInput value={invSupplier} onChange={setInvSupplier} options={supplierNames} placeholder="בחר ספק..." />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                  <label style={S.label}>סוג מסמך</label>
-                  <select value={invDocType} onChange={e => setInvDocType(e.target.value)} style={S.select}>
-                    {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                  <label style={S.label}>מספר מסמך <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
-                  <input type="text" placeholder="מס׳ חשבונית" value={invDocNum} onChange={e => setInvDocNum(e.target.value)} style={S.input} />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                  <label style={S.label}>סכום ללא מע״מ (₪)</label>
-                  <input type="number" placeholder="0" value={invAmount} onChange={e => setInvAmount(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addInvoice()}
-                    style={{ ...S.input, textAlign: 'right' }} />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                  <label style={S.label}>הערות <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
-                  <input type="text" placeholder="הערה..." value={invNotes} onChange={e => setInvNotes(e.target.value)} style={S.input} />
-                </div>
-
-              </div>
-              <button onClick={addInvoice} disabled={loadingInv || !invAmount || !invSupplier}
-                style={{ background: loadingInv || !invAmount || !invSupplier ? '#e2e8f0' : COLOR, color: loadingInv || !invAmount || !invSupplier ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Plus size={18} />הוסף חשבונית
-              </button>
-            </div>
+                <button onClick={addInvoice} disabled={loadingInv || !invAmount || !invSupplier}
+                  style={{ background: loadingInv || !invAmount || !invSupplier ? '#e2e8f0' : COLOR, color: loadingInv || !invAmount || !invSupplier ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Plus size={18} />הוסף חשבונית
+                </button>
+              </CardContent>
+            </Card>
 
             {/* פילטרים */}
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' as const }}>
@@ -308,53 +311,57 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
             )}
 
             {/* טבלת חשבוניות */}
-            <div className="table-scroll"><div style={S.card}>
-              <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 110px 120px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
-                <span>תאריך</span><span>ספק</span><span>סוג</span><span>מסמך</span><span style={{ textAlign: 'left' }}>סכום</span><span /><span />
-              </div>
-
-              {filteredInv.length === 0 ? (
-                <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין חשבוניות לחודש זה</div>
-              ) : filteredInv.map((inv, i) => (
-                <div key={inv.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 110px 120px 36px 36px', alignItems: 'center', padding: '13px 20px', borderBottom: i < filteredInv.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                  {editInvId === inv.id ? (
-                    <>
-                      <input type="date" value={editInvData.date || ''} onChange={e => setEditInvData({ ...editInvData, date: e.target.value })} style={{ border: '1px solid ' + COLOR, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                      <AutocompleteInput value={(editInvData as any).supplier_name ?? supplierName(inv.supplier_id)} onChange={v => setEditInvData({ ...editInvData, supplier_id: suppliers.find(s => s.name === v)?.id, ...(({ supplier_name: _ , ...rest }) => rest)(editInvData as any), ...{ supplier_name: v } as any })} options={supplierNames} placeholder="ספק" />
-                      <select value={editInvData.doc_type || ''} onChange={e => setEditInvData({ ...editInvData, doc_type: e.target.value })} style={{ border: '1px solid ' + COLOR, borderRadius: '6px', padding: '4px 6px', fontSize: '12px', fontFamily: 'inherit' }}>
-                        {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
-                      </select>
-                      <input type="text" value={editInvData.doc_number || ''} onChange={e => setEditInvData({ ...editInvData, doc_number: e.target.value })} style={{ border: '1px solid ' + COLOR, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                      <input type="number" value={editInvData.amount || ''} onChange={e => setEditInvData({ ...editInvData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid ' + COLOR, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                      <button onClick={() => saveInvoice(inv.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
-                      <button onClick={() => setEditInvId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
-                    </>
-                  ) : (
-                    <>
-                      <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(inv.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
-                      <div>
-                        <div style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{supplierName(inv.supplier_id)}</div>
-                        {inv.notes && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{inv.notes}</div>}
-                      </div>
-                      <span style={{ fontSize: '12px', background: BG, color: COLOR, padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>{inv.doc_type}</span>
-                      <span style={{ fontSize: '13px', color: '#94a3b8' }}>{inv.doc_number || '—'}</span>
-                      <span style={{ fontWeight: '800', color: '#0f172a', fontSize: '15px' }}>₪{Number(inv.amount).toLocaleString()}</span>
-                      <button onClick={() => { setEditInvId(inv.id); setEditInvData(inv) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                      <button onClick={() => deleteInvoice(inv.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
-                    </>
-                  )}
+            <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <div className="table-scroll"><Card className="shadow-sm">
+              <CardContent className="p-6">
+                <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 110px 120px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                  <span>תאריך</span><span>ספק</span><span>סוג</span><span>מסמך</span><span style={{ textAlign: 'left' }}>סכום</span><span /><span />
                 </div>
-              ))}
 
-              {/* סה"כ */}
-              {filteredInv.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 110px 120px 36px 36px', padding: '14px 20px', background: BG, borderTop: `2px solid ${COLOR}33`, borderRadius: '0 0 20px 20px' }}>
-                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151', gridColumn: '1/5' }}>סה"כ — {filteredInv.length} חשבוניות</span>
-                  <span style={{ fontSize: '18px', fontWeight: '800', color: COLOR }}>₪{totalInv.toLocaleString()}</span>
-                  <span /><span />
-                </div>
-              )}
-            </div></div>
+                {filteredInv.length === 0 ? (
+                  <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין חשבוניות לחודש זה</div>
+                ) : filteredInv.map((inv, i) => (
+                  <div key={inv.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 110px 120px 36px 36px', alignItems: 'center', padding: '13px 20px', borderBottom: i < filteredInv.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                    {editInvId === inv.id ? (
+                      <>
+                        <input type="date" value={editInvData.date || ''} onChange={e => setEditInvData({ ...editInvData, date: e.target.value })} style={{ border: '1px solid ' + COLOR, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
+                        <AutocompleteInput value={(editInvData as any).supplier_name ?? supplierName(inv.supplier_id)} onChange={v => setEditInvData({ ...editInvData, supplier_id: suppliers.find(s => s.name === v)?.id, ...(({ supplier_name: _ , ...rest }) => rest)(editInvData as any), ...{ supplier_name: v } as any })} options={supplierNames} placeholder="ספק" />
+                        <select value={editInvData.doc_type || ''} onChange={e => setEditInvData({ ...editInvData, doc_type: e.target.value })} style={{ border: '1px solid ' + COLOR, borderRadius: '6px', padding: '4px 6px', fontSize: '12px', fontFamily: 'inherit' }}>
+                          {DOC_TYPES.map(t => <option key={t}>{t}</option>)}
+                        </select>
+                        <input type="text" value={editInvData.doc_number || ''} onChange={e => setEditInvData({ ...editInvData, doc_number: e.target.value })} style={{ border: '1px solid ' + COLOR, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
+                        <input type="number" value={editInvData.amount || ''} onChange={e => setEditInvData({ ...editInvData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid ' + COLOR, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
+                        <button onClick={() => saveInvoice(inv.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
+                        <button onClick={() => setEditInvId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(inv.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
+                        <div>
+                          <div style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{supplierName(inv.supplier_id)}</div>
+                          {inv.notes && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{inv.notes}</div>}
+                        </div>
+                        <span style={{ fontSize: '12px', background: BG, color: COLOR, padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>{inv.doc_type}</span>
+                        <span style={{ fontSize: '13px', color: '#94a3b8' }}>{inv.doc_number || '—'}</span>
+                        <span style={{ fontWeight: '800', color: '#0f172a', fontSize: '15px' }}>₪{Number(inv.amount).toLocaleString()}</span>
+                        <button onClick={() => { setEditInvId(inv.id); setEditInvData(inv) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
+                        <button onClick={() => deleteInvoice(inv.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
+                      </>
+                    )}
+                  </div>
+                ))}
+
+                {/* סה"כ */}
+                {filteredInv.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 110px 120px 36px 36px', padding: '14px 20px', background: BG, borderTop: `2px solid ${COLOR}33`, borderRadius: '0 0 20px 20px' }}>
+                    <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151', gridColumn: '1/5' }}>סה"כ — {filteredInv.length} חשבוניות</span>
+                    <span style={{ fontSize: '18px', fontWeight: '800', color: COLOR }}>₪{totalInv.toLocaleString()}</span>
+                    <span /><span />
+                  </div>
+                )}
+              </CardContent>
+            </Card></div>
+            </motion.div>
           </>
         )}
 
@@ -362,22 +369,24 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
         {tab === 'suppliers' && (
           <>
             {/* הוספת ספק */}
-            <div style={{ ...S.card, marginBottom: '20px' }}>
-              <h2 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת ספק</h2>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const }}>
-                  <label style={S.label}>שם ספק</label>
-                  <input type="text" placeholder="שם הספק..." value={newSuppName}
-                    onChange={e => setNewSuppName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addSupplier()}
-                    style={S.input} />
+            <Card className="shadow-sm" style={{ marginBottom: '20px' }}>
+              <CardContent className="p-6">
+                <h2 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת ספק</h2>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const }}>
+                    <label style={S.label}>שם ספק</label>
+                    <input type="text" placeholder="שם הספק..." value={newSuppName}
+                      onChange={e => setNewSuppName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && addSupplier()}
+                      style={S.input} />
+                  </div>
+                  <button onClick={addSupplier} disabled={loadingSupp || !newSuppName.trim()}
+                    style={{ background: loadingSupp || !newSuppName.trim() ? '#e2e8f0' : COLOR, color: loadingSupp || !newSuppName.trim() ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' as const }}>
+                    <Plus size={18} />הוסף
+                  </button>
                 </div>
-                <button onClick={addSupplier} disabled={loadingSupp || !newSuppName.trim()}
-                  style={{ background: loadingSupp || !newSuppName.trim() ? '#e2e8f0' : COLOR, color: loadingSupp || !newSuppName.trim() ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' as const }}>
-                  <Plus size={18} />הוסף
-                </button>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             {/* חיפוש */}
             <div style={{ position: 'relative', marginBottom: '16px' }}>
@@ -387,51 +396,55 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
             </div>
 
             {/* רשימת ספקים */}
-            <div className="table-scroll"><div style={S.card}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
-                <span>שם ספק</span><span style={{ textAlign: 'center' }}>ס"כ החודש</span><span /><span />
-              </div>
-
-              {filteredSupp.length === 0 ? (
-                <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין ספקים</div>
-              ) : filteredSupp.map((sup, i) => {
-                const monthTotal = invoices.filter(inv => inv.supplier_id === sup.id).reduce((a, inv) => a + Number(inv.amount), 0)
-                return (
-                  <div key={sup.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 36px 36px', alignItems: 'center', padding: '13px 20px', borderBottom: i < filteredSupp.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                    {editSuppId === sup.id ? (
-                      <>
-                        <input type="text" value={editSuppName} onChange={e => setEditSuppName(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && saveSupplier(sup.id)}
-                          autoFocus style={{ border: '1.5px solid ' + COLOR, borderRadius: '8px', padding: '6px 10px', fontSize: '14px', fontFamily: 'inherit' }} />
-                        <span />
-                        <button onClick={() => saveSupplier(sup.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
-                        <button onClick={() => setEditSuppId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{ width: '34px', height: '34px', background: BG, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <Building2 size={16} color={COLOR} />
-                          </div>
-                          <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{sup.name}</span>
-                        </div>
-                        <span style={{ textAlign: 'center', fontWeight: '700', color: monthTotal > 0 ? COLOR : '#cbd5e1', fontSize: '14px' }}>
-                          {monthTotal > 0 ? '₪' + monthTotal.toLocaleString() : '—'}
-                        </span>
-                        <button onClick={() => { setEditSuppId(sup.id); setEditSuppName(sup.name) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                        <button onClick={() => deleteSupplier(sup.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
-                      </>
-                    )}
-                  </div>
-                )
-              })}
-
-              {filteredSupp.length > 0 && (
-                <div style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderRadius: '0 0 20px 20px', fontSize: '13px', color: '#64748b', fontWeight: '600' }}>
-                  {filteredSupp.length} ספקים
+            <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <div className="table-scroll"><Card className="shadow-sm">
+              <CardContent className="p-6">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                  <span>שם ספק</span><span style={{ textAlign: 'center' }}>ס"כ החודש</span><span /><span />
                 </div>
-              )}
-            </div></div>
+
+                {filteredSupp.length === 0 ? (
+                  <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין ספקים</div>
+                ) : filteredSupp.map((sup, i) => {
+                  const monthTotal = invoices.filter(inv => inv.supplier_id === sup.id).reduce((a, inv) => a + Number(inv.amount), 0)
+                  return (
+                    <div key={sup.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 36px 36px', alignItems: 'center', padding: '13px 20px', borderBottom: i < filteredSupp.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                      {editSuppId === sup.id ? (
+                        <>
+                          <input type="text" value={editSuppName} onChange={e => setEditSuppName(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && saveSupplier(sup.id)}
+                            autoFocus style={{ border: '1.5px solid ' + COLOR, borderRadius: '8px', padding: '6px 10px', fontSize: '14px', fontFamily: 'inherit' }} />
+                          <span />
+                          <button onClick={() => saveSupplier(sup.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
+                          <button onClick={() => setEditSuppId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ width: '34px', height: '34px', background: BG, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <Building2 size={16} color={COLOR} />
+                            </div>
+                            <span style={{ fontWeight: '600', color: '#374141', fontSize: '14px' }}>{sup.name}</span>
+                          </div>
+                          <span style={{ textAlign: 'center', fontWeight: '700', color: monthTotal > 0 ? COLOR : '#cbd5e1', fontSize: '14px' }}>
+                            {monthTotal > 0 ? '₪' + monthTotal.toLocaleString() : '—'}
+                          </span>
+                          <button onClick={() => { setEditSuppId(sup.id); setEditSuppName(sup.name) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
+                          <button onClick={() => deleteSupplier(sup.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {filteredSupp.length > 0 && (
+                  <div style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderRadius: '0 0 20px 20px', fontSize: '13px', color: '#64748b', fontWeight: '600' }}>
+                    {filteredSupp.length} ספקים
+                  </div>
+                )}
+              </CardContent>
+            </Card></div>
+            </motion.div>
           </>
         )}
 

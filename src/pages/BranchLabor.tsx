@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Plus, Pencil, Trash2, Users, CheckCircle, AlertTriangle, FileText, Eye } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { ArrowRight, Plus, Pencil, Trash2, CheckCircle, AlertTriangle, FileText, Eye } from 'lucide-react'
+import { LaborIcon } from '@/components/icons'
 
 interface Props {
   branchId: number
@@ -200,6 +204,9 @@ function parseCashOnTab(items: PdfItem[]): { rows: ParsedRow[]; rawLines: string
   return { rows, rawLines }
 }
 
+// ─── Animation variants ──────────────────────────────────────────────────────
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
+
 // ─── קומפוננטה ────────────────────────────────────────────────────────────────
 export default function BranchLabor({ branchId, branchName, branchColor, onBack }: Props) {
   const { period, setPeriod, from, to } = usePeriod()
@@ -339,30 +346,25 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   const parsedEmpTotal = parsedRows.filter(r => r.selected).reduce((s, r) => s + r.employer_cost, 0)
 
   const S = {
-    page:  { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' as const },
-    card:  { background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
     label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
     input: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
   }
 
-  const statusColor = uploadStatus === 'error' ? '#ef4444' : uploadStatus === 'confirm' || uploadStatus === 'done' ? '#10b981' : '#64748b'
+  const statusColor = uploadStatus === 'error' ? '#fb7185' : uploadStatus === 'confirm' || uploadStatus === 'done' ? '#34d399' : '#64748b'
   const statusBg    = uploadStatus === 'error' ? '#fef2f2' : uploadStatus === 'confirm' || uploadStatus === 'done' ? '#f0fdf4' : '#f8fafc'
   const statusBorder = uploadStatus === 'error' ? '#fecaca' : '#bbf7d0'
 
   return (
-    <div style={S.page}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* כותרת */}
-      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' as const }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
+        </Button>
         <div style={{ width: '40px', height: '40px', background: branchColor + '20', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Users size={20} color={branchColor} />
+          <LaborIcon size={20} color={branchColor} />
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>לייבור — {branchName}</h1>
@@ -371,9 +373,9 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
         <div style={{ marginRight: 'auto', display: 'flex', gap: '10px', alignItems: 'center' }}>
           <PeriodPicker period={period} onChange={setPeriod} />
           <div style={{ background: kpiOk ? '#f0fdf4' : '#fef2f2', border: `1px solid ${kpiOk ? '#bbf7d0' : '#fecaca'}`, borderRadius: '10px', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {kpiOk ? <CheckCircle size={16} color="#10b981" /> : <AlertTriangle size={16} color="#ef4444" />}
+            {kpiOk ? <CheckCircle size={16} color="#34d399" /> : <AlertTriangle size={16} color="#fb7185" />}
             <div>
-              <div style={{ fontSize: '15px', fontWeight: '800', color: kpiOk ? '#10b981' : '#ef4444' }}>{laborPct.toFixed(1)}%</div>
+              <div style={{ fontSize: '15px', fontWeight: '800', color: kpiOk ? '#34d399' : '#fb7185' }}>{laborPct.toFixed(1)}%</div>
               <div style={{ fontSize: '10px', color: '#64748b' }}>לייבור/הכנסות · יעד {laborTargetPct}%</div>
             </div>
           </div>
@@ -385,11 +387,16 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       </div>
 
       {/* טאבים */}
-      <div style={{ display: 'flex', padding: '0 32px', background: 'white', borderBottom: '1px solid #e2e8f0' }}>
+      <div className="flex px-8 bg-white border-b border-slate-200">
         {(['upload','manual','history'] as const).map(key => (
           <button key={key} onClick={() => setTab(key)}
-            style={{ padding: '13px 20px', background: 'none', border: 'none', borderBottom: tab === key ? `3px solid ${branchColor}` : '3px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: tab === key ? '700' : '500', color: tab === key ? branchColor : '#64748b' }}>
-            {key === 'upload' ? '📄 העלאת CashOnTab' : key === 'manual' ? '✏️ הזנה ידנית' : '📋 היסטוריה'}
+            className={`px-5 py-3.5 bg-transparent border-0 border-b-[3px] cursor-pointer text-sm transition-colors ${
+              tab === key
+                ? 'font-bold border-current'
+                : 'font-medium border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+            style={{ color: tab === key ? branchColor : undefined }}>
+            {key === 'upload' ? 'העלאת CashOnTab' : key === 'manual' ? 'הזנה ידנית' : 'היסטוריה'}
           </button>
         ))}
       </div>
@@ -399,170 +406,182 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
         {/* ══ העלאת PDF ════════════════════════════════════════════════════ */}
         {tab === 'upload' && (
           <>
-            <div style={{ ...S.card, marginBottom: '20px' }}>
-              <h2 style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>העלאת דוח שעות CashOnTab</h2>
-              <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#94a3b8' }}>PDF דוח נוכחות מרוכז מאוטוסופט — פרסור אוטומטי ללא שרת</p>
+            <Card className="shadow-sm mb-5">
+              <CardContent className="p-6">
+                <h2 style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>העלאת דוח שעות CashOnTab</h2>
+                <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#94a3b8' }}>PDF דוח נוכחות מרוכז מאוטוסופט — פרסור אוטומטי ללא שרת</p>
 
-              <div style={{ marginBottom: '16px' }}>
-                <label style={S.label}>תאריך לשמירה</label>
-                <input type="date" value={uploadDate} onChange={e => setUploadDate(e.target.value)} style={{ ...S.input, width: '180px' }} />
-              </div>
-
-              {/* אזור גרירה/העלאה */}
-              <label htmlFor="pdf-upload"
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
-                style={{ display: 'block', border: `2px dashed ${uploadStatus === 'confirm' ? '#10b981' : '#cbd5e1'}`, borderRadius: '16px', padding: '36px', textAlign: 'center', cursor: 'pointer', background: uploadStatus === 'parsing' ? '#f8fafc' : uploadStatus === 'confirm' ? '#f0fdf4' : 'white', transition: 'all 0.2s' }}>
-                <input id="pdf-upload" type="file" accept=".pdf" style={{ display: 'none' }}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); (e.target as HTMLInputElement).value = '' }} />
-                <FileText size={38} color={uploadStatus === 'confirm' ? '#10b981' : branchColor} style={{ marginBottom: '10px' }} />
-                <div style={{ fontSize: '15px', fontWeight: '700', color: '#374151', marginBottom: '4px' }}>
-                  {uploadStatus === 'parsing' ? '⏳ מעבד קובץ...' : uploadStatus === 'confirm' ? '✓ קובץ נקלט בהצלחה' : 'גרור PDF לכאן או לחץ להעלאה'}
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={S.label}>תאריך לשמירה</label>
+                  <input type="date" value={uploadDate} onChange={e => setUploadDate(e.target.value)} style={{ ...S.input, width: '180px' }} />
                 </div>
-                <div style={{ fontSize: '12px', color: '#94a3b8' }}>דוח נוכחות מרוכז מ-CashOnTab</div>
-              </label>
 
-              {/* סטטוס */}
-              {uploadMsg && (
-                <div style={{ marginTop: '12px', padding: '11px 16px', borderRadius: '10px', background: statusBg, border: `1px solid ${statusBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {(uploadStatus === 'confirm' || uploadStatus === 'done') && <CheckCircle size={16} color="#10b981" />}
-                    {uploadStatus === 'error' && <AlertTriangle size={16} color="#ef4444" />}
-                    <span style={{ fontSize: '14px', fontWeight: '600', color: statusColor }}>{uploadMsg}</span>
+                {/* אזור גרירה/העלאה */}
+                <label htmlFor="pdf-upload"
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
+                  style={{ display: 'block', border: `2px dashed ${uploadStatus === 'confirm' ? '#34d399' : '#cbd5e1'}`, borderRadius: '16px', padding: '36px', textAlign: 'center', cursor: 'pointer', background: uploadStatus === 'parsing' ? '#f8fafc' : uploadStatus === 'confirm' ? '#f0fdf4' : 'white', transition: 'all 0.2s' }}>
+                  <input id="pdf-upload" type="file" accept=".pdf" style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); (e.target as HTMLInputElement).value = '' }} />
+                  <FileText size={38} color={uploadStatus === 'confirm' ? '#34d399' : branchColor} style={{ marginBottom: '10px' }} />
+                  <div style={{ fontSize: '15px', fontWeight: '700', color: '#374151', marginBottom: '4px' }}>
+                    {uploadStatus === 'parsing' ? 'מעבד קובץ...' : uploadStatus === 'confirm' ? 'קובץ נקלט בהצלחה' : 'גרור PDF לכאן או לחץ להעלאה'}
                   </div>
-                  {rawLines.length > 0 && (
-                    <button onClick={() => setShowRaw(v => !v)}
-                      style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '4px 10px', fontSize: '12px', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' as const }}>
-                      <Eye size={12} />{showRaw ? 'הסתר' : 'טקסט גולמי'}
-                    </button>
-                  )}
-                </div>
-              )}
+                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>דוח נוכחות מרוכז מ-CashOnTab</div>
+                </label>
 
-              {/* תצוגת טקסט גולמי */}
-              {showRaw && rawLines.length > 0 && (
-                <div style={{ marginTop: '10px', background: '#0f172a', borderRadius: '10px', padding: '14px 16px', maxHeight: '220px', overflowY: 'auto' as const }}>
-                  <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace', direction: 'ltr' as const }}>
-                    {rawLines.map((line, i) => (
-                      <div key={i} style={{ padding: '1px 0', color: line.includes('תועש') || line.includes('יפסכ') ? '#34d399' : '#94a3b8' }}>
-                        <span style={{ color: '#475569', marginLeft: '8px' }}>{String(i).padStart(2, '0')}</span>
-                        {line}
-                      </div>
-                    ))}
+                {/* סטטוס */}
+                {uploadMsg && (
+                  <div style={{ marginTop: '12px', padding: '11px 16px', borderRadius: '10px', background: statusBg, border: `1px solid ${statusBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {(uploadStatus === 'confirm' || uploadStatus === 'done') && <CheckCircle size={16} color="#34d399" />}
+                      {uploadStatus === 'error' && <AlertTriangle size={16} color="#fb7185" />}
+                      <span style={{ fontSize: '14px', fontWeight: '600', color: statusColor }}>{uploadMsg}</span>
+                    </div>
+                    {rawLines.length > 0 && (
+                      <button onClick={() => setShowRaw(v => !v)}
+                        style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '4px 10px', fontSize: '12px', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' as const }}>
+                        <Eye size={12} />{showRaw ? 'הסתר' : 'טקסט גולמי'}
+                      </button>
+                    )}
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+
+                {/* תצוגת טקסט גולמי */}
+                {showRaw && rawLines.length > 0 && (
+                  <div style={{ marginTop: '10px', background: '#0f172a', borderRadius: '10px', padding: '14px 16px', maxHeight: '220px', overflowY: 'auto' as const }}>
+                    <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace', direction: 'ltr' as const }}>
+                      {rawLines.map((line, i) => (
+                        <div key={i} style={{ padding: '1px 0', color: line.includes('תועש') || line.includes('יפסכ') ? '#34d399' : '#94a3b8' }}>
+                          <span style={{ color: '#475569', marginLeft: '8px' }}>{String(i).padStart(2, '0')}</span>
+                          {line}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* ── טבלת אישור ── */}
             {uploadStatus === 'confirm' && parsedRows.length > 0 && (
-              <div className="table-scroll"><div style={S.card}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                  <div>
-                    <h3 style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>
-                      אישור לפני שמירה
-                    </h3>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>בדוק שהנתונים נכונים — ניתן לבטל עובדים בודדים</p>
-                  </div>
-                  <div style={{ textAlign: 'left' as const, fontSize: '13px' }}>
-                    <div style={{ color: '#64748b' }}>ברוטו: <strong style={{ color: branchColor }}>₪{parsedTotal.toLocaleString()}</strong></div>
-                    <div style={{ color: '#64748b' }}>עלות מעסיק: <strong style={{ color: '#ef4444' }}>₪{Math.round(parsedEmpTotal).toLocaleString()}</strong></div>
-                  </div>
-                </div>
-
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 65px 65px 65px 105px 115px', padding: '9px 14px', background: '#f8fafc', fontSize: '11px', fontWeight: '700', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
-                    <span />
-                    <span>שם עובד</span>
-                    <span style={{ textAlign: 'center' }}>100%</span>
-                    <span style={{ textAlign: 'center' }}>125%</span>
-                    <span style={{ textAlign: 'center' }}>150%</span>
-                    <span>ברוטו</span>
-                    <span>עלות מעסיק</span>
-                  </div>
-                  {parsedRows.map((row, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 65px 65px 65px 105px 115px', alignItems: 'center', padding: '11px 14px', borderBottom: i < parsedRows.length - 1 ? '1px solid #f1f5f9' : 'none', background: row.selected ? (i % 2 === 0 ? 'white' : '#fafafa') : '#f8fafc', opacity: row.selected ? 1 : 0.4, transition: 'opacity 0.15s' }}>
-                      <input type="checkbox" checked={row.selected}
-                        onChange={e => setParsedRows(prev => prev.map((r, j) => j === i ? { ...r, selected: e.target.checked } : r))}
-                        style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: branchColor }} />
-                      <div>
-                        <div style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{row.name}</div>
-                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{row.total_hours} שעות סה"כ</div>
+              <motion.div variants={fadeIn} initial="hidden" animate="visible">
+                <div className="table-scroll">
+                  <Card className="shadow-sm">
+                    <CardContent className="p-6">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                        <div>
+                          <h3 style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>
+                            אישור לפני שמירה
+                          </h3>
+                          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>בדוק שהנתונים נכונים — ניתן לבטל עובדים בודדים</p>
+                        </div>
+                        <div style={{ textAlign: 'left' as const, fontSize: '13px' }}>
+                          <div style={{ color: '#64748b' }}>ברוטו: <strong style={{ color: branchColor }}>₪{parsedTotal.toLocaleString()}</strong></div>
+                          <div style={{ color: '#64748b' }}>עלות מעסיק: <strong style={{ color: '#fb7185' }}>₪{Math.round(parsedEmpTotal).toLocaleString()}</strong></div>
+                        </div>
                       </div>
-                      <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_100 > 0 ? row.hours_100 : '—'}</span>
-                      <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_125 > 0 ? row.hours_125 : '—'}</span>
-                      <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_150 > 0 ? row.hours_150 : '—'}</span>
-                      <span style={{ fontWeight: '700', color: branchColor, fontSize: '14px' }}>₪{row.gross_salary.toLocaleString()}</span>
-                      <span style={{ fontWeight: '700', color: '#ef4444', fontSize: '14px' }}>₪{Math.round(row.employer_cost).toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
 
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                  <button onClick={() => { setParsedRows([]); setUploadStatus('idle'); setUploadMsg('') }}
-                    style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-                    ביטול
-                  </button>
-                  <button onClick={saveSelected} disabled={loading || parsedRows.filter(r => r.selected).length === 0}
-                    style={{ background: loading ? '#e2e8f0' : '#10b981', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CheckCircle size={16} />שמור {parsedRows.filter(r => r.selected).length} עובדים
-                  </button>
+                      <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 65px 65px 65px 105px 115px', padding: '9px 14px', background: '#f8fafc', fontSize: '11px', fontWeight: '700', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
+                          <span />
+                          <span>שם עובד</span>
+                          <span style={{ textAlign: 'center' }}>100%</span>
+                          <span style={{ textAlign: 'center' }}>125%</span>
+                          <span style={{ textAlign: 'center' }}>150%</span>
+                          <span>ברוטו</span>
+                          <span>עלות מעסיק</span>
+                        </div>
+                        {parsedRows.map((row, i) => (
+                          <div key={i} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 65px 65px 65px 105px 115px', alignItems: 'center', padding: '11px 14px', borderBottom: i < parsedRows.length - 1 ? '1px solid #f1f5f9' : 'none', background: row.selected ? (i % 2 === 0 ? 'white' : '#fafafa') : '#f8fafc', opacity: row.selected ? 1 : 0.4, transition: 'opacity 0.15s' }}>
+                            <input type="checkbox" checked={row.selected}
+                              onChange={e => setParsedRows(prev => prev.map((r, j) => j === i ? { ...r, selected: e.target.checked } : r))}
+                              style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: branchColor }} />
+                            <div>
+                              <div style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{row.name}</div>
+                              <div style={{ fontSize: '11px', color: '#94a3b8' }}>{row.total_hours} שעות סה"כ</div>
+                            </div>
+                            <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_100 > 0 ? row.hours_100 : '—'}</span>
+                            <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_125 > 0 ? row.hours_125 : '—'}</span>
+                            <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_150 > 0 ? row.hours_150 : '—'}</span>
+                            <span style={{ fontWeight: '700', color: branchColor, fontSize: '14px' }}>₪{row.gross_salary.toLocaleString()}</span>
+                            <span style={{ fontWeight: '700', color: '#fb7185', fontSize: '14px' }}>₪{Math.round(row.employer_cost).toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                        <Button variant="ghost" onClick={() => { setParsedRows([]); setUploadStatus('idle'); setUploadMsg('') }}
+                          className="rounded-xl px-5 text-sm font-semibold text-slate-500">
+                          ביטול
+                        </Button>
+                        <button onClick={saveSelected} disabled={loading || parsedRows.filter(r => r.selected).length === 0}
+                          style={{ background: loading ? '#e2e8f0' : '#34d399', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <CheckCircle size={16} />שמור {parsedRows.filter(r => r.selected).length} עובדים
+                        </button>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
-              </div></div>
+              </motion.div>
             )}
 
             {uploadStatus === 'done' && (
-              <div style={{ ...S.card, textAlign: 'center', padding: '40px' }}>
-                <CheckCircle size={44} color="#10b981" style={{ marginBottom: '10px' }} />
-                <h3 style={{ margin: '0 0 8px', color: '#0f172a' }}>{uploadMsg}</h3>
-                <button onClick={() => { setUploadStatus('idle'); setUploadMsg(''); setTab('history') }}
-                  style={{ background: branchColor, color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', marginTop: '10px' }}>
-                  ראה היסטוריה
-                </button>
-              </div>
+              <Card className="shadow-sm">
+                <CardContent className="p-10 text-center">
+                  <CheckCircle size={44} color="#34d399" style={{ marginBottom: '10px' }} />
+                  <h3 style={{ margin: '0 0 8px', color: '#0f172a' }}>{uploadMsg}</h3>
+                  <button onClick={() => { setUploadStatus('idle'); setUploadMsg(''); setTab('history') }}
+                    style={{ background: branchColor, color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', marginTop: '10px' }}>
+                    ראה היסטוריה
+                  </button>
+                </CardContent>
+              </Card>
             )}
           </>
         )}
 
         {/* ══ הזנה ידנית ══════════════════════════════════════════════════ */}
         {tab === 'manual' && (
-          <div style={S.card}>
-            <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת לייבור ידני</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                <label style={S.label}>תאריך</label>
-                <input type="date" value={manDate} onChange={e => setManDate(e.target.value)} style={S.input} />
+          <Card className="shadow-sm">
+            <CardContent className="p-6">
+              <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת לייבור ידני</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                  <label style={S.label}>תאריך</label>
+                  <input type="date" value={manDate} onChange={e => setManDate(e.target.value)} style={S.input} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gridColumn: 'span 2' }}>
+                  <label style={S.label}>שם עובד</label>
+                  <input type="text" placeholder="שם מלא..." value={manName} onChange={e => setManName(e.target.value)} style={S.input} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                  <label style={S.label}>שעות <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
+                  <input type="number" placeholder="0" value={manHours} onChange={e => setManHours(e.target.value)} style={{ ...S.input, textAlign: 'right' as const }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                  <label style={S.label}>שכר ברוטו (₪)</label>
+                  <input type="number" placeholder="0" value={manGross} onChange={e => setManGross(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addManual()}
+                    style={{ ...S.input, textAlign: 'right' as const }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                  <label style={S.label}>הערות <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
+                  <input type="text" placeholder="הערה..." value={manNotes} onChange={e => setManNotes(e.target.value)} style={S.input} />
+                </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column' as const, gridColumn: 'span 2' }}>
-                <label style={S.label}>שם עובד</label>
-                <input type="text" placeholder="שם מלא..." value={manName} onChange={e => setManName(e.target.value)} style={S.input} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                <label style={S.label}>שעות <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
-                <input type="number" placeholder="0" value={manHours} onChange={e => setManHours(e.target.value)} style={{ ...S.input, textAlign: 'right' as const }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                <label style={S.label}>שכר ברוטו (₪)</label>
-                <input type="number" placeholder="0" value={manGross} onChange={e => setManGross(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addManual()}
-                  style={{ ...S.input, textAlign: 'right' as const }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                <label style={S.label}>הערות <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
-                <input type="text" placeholder="הערה..." value={manNotes} onChange={e => setManNotes(e.target.value)} style={S.input} />
-              </div>
-            </div>
-            {manGross && parseFloat(manGross) > 0 && (
-              <div style={{ background: branchColor + '15', border: `1px solid ${branchColor}33`, borderRadius: '10px', padding: '10px 14px', marginBottom: '14px', display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>עלות מעסיק (×1.3):</span>
-                <span style={{ fontSize: '18px', fontWeight: '800', color: branchColor }}>₪{Math.round(parseFloat(manGross) * EMPLOYER_FACTOR).toLocaleString()}</span>
-              </div>
-            )}
-            <button onClick={addManual} disabled={loading || !manName || !manGross}
-              style={{ background: loading || !manName || !manGross ? '#e2e8f0' : branchColor, color: loading || !manName || !manGross ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Plus size={18} />הוסף
-            </button>
-          </div>
+              {manGross && parseFloat(manGross) > 0 && (
+                <div style={{ background: branchColor + '15', border: `1px solid ${branchColor}33`, borderRadius: '10px', padding: '10px 14px', marginBottom: '14px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '13px', color: '#64748b' }}>עלות מעסיק (×1.3):</span>
+                  <span style={{ fontSize: '18px', fontWeight: '800', color: branchColor }}>₪{Math.round(parseFloat(manGross) * EMPLOYER_FACTOR).toLocaleString()}</span>
+                </div>
+              )}
+              <button onClick={addManual} disabled={loading || !manName || !manGross}
+                style={{ background: loading || !manName || !manGross ? '#e2e8f0' : branchColor, color: loading || !manName || !manGross ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Plus size={18} />הוסף
+              </button>
+            </CardContent>
+          </Card>
         )}
 
         {/* ══ היסטוריה ════════════════════════════════════════════════════ */}
@@ -571,58 +590,64 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
             <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', alignItems: 'center' }}>
               <div style={{ marginRight: 'auto', display: 'flex', gap: '16px', fontSize: '13px', color: '#64748b' }}>
                 <span>ברוטו: <strong style={{ color: branchColor }}>₪{Math.round(totalGross).toLocaleString()}</strong></span>
-                <span>עלות מעסיק: <strong style={{ color: '#ef4444' }}>₪{Math.round(totalEmployer).toLocaleString()}</strong></span>
+                <span>עלות מעסיק: <strong style={{ color: '#fb7185' }}>₪{Math.round(totalEmployer).toLocaleString()}</strong></span>
                 <span>שעות: <strong>{totalHours.toFixed(1)}</strong></span>
               </div>
             </div>
-            <div className="table-scroll"><div style={S.card}>
-              <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
-                <span>תאריך</span><span>עובד</span>
-                <span style={{ textAlign: 'center' }}>שעות</span>
-                <span>ברוטו</span><span>עלות מעסיק</span>
-                <span /><span />
-              </div>
-              {entries.length === 0 ? (
-                <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין רשומות לחודש זה</div>
-              ) : entries.map((entry, i) => (
-                <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < entries.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                  {editId === entry.id ? (
-                    <>
-                      <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
-                      <input type="text" value={editData.employee_name || ''} onChange={e => setEditData({ ...editData, employee_name: e.target.value })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 8px', fontSize: '13px', fontFamily: 'inherit' }} />
-                      <input type="number" value={editData.hours || ''} onChange={e => setEditData({ ...editData, hours: parseFloat(e.target.value) })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' as const }} />
-                      <input type="number" value={editData.gross_salary || ''} onChange={e => setEditData({ ...editData, gross_salary: parseFloat(e.target.value) })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                      <span style={{ fontSize: '13px', color: '#ef4444', fontWeight: '700' }}>₪{Math.round(Number(editData.gross_salary || 0) * EMPLOYER_FACTOR).toLocaleString()}</span>
-                      <button onClick={() => saveEdit(entry.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
-                      <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
-                    </>
-                  ) : (
-                    <>
-                      <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(entry.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
-                      <div>
-                        <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{entry.employee_name}</span>
-                        {entry.notes && <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{entry.notes}</div>}
+            <motion.div variants={fadeIn} initial="hidden" animate="visible">
+              <div className="table-scroll">
+                <Card className="shadow-sm">
+                  <CardContent className="p-0">
+                    <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                      <span>תאריך</span><span>עובד</span>
+                      <span style={{ textAlign: 'center' }}>שעות</span>
+                      <span>ברוטו</span><span>עלות מעסיק</span>
+                      <span /><span />
+                    </div>
+                    {entries.length === 0 ? (
+                      <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין רשומות לחודש זה</div>
+                    ) : entries.map((entry, i) => (
+                      <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < entries.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                        {editId === entry.id ? (
+                          <>
+                            <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
+                            <input type="text" value={editData.employee_name || ''} onChange={e => setEditData({ ...editData, employee_name: e.target.value })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 8px', fontSize: '13px', fontFamily: 'inherit' }} />
+                            <input type="number" value={editData.hours || ''} onChange={e => setEditData({ ...editData, hours: parseFloat(e.target.value) })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' as const }} />
+                            <input type="number" value={editData.gross_salary || ''} onChange={e => setEditData({ ...editData, gross_salary: parseFloat(e.target.value) })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
+                            <span style={{ fontSize: '13px', color: '#fb7185', fontWeight: '700' }}>₪{Math.round(Number(editData.gross_salary || 0) * EMPLOYER_FACTOR).toLocaleString()}</span>
+                            <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
+                            <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(entry.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
+                            <div>
+                              <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{entry.employee_name}</span>
+                              {entry.notes && <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{entry.notes}</div>}
+                            </div>
+                            <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{Number(entry.hours) > 0 ? Number(entry.hours).toFixed(1) : '—'}</span>
+                            <span style={{ fontWeight: '700', color: branchColor, fontSize: '14px' }}>₪{Number(entry.gross_salary).toLocaleString()}</span>
+                            <span style={{ fontWeight: '700', color: '#fb7185', fontSize: '14px' }}>₪{Math.round(Number(entry.employer_cost)).toLocaleString()}</span>
+                            <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
+                            <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
+                          </>
+                        )}
                       </div>
-                      <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{Number(entry.hours) > 0 ? Number(entry.hours).toFixed(1) : '—'}</span>
-                      <span style={{ fontWeight: '700', color: branchColor, fontSize: '14px' }}>₪{Number(entry.gross_salary).toLocaleString()}</span>
-                      <span style={{ fontWeight: '700', color: '#ef4444', fontSize: '14px' }}>₪{Math.round(Number(entry.employer_cost)).toLocaleString()}</span>
-                      <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                      <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
-                    </>
-                  )}
-                </div>
-              ))}
-              {entries.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', padding: '13px 20px', background: branchColor + '15', borderTop: `2px solid ${branchColor}33`, borderRadius: '0 0 20px 20px', fontWeight: '700' }}>
-                  <span style={{ color: '#374151', fontSize: '13px' }}>סה"כ</span>
-                  <span style={{ color: '#64748b', fontSize: '13px' }}>{entries.length} רשומות</span>
-                  <span style={{ textAlign: 'center', color: '#64748b', fontSize: '13px' }}>{totalHours.toFixed(1)}</span>
-                  <span style={{ color: branchColor }}>₪{Math.round(totalGross).toLocaleString()}</span>
-                  <span style={{ color: '#ef4444' }}>₪{Math.round(totalEmployer).toLocaleString()}</span>
-                  <span /><span />
-                </div>
-              )}
-            </div></div>
+                    ))}
+                    {entries.length > 0 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', padding: '13px 20px', background: branchColor + '15', borderTop: `2px solid ${branchColor}33`, borderRadius: '0 0 20px 20px', fontWeight: '700' }}>
+                        <span style={{ color: '#374151', fontSize: '13px' }}>סה"כ</span>
+                        <span style={{ color: '#64748b', fontSize: '13px' }}>{entries.length} רשומות</span>
+                        <span style={{ textAlign: 'center', color: '#64748b', fontSize: '13px' }}>{totalHours.toFixed(1)}</span>
+                        <span style={{ color: branchColor }}>₪{Math.round(totalGross).toLocaleString()}</span>
+                        <span style={{ color: '#fb7185' }}>₪{Math.round(totalEmployer).toLocaleString()}</span>
+                        <span /><span />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </motion.div>
           </>
         )}
 

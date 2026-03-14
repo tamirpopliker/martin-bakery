@@ -1,8 +1,18 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import CountUp from 'react-countup'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Store, TrendingUp, TrendingDown, Minus, Users, Receipt, ShoppingBag, Trash2, DollarSign, BarChart3 } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { ArrowRight, Store, TrendingUp, TrendingDown, Minus, Trash2 } from 'lucide-react'
+import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon } from '@/components/icons'
+
+const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.1 } } }
+const fadeUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
 
 interface Props {
   onBack: () => void
@@ -36,9 +46,9 @@ interface BranchData {
 }
 
 const BRANCHES = [
-  { id: 1, name: 'אברהם אבינו', color: '#3b82f6' },
-  { id: 2, name: 'הפועלים',     color: '#10b981' },
-  { id: 3, name: 'יעקב כהן',   color: '#a855f7' },
+  { id: 1, name: 'אברהם אבינו', color: '#818cf8' },
+  { id: 2, name: 'הפועלים',     color: '#34d399' },
+  { id: 3, name: 'יעקב כהן',   color: '#c084fc' },
 ]
 
 function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString() }
@@ -147,51 +157,43 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   function DiffArrow({ current, previous }: { current: number; previous: number }) {
     if (previous === 0) return <Minus size={12} color="#94a3b8" />
     const p = ((current - previous) / Math.abs(previous)) * 100
-    const color = p > 0 ? '#10b981' : '#ef4444'
+    const color = p > 0 ? '#34d399' : '#fb7185'
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '11px', fontWeight: '700', color }}>
+      <span className="inline-flex items-center gap-0.5 text-[11px] font-bold" style={{ color }}>
         {p > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
         {Math.abs(p).toFixed(1)}%
       </span>
     )
   }
 
-  const S = {
-    page: { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' as const },
-    card: { background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' } as React.CSSProperties,
-  }
-
   return (
-    <div style={S.page}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
       {/* Header */}
-      <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' as const }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
-        <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, #3b82f6, #10b981)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(59,130,246,0.3)' }}>
-          <BarChart3 size={22} color="white" />
+        </Button>
+        <div className="w-11 h-11 rounded-[14px] flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #818cf8, #34d399)', boxShadow: '0 4px 14px rgba(129,140,248,0.3)' }}>
+          <ProfitIcon size={22} color="white" />
         </div>
         <div>
-          <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>דשבורד מנהל סניפים</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>השוואת ביצועים · P&L · KPI</p>
+          <h1 className="m-0 text-[22px] font-extrabold text-slate-900">דשבורד מנהל סניפים</h1>
+          <p className="m-0 text-[13px] text-slate-400">השוואת ביצועים · P&L · KPI</p>
         </div>
-        <div style={{ marginRight: 'auto' }}>
+        <div className="mr-auto">
           <PeriodPicker period={period} onChange={setPeriod} />
         </div>
       </div>
 
-      {loading && <div style={{ textAlign: 'center', padding: '60px', color: '#94a3b8', fontSize: '16px' }}>טוען נתונים...</div>}
+      {loading && <div className="text-center py-16 text-slate-400">טוען נתונים...</div>}
 
       {!loading && (
-        <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1200px', margin: '0 auto' }}>
+        <div className="page-container px-8 py-6 max-w-[1200px] mx-auto">
 
           {/* Overhead % control */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', justifyContent: 'flex-end' }}>
-            <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>העמסת מטה:</span>
+          <div className="flex items-center gap-2 mb-3.5 justify-end">
+            <span className="text-[13px] font-semibold text-slate-500">העמסת מטה:</span>
             <input
               type="number"
               value={overheadPct}
@@ -200,278 +202,344 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                 setOverheadPct(v)
                 localStorage.setItem('overhead_pct', String(v))
               }}
-              style={{ width: '50px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '4px 8px', fontSize: '14px', textAlign: 'center' as const, fontWeight: '600', color: '#3b82f6', background: 'white' }}
+              className="w-[50px] border border-slate-200 rounded-lg px-2 py-1 text-sm text-center font-semibold text-indigo-400 bg-white"
             />
-            <span style={{ fontSize: '13px', color: '#64748b' }}>%</span>
+            <span className="text-[13px] text-slate-500">%</span>
           </div>
 
-          {/* ── KPI Cards ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '14px', marginBottom: '24px' }}>
-            <div style={{ ...S.card, padding: '18px', borderTop: '3px solid #3b82f6' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <ShoppingBag size={15} color="#3b82f6" />
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>סה"כ הכנסות</span>
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>{fmtM(totals.revenue)}</div>
-              <DiffArrow current={totals.revenue} previous={prevTotals.revenue} />
-            </div>
+          {/* KPI Cards */}
+          <motion.div
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5 mb-6"
+          >
+            {/* Revenue */}
+            <motion.div variants={fadeUp}>
+              <Card className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default border-r-4 overflow-hidden" style={{ borderRightColor: '#818cf8' }}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#10B98115' }}>
+                      <RevenueIcon size={15} color="#10B981" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500">סה"כ הכנסות</span>
+                  </div>
+                  <div className="text-[22px] font-extrabold text-slate-900">
+                    <CountUp end={Math.round(totals.revenue)} duration={1.5} separator="," prefix="₪" />
+                  </div>
+                  <DiffArrow current={totals.revenue} previous={prevTotals.revenue} />
+                </CardContent>
+              </Card>
+            </motion.div>
 
-            <div style={{ ...S.card, padding: '18px', borderTop: '3px solid #ef4444' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <Receipt size={15} color="#ef4444" />
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>סה"כ הוצאות</span>
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: '800', color: '#ef4444' }}>{fmtM(totals.expenses)}</div>
-            </div>
+            {/* Expenses */}
+            <motion.div variants={fadeUp}>
+              <Card className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default border-r-4 overflow-hidden" style={{ borderRightColor: '#fb7185' }}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#fb718515' }}>
+                      <FixedCostIcon size={15} color="#fb7185" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500">סה"כ הוצאות</span>
+                  </div>
+                  <div className="text-[22px] font-extrabold" style={{ color: '#e11d48' }}>
+                    <CountUp end={Math.round(totals.expenses)} duration={1.5} separator="," prefix="₪" />
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-            <div style={{ ...S.card, padding: '18px', borderTop: '3px solid #f59e0b' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <Users size={15} color="#f59e0b" />
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>% לייבור</span>
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: '800', color: totalLaborPct <= 28 ? '#10b981' : '#ef4444' }}>{totalLaborPct.toFixed(1)}%</div>
-              <span style={{ fontSize: '11px', color: '#94a3b8' }}>יעד 28%</span>
-            </div>
+            {/* Labor % */}
+            <motion.div variants={fadeUp}>
+              <Card className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default border-r-4 overflow-hidden" style={{ borderRightColor: '#fbbf24' }}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#3B82F615' }}>
+                      <LaborIcon size={15} color="#3B82F6" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500">% לייבור</span>
+                  </div>
+                  <div className="text-[22px] font-extrabold" style={{ color: totalLaborPct <= 28 ? '#059669' : '#e11d48' }}>
+                    <CountUp end={totalLaborPct} duration={1.5} suffix="%" decimals={1} />
+                  </div>
+                  <span className="text-[11px] text-slate-400">יעד 28%</span>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-            <div style={{ ...S.card, padding: '18px', borderTop: '3px solid #ef4444' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <Trash2 size={15} color="#ef4444" />
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>% פחת</span>
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: '800', color: totalWastePct <= 4 ? '#10b981' : '#ef4444' }}>{totalWastePct.toFixed(1)}%</div>
-              <span style={{ fontSize: '11px', color: '#94a3b8' }}>יעד 4%</span>
-            </div>
+            {/* Waste % */}
+            <motion.div variants={fadeUp}>
+              <Card className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default border-r-4 overflow-hidden" style={{ borderRightColor: '#fb7185' }}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#fb718515' }}>
+                      <Trash2 size={15} color="#fb7185" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500">% פחת</span>
+                  </div>
+                  <div className="text-[22px] font-extrabold" style={{ color: totalWastePct <= 4 ? '#059669' : '#e11d48' }}>
+                    <CountUp end={totalWastePct} duration={1.5} suffix="%" decimals={1} />
+                  </div>
+                  <span className="text-[11px] text-slate-400">יעד 4%</span>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-            <div style={{ ...S.card, padding: '18px', borderTop: `3px solid ${totals.grossProfit >= 0 ? '#10b981' : '#ef4444'}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <DollarSign size={15} color={totals.grossProfit >= 0 ? '#10b981' : '#ef4444'} />
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>רווח גולמי</span>
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: '800', color: totals.grossProfit >= 0 ? '#10b981' : '#ef4444' }}>{fmtM(totals.grossProfit)}</div>
-              <DiffArrow current={totals.grossProfit} previous={prevTotals.grossProfit} />
-            </div>
+            {/* Gross Profit */}
+            <motion.div variants={fadeUp}>
+              <Card className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default border-r-4 overflow-hidden" style={{ borderRightColor: totals.grossProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#7C3AED15' }}>
+                      <ProfitIcon size={15} color={totals.grossProfit >= 0 ? '#7C3AED' : '#fb7185'} />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500">רווח גולמי</span>
+                  </div>
+                  <div className="text-[22px] font-extrabold" style={{ color: totals.grossProfit >= 0 ? '#059669' : '#e11d48' }}>
+                    <CountUp end={Math.round(totals.grossProfit)} duration={1.5} separator="," prefix="₪" />
+                  </div>
+                  <DiffArrow current={totals.grossProfit} previous={prevTotals.grossProfit} />
+                </CardContent>
+              </Card>
+            </motion.div>
 
-            <div style={{ ...S.card, padding: '18px', borderTop: `3px solid ${totals.operatingProfit >= 0 ? '#10b981' : '#ef4444'}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <BarChart3 size={15} color={totals.operatingProfit >= 0 ? '#10b981' : '#ef4444'} />
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>רווח תפעולי</span>
-              </div>
-              <div style={{ fontSize: '22px', fontWeight: '800', color: totals.operatingProfit >= 0 ? '#10b981' : '#ef4444' }}>{fmtM(totals.operatingProfit)}</div>
-              <DiffArrow current={totals.operatingProfit} previous={prevTotals.operatingProfit} />
-            </div>
-          </div>
+            {/* Operating Profit */}
+            <motion.div variants={fadeUp}>
+              <Card className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-default border-r-4 overflow-hidden" style={{ borderRightColor: totals.operatingProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#7C3AED15' }}>
+                      <ProfitIcon size={15} color={totals.operatingProfit >= 0 ? '#7C3AED' : '#fb7185'} />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500">רווח תפעולי</span>
+                  </div>
+                  <div className="text-[22px] font-extrabold" style={{ color: totals.operatingProfit >= 0 ? '#059669' : '#e11d48' }}>
+                    <CountUp end={Math.round(totals.operatingProfit)} duration={1.5} separator="," prefix="₪" />
+                  </div>
+                  <DiffArrow current={totals.operatingProfit} previous={prevTotals.operatingProfit} />
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
 
-          {/* ── Branch Cards ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+          {/* Branch Cards */}
+          <motion.div
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-5 mb-6"
+          >
             {branches.map((br, bi) => {
               const prev = prevBranches[bi]
               return (
-                <div key={br.id} style={{ ...S.card, borderTop: `4px solid ${br.color}` }}>
-                  {/* Branch header */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
-                    <div style={{ width: '44px', height: '44px', background: br.color, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 4px 14px ${br.color}40` }}>
-                      <Store size={22} color="white" />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{br.name}</div>
-                      <div style={{ fontSize: '12px', color: '#94a3b8' }}>{period.label}</div>
-                    </div>
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontSize: '20px', fontWeight: '800', color: brOP(br) >= 0 ? '#10b981' : '#ef4444' }}>
-                        {fmtM(brOP(br))}
+                <motion.div key={br.id} variants={fadeUp}>
+                  <Card className="shadow-sm overflow-hidden border-t-4" style={{ borderTopColor: br.color }}>
+                    <CardContent className="p-6">
+                      {/* Branch header */}
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-11 h-11 rounded-[14px] flex items-center justify-center" style={{ background: br.color, boxShadow: `0 4px 14px ${br.color}40` }}>
+                          <Store size={22} color="white" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-lg font-extrabold text-slate-900">{br.name}</div>
+                          <div className="text-xs text-slate-400">{period.label}</div>
+                        </div>
+                        <div className="text-left">
+                          <div className="text-xl font-extrabold" style={{ color: brOP(br) >= 0 ? '#34d399' : '#fb7185' }}>
+                            {fmtM(brOP(br))}
+                          </div>
+                          <div className="text-[11px] text-slate-400">רווח תפעולי</div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>רווח תפעולי</div>
-                    </div>
-                  </div>
 
-                  {/* KPI row */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '16px' }}>
-                    {[
-                      { label: 'לייבור', val: br.laborPct.toFixed(1) + '%', ok: br.laborPct <= 28, target: '28%' },
-                      { label: 'פחת', val: br.wastePct.toFixed(1) + '%', ok: br.wastePct <= 4, target: '4%' },
-                      { label: 'גולמי', val: br.grossPct.toFixed(1) + '%', ok: br.grossProfit >= 0, target: '' },
-                      { label: 'תפעולי', val: (br.totalRevenue > 0 ? (brOP(br) / br.totalRevenue * 100).toFixed(1) : '0.0') + '%', ok: brOP(br) >= 0, target: '' },
-                    ].map(kpi => (
-                      <div key={kpi.label} style={{ background: kpi.ok ? '#f0fdf4' : '#fef2f2', borderRadius: '10px', padding: '8px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '15px', fontWeight: '800', color: kpi.ok ? '#10b981' : '#ef4444' }}>{kpi.val}</div>
-                        <div style={{ fontSize: '10px', color: '#64748b' }}>{kpi.label}</div>
+                      {/* KPI row */}
+                      <div className="grid grid-cols-4 gap-2 mb-4">
+                        {[
+                          { label: 'לייבור', val: br.laborPct.toFixed(1) + '%', ok: br.laborPct <= 28, target: '28%' },
+                          { label: 'פחת', val: br.wastePct.toFixed(1) + '%', ok: br.wastePct <= 4, target: '4%' },
+                          { label: 'גולמי', val: br.grossPct.toFixed(1) + '%', ok: br.grossProfit >= 0, target: '' },
+                          { label: 'תפעולי', val: (br.totalRevenue > 0 ? (brOP(br) / br.totalRevenue * 100).toFixed(1) : '0.0') + '%', ok: brOP(br) >= 0, target: '' },
+                        ].map(kpi => (
+                          <div key={kpi.label} className={`rounded-[10px] p-2 text-center ${kpi.ok ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                            <div className="text-[15px] font-extrabold" style={{ color: kpi.ok ? '#34d399' : '#fb7185' }}>{kpi.val}</div>
+                            <div className="text-[10px] text-slate-500">{kpi.label}</div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
 
-                  {/* P&L breakdown */}
-                  <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', fontSize: '13px' }}>
-                    {[
-                      { label: 'הכנסות', amount: br.totalRevenue, color: '#10b981', bold: true },
-                      { label: '  קופה', amount: br.revCashier, color: '#374151' },
-                      { label: '  אתר', amount: br.revWebsite, color: '#374151' },
-                      { label: '  הקפה', amount: br.revCredit, color: '#374151' },
-                      { label: 'לייבור', amount: -br.laborEmployer, color: '#ef4444', bold: true },
-                      { label: 'הוצאות', amount: -br.totalExpenses, color: '#ef4444', bold: true },
-                      { label: '  ספקים', amount: -br.expSuppliers, color: '#374151' },
-                      ...(br.expRepairs > 0 ? [{ label: '  תיקונים', amount: -br.expRepairs, color: '#374151' }] : []),
-                      ...(br.expDelivery > 0 ? [{ label: '  משלוחים', amount: -br.expDelivery, color: '#374151' }] : []),
-                      ...(br.expInfra > 0 ? [{ label: '  תשתיות', amount: -br.expInfra, color: '#374151' }] : []),
-                      ...(br.expOther > 0 ? [{ label: '  אחר', amount: -br.expOther, color: '#374151' }] : []),
-                      { label: 'רווח גולמי', amount: br.grossProfit, color: br.grossProfit >= 0 ? '#10b981' : '#ef4444', bold: true, bg: br.grossProfit >= 0 ? '#f0fdf4' : '#fef2f2' },
-                      ...(br.fixedCosts > 0 ? [{ label: 'עלויות קבועות', amount: -br.fixedCosts, color: '#64748b' }] : []),
-                      ...(br.mgmtCosts > 0 ? [{ label: 'הנהלה וכלליות', amount: -br.mgmtCosts, color: '#64748b' }] : []),
-                      { label: 'פחת', amount: -br.wasteTotal, color: '#64748b' },
-                      ...(overheadPct > 0 ? [{ label: `העמסת מטה ${overheadPct}%`, amount: -brOH(br), color: '#64748b' }] : []),
-                      { label: 'רווח תפעולי', amount: brOP(br), color: brOP(br) >= 0 ? '#10b981' : '#ef4444', bold: true, bg: brOP(br) >= 0 ? '#f0fdf4' : '#fef2f2' },
-                    ].map((line, i) => (
-                      <div key={i} style={{
-                        display: 'grid', gridTemplateColumns: '1fr 120px',
-                        padding: '7px 14px',
-                        background: (line as any).bg || (i % 2 === 0 ? 'white' : '#fafafa'),
-                        borderBottom: '1px solid #f1f5f9',
-                        fontWeight: (line as any).bold ? '700' : '400',
-                      }}>
-                        <span style={{ color: '#374151' }}>{line.label}</span>
-                        <span style={{ textAlign: 'left', color: line.color, fontWeight: (line as any).bold ? '700' : '500' }}>
-                          {line.amount === 0 ? '—' : fmtM(Math.abs(line.amount))}{line.amount < 0 ? '-' : ''}
-                        </span>
+                      {/* P&L breakdown */}
+                      <div className="border border-slate-200 rounded-xl overflow-hidden text-[13px]">
+                        {[
+                          { label: 'הכנסות', amount: br.totalRevenue, color: '#34d399', bold: true },
+                          { label: '  קופה', amount: br.revCashier, color: '#374151' },
+                          { label: '  אתר', amount: br.revWebsite, color: '#374151' },
+                          { label: '  הקפה', amount: br.revCredit, color: '#374151' },
+                          { label: 'לייבור', amount: -br.laborEmployer, color: '#fb7185', bold: true },
+                          { label: 'הוצאות', amount: -br.totalExpenses, color: '#fb7185', bold: true },
+                          { label: '  ספקים', amount: -br.expSuppliers, color: '#374151' },
+                          ...(br.expRepairs > 0 ? [{ label: '  תיקונים', amount: -br.expRepairs, color: '#374151' }] : []),
+                          ...(br.expDelivery > 0 ? [{ label: '  משלוחים', amount: -br.expDelivery, color: '#374151' }] : []),
+                          ...(br.expInfra > 0 ? [{ label: '  תשתיות', amount: -br.expInfra, color: '#374151' }] : []),
+                          ...(br.expOther > 0 ? [{ label: '  אחר', amount: -br.expOther, color: '#374151' }] : []),
+                          { label: 'רווח גולמי', amount: br.grossProfit, color: br.grossProfit >= 0 ? '#34d399' : '#fb7185', bold: true, bg: br.grossProfit >= 0 ? '#f0fdf4' : '#fef2f2' },
+                          ...(br.fixedCosts > 0 ? [{ label: 'עלויות קבועות', amount: -br.fixedCosts, color: '#64748b' }] : []),
+                          ...(br.mgmtCosts > 0 ? [{ label: 'הנהלה וכלליות', amount: -br.mgmtCosts, color: '#64748b' }] : []),
+                          { label: 'פחת', amount: -br.wasteTotal, color: '#64748b' },
+                          ...(overheadPct > 0 ? [{ label: `העמסת מטה ${overheadPct}%`, amount: -brOH(br), color: '#64748b' }] : []),
+                          { label: 'רווח תפעולי', amount: brOP(br), color: brOP(br) >= 0 ? '#34d399' : '#fb7185', bold: true, bg: brOP(br) >= 0 ? '#f0fdf4' : '#fef2f2' },
+                        ].map((line, i) => (
+                          <div key={i} className={`grid grid-cols-[1fr_120px] px-3.5 py-[7px] border-b border-slate-50 ${(line as any).bold ? 'font-bold' : 'font-normal'}`}
+                            style={{ background: (line as any).bg || (i % 2 === 0 ? 'white' : '#fafafa') }}>
+                            <span className="text-slate-700">{line.label}</span>
+                            <span className={`text-left ${(line as any).bold ? 'font-bold' : 'font-medium'}`} style={{ color: line.color }}>
+                              {line.amount === 0 ? '—' : fmtM(Math.abs(line.amount))}{line.amount < 0 ? '-' : ''}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
 
-                  {/* Comparison */}
-                  {prev && prev.totalRevenue > 0 && (
-                    <div style={{ marginTop: '12px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                      <div style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        הכנסות: <DiffArrow current={br.totalRevenue} previous={prev.totalRevenue} />
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        רווח: <DiffArrow current={brOP(br)} previous={brOP(prev)} />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                      {/* Comparison */}
+                      {prev && prev.totalRevenue > 0 && (
+                        <div className="mt-3 flex gap-2 justify-center">
+                          <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                            הכנסות: <DiffArrow current={br.totalRevenue} previous={prev.totalRevenue} />
+                          </div>
+                          <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                            רווח: <DiffArrow current={brOP(br)} previous={brOP(prev)} />
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
               )
             })}
-          </div>
+          </motion.div>
 
-          {/* ── Comparison Table ── */}
-          <div className="table-scroll"><div style={S.card}>
-            <h2 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>
-              טבלת השוואה — {period.label}
-            </h2>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                    <th style={{ padding: '10px 14px', textAlign: 'right', color: '#64748b', fontWeight: '600', fontSize: '12px' }}>מדד</th>
-                    {branches.map(br => (
-                      <th key={br.id} style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '700', fontSize: '13px' }}>
-                        <span style={{ color: br.color }}>{br.name}</span>
-                      </th>
-                    ))}
-                    <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '700', fontSize: '13px', color: '#0f172a' }}>סה"כ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { label: 'הכנסות', key: 'totalRevenue' as const, color: '#10b981' },
-                    { label: 'הוצאות', key: 'totalExpenses' as const, color: '#ef4444' },
-                    { label: 'לייבור', key: 'laborEmployer' as const, color: '#f59e0b' },
-                    { label: 'פחת', key: 'wasteTotal' as const, color: '#ef4444' },
-                    { label: 'עלויות קבועות', key: 'fixedCosts' as const, color: '#64748b' },
-                    { label: 'הנהלה וכלליות', key: 'mgmtCosts' as const, color: '#64748b' },
-                    { label: 'רווח גולמי', key: 'grossProfit' as const, color: '#10b981' },
-                  ].map((row, ri) => {
-                    const isBold = row.key === 'grossProfit' || row.key === 'operatingProfit' || row.key === 'totalRevenue'
-                    const totalVal = branches.reduce((s, b) => s + b[row.key], 0)
-                    return (
-                      <tr key={row.key} style={{
-                        borderBottom: '1px solid #f1f5f9',
-                        background: isBold ? '#f8fafc' : ri % 2 === 0 ? 'white' : '#fafafa',
-                      }}>
-                        <td style={{ padding: '10px 14px', fontWeight: isBold ? '700' : '500', color: '#374151' }}>{row.label}</td>
+          {/* Comparison Table */}
+          <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <div className="table-scroll">
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-base font-bold text-slate-900">
+                    טבלת השוואה — {period.label}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b-2 border-slate-200">
+                        <TableHead className="text-right text-slate-500 font-semibold text-xs px-3.5 py-2.5">מדד</TableHead>
+                        {branches.map(br => (
+                          <TableHead key={br.id} className="text-center font-bold text-[13px] px-3.5 py-2.5">
+                            <span style={{ color: br.color }}>{br.name}</span>
+                          </TableHead>
+                        ))}
+                        <TableHead className="text-center font-bold text-[13px] text-slate-900 px-3.5 py-2.5">סה"כ</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {[
+                        { label: 'הכנסות', key: 'totalRevenue' as const, color: '#34d399' },
+                        { label: 'הוצאות', key: 'totalExpenses' as const, color: '#fb7185' },
+                        { label: 'לייבור', key: 'laborEmployer' as const, color: '#fbbf24' },
+                        { label: 'פחת', key: 'wasteTotal' as const, color: '#fb7185' },
+                        { label: 'עלויות קבועות', key: 'fixedCosts' as const, color: '#64748b' },
+                        { label: 'הנהלה וכלליות', key: 'mgmtCosts' as const, color: '#64748b' },
+                        { label: 'רווח גולמי', key: 'grossProfit' as const, color: '#34d399' },
+                      ].map((row, ri) => {
+                        const isBold = row.key === 'grossProfit' || row.key === 'operatingProfit' || row.key === 'totalRevenue'
+                        const totalVal = branches.reduce((s, b) => s + b[row.key], 0)
+                        return (
+                          <TableRow key={row.key} className={isBold ? 'bg-slate-50' : ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                            <TableCell className={`px-3.5 py-2.5 text-slate-700 ${isBold ? 'font-bold' : 'font-medium'}`}>{row.label}</TableCell>
+                            {branches.map(br => {
+                              const val = br[row.key]
+                              const isProfit = row.key === 'grossProfit' || row.key === 'operatingProfit'
+                              const c = isProfit ? (val >= 0 ? '#34d399' : '#fb7185') : row.color
+                              return (
+                                <TableCell key={br.id} className={`px-3.5 py-2.5 text-center ${isBold ? 'font-bold' : 'font-medium'}`} style={{ color: val === 0 ? '#94a3b8' : c }}>
+                                  {val === 0 ? '—' : fmtM(val)}
+                                </TableCell>
+                              )
+                            })}
+                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: (row.key === 'grossProfit' || row.key === 'operatingProfit') ? (totalVal >= 0 ? '#34d399' : '#fb7185') : '#0f172a' }}>
+                              {totalVal === 0 ? '—' : fmtM(totalVal)}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                      {/* Overhead row */}
+                      {overheadPct > 0 && (
+                        <TableRow className="bg-slate-50/50">
+                          <TableCell className="px-3.5 py-2.5 font-medium text-slate-700">העמסת מטה {overheadPct}%</TableCell>
+                          {branches.map(br => (
+                            <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-medium text-slate-500">
+                              {fmtM(brOH(br))}
+                            </TableCell>
+                          ))}
+                          <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
+                            {fmtM(totals.overhead)}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      <TableRow className="bg-slate-50">
+                        <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">רווח תפעולי</TableCell>
                         {branches.map(br => {
-                          const val = br[row.key]
-                          const isProfit = row.key === 'grossProfit' || row.key === 'operatingProfit'
-                          const c = isProfit ? (val >= 0 ? '#10b981' : '#ef4444') : row.color
+                          const op = brOP(br)
                           return (
-                            <td key={br.id} style={{ padding: '10px 14px', textAlign: 'center', fontWeight: isBold ? '700' : '500', color: val === 0 ? '#94a3b8' : c }}>
-                              {val === 0 ? '—' : fmtM(val)}
-                            </td>
+                            <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: op >= 0 ? '#34d399' : '#fb7185' }}>
+                              {op === 0 ? '—' : fmtM(op)}
+                            </TableCell>
                           )
                         })}
-                        <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '700', color: (row.key === 'grossProfit' || row.key === 'operatingProfit') ? (totalVal >= 0 ? '#10b981' : '#ef4444') : '#0f172a' }}>
-                          {totalVal === 0 ? '—' : fmtM(totalVal)}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {/* Overhead row */}
-                  {overheadPct > 0 && (
-                    <tr style={{ borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
-                      <td style={{ padding: '10px 14px', fontWeight: '500', color: '#374151' }}>העמסת מטה {overheadPct}%</td>
-                      {branches.map(br => (
-                        <td key={br.id} style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '500', color: '#64748b' }}>
-                          {fmtM(brOH(br))}
-                        </td>
-                      ))}
-                      <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '700', color: '#0f172a' }}>
-                        {fmtM(totals.overhead)}
-                      </td>
-                    </tr>
-                  )}
-                  <tr style={{ borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
-                    <td style={{ padding: '10px 14px', fontWeight: '700', color: '#374151' }}>רווח תפעולי</td>
-                    {branches.map(br => {
-                      const op = brOP(br)
-                      return (
-                        <td key={br.id} style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '700', color: op >= 0 ? '#10b981' : '#ef4444' }}>
-                          {op === 0 ? '—' : fmtM(op)}
-                        </td>
-                      )
-                    })}
-                    <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '700', color: totals.operatingProfit >= 0 ? '#10b981' : '#ef4444' }}>
-                      {totals.operatingProfit === 0 ? '—' : fmtM(totals.operatingProfit)}
-                    </td>
-                  </tr>
-                  {/* KPI row */}
-                  <tr style={{ borderTop: '2px solid #e2e8f0', background: '#f8fafc' }}>
-                    <td style={{ padding: '10px 14px', fontWeight: '700', color: '#374151' }}>% לייבור</td>
-                    {branches.map(br => (
-                      <td key={br.id} style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '700', color: br.laborPct <= 28 ? '#10b981' : '#ef4444' }}>
-                        {br.totalRevenue > 0 ? br.laborPct.toFixed(1) + '%' : '—'}
-                      </td>
-                    ))}
-                    <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '700', color: totalLaborPct <= 28 ? '#10b981' : '#ef4444' }}>
-                      {totalLaborPct.toFixed(1)}%
-                    </td>
-                  </tr>
-                  <tr style={{ background: '#f8fafc' }}>
-                    <td style={{ padding: '10px 14px', fontWeight: '700', color: '#374151' }}>% פחת</td>
-                    {branches.map(br => (
-                      <td key={br.id} style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '700', color: br.wastePct <= 4 ? '#10b981' : '#ef4444' }}>
-                        {br.totalRevenue > 0 ? br.wastePct.toFixed(1) + '%' : '—'}
-                      </td>
-                    ))}
-                    <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '700', color: totalWastePct <= 4 ? '#10b981' : '#ef4444' }}>
-                      {totalWastePct.toFixed(1)}%
-                    </td>
-                  </tr>
-                  <tr style={{ background: '#f8fafc' }}>
-                    <td style={{ padding: '10px 14px', fontWeight: '700', color: '#374151' }}>% רווח תפעולי</td>
-                    {branches.map(br => {
-                      const opPct = br.totalRevenue > 0 ? (brOP(br) / br.totalRevenue * 100) : 0
-                      return (
-                        <td key={br.id} style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '700', color: opPct >= 0 ? '#10b981' : '#ef4444' }}>
-                          {br.totalRevenue > 0 ? opPct.toFixed(1) + '%' : '—'}
-                        </td>
-                      )
-                    })}
-                    <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '700', color: totals.revenue > 0 ? ((totals.operatingProfit / totals.revenue * 100) >= 0 ? '#10b981' : '#ef4444') : '#94a3b8' }}>
-                      {totals.revenue > 0 ? (totals.operatingProfit / totals.revenue * 100).toFixed(1) + '%' : '—'}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                        <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.operatingProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                          {totals.operatingProfit === 0 ? '—' : fmtM(totals.operatingProfit)}
+                        </TableCell>
+                      </TableRow>
+                      {/* KPI rows */}
+                      <TableRow className="border-t-2 border-slate-200 bg-slate-50">
+                        <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% לייבור</TableCell>
+                        {branches.map(br => (
+                          <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: br.laborPct <= 28 ? '#34d399' : '#fb7185' }}>
+                            {br.totalRevenue > 0 ? br.laborPct.toFixed(1) + '%' : '—'}
+                          </TableCell>
+                        ))}
+                        <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totalLaborPct <= 28 ? '#34d399' : '#fb7185' }}>
+                          {totalLaborPct.toFixed(1)}%
+                        </TableCell>
+                      </TableRow>
+                      <TableRow className="bg-slate-50">
+                        <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% פחת</TableCell>
+                        {branches.map(br => (
+                          <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: br.wastePct <= 4 ? '#34d399' : '#fb7185' }}>
+                            {br.totalRevenue > 0 ? br.wastePct.toFixed(1) + '%' : '—'}
+                          </TableCell>
+                        ))}
+                        <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totalWastePct <= 4 ? '#34d399' : '#fb7185' }}>
+                          {totalWastePct.toFixed(1)}%
+                        </TableCell>
+                      </TableRow>
+                      <TableRow className="bg-slate-50">
+                        <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% רווח תפעולי</TableCell>
+                        {branches.map(br => {
+                          const opPct = br.totalRevenue > 0 ? (brOP(br) / br.totalRevenue * 100) : 0
+                          return (
+                            <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: opPct >= 0 ? '#34d399' : '#fb7185' }}>
+                              {br.totalRevenue > 0 ? opPct.toFixed(1) + '%' : '—'}
+                            </TableCell>
+                          )
+                        })}
+                        <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.revenue > 0 ? ((totals.operatingProfit / totals.revenue * 100) >= 0 ? '#34d399' : '#fb7185') : '#94a3b8' }}>
+                          {totals.revenue > 0 ? (totals.operatingProfit / totals.revenue * 100).toFixed(1) + '%' : '—'}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             </div>
-          </div></div>
+          </motion.div>
 
         </div>
       )}

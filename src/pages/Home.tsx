@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { supabase, getLast6Months, monthEnd } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import { useAppUser } from '../lib/UserContext'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import PeriodPicker from '../components/PeriodPicker'
 import DailyProduction from './DailyProduction'
 import FactoryWaste from './FactoryWaste'
@@ -21,40 +24,46 @@ import UserManagement from './UserManagement'
 import DataImport from './DataImport'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
-  Store, Trophy, Settings, LogOut, TrendingUp, TrendingDown,
+  Store, Settings, LogOut, TrendingUp, TrendingDown,
   AlertTriangle, ClipboardList, Truck, UserCog,
   Factory, ChevronDown, ChevronLeft, Database,
   LayoutDashboard
 } from 'lucide-react'
+import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
 // ─── קבועים ─────────────────────────────────────────────────────────────────
 const BRANCHES = [
-  { id: 1, name: 'אברהם אבינו', color: '#3b82f6', page: 'branch_1' },
-  { id: 2, name: 'הפועלים',     color: '#10b981', page: 'branch_2' },
-  { id: 3, name: 'יעקב כהן',   color: '#a855f7', page: 'branch_3' },
+  { id: 1, name: 'אברהם אבינו', color: '#818cf8', page: 'branch_1' },
+  { id: 2, name: 'הפועלים',     color: '#34d399', page: 'branch_2' },
+  { id: 3, name: 'יעקב כהן',   color: '#c084fc', page: 'branch_3' },
 ]
 
 const PANEL_FACTORY = [
-  { label: 'קרמים',        subtitle: 'ייצור · פחת · תיקונים',         Icon: FlaskConical, color: '#3b82f6', page: 'dept_creams' },
+  { label: 'קרמים',        subtitle: 'ייצור · פחת · תיקונים',         Icon: FlaskConical, color: '#818cf8', page: 'dept_creams' },
   { label: 'בצקים',        subtitle: 'ייצור · פחת · תיקונים',         Icon: Croissant,    color: '#8b5cf6', page: 'dept_dough' },
   { label: 'אריזה',        subtitle: 'כמויות · תיקונים · לייבור',     Icon: Package,      color: '#0ea5e9', page: 'dept_packaging' },
   { label: 'ניקיון/נהג',   subtitle: 'תיקונים · לייבור',              Icon: Truck,        color: '#64748b', page: 'dept_cleaning' },
   { label: 'לייבור מרוכז', subtitle: 'העלאת CSV · כל המחלקות',       Icon: HardHat,      color: '#f59e0b', page: 'labor' },
   { label: 'מכירות',        subtitle: 'קרמים · בצקים · B2B · שונות',  Icon: TrendingUp,   color: '#6366f1', page: 'factory_b2b' },
-  { label: 'ספקים',         subtitle: 'חשבוניות · ניהול ספקים',        Icon: ClipboardList, color: '#10b981', page: 'suppliers' },
-  { label: 'דשבורד מפעל',  subtitle: 'KPI · רווח · גרפים',           Icon: BarChart3,    color: '#6366f1', page: 'factory_dashboard' },
+  { label: 'ספקים',         subtitle: 'חשבוניות · ניהול ספקים',        Icon: ClipboardList, color: '#34d399', page: 'suppliers' },
+  { label: 'דשבורד מפעל',  subtitle: 'KPI · רווח · גרפים',           Icon: ProfitIcon,    color: '#6366f1', page: 'factory_dashboard' },
   { label: 'הגדרות מפעל',  subtitle: 'יעדים · עובדים · עלויות',      Icon: Settings,     color: '#64748b', page: 'settings' },
 ]
 
 const PANEL_MANAGE = [
-  { label: 'דשבורד מנכ"ל', subtitle: 'מבט רשתי · כל הסניפים', Icon: Trophy,   color: '#f59e0b', page: 'ceo_dashboard' },
+  { label: 'דשבורד מנכ"ל', subtitle: 'מבט רשתי · כל הסניפים', Icon: TrophyIcon,   color: '#f59e0b', page: 'ceo_dashboard' },
   { label: 'הגדרות מערכת', subtitle: 'יעדים · עובדים · עלויות', Icon: Settings, color: '#64748b', page: 'settings' },
-  { label: 'ייבוא נתונים', subtitle: 'CSV מ-Base44 · העלאה',   Icon: Database, color: '#3b82f6', page: 'data_import' },
+  { label: 'ייבוא נתונים', subtitle: 'CSV מ-Base44 · העלאה',   Icon: Database, color: '#818cf8', page: 'data_import' },
 ]
 
 const fmtK = (n: number) => n === 0 ? '—' : '₪' + Math.round(n).toLocaleString()
 
 interface BranchKpi { id: number; name: string; color: string; revenue: number; laborPct: number }
+
+// ─── Animation Variants ──────────────────────────────────────────────────────
+const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }
+const fadeUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
 
 // ─── קומפוננטה ──────────────────────────────────────────────────────────────
 export default function Home() {
@@ -241,9 +250,9 @@ export default function Home() {
     if (page === 'dept_cleaning')  return <DepartmentHome department="cleaning"  onBack={() => setPage(null)} />
 
     if (page === 'branch_dashboard') return <BranchManagerDashboard onBack={() => setPage(null)} />
-    if (page === 'branch_1') return <BranchHome branch={{ id: 1, name: 'אברהם אבינו', color: '#3b82f6' }} onBack={() => setPage(null)} />
-    if (page === 'branch_2') return <BranchHome branch={{ id: 2, name: 'הפועלים',     color: '#10b981' }} onBack={() => setPage(null)} />
-    if (page === 'branch_3') return <BranchHome branch={{ id: 3, name: 'יעקב כהן',   color: '#a855f7' }} onBack={() => setPage(null)} />
+    if (page === 'branch_1') return <BranchHome branch={{ id: 1, name: 'אברהם אבינו', color: '#818cf8' }} onBack={() => setPage(null)} />
+    if (page === 'branch_2') return <BranchHome branch={{ id: 2, name: 'הפועלים',     color: '#34d399' }} onBack={() => setPage(null)} />
+    if (page === 'branch_3') return <BranchHome branch={{ id: 3, name: 'יעקב כהן',   color: '#c084fc' }} onBack={() => setPage(null)} />
 
     return null
   }
@@ -256,38 +265,34 @@ export default function Home() {
         <>
           {pageContent}
           {/* Floating Home Button */}
-          <button
+          <motion.button
             onClick={() => setPage(null)}
             title="חזרה לדף הבית"
-            style={{
-              position: 'fixed', bottom: 24, left: 24,
-              width: 52, height: 52, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-              color: 'white', border: 'none',
-              boxShadow: '0 4px 20px rgba(59,130,246,0.4)',
-              cursor: 'pointer', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', zIndex: 9999,
-              transition: 'transform 0.15s, box-shadow 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(59,130,246,0.5)' }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(59,130,246,0.4)' }}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.3 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            className="fixed bottom-6 left-6 w-[52px] h-[52px] rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-white border-none shadow-lg shadow-indigo-400/40 cursor-pointer flex items-center justify-center z-[9999] transition-shadow hover:shadow-xl hover:shadow-indigo-400/50"
           >
             <LayoutDashboard size={24} />
-          </button>
+          </motion.button>
         </>
       )
     }
     // Unknown page — show "in development" fallback
     return (
-      <div style={{ minHeight: '100vh', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' }}>
-        <div style={{ background: 'white', borderRadius: '20px', padding: '48px', textAlign: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
-          <h2 style={{ margin: '0 0 8px', color: '#0f172a' }}>בפיתוח</h2>
-          <p style={{ color: '#94a3b8', marginBottom: '24px' }}>מסך זה יהיה זמין בקרוב</p>
-          <button onClick={() => setPage(null)} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}>
-            חזרה לדף הבית
-          </button>
-        </div>
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center font-sans" style={{ direction: 'rtl' }}>
+        <Card className="text-center p-12 shadow-lg">
+          <CardContent className="flex flex-col items-center gap-4">
+            <div className="text-5xl">🚧</div>
+            <h2 className="text-xl font-bold text-slate-900 m-0">בפיתוח</h2>
+            <p className="text-slate-400 m-0">מסך זה יהיה זמין בקרוב</p>
+            <Button variant="default" size="lg" onClick={() => setPage(null)} className="rounded-xl px-6 text-[15px] font-bold">
+              חזרה לדף הבית
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -299,10 +304,10 @@ export default function Home() {
     const d = ((curr - prev) / Math.abs(prev)) * 100
     const up = d > 0
     const good = inverse ? !up : up
-    const color = Math.abs(d) < 1 ? '#94a3b8' : good ? '#10b981' : '#ef4444'
+    const color = Math.abs(d) < 1 ? '#94a3b8' : good ? '#34d399' : '#fb7185'
     const Icon = up ? TrendingUp : TrendingDown
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '12px', fontWeight: '700', color, marginTop: '4px' }}>
+      <span className="inline-flex items-center gap-[3px] text-xs font-bold mt-1" style={{ color }}>
         <Icon size={12} /> {Math.abs(d).toFixed(1)}%
       </span>
     )
@@ -315,418 +320,410 @@ export default function Home() {
 
   // ─── מסך הבית ─────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' }}>
+    <div className="min-h-screen bg-slate-100 font-sans" style={{ direction: 'rtl' }}>
 
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '20px 24px' }}>
+      <div className="max-w-[900px] mx-auto px-6 py-5">
 
         {/* ─── כותרת ─────────────────────────────────────────────────────── */}
-        <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '42px', height: '42px', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(59,130,246,0.3)' }}>
+        <motion.div
+          variants={fadeIn}
+          initial="hidden"
+          animate="visible"
+          className="mb-4 flex items-center justify-between flex-wrap gap-2.5"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-[42px] h-[42px] bg-gradient-to-br from-indigo-400 to-purple-500 rounded-[14px] flex items-center justify-center shadow-lg shadow-indigo-400/30">
               <Croissant size={22} color="white" />
             </div>
             <div>
-              <h1 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: '0' }}>שלום, {appUser?.name || 'משתמש'}</h1>
-              <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>
+              <h1 className="text-xl font-extrabold text-slate-900 m-0">שלום, {appUser?.name || 'משתמש'}</h1>
+              <p className="text-slate-400 text-xs m-0">
                 {new Date().toLocaleDateString('he-IL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="flex items-center gap-2.5">
             <PeriodPicker period={period} onChange={setPeriod} />
-            <button
+            <Button
+              variant="outline"
+              size="icon"
               onClick={() => logout()}
               title="יציאה"
-              style={{
-                width: '36px', height: '36px', background: 'white', border: '1.5px solid #e2e8f0',
-                borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', transition: 'all 0.12s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.background = '#fef2f2' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = 'white' }}
+              className="w-9 h-9 rounded-[10px] hover:border-rose-400 hover:bg-rose-50"
             >
-              <LogOut size={16} color="#64748b" />
-            </button>
+              <LogOut size={16} className="text-slate-500" />
+            </Button>
           </div>
-        </div>
+        </motion.div>
 
         {/* ─── KPI Strip ──────────────────────────────────────────────────── */}
-        <div className="kpi-grid" style={{ background: 'white', borderRadius: '14px', padding: '14px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '0', flexWrap: 'wrap' }}>
-          {/* הכנסות */}
-          {(() => { const grandRevenue = factoryRevenue + totalBranchRevenue; return (
-          <div style={{ flex: 1, minWidth: '140px', display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 16px 4px 0', borderLeft: '1px solid #e2e8f0' }}>
-            <div>
-              <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', marginBottom: '2px' }}>הכנסות</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{fmtK(grandRevenue)}</span>
-                <DiffBadge curr={factoryRevenue + totalBranchRevenue} prev={prevFactoryRevenue + prevBranchRevenue} />
+        <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.1 }}>
+          <Card className="mb-5 py-0">
+            <CardContent className="kpi-grid flex items-center gap-0 flex-wrap py-3.5 px-6">
+              {/* הכנסות */}
+              {(() => { const grandRevenue = factoryRevenue + totalBranchRevenue; return (
+              <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 pe-4 border-e border-slate-200">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#10B98115' }}>
+                  <RevenueIcon size={16} color="#10B981" />
+                </div>
+                <div>
+                  <div className="text-[11px] text-slate-400 font-semibold mb-0.5">הכנסות</div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-lg font-extrabold text-slate-900">{fmtK(grandRevenue)}</span>
+                    <DiffBadge curr={factoryRevenue + totalBranchRevenue} prev={prevFactoryRevenue + prevBranchRevenue} />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          )})()}
-          {/* רווח גולמי */}
-          {(() => { const grandGross = factoryGross + totalBranchGross; return (
-          <div style={{ flex: 1, minWidth: '140px', display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 16px', borderLeft: '1px solid #e2e8f0' }}>
-            <div>
-              <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', marginBottom: '2px' }}>רווח גולמי</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '18px', fontWeight: '800', color: grandGross >= 0 ? '#10b981' : '#ef4444' }}>{fmtK(grandGross)}</span>
-                <DiffBadge curr={factoryGross + totalBranchGross} prev={prevFactoryGross + prevBranchGross} />
+              )})()}
+              {/* רווח גולמי */}
+              {(() => { const grandGross = factoryGross + totalBranchGross; return (
+              <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#7C3AED15' }}>
+                  <ProfitIcon size={16} color="#7C3AED" />
+                </div>
+                <div>
+                  <div className="text-[11px] text-slate-400 font-semibold mb-0.5">רווח גולמי</div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className={`text-lg font-extrabold ${grandGross >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{fmtK(grandGross)}</span>
+                    <DiffBadge curr={factoryGross + totalBranchGross} prev={prevFactoryGross + prevBranchGross} />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          )})()}
-          {/* % לייבור */}
-          <div style={{ flex: 1, minWidth: '140px', display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 16px', borderLeft: '1px solid #e2e8f0' }}>
-            <div>
-              <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', marginBottom: '2px' }}>לייבור ממוצע</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{avgLaborPct.toFixed(1)}%</span>
-                <span style={{ fontSize: '13px', fontWeight: '700', color: avgLaborPct <= 28 ? '#10b981' : '#ef4444' }}>{avgLaborPct <= 28 ? '✓' : '✗'}</span>
-                <DiffBadge curr={avgLaborPct} prev={prevAvgLaborPct} inverse />
+              )})()}
+              {/* % לייבור */}
+              <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#3B82F615' }}>
+                  <LaborIcon size={16} color="#3B82F6" />
+                </div>
+                <div>
+                  <div className="text-[11px] text-slate-400 font-semibold mb-0.5">לייבור ממוצע</div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-lg font-extrabold text-slate-900">{avgLaborPct.toFixed(1)}%</span>
+                    <span className={`text-[13px] font-bold ${avgLaborPct <= 28 ? 'text-emerald-400' : 'text-rose-400'}`}>{avgLaborPct <= 28 ? '✓' : '✗'}</span>
+                    <DiffBadge curr={avgLaborPct} prev={prevAvgLaborPct} inverse />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          {/* התראות */}
-          <div style={{ flex: 1, minWidth: '100px', display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 0 4px 16px' }}>
-            <div>
-              <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '600', marginBottom: '2px' }}>התראות</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '18px', fontWeight: '800', color: alerts > 0 ? '#ef4444' : '#10b981' }}>{alerts}</span>
-                <span style={{ fontSize: '11px', color: '#94a3b8' }}>{alerts === 0 ? 'תקין' : 'חריגה'}</span>
+              {/* התראות */}
+              <div className="flex-1 min-w-[100px] flex items-center gap-2.5 py-1 ps-4">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: alerts > 0 ? '#fb718515' : '#10B98115' }}>
+                  <AlertTriangle size={16} color={alerts > 0 ? '#fb7185' : '#10B981'} />
+                </div>
+                <div>
+                  <div className="text-[11px] text-slate-400 font-semibold mb-0.5">התראות</div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className={`text-lg font-extrabold ${alerts > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{alerts}</span>
+                    <span className="text-[11px] text-slate-400">{alerts === 0 ? 'תקין' : 'חריגה'}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
         {/* ═══ Section 1: מפעל ═══════════════════════════════════════════════ */}
         {showFactory && (
-          <div style={{ background: 'white', borderRadius: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: '16px', overflow: 'hidden' }}>
-            {/* Section Header */}
-            <button
-              onClick={() => toggleSection('factory')}
-              style={{
-                width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-                padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px',
-                borderBottom: expandedSection === 'factory' ? '1px solid #e2e8f0' : 'none',
-              }}
-            >
-              <div style={{ width: '40px', height: '40px', background: '#3b82f615', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Factory size={22} color="#3b82f6" />
-              </div>
-              <div style={{ flex: 1, textAlign: 'right' }}>
-                <div style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>מפעל</div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '1px' }}>מחלקות · לייבור · מכירות · דשבורד</div>
-              </div>
-              <ChevronDown
-                size={20} color="#94a3b8"
-                style={{ transition: 'transform 0.2s', transform: expandedSection === 'factory' ? 'rotate(180deg)' : 'rotate(0deg)', flexShrink: 0 }}
-              />
-            </button>
-            {/* Section Content */}
-            {expandedSection === 'factory' && (
-              <div style={{ padding: '16px 16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
-                {filteredPanelFactory.map(item => {
-                  const Icon = item.Icon
-                  return (
-                    <button
-                      key={item.page}
-                      onClick={() => setPage(item.page)}
-                      style={{
-                        background: '#f8fafc', border: '1.5px solid #e2e8f0',
-                        borderRadius: '12px', padding: '14px 16px', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: '12px',
-                        textAlign: 'right', transition: 'all 0.12s',
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = item.color; e.currentTarget.style.background = item.color + '08'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 4px 12px ${item.color}15` }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
-                    >
-                      <div style={{ width: '38px', height: '38px', background: item.color + '15', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Icon size={18} color={item.color} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{item.label}</div>
-                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>{item.subtitle}</div>
-                      </div>
-                      <ChevronLeft size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+          <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.15 }}>
+            <Card className="mb-4 py-0 overflow-hidden">
+              {/* Section Header */}
+              <button
+                onClick={() => toggleSection('factory')}
+                className="w-full bg-transparent border-none cursor-pointer p-4 px-5 flex items-center gap-3"
+                style={{ borderBottom: expandedSection === 'factory' ? '1px solid #e2e8f0' : 'none' }}
+              >
+                <div className="w-10 h-10 bg-indigo-400/10 rounded-xl flex items-center justify-center shrink-0">
+                  <Factory size={22} color="#818cf8" />
+                </div>
+                <div className="flex-1 text-right">
+                  <div className="text-base font-extrabold text-slate-900">מפעל</div>
+                  <div className="text-[11px] text-slate-400 mt-px">מחלקות · לייבור · מכירות · דשבורד</div>
+                </div>
+                <ChevronDown
+                  size={20} color="#94a3b8"
+                  className="shrink-0 transition-transform duration-200"
+                  style={{ transform: expandedSection === 'factory' ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                />
+              </button>
+              {/* Section Content */}
+              {expandedSection === 'factory' && (
+                <CardContent className="pb-5 pt-4">
+                  <motion.div
+                    variants={staggerContainer}
+                    initial="hidden"
+                    animate="visible"
+                    className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5"
+                  >
+                    {filteredPanelFactory.map(item => {
+                      const Icon = item.Icon
+                      return (
+                        <motion.div key={item.page} variants={fadeUp}>
+                          <button
+                            onClick={() => setPage(item.page)}
+                            className="w-full bg-slate-50 border-[1.5px] border-slate-200 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-current hover:-translate-y-0.5 hover:shadow-md"
+                            style={{ '--tw-shadow-color': item.color + '15' } as React.CSSProperties}
+                          >
+                            <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: item.color + '15' }}>
+                              <Icon size={18} color={item.color} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[13px] font-bold text-slate-900">{item.label}</div>
+                              <div className="text-[10px] text-slate-400 mt-0.5">{item.subtitle}</div>
+                            </div>
+                            <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
+                          </button>
+                        </motion.div>
+                      )
+                    })}
+                  </motion.div>
+                </CardContent>
+              )}
+            </Card>
+          </motion.div>
         )}
 
         {/* ═══ Section 2: סניפים ═════════════════════════════════════════════ */}
         {showBranches && (
-          <div style={{ background: 'white', borderRadius: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: '16px', overflow: 'hidden' }}>
-            {/* Section Header */}
-            <button
-              onClick={() => toggleSection('branches')}
-              style={{
-                width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-                padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px',
-                borderBottom: expandedSection === 'branches' ? '1px solid #e2e8f0' : 'none',
-              }}
-            >
-              <div style={{ width: '40px', height: '40px', background: '#10b98115', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Store size={22} color="#10b981" />
-              </div>
-              <div style={{ flex: 1, textAlign: 'right' }}>
-                <div style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>סניפים</div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '1px' }}>ניהול סניפים · דשבורד מנהל</div>
-              </div>
-              <ChevronDown
-                size={20} color="#94a3b8"
-                style={{ transition: 'transform 0.2s', transform: expandedSection === 'branches' ? 'rotate(180deg)' : 'rotate(0deg)', flexShrink: 0 }}
-              />
-            </button>
-            {/* Section Content */}
-            {expandedSection === 'branches' && (
-              <div style={{ padding: '16px 16px 20px' }}>
-                {/* Branch Manager Dashboard button */}
-                {canAccessPage('branch_dashboard') && (
-                  <button
-                    onClick={() => setPage('branch_dashboard')}
-                    style={{
-                      width: '100%', background: 'linear-gradient(135deg, #3b82f608, #10b98108)',
-                      border: '1.5px solid #10b98130', borderRadius: '12px', padding: '14px 16px',
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px',
-                      textAlign: 'right', transition: 'all 0.12s', marginBottom: '12px',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(16,185,129,0.12)' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#10b98130'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
-                  >
-                    <div style={{ width: '38px', height: '38px', background: 'linear-gradient(135deg, #3b82f6, #10b981)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <BarChart3 size={18} color="white" />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>דשבורד מנהל סניפים</div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '1px' }}>השוואת סניפים · P&L · KPI</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a' }}>{fmtK(totalBranchRevenue)}</span>
-                      <ChevronLeft size={14} color="#cbd5e1" />
-                    </div>
-                  </button>
-                )}
-
-                {/* Individual branch cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
-                  {filteredBranches.map(br => {
-                    const kpi = branchKpi.find(b => b.id === br.id)
-                    const rev = kpi?.revenue ?? 0
-                    const labPct = kpi?.laborPct ?? 0
-                    return (
-                      <button
-                        key={br.id}
-                        onClick={() => setPage(br.page)}
-                        style={{
-                          background: '#f8fafc', border: `1.5px solid ${br.color}30`,
-                          borderRadius: '12px', padding: '14px 16px', cursor: 'pointer',
-                          textAlign: 'right', transition: 'all 0.12s',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = br.color; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 4px 12px ${br.color}18` }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = br.color + '30'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                          <div style={{ width: '32px', height: '32px', background: br.color, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <Store size={16} color="white" />
-                          </div>
-                          <span style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>{br.name}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>{fmtK(rev)}</span>
-                          <span style={{ fontSize: '12px', fontWeight: '700', color: labPct <= 28 ? '#10b981' : '#ef4444' }}>
-                            {rev > 0 ? labPct.toFixed(1) + '%' : '—'} {rev > 0 ? (labPct <= 28 ? '✓' : '✗') : ''}
-                          </span>
-                        </div>
-                      </button>
-                    )
-                  })}
+          <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.2 }}>
+            <Card className="mb-4 py-0 overflow-hidden">
+              {/* Section Header */}
+              <button
+                onClick={() => toggleSection('branches')}
+                className="w-full bg-transparent border-none cursor-pointer p-4 px-5 flex items-center gap-3"
+                style={{ borderBottom: expandedSection === 'branches' ? '1px solid #e2e8f0' : 'none' }}
+              >
+                <div className="w-10 h-10 bg-emerald-400/10 rounded-xl flex items-center justify-center shrink-0">
+                  <Store size={22} color="#34d399" />
                 </div>
+                <div className="flex-1 text-right">
+                  <div className="text-base font-extrabold text-slate-900">סניפים</div>
+                  <div className="text-[11px] text-slate-400 mt-px">ניהול סניפים · דשבורד מנהל</div>
+                </div>
+                <ChevronDown
+                  size={20} color="#94a3b8"
+                  className="shrink-0 transition-transform duration-200"
+                  style={{ transform: expandedSection === 'branches' ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                />
+              </button>
+              {/* Section Content */}
+              {expandedSection === 'branches' && (
+                <CardContent className="pb-5 pt-4">
+                  <motion.div variants={staggerContainer} initial="hidden" animate="visible">
+                    {/* Branch Manager Dashboard button */}
+                    {canAccessPage('branch_dashboard') && (
+                      <motion.div variants={fadeUp}>
+                        <button
+                          onClick={() => setPage('branch_dashboard')}
+                          className="w-full bg-gradient-to-br from-indigo-400/5 to-emerald-400/5 border-[1.5px] border-emerald-400/20 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-emerald-400 hover:-translate-y-0.5 hover:shadow-md hover:shadow-emerald-400/10 mb-3"
+                        >
+                          <div className="w-[38px] h-[38px] bg-gradient-to-br from-indigo-400 to-emerald-400 rounded-[10px] flex items-center justify-center shrink-0">
+                            <ProfitIcon size={18} color="white" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-sm font-bold text-slate-900">דשבורד מנהל סניפים</div>
+                            <div className="text-[11px] text-slate-400 mt-px">השוואת סניפים · P&L · KPI</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[15px] font-extrabold text-slate-900">{fmtK(totalBranchRevenue)}</span>
+                            <ChevronLeft size={14} color="#cbd5e1" />
+                          </div>
+                        </button>
+                      </motion.div>
+                    )}
 
-                {/* Branch data import button */}
-                <button
-                  onClick={() => setPage('branch_import')}
-                  style={{
-                    width: '100%', background: '#f8fafc', border: '1.5px solid #3b82f630',
-                    borderRadius: '12px', padding: '12px 16px', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: '12px',
-                    textAlign: 'right', transition: 'all 0.12s', marginTop: '12px',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(59,130,246,0.12)' }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#3b82f630'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
-                >
-                  <div style={{ width: '38px', height: '38px', background: '#3b82f615', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Database size={18} color="#3b82f6" />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>ייבוא נתוני סניפים</div>
-                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>CSV מ-Base44 · כל הסניפים ביחד</div>
-                  </div>
-                  <ChevronLeft size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
-                </button>
-              </div>
-            )}
-          </div>
+                    {/* Individual branch cards */}
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
+                      {filteredBranches.map(br => {
+                        const kpi = branchKpi.find(b => b.id === br.id)
+                        const rev = kpi?.revenue ?? 0
+                        const labPct = kpi?.laborPct ?? 0
+                        return (
+                          <motion.div key={br.id} variants={fadeUp}>
+                            <button
+                              onClick={() => setPage(br.page)}
+                              className="w-full bg-slate-50 rounded-xl p-3.5 px-4 cursor-pointer text-right transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
+                              style={{ border: `1.5px solid ${br.color}30` }}
+                            >
+                              <div className="flex items-center gap-2.5 mb-2.5">
+                                <div className="w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: br.color }}>
+                                  <Store size={16} color="white" />
+                                </div>
+                                <span className="text-sm font-bold text-slate-900">{br.name}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-base font-extrabold text-slate-900">{fmtK(rev)}</span>
+                                <span className={`text-xs font-bold ${labPct <= 28 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                  {rev > 0 ? labPct.toFixed(1) + '%' : '—'} {rev > 0 ? (labPct <= 28 ? '✓' : '✗') : ''}
+                                </span>
+                              </div>
+                            </button>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Branch data import button */}
+                    <motion.div variants={fadeUp}>
+                      <button
+                        onClick={() => setPage('branch_import')}
+                        className="w-full bg-slate-50 border-[1.5px] border-indigo-400/20 rounded-xl p-3 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-indigo-400 hover:-translate-y-0.5 hover:shadow-md hover:shadow-indigo-400/10 mt-3"
+                      >
+                        <div className="w-[38px] h-[38px] bg-indigo-400/10 rounded-[10px] flex items-center justify-center shrink-0">
+                          <Database size={18} color="#818cf8" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-[13px] font-bold text-slate-900">ייבוא נתוני סניפים</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">CSV מ-Base44 · כל הסניפים ביחד</div>
+                        </div>
+                        <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
+                      </button>
+                    </motion.div>
+                  </motion.div>
+                </CardContent>
+              )}
+            </Card>
+          </motion.div>
         )}
 
         {/* ═══ Section 3: דשבורד מנכ"ל + ניהול ═══════════════════════════════ */}
         {showManage && (
-          <div style={{ background: 'white', borderRadius: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: '16px', overflow: 'hidden' }}>
-            {/* Section Header */}
-            <button
-              onClick={() => toggleSection('manage')}
-              style={{
-                width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-                padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px',
-                borderBottom: expandedSection === 'manage' ? '1px solid #e2e8f0' : 'none',
-              }}
-            >
-              <div style={{ width: '40px', height: '40px', background: '#f59e0b15', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Trophy size={22} color="#f59e0b" />
-              </div>
-              <div style={{ flex: 1, textAlign: 'right' }}>
-                <div style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>דשבורד מנכ"ל + ניהול</div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '1px' }}>דשבורד · הגדרות · ייבוא נתונים</div>
-              </div>
-              <ChevronDown
-                size={20} color="#94a3b8"
-                style={{ transition: 'transform 0.2s', transform: expandedSection === 'manage' ? 'rotate(180deg)' : 'rotate(0deg)', flexShrink: 0 }}
-              />
-            </button>
-            {/* Section Content */}
-            {expandedSection === 'manage' && (
-              <div style={{ padding: '16px 16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
-                {managePanelItems.map(item => {
-                  const Icon = item.Icon
-                  return (
-                    <button
-                      key={item.page}
-                      onClick={() => setPage(item.page)}
-                      style={{
-                        background: '#f8fafc', border: '1.5px solid #e2e8f0',
-                        borderRadius: '12px', padding: '14px 16px', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: '12px',
-                        textAlign: 'right', transition: 'all 0.12s',
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = item.color; e.currentTarget.style.background = item.color + '08'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 4px 12px ${item.color}15` }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
-                    >
-                      <div style={{ width: '38px', height: '38px', background: item.color + '15', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Icon size={18} color={item.color} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{item.label}</div>
-                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>{item.subtitle}</div>
-                      </div>
-                      <ChevronLeft size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+          <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.25 }}>
+            <Card className="mb-4 py-0 overflow-hidden">
+              {/* Section Header */}
+              <button
+                onClick={() => toggleSection('manage')}
+                className="w-full bg-transparent border-none cursor-pointer p-4 px-5 flex items-center gap-3"
+                style={{ borderBottom: expandedSection === 'manage' ? '1px solid #e2e8f0' : 'none' }}
+              >
+                <div className="w-10 h-10 bg-amber-400/10 rounded-xl flex items-center justify-center shrink-0">
+                  <TrophyIcon size={22} color="#f59e0b" />
+                </div>
+                <div className="flex-1 text-right">
+                  <div className="text-base font-extrabold text-slate-900">דשבורד מנכ"ל + ניהול</div>
+                  <div className="text-[11px] text-slate-400 mt-px">דשבורד · הגדרות · ייבוא נתונים</div>
+                </div>
+                <ChevronDown
+                  size={20} color="#94a3b8"
+                  className="shrink-0 transition-transform duration-200"
+                  style={{ transform: expandedSection === 'manage' ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                />
+              </button>
+              {/* Section Content */}
+              {expandedSection === 'manage' && (
+                <CardContent className="pb-5 pt-4">
+                  <motion.div
+                    variants={staggerContainer}
+                    initial="hidden"
+                    animate="visible"
+                    className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5"
+                  >
+                    {managePanelItems.map(item => {
+                      const Icon = item.Icon
+                      return (
+                        <motion.div key={item.page} variants={fadeUp}>
+                          <button
+                            onClick={() => setPage(item.page)}
+                            className="w-full bg-slate-50 border-[1.5px] border-slate-200 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-current hover:-translate-y-0.5 hover:shadow-md"
+                          >
+                            <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: item.color + '15' }}>
+                              <Icon size={18} color={item.color} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[13px] font-bold text-slate-900">{item.label}</div>
+                              <div className="text-[10px] text-slate-400 mt-0.5">{item.subtitle}</div>
+                            </div>
+                            <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
+                          </button>
+                        </motion.div>
+                      )
+                    })}
+                  </motion.div>
+                </CardContent>
+              )}
+            </Card>
+          </motion.div>
         )}
 
         {/* ─── מגמות 6 חודשים ─── */}
         {trendData.length > 0 && trendData.some(d => d.revenue > 0) && (
-          <div style={{ marginBottom: '20px' }}>
-            <div className="chart-container" style={{ background: 'white', borderRadius: '14px', padding: '16px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <span style={{ fontSize: '13px', fontWeight: '700', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>מגמות 6 חודשים</span>
-                <div style={{ display: 'flex', gap: '14px' }}>
-                  {[{ color: '#3b82f6', label: 'הכנסות' }, { color: '#f59e0b', label: 'לייבור' }, { color: '#10b981', label: 'רווח' }].map(m => (
-                    <span key={m.label} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#94a3b8' }}>
-                      <span style={{ width: '8px', height: '8px', background: m.color, borderRadius: '2px', display: 'inline-block' }} />
-                      {m.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              {(() => {
-                const W = 650, H = 160, PL = 50, PR = 12, PT = 8, PB = 24
-                const metrics = [
-                  { key: 'revenue' as const, color: '#3b82f6' },
-                  { key: 'labor' as const, color: '#f59e0b' },
-                  { key: 'profit' as const, color: '#10b981' },
-                ]
-                const allVals = trendData.flatMap(d => metrics.map(m => d[m.key]))
-                const maxPos = Math.max(...allVals, 0)
-                const minNeg = Math.min(...allVals, 0)
-                const totalRange = (maxPos - minNeg) || 1
-                const chartH = H - PT - PB
-                // Zero line position: fraction of chart height from top
-                const zeroY = PT + (maxPos / totalRange) * chartH
-                const groupW = (W - PL - PR) / trendData.length
-                const barW = groupW / (metrics.length + 1)
-                return (
-                  <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxHeight: '160px' }}>
-                    {/* Zero / baseline */}
-                    <line x1={PL} y1={zeroY} x2={W - PR} y2={zeroY} stroke="#cbd5e1" strokeWidth="1" />
-                    {/* Dashed line for negative zone */}
-                    {minNeg < 0 && <text x={PL - 4} y={zeroY + 3} textAnchor="end" fontSize="9" fill="#94a3b8">0</text>}
-                    {trendData.map((d, di) => {
-                      const gx = PL + di * groupW
-                      return metrics.map((m, mi) => {
-                        const val = d[m.key]
-                        if (val === 0) return null
-                        const barX = gx + (mi + 0.5) * barW
-                        if (val >= 0) {
-                          const h = (val / totalRange) * chartH
-                          return <rect key={`${di}-${mi}`} x={barX} y={zeroY - h} width={barW * 0.8} height={h} rx={3} fill={m.color} opacity={0.85} />
-                        } else {
-                          const h = (Math.abs(val) / totalRange) * chartH
-                          return <rect key={`${di}-${mi}`} x={barX} y={zeroY} width={barW * 0.8} height={h} rx={3} fill="#ef4444" opacity={0.6} />
-                        }
-                      })
-                    })}
-                    {trendData.map((d, i) => (
-                      <text key={i} x={PL + i * groupW + groupW / 2} y={H - 6} textAnchor="middle" fontSize="10" fill="#94a3b8">{d.label}</text>
+          <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.3 }} className="mb-5">
+            <Card className="py-0">
+              <CardContent className="chart-container py-4 px-5">
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[13px] font-bold text-slate-400 flex items-center gap-1.5 uppercase tracking-wider">מגמות 6 חודשים</span>
+                  <div className="flex gap-3.5">
+                    {[{ color: '#818cf8', label: 'הכנסות' }, { color: '#f59e0b', label: 'לייבור' }, { color: '#34d399', label: 'רווח' }].map(m => (
+                      <span key={m.label} className="flex items-center gap-1 text-[11px] text-slate-400">
+                        <span className="w-2 h-2 rounded-sm inline-block" style={{ background: m.color }} />
+                        {m.label}
+                      </span>
                     ))}
-                  </svg>
-                )
-              })()}
-            </div>
-          </div>
+                  </div>
+                </div>
+                {(() => {
+                  const W = 650, H = 160, PL = 50, PR = 12, PT = 8, PB = 24
+                  const metrics = [
+                    { key: 'revenue' as const, color: '#818cf8' },
+                    { key: 'labor' as const, color: '#f59e0b' },
+                    { key: 'profit' as const, color: '#34d399' },
+                  ]
+                  const allVals = trendData.flatMap(d => metrics.map(m => d[m.key]))
+                  const maxPos = Math.max(...allVals, 0)
+                  const minNeg = Math.min(...allVals, 0)
+                  const totalRange = (maxPos - minNeg) || 1
+                  const chartH = H - PT - PB
+                  // Zero line position: fraction of chart height from top
+                  const zeroY = PT + (maxPos / totalRange) * chartH
+                  const groupW = (W - PL - PR) / trendData.length
+                  const barW = groupW / (metrics.length + 1)
+                  return (
+                    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxHeight: '160px' }}>
+                      {/* Zero / baseline */}
+                      <line x1={PL} y1={zeroY} x2={W - PR} y2={zeroY} stroke="#cbd5e1" strokeWidth="1" />
+                      {/* Dashed line for negative zone */}
+                      {minNeg < 0 && <text x={PL - 4} y={zeroY + 3} textAnchor="end" fontSize="9" fill="#94a3b8">0</text>}
+                      {trendData.map((d, di) => {
+                        const gx = PL + di * groupW
+                        return metrics.map((m, mi) => {
+                          const val = d[m.key]
+                          if (val === 0) return null
+                          const barX = gx + (mi + 0.5) * barW
+                          if (val >= 0) {
+                            const h = (val / totalRange) * chartH
+                            return <rect key={`${di}-${mi}`} x={barX} y={zeroY - h} width={barW * 0.8} height={h} rx={3} fill={m.color} opacity={0.85} />
+                          } else {
+                            const h = (Math.abs(val) / totalRange) * chartH
+                            return <rect key={`${di}-${mi}`} x={barX} y={zeroY} width={barW * 0.8} height={h} rx={3} fill="#fb7185" opacity={0.6} />
+                          }
+                        })
+                      })}
+                      {trendData.map((d, i) => (
+                        <text key={i} x={PL + i * groupW + groupW / 2} y={H - 6} textAnchor="middle" fontSize="10" fill="#94a3b8">{d.label}</text>
+                      ))}
+                    </svg>
+                  )
+                })()}
+              </CardContent>
+            </Card>
+          </motion.div>
         )}
 
       </div>
 
       {/* Mobile Bottom Nav */}
-      <nav className="mobile-bottom-nav" style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0, height: 56,
-        background: '#0f172a', display: 'none',
-        alignItems: 'center', justifyContent: 'space-around',
-        zIndex: 300, borderTop: '1px solid #1e293b',
-        paddingBottom: 'env(safe-area-inset-bottom)',
-      }}>
-        <button onClick={() => setExpandedSection('factory')} style={{
-          background: 'none', border: 'none', color: expandedSection === 'factory' ? '#38bdf8' : '#94a3b8',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontSize: 10, cursor: 'pointer', padding: '6px 12px',
-        }}>
+      <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 h-14 bg-slate-900 hidden items-center justify-around z-[300] border-t border-slate-800" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <button onClick={() => setExpandedSection('factory')} className={`bg-transparent border-none flex flex-col items-center gap-0.5 text-[10px] cursor-pointer py-1.5 px-3 ${expandedSection === 'factory' ? 'text-sky-400' : 'text-slate-400'}`}>
           <Factory size={22} />
           <span>מפעל</span>
         </button>
-        <button onClick={() => setExpandedSection('branches')} style={{
-          background: 'none', border: 'none', color: expandedSection === 'branches' ? '#38bdf8' : '#94a3b8',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontSize: 10, cursor: 'pointer', padding: '6px 12px',
-        }}>
+        <button onClick={() => setExpandedSection('branches')} className={`bg-transparent border-none flex flex-col items-center gap-0.5 text-[10px] cursor-pointer py-1.5 px-3 ${expandedSection === 'branches' ? 'text-sky-400' : 'text-slate-400'}`}>
           <Store size={22} />
           <span>סניפים</span>
         </button>
-        <button onClick={() => setExpandedSection('manage')} style={{
-          background: 'none', border: 'none', color: expandedSection === 'manage' ? '#38bdf8' : '#94a3b8',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontSize: 10, cursor: 'pointer', padding: '6px 12px',
-        }}>
+        <button onClick={() => setExpandedSection('manage')} className={`bg-transparent border-none flex flex-col items-center gap-0.5 text-[10px] cursor-pointer py-1.5 px-3 ${expandedSection === 'manage' ? 'text-sky-400' : 'text-slate-400'}`}>
           <Settings size={22} />
           <span>ניהול</span>
         </button>
-        <button onClick={() => logout()} style={{
-          background: 'none', border: 'none', color: '#94a3b8',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontSize: 10, cursor: 'pointer', padding: '6px 12px',
-        }}>
+        <button onClick={() => logout()} className="bg-transparent border-none flex flex-col items-center gap-0.5 text-[10px] cursor-pointer py-1.5 px-3 text-slate-400">
           <LogOut size={22} />
           <span>יציאה</span>
         </button>

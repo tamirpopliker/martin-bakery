@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, BarChart3, TrendingUp, TrendingDown, Minus, DollarSign, Users, ShoppingBag, Receipt } from 'lucide-react'
+import { ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon } from '@/components/icons'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 interface Props {
   branchId: number
@@ -13,6 +17,8 @@ interface Props {
 
 
 function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString() }
+
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
 
 export default function BranchPL({ branchId, branchName, branchColor, onBack }: Props) {
   const { period, setPeriod, from, to, monthKey, comparisonPeriod } = usePeriod()
@@ -145,7 +151,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   function DiffArrow({ current, previous }: { current: number; previous: number }) {
     if (previous === 0) return <Minus size={14} color="#94a3b8" />
     const p = ((current - previous) / Math.abs(previous)) * 100
-    const color = p > 0 ? '#10b981' : '#ef4444'
+    const color = p > 0 ? '#34d399' : '#fb7185'
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '12px', fontWeight: '700', color }}>
         {p > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
@@ -154,25 +160,17 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
     )
   }
 
-  const S = {
-    page: { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' as const },
-    card: { background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
-  }
-
   return (
-    <div style={S.page}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* כותרת */}
-      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' as const }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
+        </Button>
         <div style={{ width: '40px', height: '40px', background: branchColor + '20', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <BarChart3 size={20} color={branchColor} />
+          <ProfitIcon size={20} color={branchColor} />
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>דוח רווח והפסד — {branchName}</h1>
@@ -192,69 +190,80 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
             {/* KPI cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: '14px', marginBottom: '20px' }}>
               {/* הכנסות */}
-              <div style={{ ...S.card, padding: '18px' }}>
+              <Card className="shadow-sm"><CardContent className="p-6" style={{ padding: '18px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                  <ShoppingBag size={16} color="#3b82f6" />
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#10B98115' }}>
+                    <RevenueIcon size={16} color="#10B981" />
+                  </div>
                   <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>הכנסות</span>
                 </div>
                 <div style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>{fmtM(totalRevenue)}</div>
                 <DiffArrow current={totalRevenue} previous={prevRevenue} />
-              </div>
+              </CardContent></Card>
 
               {/* הוצאות */}
-              <div style={{ ...S.card, padding: '18px' }}>
+              <Card className="shadow-sm"><CardContent className="p-6" style={{ padding: '18px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                  <Receipt size={16} color="#ef4444" />
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fb718515' }}>
+                    <FixedCostIcon size={16} color="#fb7185" />
+                  </div>
                   <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>הוצאות</span>
                 </div>
-                <div style={{ fontSize: '22px', fontWeight: '800', color: '#ef4444' }}>{fmtM(totalExpenses)}</div>
-              </div>
+                <div style={{ fontSize: '22px', fontWeight: '800', color: '#fb7185' }}>{fmtM(totalExpenses)}</div>
+              </CardContent></Card>
 
               {/* לייבור */}
-              <div style={{ ...S.card, padding: '18px' }}>
+              <Card className="shadow-sm"><CardContent className="p-6" style={{ padding: '18px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                  <Users size={16} color="#f59e0b" />
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#3B82F615' }}>
+                    <LaborIcon size={16} color="#3B82F6" />
+                  </div>
                   <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>% לייבור</span>
                 </div>
-                <div style={{ fontSize: '22px', fontWeight: '800', color: laborPct <= laborTarget ? '#10b981' : '#ef4444' }}>{laborPct.toFixed(1)}%</div>
+                <div style={{ fontSize: '22px', fontWeight: '800', color: laborPct <= laborTarget ? '#34d399' : '#fb7185' }}>{laborPct.toFixed(1)}%</div>
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>יעד {laborTarget}%</span>
-              </div>
+              </CardContent></Card>
 
               {/* רווח גולמי */}
-              <div style={{ ...S.card, padding: '18px', border: `2px solid ${grossProfit >= 0 ? '#10b981' : '#ef4444'}22` }}>
+              <Card className="shadow-sm" style={{ border: `2px solid ${grossProfit >= 0 ? '#34d399' : '#fb7185'}22` }}><CardContent className="p-6" style={{ padding: '18px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                  <DollarSign size={16} color={grossProfit >= 0 ? '#10b981' : '#ef4444'} />
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#7C3AED15' }}>
+                    <ProfitIcon size={16} color={grossProfit >= 0 ? '#7C3AED' : '#fb7185'} />
+                  </div>
                   <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>רווח גולמי</span>
                 </div>
-                <div style={{ fontSize: '22px', fontWeight: '800', color: grossProfit >= 0 ? '#10b981' : '#ef4444' }}>{fmtM(grossProfit)}</div>
+                <div style={{ fontSize: '22px', fontWeight: '800', color: grossProfit >= 0 ? '#34d399' : '#fb7185' }}>{fmtM(grossProfit)}</div>
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>{grossPct.toFixed(1)}% מהכנסות</span>
-              </div>
+              </CardContent></Card>
 
               {/* רווח תפעולי */}
-              <div style={{ ...S.card, padding: '18px', border: `2px solid ${operatingProfit >= 0 ? '#10b981' : '#ef4444'}22` }}>
+              <Card className="shadow-sm" style={{ border: `2px solid ${operatingProfit >= 0 ? '#34d399' : '#fb7185'}22` }}><CardContent className="p-6" style={{ padding: '18px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                  <BarChart3 size={16} color={operatingProfit >= 0 ? '#10b981' : '#ef4444'} />
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#7C3AED15' }}>
+                    <ProfitIcon size={16} color={operatingProfit >= 0 ? '#7C3AED' : '#fb7185'} />
+                  </div>
                   <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>רווח תפעולי</span>
                 </div>
-                <div style={{ fontSize: '22px', fontWeight: '800', color: operatingProfit >= 0 ? '#10b981' : '#ef4444' }}>{fmtM(operatingProfit)}</div>
+                <div style={{ fontSize: '22px', fontWeight: '800', color: operatingProfit >= 0 ? '#34d399' : '#fb7185' }}>{fmtM(operatingProfit)}</div>
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>{operatingPct.toFixed(1)}% מהכנסות</span>
-              </div>
+              </CardContent></Card>
             </div>
 
             {/* נוסחת רווח */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
-              <div style={{ background: 'white', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderRight: `4px solid ${grossProfit >= 0 ? '#10b981' : '#ef4444'}` }}>
+              <div style={{ background: 'white', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderRight: `4px solid ${grossProfit >= 0 ? '#34d399' : '#fb7185'}` }}>
                 <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>הכנסות − לייבור − הוצאות</div>
-                <div style={{ fontSize: '20px', fontWeight: '800', color: grossProfit >= 0 ? '#10b981' : '#ef4444' }}>= רווח גולמי {fmtM(grossProfit)}</div>
+                <div style={{ fontSize: '20px', fontWeight: '800', color: grossProfit >= 0 ? '#34d399' : '#fb7185' }}>= רווח גולמי {fmtM(grossProfit)}</div>
               </div>
-              <div style={{ background: 'white', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderRight: `4px solid ${operatingProfit >= 0 ? '#10b981' : '#ef4444'}` }}>
+              <div style={{ background: 'white', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderRight: `4px solid ${operatingProfit >= 0 ? '#34d399' : '#fb7185'}` }}>
                 <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>גולמי − קבועות − הנהלה − פחת − מטה</div>
-                <div style={{ fontSize: '20px', fontWeight: '800', color: operatingProfit >= 0 ? '#10b981' : '#ef4444' }}>= רווח תפעולי {fmtM(operatingProfit)}</div>
+                <div style={{ fontSize: '20px', fontWeight: '800', color: operatingProfit >= 0 ? '#34d399' : '#fb7185' }}>= רווח תפעולי {fmtM(operatingProfit)}</div>
               </div>
             </div>
 
             {/* P&L table */}
-            <div style={{ ...S.card, marginBottom: '20px' }}>
+            <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <Card className="shadow-sm" style={{ marginBottom: '20px' }}><CardContent className="p-6">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
                 <h2 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>{period.label}</h2>
                 <span style={{ fontSize: '12px', color: '#94a3b8' }}>השוואה ל{comparisonPeriod.label}</span>
@@ -264,9 +273,9 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
 
                 {/* הכנסות */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '11px 18px', background: '#f0fdf4', borderBottom: '1px solid #e2e8f0' }}>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#10b981' }}>הכנסות</span>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#10b981', textAlign: 'left' as const }}>סכום (₪)</span>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#10b981', textAlign: 'left' as const }}>%</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#34d399' }}>הכנסות</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#34d399', textAlign: 'left' as const }}>סכום (₪)</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#34d399', textAlign: 'left' as const }}>%</span>
                 </div>
                 {[
                   { label: 'קופה', amount: revCashier },
@@ -280,16 +289,16 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                   </div>
                 ))}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '12px 18px', background: '#f0fdf4', borderBottom: '2px solid #bbf7d0' }}>
-                  <span style={{ fontSize: '14px', fontWeight: '800', color: '#10b981' }}>סה"כ הכנסות</span>
-                  <span style={{ fontSize: '16px', fontWeight: '800', color: '#10b981', textAlign: 'left' as const }}>{fmtM(totalRevenue)}</span>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#10b981', textAlign: 'left' as const }}>100%</span>
+                  <span style={{ fontSize: '14px', fontWeight: '800', color: '#34d399' }}>סה"כ הכנסות</span>
+                  <span style={{ fontSize: '16px', fontWeight: '800', color: '#34d399', textAlign: 'left' as const }}>{fmtM(totalRevenue)}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#34d399', textAlign: 'left' as const }}>100%</span>
                 </div>
 
                 {/* הוצאות */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '11px 18px', background: '#fef2f2', borderBottom: '1px solid #e2e8f0' }}>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#ef4444' }}>הוצאות</span>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#ef4444', textAlign: 'left' as const }}>סכום (₪)</span>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#ef4444', textAlign: 'left' as const }}>%</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '11px 18px', background: '#fff1f2', borderBottom: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#fb7185' }}>הוצאות</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#fb7185', textAlign: 'left' as const }}>סכום (₪)</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#fb7185', textAlign: 'left' as const }}>%</span>
                 </div>
                 {[
                   { label: 'ספקים / מלאי', amount: expSuppliers },
@@ -301,23 +310,23 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                 ].map((l, i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                     <span style={{ fontSize: '14px', color: '#374151' }}>{l.label}</span>
-                    <span style={{ fontSize: '14px', fontWeight: '600', color: l.amount > 0 ? '#ef4444' : '#94a3b8', textAlign: 'left' as const }}>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: l.amount > 0 ? '#fb7185' : '#94a3b8', textAlign: 'left' as const }}>
                       {l.amount > 0 ? fmtM(l.amount) : '—'}
                     </span>
                     <span style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'left' as const }}>{totalRevenue > 0 && l.amount > 0 ? (l.amount / totalRevenue * 100).toFixed(1) + '%' : '—'}</span>
                   </div>
                 ))}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '12px 18px', background: '#fef2f2', borderBottom: '2px solid #fecaca' }}>
-                  <span style={{ fontSize: '14px', fontWeight: '800', color: '#ef4444' }}>סה"כ הוצאות + לייבור</span>
-                  <span style={{ fontSize: '16px', fontWeight: '800', color: '#ef4444', textAlign: 'left' as const }}>{fmtM(totalExpenses + laborEmployer)}</span>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#ef4444', textAlign: 'left' as const }}>{totalRevenue > 0 ? ((totalExpenses + laborEmployer) / totalRevenue * 100).toFixed(1) + '%' : '—'}</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '12px 18px', background: '#fff1f2', borderBottom: '2px solid #fecdd3' }}>
+                  <span style={{ fontSize: '14px', fontWeight: '800', color: '#fb7185' }}>סה"כ הוצאות + לייבור</span>
+                  <span style={{ fontSize: '16px', fontWeight: '800', color: '#fb7185', textAlign: 'left' as const }}>{fmtM(totalExpenses + laborEmployer)}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#fb7185', textAlign: 'left' as const }}>{totalRevenue > 0 ? ((totalExpenses + laborEmployer) / totalRevenue * 100).toFixed(1) + '%' : '—'}</span>
                 </div>
 
                 {/* רווח גולמי */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '14px 18px', background: grossProfit >= 0 ? '#f0fdf4' : '#fef2f2', borderBottom: '2px solid #e2e8f0' }}>
-                  <span style={{ fontSize: '15px', fontWeight: '800', color: grossProfit >= 0 ? '#10b981' : '#ef4444' }}>רווח גולמי</span>
-                  <span style={{ fontSize: '18px', fontWeight: '800', color: grossProfit >= 0 ? '#10b981' : '#ef4444', textAlign: 'left' as const }}>{fmtM(grossProfit)}</span>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: grossProfit >= 0 ? '#10b981' : '#ef4444', textAlign: 'left' as const }}>{grossPct.toFixed(1)}%</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '14px 18px', background: grossProfit >= 0 ? '#f0fdf4' : '#fff1f2', borderBottom: '2px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '15px', fontWeight: '800', color: grossProfit >= 0 ? '#34d399' : '#fb7185' }}>רווח גולמי</span>
+                  <span style={{ fontSize: '18px', fontWeight: '800', color: grossProfit >= 0 ? '#34d399' : '#fb7185', textAlign: 'left' as const }}>{fmtM(grossProfit)}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: grossProfit >= 0 ? '#34d399' : '#fb7185', textAlign: 'left' as const }}>{grossPct.toFixed(1)}%</span>
                 </div>
 
                 {/* עלויות קבועות + פחת */}
@@ -351,7 +360,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                         setOverheadPct(v)
                         localStorage.setItem('overhead_pct', String(v))
                       }}
-                      style={{ width: '44px', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '2px 6px', fontSize: '13px', textAlign: 'center' as const, fontWeight: '600', color: '#3b82f6', background: '#f8fafc' }}
+                      style={{ width: '44px', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '2px 6px', fontSize: '13px', textAlign: 'center' as const, fontWeight: '600', color: '#818cf8', background: '#f8fafc' }}
                     />
                     <span style={{ fontSize: '12px', color: '#94a3b8' }}>%</span>
                   </span>
@@ -362,23 +371,26 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                 </div>
 
                 {/* רווח תפעולי */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '16px 18px', background: operatingProfit >= 0 ? '#f0fdf4' : '#fef2f2' }}>
-                  <span style={{ fontSize: '16px', fontWeight: '800', color: operatingProfit >= 0 ? '#10b981' : '#ef4444' }}>רווח תפעולי</span>
-                  <span style={{ fontSize: '20px', fontWeight: '800', color: operatingProfit >= 0 ? '#10b981' : '#ef4444', textAlign: 'left' as const }}>{fmtM(operatingProfit)}</span>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: operatingProfit >= 0 ? '#10b981' : '#ef4444', textAlign: 'left' as const }}>{operatingPct.toFixed(1)}%</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '16px 18px', background: operatingProfit >= 0 ? '#f0fdf4' : '#fff1f2' }}>
+                  <span style={{ fontSize: '16px', fontWeight: '800', color: operatingProfit >= 0 ? '#34d399' : '#fb7185' }}>רווח תפעולי</span>
+                  <span style={{ fontSize: '20px', fontWeight: '800', color: operatingProfit >= 0 ? '#34d399' : '#fb7185', textAlign: 'left' as const }}>{fmtM(operatingProfit)}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: operatingProfit >= 0 ? '#34d399' : '#fb7185', textAlign: 'left' as const }}>{operatingPct.toFixed(1)}%</span>
                 </div>
               </div>
-            </div>
+            </CardContent></Card>
+            </motion.div>
 
             {/* KPI bars */}
-            <div style={S.card}>
+            <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <Card className="shadow-sm"><CardContent className="p-6">
               <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>מדדים מרכזיים</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
-                <KpiBar label="% לייבור מהכנסות" value={laborPct} target={laborTarget} color="#f59e0b" branchColor={branchColor} />
-                <KpiBar label="% פחת מהכנסות" value={wastePct} target={wasteTarget} color="#ef4444" branchColor={branchColor} />
-                <KpiBar label="% רווח תפעולי" value={operatingPct} target={30} color="#10b981" branchColor={branchColor} invertWarning />
+                <KpiBar label="% לייבור מהכנסות" value={laborPct} target={laborTarget} color="#fbbf24" branchColor={branchColor} />
+                <KpiBar label="% פחת מהכנסות" value={wastePct} target={wasteTarget} color="#fb7185" branchColor={branchColor} />
+                <KpiBar label="% רווח תפעולי" value={operatingPct} target={30} color="#34d399" branchColor={branchColor} invertWarning />
               </div>
-            </div>
+            </CardContent></Card>
+            </motion.div>
           </>
         )}
 
@@ -396,10 +408,10 @@ function KpiBar({ label, value, target, color, branchColor, invertWarning }: {
     <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
         <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>{label}</span>
-        <span style={{ fontSize: '14px', fontWeight: '800', color: warn ? '#ef4444' : '#10b981' }}>{value.toFixed(1)}%</span>
+        <span style={{ fontSize: '14px', fontWeight: '800', color: warn ? '#fb7185' : '#34d399' }}>{value.toFixed(1)}%</span>
       </div>
       <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '4px', position: 'relative' as const, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${barWidth}%`, background: warn ? '#ef4444' : color, borderRadius: '4px', transition: 'width 0.3s' }} />
+        <div style={{ height: '100%', width: `${barWidth}%`, background: warn ? '#fb7185' : color, borderRadius: '4px', transition: 'width 0.3s' }} />
       </div>
       <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>יעד: {target}%</div>
     </div>

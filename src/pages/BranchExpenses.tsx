@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Plus, Pencil, Trash2, Search, X, Receipt } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { ArrowRight, Plus, Pencil, Trash2, Search, X } from 'lucide-react'
+import { FixedCostIcon } from '@/components/icons'
 
 interface Props {
   branchId: number
@@ -27,12 +31,14 @@ interface Entry {
 interface Supplier { id: number; name: string }
 
 const TYPE_CONFIG: Record<ExpenseType, { label: string; color: string; bg: string }> = {
-  suppliers:      { label: 'ספקים / מלאי',  color: '#3b82f6', bg: '#dbeafe' },
+  suppliers:      { label: 'ספקים / מלאי',  color: '#818cf8', bg: '#e0e7ff' },
   repairs:        { label: 'תיקונים',         color: '#f97316', bg: '#fff7ed' },
-  infrastructure: { label: 'תשתיות',          color: '#8b5cf6', bg: '#ede9fe' },
-  deliveries:     { label: 'משלוחים',         color: '#10b981', bg: '#d1fae5' },
+  infrastructure: { label: 'תשתיות',          color: '#c084fc', bg: '#f3e8ff' },
+  deliveries:     { label: 'משלוחים',         color: '#34d399', bg: '#d1fae5' },
   other:          { label: 'אחר',             color: '#64748b', bg: '#f1f5f9' },
 }
+
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
 
 function AutocompleteInput({ value, onChange, options, placeholder, color }: {
   value: string; onChange: (v: string) => void
@@ -153,25 +159,20 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
   ).sort((a: any, b: any) => b.total - a.total).slice(0, 5)
 
   const S = {
-    page:  { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' as const },
-    card:  { background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
     label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
     input: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
   }
 
   return (
-    <div style={S.page}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
       {/* כותרת */}
-      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
+        </Button>
         <div style={{ width: '40px', height: '40px', background: branchColor + '20', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Receipt size={20} color={branchColor} />
+          <FixedCostIcon size={20} color={branchColor} />
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>הוצאות — {branchName}</h1>
@@ -179,8 +180,8 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
         </div>
         <div style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <PeriodPicker period={period} onChange={setPeriod} />
-          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '8px 18px' }}>
-            <span style={{ fontSize: '18px', fontWeight: '800', color: '#ef4444' }}>₪{totalAll.toLocaleString()}</span>
+          <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '10px', padding: '8px 18px' }}>
+            <span style={{ fontSize: '18px', fontWeight: '800', color: '#fb7185' }}>₪{totalAll.toLocaleString()}</span>
             <span style={{ fontSize: '12px', color: '#64748b', marginRight: '6px' }}>סה"כ</span>
           </div>
         </div>
@@ -202,7 +203,9 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
         )}
 
         {/* טופס הוספה */}
-        <div style={{ ...S.card, marginBottom: '20px' }}>
+        <motion.div variants={fadeIn} initial="hidden" animate="visible">
+        <Card className="shadow-sm mb-5">
+          <CardContent className="p-6">
           <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת הוצאה</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: '12px', marginBottom: '14px' }}>
 
@@ -246,7 +249,9 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
             style={{ background: canAdd ? branchColor : '#e2e8f0', color: canAdd ? 'white' : '#94a3b8', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: canAdd ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Plus size={18} />הוסף הוצאה
           </button>
-        </div>
+          </CardContent>
+        </Card>
+        </motion.div>
 
         {/* פילטרים */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
@@ -273,7 +278,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
             {(bySupplier as any[]).map((s: any) => (
               <div key={s.name} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '6px 12px', fontSize: '12px' }}>
                 <span style={{ fontWeight: '600', color: '#374151' }}>{s.name}</span>
-                <span style={{ color: '#ef4444', fontWeight: '700', marginRight: '6px' }}>₪{s.total.toLocaleString()}</span>
+                <span style={{ color: '#fb7185', fontWeight: '700', marginRight: '6px' }}>₪{s.total.toLocaleString()}</span>
                 <span style={{ color: '#94a3b8' }}>({s.count})</span>
               </div>
             ))}
@@ -281,7 +286,10 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
         )}
 
         {/* טבלה */}
-        <div className="table-scroll"><div style={S.card}>
+        <motion.div variants={fadeIn} initial="hidden" animate="visible">
+        <div className="table-scroll">
+        <Card className="shadow-sm">
+          <CardContent className="p-0">
           <div style={{ display: 'grid', gridTemplateColumns: '100px 90px 1fr 100px 130px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
             <span>תאריך</span><span>סוג</span><span>ספק</span><span>מסמך</span><span style={{ textAlign: 'left' }}>סכום</span><span /><span />
           </div>
@@ -301,7 +309,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
                     <AutocompleteInput value={editData.supplier || ''} onChange={v => setEditData({ ...editData, supplier: v })} options={supplierNames} placeholder="ספק" color={branchColor} />
                     <input type="text" value={editData.doc_number || ''} onChange={e => setEditData({ ...editData, doc_number: e.target.value })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
                     <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                    <button onClick={() => saveEdit(entry.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
+                    <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                     <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                   </>
                 ) : (
@@ -313,9 +321,9 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
                       {entry.notes && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{entry.notes}</div>}
                     </div>
                     <span style={{ fontSize: '13px', color: '#94a3b8' }}>{entry.doc_number || '—'}</span>
-                    <span style={{ fontWeight: '800', color: '#ef4444', fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString()}</span>
+                    <span style={{ fontWeight: '800', color: '#fb7185', fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString()}</span>
                     <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                    <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
+                    <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
                   </>
                 )}
               </div>
@@ -323,12 +331,15 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
           })}
 
           {filtered.length > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', background: '#fef2f2', borderTop: '2px solid #fecaca', borderRadius: '0 0 20px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', background: '#fff1f2', borderTop: '2px solid #fecdd3', borderRadius: '0 0 20px 20px' }}>
               <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>סה"כ — {filtered.length} רשומות</span>
-              <span style={{ fontSize: '20px', fontWeight: '800', color: '#ef4444' }}>₪{total.toLocaleString()}</span>
+              <span style={{ fontSize: '20px', fontWeight: '800', color: '#fb7185' }}>₪{total.toLocaleString()}</span>
             </div>
           )}
-        </div></div>
+          </CardContent>
+        </Card>
+        </div>
+        </motion.div>
       </div>
     </div>
   )

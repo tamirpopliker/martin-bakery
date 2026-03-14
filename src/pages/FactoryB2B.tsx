@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Plus, Pencil, Trash2, Search, X, TrendingUp } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Search, X } from 'lucide-react'
+import { RevenueIcon } from '@/components/icons'
 import { detectBranchId, getBranchNameById } from '../lib/internalCustomers'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Props { onBack: () => void }
@@ -32,12 +36,15 @@ interface TabConfig {
   filterVal: string
 }
 
+// ─── Animation variants ─────────────────────────────────────────────────────
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
+
 // ─── קונפיגורציה לכל טאב ─────────────────────────────────────────────────────
 const TAB_CONFIG: Record<SaleTab, TabConfig> = {
-  creams: { label: 'קרמים',       subtitle: 'מכירות מחלקת קרמים',              color: '#3b82f6', bg: '#dbeafe', table: 'factory_sales',     filterCol: 'department', filterVal: 'creams' },
-  dough:  { label: 'בצקים',       subtitle: 'מכירות מחלקת בצקים',              color: '#8b5cf6', bg: '#ede9fe', table: 'factory_sales',     filterCol: 'department', filterVal: 'dough'  },
-  b2b:    { label: 'B2B',         subtitle: 'לקוחות עסקיים חיצוניים',          color: '#6366f1', bg: '#e0e7ff', table: 'factory_b2b_sales', filterCol: 'sale_type',  filterVal: 'b2b'    },
-  misc:   { label: 'שונות',       subtitle: 'חומרי גלם לסניפים במחיר עלות',   color: '#10b981', bg: '#d1fae5', table: 'factory_b2b_sales', filterCol: 'sale_type',  filterVal: 'misc'   },
+  creams: { label: 'קרמים',       subtitle: 'מכירות מחלקת קרמים',              color: '#818cf8', bg: '#dbeafe', table: 'factory_sales',     filterCol: 'department', filterVal: 'creams' },
+  dough:  { label: 'בצקים',       subtitle: 'מכירות מחלקת בצקים',              color: '#c084fc', bg: '#ede9fe', table: 'factory_sales',     filterCol: 'department', filterVal: 'dough'  },
+  b2b:    { label: 'B2B',         subtitle: 'לקוחות עסקיים חיצוניים',          color: '#818cf8', bg: '#e0e7ff', table: 'factory_b2b_sales', filterCol: 'sale_type',  filterVal: 'b2b'    },
+  misc:   { label: 'שונות',       subtitle: 'חומרי גלם לסניפים במחיר עלות',   color: '#34d399', bg: '#d1fae5', table: 'factory_b2b_sales', filterCol: 'sale_type',  filterVal: 'misc'   },
 }
 
 const TABS: SaleTab[] = ['creams', 'dough', 'b2b', 'misc']
@@ -69,8 +76,6 @@ function AutocompleteInput({ value, onChange, suggestions, placeholder, color }:
           {filtered.slice(0, 6).map(s => (
             <div key={s} onMouseDown={() => { onChange(s); setOpen(false) }}
               style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '14px', color: '#374151', borderBottom: '1px solid #f1f5f9' }}
-              onMouseEnter={e => (e.currentTarget.style.background = color + '15')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'white')}
             >{s}</div>
           ))}
         </div>
@@ -193,26 +198,21 @@ export default function FactoryB2B({ onBack }: Props) {
 
   // ─── סגנונות ─────────────────────────────────────────────────────────────
   const S = {
-    page:  { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' as const },
-    card:  { background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
     label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
     input: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
   }
 
   return (
-    <div style={S.page}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
+        </Button>
         <div style={{ width: '40px', height: '40px', background: cfg.bg, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <TrendingUp size={20} color={cfg.color} />
+          <RevenueIcon size={20} color={cfg.color} />
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>מכירות</h1>
@@ -225,10 +225,11 @@ export default function FactoryB2B({ onBack }: Props) {
       </div>
 
       {/* ─── טאבים ───────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', padding: '0 32px', background: 'white', borderBottom: '1px solid #e2e8f0' }}>
+      <div className="flex px-8 bg-white border-b border-slate-200">
         {TABS.map(t => (
           <button key={t} onClick={() => setTab(t)}
-            style={{ padding: '14px 24px', background: 'none', border: 'none', borderBottom: tab === t ? `3px solid ${TAB_CONFIG[t].color}` : '3px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: tab === t ? '700' : '500', color: tab === t ? TAB_CONFIG[t].color : '#64748b' }}>
+            className={`py-3.5 px-6 bg-transparent border-0 border-b-[3px] cursor-pointer text-sm ${tab === t ? 'font-bold' : 'font-medium text-slate-500'}`}
+            style={{ borderBottomColor: tab === t ? TAB_CONFIG[t].color : 'transparent', color: tab === t ? TAB_CONFIG[t].color : undefined }}>
             {TAB_CONFIG[t].label}
           </button>
         ))}
@@ -243,7 +244,8 @@ export default function FactoryB2B({ onBack }: Props) {
         </div>
 
         {/* ─── טופס הוספה ───────────────────────────────────────────────── */}
-        <div style={{ ...S.card, marginBottom: '20px' }}>
+        <Card className="shadow-sm mb-5">
+          <CardContent className="p-6">
           <h2 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת מכירה — {cfg.label}</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
 
@@ -284,7 +286,8 @@ export default function FactoryB2B({ onBack }: Props) {
             style={{ background: loading || !amount || !customer ? '#e2e8f0' : cfg.color, color: loading || !amount || !customer ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Plus size={18} />הוסף
           </button>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* ─── פילטרים + דירוג ──────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
@@ -298,13 +301,15 @@ export default function FactoryB2B({ onBack }: Props) {
           </div>
           <button onClick={() => setShowRanking(v => !v)}
             style={{ background: showRanking ? cfg.color : '#f1f5f9', color: showRanking ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-            📊 דירוג לקוחות
+            דירוג לקוחות
           </button>
         </div>
 
         {/* ─── דירוג לקוחות ────────────────────────────────────────────── */}
         {showRanking && ranking.length > 0 && (
-          <div style={{ ...S.card, marginBottom: '16px' }}>
+          <motion.div variants={fadeIn} initial="hidden" animate="visible">
+          <Card className="shadow-sm mb-4">
+            <CardContent className="p-6">
             <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>דירוג לקוחות — {period.label}</h3>
             {ranking.map((r, i) => {
               const pctVal = grandTotal > 0 ? (r.total / grandTotal) * 100 : 0
@@ -325,11 +330,15 @@ export default function FactoryB2B({ onBack }: Props) {
                 </div>
               )
             })}
-          </div>
+            </CardContent>
+          </Card>
+          </motion.div>
         )}
 
         {/* ─── טבלת רשומות ──────────────────────────────────────────────── */}
-        <div className="table-scroll"><div style={S.card}>
+        <motion.div variants={fadeIn} initial="hidden" animate="visible">
+        <div className="table-scroll"><Card className="shadow-sm">
+          <CardContent className="p-6">
           <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 130px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
             <span>תאריך</span><span>לקוח</span><span>תעודה</span><span style={{ textAlign: 'left' }}>סכום</span><span /><span />
           </div>
@@ -344,7 +353,7 @@ export default function FactoryB2B({ onBack }: Props) {
                   <AutocompleteInput value={editData.customer || ''} onChange={v => setEditData({ ...editData, customer: v })} suggestions={allCustomers} placeholder="לקוח" color={cfg.color} />
                   <input type="text" value={editData.doc_number || ''} onChange={e => setEditData({ ...editData, doc_number: e.target.value })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
                   <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                  <button onClick={() => saveEdit(entry.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
+                  <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                   <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                 </>
               ) : (
@@ -369,7 +378,7 @@ export default function FactoryB2B({ onBack }: Props) {
                   <span style={{ fontSize: '13px', color: '#94a3b8' }}>{entry.doc_number || '—'}</span>
                   <span style={{ fontWeight: '800', color: cfg.color, fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString()}</span>
                   <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                  <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
+                  <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
                 </>
               )}
             </div>
@@ -381,7 +390,9 @@ export default function FactoryB2B({ onBack }: Props) {
               <span style={{ fontSize: '20px', fontWeight: '800', color: cfg.color }}>₪{total.toLocaleString()}</span>
             </div>
           )}
-        </div></div>
+          </CardContent>
+        </Card></div>
+        </motion.div>
 
       </div>
     </div>
