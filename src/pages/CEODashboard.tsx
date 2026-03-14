@@ -311,6 +311,12 @@ export default function CEODashboard({ onBack }: Props) {
       הוצאות: Math.round(factoryLabor + factorySuppliers + factoryWaste + factoryRepairs + factoryFixed),
       'רווח תפעולי': Math.round(factoryOperatingProfit),
     },
+    {
+      name: 'סה"כ',
+      הכנסות: Math.round(grandRevenue),
+      הוצאות: Math.round(totalExpenses + totalLabor + totalWaste + totalFixed + factoryLabor + factorySuppliers + factoryWaste + factoryRepairs + factoryFixed),
+      'רווח תפעולי': Math.round(grandOperating),
+    },
   ]
 
   const ranked = [...branches].sort((a, b) => b.operatingProfit - a.operatingProfit)
