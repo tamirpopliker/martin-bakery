@@ -453,20 +453,35 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
   // ─── שמירה ────────────────────────────────────────────────────────────────
   async function saveSelected() {
-    const toSave = parsedRows.filter(r => r.selected && r.gross_salary > 0)
-    if (!toSave.length) return
+    // Recalculate salary inside save (don't rely on render-phase mutation)
+    const selected = parsedRows.filter(r => r.selected)
+    const toSave: typeof parsedRows = []
+    for (const r of selected) {
+      const rate = r.hourly_rate || 0
+      if (rate > 0 && r.total_hours > 0) {
+        const c100 = r.hours_100 * rate
+        const c125 = r.hours_125 * rate * 1.25
+        const c150 = r.hours_150 * rate * 1.5
+        const bonusAmount = r.total_hours * (r.retention_bonus || 0)
+        const gross = parseFloat((c100 + c125 + c150 + bonusAmount).toFixed(2))
+        const empCost = parseFloat(((c100 * EMPLOYER_FACTOR) + c125 + c150 + bonusAmount).toFixed(2))
+        toSave.push({ ...r, gross_salary: gross, employer_cost: empCost, cost_100: c100, cost_125: c125, cost_150: c150 })
+      } else if (r.gross_salary > 0) {
+        toSave.push(r)
+      }
+    }
+    if (!toSave.length) {
+      setUploadStatus('error')
+      setUploadMsg('אין שורות עם שכר לשמירה — הזן תעריף שעתי')
+      return
+    }
     setLoading(true)
-    let saved = 0
 
-    for (const r of toSave) {
-      const rowDate = r.date || uploadDate
-
-      // Check if already exists (UPSERT by date + name + branch)
-      const { data: existing } = await supabase.from('branch_labor')
-        .select('id').eq('branch_id', branchId).eq('date', rowDate).eq('employee_name', r.name).limit(1)
-
-      const payload: Record<string, any> = {
-        branch_id: branchId, date: rowDate,
+    try {
+      // Build all payloads
+      const payloads = toSave.map(r => ({
+        branch_id: branchId,
+        date: r.date || uploadDate,
         employee_name: r.name,
         hours: r.total_hours,
         gross_salary: r.gross_salary,
@@ -476,40 +491,63 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
           r.hours_125 > 0 ? `125%: ${r.hours_125}ש׳` : '',
           r.hours_150 > 0 ? `150%: ${r.hours_150}ש׳` : '',
         ].filter(Boolean).join(' | ')
+      }))
+
+      // Get all unique dates in the payload
+      const dates = [...new Set(payloads.map(p => p.date))]
+
+      // Delete existing rows for these dates + branch (batch replace)
+      for (const d of dates) {
+        await supabase.from('branch_labor').delete()
+          .eq('branch_id', branchId).eq('date', d)
       }
 
-      if (existing && existing.length > 0) {
-        const { error } = await supabase.from('branch_labor').update(payload).eq('id', existing[0].id)
-        if (error) console.error('Update error:', error)
-      } else {
-        const { error } = await supabase.from('branch_labor').insert(payload)
-        if (error) console.error('Insert error:', error)
+      // Batch insert in chunks of 50
+      let saved = 0
+      for (let i = 0; i < payloads.length; i += 50) {
+        const chunk = payloads.slice(i, i + 50)
+        const { error } = await supabase.from('branch_labor').insert(chunk)
+        if (error) {
+          console.error('Batch insert error:', error)
+          setUploadStatus('error')
+          setUploadMsg(`שגיאה בשמירה: ${error.message}`)
+          setLoading(false)
+          return
+        }
+        saved += chunk.length
       }
-      saved++
-    }
 
-    // Auto-save new employees to branch_employees
-    const uniqueEmps = new Map<string, { rate: number; bonus: number }>()
-    for (const r of toSave) {
-      if (r.hourly_rate > 0 && !uniqueEmps.has(r.name)) {
-        uniqueEmps.set(r.name, { rate: r.hourly_rate, bonus: r.retention_bonus || 0 })
+      // Auto-save new employees to branch_employees
+      const uniqueEmps = new Map<string, { rate: number; bonus: number }>()
+      for (const r of toSave) {
+        if (r.hourly_rate > 0 && !uniqueEmps.has(r.name)) {
+          uniqueEmps.set(r.name, { rate: r.hourly_rate, bonus: r.retention_bonus || 0 })
+        }
       }
-    }
-    let newEmps = 0
-    for (const [name, { rate, bonus }] of uniqueEmps) {
-      const { data: existing } = await supabase.from('branch_employees')
-        .select('id').eq('branch_id', branchId).ilike('name', `%${name}%`).limit(1)
-      if (!existing || existing.length === 0) {
-        await supabase.from('branch_employees').insert({
-          branch_id: branchId, name, hourly_rate: rate, retention_bonus: bonus, active: true,
-        })
-        newEmps++
+      let newEmps = 0
+      const { data: existingEmps } = await supabase.from('branch_employees')
+        .select('name').eq('branch_id', branchId)
+      const existingNames = (existingEmps || []).map((e: any) => e.name.toLowerCase())
+      const newEmpPayloads: any[] = []
+      for (const [name, { rate, bonus }] of uniqueEmps) {
+        if (!existingNames.some((n: string) => name.toLowerCase().includes(n) || n.includes(name.toLowerCase()))) {
+          newEmpPayloads.push({ branch_id: branchId, name, hourly_rate: rate, retention_bonus: bonus, active: true })
+        }
       }
-    }
+      if (newEmpPayloads.length > 0) {
+        await supabase.from('branch_employees').insert(newEmpPayloads)
+        newEmps = newEmpPayloads.length
+      }
 
-    setParsedRows([]); setUploadStatus('done')
-    setUploadMsg(`✓ נשמרו ${saved} רשומות` + (newEmps > 0 ? ` · ${newEmps} עובדים חדשים נוספו למערכת` : ''))
-    await fetchEntries(); setLoading(false)
+      setParsedRows([]); setUploadStatus('done')
+      setUploadMsg(`✓ נשמרו ${saved} רשומות` + (newEmps > 0 ? ` · ${newEmps} עובדים חדשים נוספו למערכת` : ''))
+      await fetchEntries()
+    } catch (err: any) {
+      console.error('Save error:', err)
+      setUploadStatus('error')
+      setUploadMsg('שגיאה: ' + (err.message || 'נסה שוב'))
+    }
+    setLoading(false)
   }
 
   // ─── הזנה ידנית ───────────────────────────────────────────────────────────
