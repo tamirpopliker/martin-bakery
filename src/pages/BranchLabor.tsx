@@ -24,6 +24,7 @@ interface ParsedRow {
   total_hours: number
   gross_salary: number
   employer_cost: number
+  hourly_rate: number
   selected: boolean
 }
 
@@ -216,6 +217,7 @@ function parseCashOnTab(items: PdfItem[]): { rows: ParsedRow[]; rawLines: string
         total_hours,
         gross_salary,
         employer_cost: parseFloat(((c100 * EMPLOYER_FACTOR) + c125 + c150).toFixed(2)),
+        hourly_rate: 0,
         selected: true,
       })
     }
@@ -284,6 +286,7 @@ function parseDetailedFormat(pages: PdfItem[][]): { rows: ParsedRow[]; rawLines:
         total_hours: totalHours,
         gross_salary: 0,
         employer_cost: 0,
+        hourly_rate: 0,
         selected: true,
       })
     }
@@ -630,13 +633,13 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
             {/* ── טבלת אישור ── */}
             {uploadStatus === 'confirm' && parsedRows.length > 0 && (() => {
-              const isDetailedMode = parsedRows.some(r => r.gross_salary === 0 && r.total_hours > 0)
-              const rate = parseFloat(hourlyRate) || 0
+              const isDetailedMode = parsedRows.some(r => r.total_hours > 0 && r.hourly_rate >= 0)
 
-              // For detailed format: calculate salary from hourly rate
-              if (isDetailedMode && rate > 0) {
+              // For detailed format: recalculate salary from per-employee hourly rate
+              if (isDetailedMode) {
                 for (const r of parsedRows) {
-                  if (r.gross_salary === 0 && r.total_hours > 0) {
+                  const rate = r.hourly_rate || 0
+                  if (rate > 0 && r.total_hours > 0) {
                     const c100 = r.hours_100 * rate
                     const c125 = r.hours_125 * rate * 1.25
                     const c150 = r.hours_150 * rate * 1.5
@@ -662,32 +665,24 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                           </p>
                         </div>
                         <div style={{ textAlign: 'left' as const, fontSize: '13px' }}>
-                          {isDetailedMode && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                              <span style={{ fontSize: '12px', color: '#64748b' }}>תעריף שעתי:</span>
-                              <input type="number" value={hourlyRate}
-                                onChange={e => setHourlyRate(e.target.value)}
-                                style={{ width: '70px', border: '1.5px solid #e2e8f0', borderRadius: '8px', padding: '4px 8px', fontSize: '14px', fontWeight: '700', textAlign: 'center' }} />
-                              <span style={{ fontSize: '12px', color: '#64748b' }}>₪/שעה</span>
-                            </div>
-                          )}
                           <div style={{ color: '#64748b' }}>ברוטו: <strong style={{ color: branchColor }}>₪{parsedTotal.toLocaleString()}</strong></div>
                           <div style={{ color: '#64748b' }}>עלות מעסיק: <strong style={{ color: '#fb7185' }}>₪{Math.round(parsedEmpTotal).toLocaleString()}</strong></div>
                         </div>
                       </div>
 
                       <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 65px 65px 65px 105px 115px', padding: '9px 14px', background: '#f8fafc', fontSize: '11px', fontWeight: '700', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: isDetailedMode ? '32px 1fr 65px 65px 65px 70px 95px 105px' : '32px 1fr 65px 65px 65px 105px 115px', padding: '9px 14px', background: '#f8fafc', fontSize: '11px', fontWeight: '700', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
                           <span />
                           <span>שם עובד</span>
                           <span style={{ textAlign: 'center' }}>100%</span>
                           <span style={{ textAlign: 'center' }}>125%</span>
                           <span style={{ textAlign: 'center' }}>150%</span>
+                          {isDetailedMode && <span style={{ textAlign: 'center' }}>₪/שעה</span>}
                           <span>ברוטו</span>
                           <span>עלות מעסיק</span>
                         </div>
                         {parsedRows.map((row, i) => (
-                          <div key={i} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 65px 65px 65px 105px 115px', alignItems: 'center', padding: '11px 14px', borderBottom: i < parsedRows.length - 1 ? '1px solid #f1f5f9' : 'none', background: row.selected ? (i % 2 === 0 ? 'white' : '#fafafa') : '#f8fafc', opacity: row.selected ? 1 : 0.4, transition: 'opacity 0.15s' }}>
+                          <div key={i} style={{ display: 'grid', gridTemplateColumns: isDetailedMode ? '32px 1fr 65px 65px 65px 70px 95px 105px' : '32px 1fr 65px 65px 65px 105px 115px', alignItems: 'center', padding: '11px 14px', borderBottom: i < parsedRows.length - 1 ? '1px solid #f1f5f9' : 'none', background: row.selected ? (i % 2 === 0 ? 'white' : '#fafafa') : '#f8fafc', opacity: row.selected ? 1 : 0.4, transition: 'opacity 0.15s' }}>
                             <input type="checkbox" checked={row.selected}
                               onChange={e => setParsedRows(prev => prev.map((r, j) => j === i ? { ...r, selected: e.target.checked } : r))}
                               style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: branchColor }} />
@@ -698,8 +693,14 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                             <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_100 > 0 ? row.hours_100 : '—'}</span>
                             <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_125 > 0 ? row.hours_125 : '—'}</span>
                             <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_150 > 0 ? row.hours_150 : '—'}</span>
-                            <span style={{ fontWeight: '700', color: branchColor, fontSize: '14px' }}>₪{row.gross_salary.toLocaleString()}</span>
-                            <span style={{ fontWeight: '700', color: '#fb7185', fontSize: '14px' }}>₪{Math.round(row.employer_cost).toLocaleString()}</span>
+                            {isDetailedMode && (
+                              <input type="number" value={row.hourly_rate || ''}
+                                onChange={e => setParsedRows(prev => prev.map((r, j) => j === i ? { ...r, hourly_rate: parseFloat(e.target.value) || 0, gross_salary: 0, employer_cost: 0 } : r))}
+                                placeholder="₪"
+                                style={{ width: '60px', border: `1.5px solid ${row.hourly_rate > 0 ? '#e2e8f0' : '#fca5a5'}`, borderRadius: '6px', padding: '4px 6px', fontSize: '13px', fontWeight: '700', textAlign: 'center', background: row.hourly_rate > 0 ? 'white' : '#fef2f2' }} />
+                            )}
+                            <span style={{ fontWeight: '700', color: branchColor, fontSize: '13px' }}>₪{Math.round(row.gross_salary).toLocaleString()}</span>
+                            <span style={{ fontWeight: '700', color: '#fb7185', fontSize: '13px' }}>₪{Math.round(row.employer_cost).toLocaleString()}</span>
                           </div>
                         ))}
                       </div>
@@ -709,8 +710,8 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                           className="rounded-xl px-5 text-sm font-semibold text-slate-500">
                           ביטול
                         </Button>
-                        <button onClick={saveSelected} disabled={loading || parsedRows.filter(r => r.selected).length === 0}
-                          style={{ background: loading ? '#e2e8f0' : '#34d399', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button onClick={saveSelected} disabled={loading || parsedRows.filter(r => r.selected).length === 0 || (isDetailedMode && parsedRows.some(r => r.selected && r.hourly_rate <= 0))}
+                          style={{ background: (loading || (isDetailedMode && parsedRows.some(r => r.selected && r.hourly_rate <= 0))) ? '#e2e8f0' : '#34d399', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <CheckCircle size={16} />שמור {parsedRows.filter(r => r.selected).length} עובדים
                         </button>
                       </div>
