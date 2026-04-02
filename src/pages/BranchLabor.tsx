@@ -18,6 +18,7 @@ interface Props {
 
 interface ParsedRow {
   name: string
+  date: string // YYYY-MM-DD or '' for summary rows
   hours_100: number; cost_100: number
   hours_125: number; cost_125: number
   hours_150: number; cost_150: number
@@ -211,7 +212,7 @@ function parseCashOnTab(items: PdfItem[]): { rows: ParsedRow[]; rawLines: string
 
     if (name && gross_salary > 0) {
       rows.push({
-        name,
+        name, date: '',
         hours_100: h100, cost_100: c100,
         hours_125: h125, cost_125: c125,
         hours_150: h150, cost_150: c150,
@@ -230,14 +231,13 @@ function parseCashOnTab(items: PdfItem[]): { rows: ParsedRow[]; rawLines: string
 }
 
 // ─── פרסור פורמט מפורט (כל עובד בדף נפרד) ──────────────────────────────────
-// עובד per-page: מחלץ שם + שעות סיכום מכל עמוד בנפרד
+// מחלץ שורה לכל יום לכל עובד (לא רק סיכום)
 function parseDetailedFormat(pages: PdfItem[][]): { rows: ParsedRow[]; rawLines: string[] } {
   const rawLines: string[] = []
   const rows: ParsedRow[] = []
-  const seenNames = new Set<string>()
+  const seenKeys = new Set<string>() // "name|date" dedup
 
   for (const pageItems of pages) {
-    // Full text of this page
     const fullText = pageItems.map(it => it.text).join(' ')
     rawLines.push(`--- PAGE ---`)
     rawLines.push(fullText.substring(0, 200))
@@ -246,55 +246,69 @@ function parseDetailedFormat(pages: PdfItem[][]): { rows: ParsedRow[]; rawLines:
     const nameMatch = fullText.match(/שם עובד:\s*([^\n]+?)(?:\s+קוד|\s+מחסנים|\s+תאריך)/)
     if (!nameMatch) continue
     const name = nameMatch[1].trim().replace(/\s+/g, ' ')
-    if (!name || seenNames.has(name)) continue
+    if (!name) continue
 
-    // Find "סה"כ שעות" summary — look for the last set of 4 numbers at bottom
-    // The summary has: totalHours, regular, level1, level2
-    // Group by Y to find summary lines
+    // Group by Y and sort top-to-bottom
     const groups = groupByY(pageItems)
-    const yKeys = [...groups.keys()].sort((a, b) => a - b) // bottom first (lowest y = bottom)
+    const yKeys = [...groups.keys()].sort((a, b) => b - a) // high Y = top
 
-    let totalHours = 0, regular = 0, level1 = 0, level2 = 0
-
-    // Look at the bottom lines for "סה"כ שעות" text and numbers
+    // Find daily rows: lines that contain a date DD/MM/YYYY and numbers
     for (const y of yKeys) {
       const row = groups.get(y)!
-      const lineText = row.map(i => i.text).join(' ')
+      const texts = row.map(i => i.text)
+      const lineText = texts.join(' ')
 
-      // The final summary line has the totals
-      if (lineText.includes('סה"כ שעות') || (totalHours === 0 && lineText.match(/^\d/))) {
-        const nums = row.map(i => i.text.replace(/,/g, ''))
-          .filter(t => /^\d+(\.\d+)?$/.test(t))
-          .map(parseFloat)
-          .filter(n => n > 0)
+      // Skip summary lines
+      if (lineText.includes('סיכום') || lineText.includes('סה"כ') || lineText.includes('CashOnTab')) continue
 
-        if (nums.length >= 2) {
-          const sorted = [...nums].sort((a, b) => b - a)
-          totalHours = sorted[0]
-          regular = sorted[1] || 0
-          level1 = sorted.length >= 3 ? sorted[2] : 0
-          level2 = sorted.length >= 4 ? sorted[3] : 0
-        }
-      }
-    }
+      // Look for date pattern DD/MM/YYYY
+      const dateToken = texts.find(t => /^\d{2}\/\d{2}\/\d{4}$/.test(t))
+      if (!dateToken) continue
 
-    if (totalHours > 0) {
-      seenNames.add(name)
+      // Parse date DD/MM/YYYY → YYYY-MM-DD
+      const [dd, mm, yyyy] = dateToken.split('/')
+      const dateStr = `${yyyy}-${mm}-${dd}`
+      const key = `${name}|${dateStr}`
+      if (seenKeys.has(key)) continue
+
+      // Extract numbers from line (excluding date-like tokens)
+      const nums = texts
+        .filter(t => !/^\d{2}\/\d{2}\/\d{4}$/.test(t) && !/^\d{2}:\d{2}$/.test(t))
+        .map(t => t.replace(/,/g, ''))
+        .filter(t => /^\d+(\.\d+)?$/.test(t))
+        .map(parseFloat)
+
+      // We need at least: totalHours, hours100, hours125, hours150, anomalies
+      // The detailed PDF row has: totalHours, hours100, hours125, hours150, 0.00 (anomalies)
+      // Numbers are ordered left-to-right: anomalies(0), hours150, hours125, hours100, totalHours, ...
+      // But sorted by X ascending (left first)
+      if (nums.length < 3) continue
+
+      // The largest number is totalHours, second is hours_100
+      const sorted = [...nums].sort((a, b) => b - a)
+      const totalH = sorted[0]
+      const h100 = sorted[1] || 0
+      const h125 = sorted.length >= 3 ? sorted[2] : 0
+      const h150 = sorted.length >= 4 ? sorted[3] : 0
+
+      if (totalH <= 0) continue
+
+      seenKeys.add(key)
       rows.push({
-        name,
-        hours_100: regular, cost_100: 0,
-        hours_125: level1, cost_125: 0,
-        hours_150: level2, cost_150: 0,
-        total_hours: totalHours,
-        gross_salary: 0,
-        employer_cost: 0,
-        hourly_rate: 0,
-        retention_bonus: 0,
+        name, date: dateStr,
+        hours_100: h100, cost_100: 0,
+        hours_125: h125, cost_125: 0,
+        hours_150: h150, cost_150: 0,
+        total_hours: totalH,
+        gross_salary: 0, employer_cost: 0,
+        hourly_rate: 0, retention_bonus: 0,
         selected: true,
       })
     }
   }
 
+  // Sort by name, then date
+  rows.sort((a, b) => a.name.localeCompare(b.name) || a.date.localeCompare(b.date))
   return { rows, rawLines }
 }
 
@@ -428,8 +442,9 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
       setParsedRows(rows)
       setUploadStatus('confirm')
+      const uniqueNames = new Set(rows.map(r => r.name)).size
       setUploadMsg(isDetailed
-        ? `זוהו ${rows.length} עובדים (פורמט מפורט — שעות בלבד, ללא שכר)`
+        ? `זוהו ${uniqueNames} עובדים · ${rows.length} שורות יומיות (ללא שכר — הזן תעריף)`
         : `זוהו ${rows.length} עובדים — בדוק ואשר`)
     } catch (err: any) {
       setUploadStatus('error')
@@ -442,11 +457,20 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
     const toSave = parsedRows.filter(r => r.selected && r.gross_salary > 0)
     if (!toSave.length) return
     setLoading(true)
+    let saved = 0
+
     for (const r of toSave) {
-      await supabase.from('branch_labor').insert({
-        branch_id: branchId, date: uploadDate,
+      const rowDate = r.date || uploadDate
+
+      // Check if already exists (UPSERT by date + name + branch)
+      const { data: existing } = await supabase.from('branch_labor')
+        .select('id').eq('branch_id', branchId).eq('date', rowDate).eq('employee_name', r.name).limit(1)
+
+      const payload = {
+        branch_id: branchId, date: rowDate,
         employee_name: r.name,
         hours: r.total_hours,
+        hours_100: r.hours_100, hours_125: r.hours_125, hours_150: r.hours_150,
         gross_salary: r.gross_salary,
         employer_cost: r.employer_cost,
         notes: [
@@ -454,10 +478,18 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
           r.hours_125 > 0 ? `125%: ${r.hours_125}ש׳` : '',
           r.hours_150 > 0 ? `150%: ${r.hours_150}ש׳` : '',
         ].filter(Boolean).join(' | ')
-      })
+      }
+
+      if (existing && existing.length > 0) {
+        await supabase.from('branch_labor').update(payload).eq('id', existing[0].id)
+      } else {
+        await supabase.from('branch_labor').insert(payload)
+      }
+      saved++
     }
+
     setParsedRows([]); setUploadStatus('done')
-    setUploadMsg(`✓ נשמרו ${toSave.length} עובדים`)
+    setUploadMsg(`✓ נשמרו ${saved} רשומות`)
     await fetchEntries(); setLoading(false)
   }
 
@@ -707,7 +739,10 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                               style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: branchColor }} />
                             <div>
                               <div style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{row.name}</div>
-                              <div style={{ fontSize: '11px', color: '#94a3b8' }}>{row.total_hours} שעות סה"כ</div>
+                              <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                {row.date ? new Date(row.date + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' }) + ' · ' : ''}
+                                {row.total_hours} שעות
+                              </div>
                             </div>
                             <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_100 > 0 ? row.hours_100 : '—'}</span>
                             <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_125 > 0 ? row.hours_125 : '—'}</span>
