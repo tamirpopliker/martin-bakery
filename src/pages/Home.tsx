@@ -23,10 +23,11 @@ import BranchHome from './BranchHome'
 import BranchManagerDashboard from './BranchManagerDashboard'
 import DepartmentHome from './DepartmentHome'
 import UserManagement from './UserManagement'
+import ReportsAlerts from './ReportsAlerts'
 import DataImport from './DataImport'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
-  Store, Settings, LogOut, TrendingUp, TrendingDown,
+  Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
   AlertTriangle, ClipboardList, Truck, UserCog,
   Factory, ChevronDown, ChevronLeft, Database,
   LayoutDashboard
@@ -49,6 +50,7 @@ const PANEL_FACTORY = [
 
 const PANEL_MANAGE = [
   { label: 'דשבורד מנכ"ל', subtitle: 'מבט רשתי · כל הסניפים', Icon: TrophyIcon,   color: '#f59e0b', page: 'ceo_dashboard' },
+  { label: 'דוחות והתרעות', subtitle: 'לוג דוחות · כללי התרעה', Icon: Mail,         color: '#f59e0b', page: 'reports_alerts' },
   { label: 'הגדרות מערכת', subtitle: 'יעדים · עובדים · עלויות', Icon: Settings, color: '#64748b', page: 'settings' },
   { label: 'ייבוא נתונים', subtitle: 'CSV מ-Base44 · העלאה',   Icon: Database, color: '#818cf8', page: 'data_import' },
 ]
@@ -244,6 +246,7 @@ export default function Home() {
     if (page === 'data_import')          return <DataImport onBack={() => setPage(null)} />
     if (page === 'branch_import')        return <DataImport onBack={() => setPage(null)} branchOnly />
     if (page === 'user_management')      return <UserManagement onBack={() => setPage(null)} />
+    if (page === 'reports_alerts')       return <ReportsAlerts onBack={() => setPage(null)} />
 
     if (page === 'dept_creams')    return <DepartmentHome department="creams"    onBack={() => setPage(null)} />
     if (page === 'dept_dough')     return <DepartmentHome department="dough"     onBack={() => setPage(null)} />

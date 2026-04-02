@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ArrowRight, Plus, Pencil, Trash2, Save, X, UserCog, Store, ToggleLeft, ToggleRight, Bell, AlertTriangle, History } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Save, X, UserCog, Store, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -41,31 +41,6 @@ const ROLE_COLORS: Record<string, string> = {
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
-// ─── Alert types & constants ──────────────────────────────────────────────
-interface AlertRule {
-  id: number; name: string; entity_type: 'branch' | 'factory'; entity_id: string
-  metric: string; condition: string; threshold: number; threshold_type: string; active: boolean; created_at: string
-}
-interface AlertLogEntry {
-  id: number; rule_id: number; triggered_at: string; actual_value: number
-  threshold_value: number; email_sent: boolean; recipient_emails: string[]; rule_name?: string
-}
-const ALERT_METRICS = [
-  { value: 'revenue', label: 'הכנסות' }, { value: 'waste', label: 'פחת' },
-  { value: 'labor_cost', label: 'עלות לייבור' }, { value: 'production', label: 'ייצור' },
-]
-const ALERT_CONDITIONS = [{ value: 'below', label: 'מתחת ל-' }, { value: 'above', label: 'מעל ל-' }]
-const ALERT_THRESHOLD_TYPES = [{ value: 'absolute', label: 'ערך מוחלט (₪)' }, { value: 'percent', label: 'אחוז (%)' }]
-const ALERT_DEPTS = [
-  { value: 'creams', label: 'קרמים' }, { value: 'dough', label: 'בצקים' },
-  { value: 'packaging', label: 'אריזה' }, { value: 'cleaning', label: 'ניקיון' },
-]
-const S_ALERT = {
-  label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', display: 'block', marginBottom: '6px' },
-  input: { width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box' as const, fontFamily: 'inherit' },
-  select: { width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box' as const, fontFamily: 'inherit', background: 'white' },
-}
-
 export default function UserManagement({ onBack }: { onBack: () => void }) {
   const { branches, getBranchName, refreshBranches } = useBranches()
   const [users, setUsers] = useState<AppUser[]>([])
@@ -76,21 +51,10 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
   const [newUser, setNewUser] = useState({ email: '', name: '', role: 'branch' as string, branch_id: 1, excluded_departments: [] as string[], can_settings: false })
   const [saving, setSaving] = useState(false)
   // ─── Branch management state ──────────────────────────────────────────────
-  const [tab, setTab] = useState<'users' | 'branches' | 'alerts'>('users')
+  const [tab, setTab] = useState<'users' | 'branches'>('users')
   const [branchSheetOpen, setBranchSheetOpen] = useState(false)
   const [editBranch, setEditBranch] = useState<{ id?: number; name: string; short_name: string; address: string }>({ name: '', short_name: '', address: '' })
   const [branchSaving, setBranchSaving] = useState(false)
-  // ─── Alerts state ─────────────────────────────────────────────────────────
-  const [alertRules, setAlertRules] = useState<AlertRule[]>([])
-  const [alertLog, setAlertLog] = useState<AlertLogEntry[]>([])
-  const [alertSubTab, setAlertSubTab] = useState<'rules' | 'log'>('rules')
-  const [alertSheetOpen, setAlertSheetOpen] = useState(false)
-  const [alertSaving, setAlertSaving] = useState(false)
-  const [alertLogDays, setAlertLogDays] = useState(7)
-  const [alertForm, setAlertForm] = useState({
-    id: undefined as number | undefined, name: '', entity_type: 'branch' as 'branch' | 'factory',
-    entity_id: '', metric: 'revenue', condition: 'below', threshold: '', threshold_type: 'absolute',
-  })
 
   async function loadUsers() {
     const { data } = await supabase.from('app_users').select('*').order('created_at')
@@ -159,54 +123,6 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
     }
   }
 
-  // ─── Alert functions ─────────────────────────────────────────────────────
-  async function loadAlertRules() {
-    const { data } = await supabase.from('alert_rules').select('*').order('created_at', { ascending: false })
-    setAlertRules(data || [])
-  }
-  async function loadAlertLog() {
-    const since = new Date(); since.setDate(since.getDate() - alertLogDays)
-    const { data } = await supabase.from('alert_log')
-      .select('*, alert_rules(name)')
-      .gte('triggered_at', since.toISOString())
-      .order('triggered_at', { ascending: false }).limit(100)
-    setAlertLog((data || []).map((e: any) => ({ ...e, rule_name: e.alert_rules?.name || `כלל #${e.rule_id}` })))
-  }
-  useEffect(() => { if (tab === 'alerts') { loadAlertRules(); if (alertSubTab === 'log') loadAlertLog() } }, [tab, alertSubTab, alertLogDays])
-
-  async function handleAlertSave() {
-    if (!alertForm.name.trim() || !alertForm.entity_id || !alertForm.threshold) return
-    setAlertSaving(true)
-    const payload = {
-      name: alertForm.name.trim(), entity_type: alertForm.entity_type, entity_id: alertForm.entity_id,
-      metric: alertForm.metric, condition: alertForm.condition, threshold: Number(alertForm.threshold),
-      threshold_type: alertForm.threshold_type, active: true,
-    }
-    if (alertForm.id) {
-      await supabase.from('alert_rules').update(payload).eq('id', alertForm.id)
-    } else {
-      await supabase.from('alert_rules').insert(payload)
-    }
-    setAlertSaving(false); setAlertSheetOpen(false); loadAlertRules()
-  }
-  async function toggleAlertActive(rule: AlertRule) {
-    await supabase.from('alert_rules').update({ active: !rule.active }).eq('id', rule.id); loadAlertRules()
-  }
-  function openNewAlert() {
-    setAlertForm({ id: undefined, name: '', entity_type: 'branch', entity_id: branches[0]?.id?.toString() || '1', metric: 'revenue', condition: 'below', threshold: '', threshold_type: 'absolute' })
-    setAlertSheetOpen(true)
-  }
-  function openEditAlert(rule: AlertRule) {
-    setAlertForm({ id: rule.id, name: rule.name, entity_type: rule.entity_type, entity_id: rule.entity_id, metric: rule.metric, condition: rule.condition, threshold: String(rule.threshold), threshold_type: rule.threshold_type })
-    setAlertSheetOpen(true)
-  }
-  function getAlertEntityLabel(rule: AlertRule): string {
-    if (rule.entity_type === 'branch') { const br = branches.find(b => b.id === Number(rule.entity_id)); return br?.name || `סניף ${rule.entity_id}` }
-    return ALERT_DEPTS.find(d => d.value === rule.entity_id)?.label || rule.entity_id
-  }
-  const alertEntityOptions = alertForm.entity_type === 'branch'
-    ? branches.map(b => ({ value: String(b.id), label: b.name })) : ALERT_DEPTS
-
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
@@ -222,7 +138,7 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
           </div>
           <div>
             <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: 0 }}>ניהול מערכת</h1>
-            <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>משתמשים · סניפים · התרעות</p>
+            <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>משתמשים · סניפים · הרשאות</p>
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -238,12 +154,6 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
             <Plus size={16} /> הוסף סניף
           </button>
         )}
-        {tab === 'alerts' && alertSubTab === 'rules' && (
-          <button onClick={openNewAlert}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-            <Plus size={16} /> הוסף התרעה
-          </button>
-        )}
       </div>
 
       <div style={{ padding: '28px 36px', maxWidth: '1100px', margin: '0 auto' }}>
@@ -253,7 +163,6 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
         {[
           { key: 'users' as const, label: 'משתמשים', icon: UserCog, count: users.length },
           { key: 'branches' as const, label: 'סניפים', icon: Store, count: branches.length },
-          { key: 'alerts' as const, label: 'התרעות', icon: Bell, count: alertRules.length },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{
@@ -523,187 +432,6 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
             )}
           </Card>
         </motion.div>
-      )}
-
-      {/* ═══ ALERTS TAB ═══ */}
-      {tab === 'alerts' && (
-        <>
-          {/* Sub-tab switcher */}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
-            {([
-              { key: 'rules' as const, label: 'כללי התרעה', icon: AlertTriangle, count: alertRules.length },
-              { key: 'log' as const, label: 'לוג התרעות', icon: History, count: alertLog.length },
-            ]).map(t => (
-              <button key={t.key} onClick={() => setAlertSubTab(t.key)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '8px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: '700',
-                  border: alertSubTab === t.key ? '2px solid #f59e0b' : '2px solid #e2e8f0',
-                  background: alertSubTab === t.key ? '#fffbeb' : 'white', color: alertSubTab === t.key ? '#b45309' : '#64748b',
-                  cursor: 'pointer', transition: 'all 0.15s',
-                }}>
-                <t.icon size={14} />
-                {t.label}
-                <span style={{ background: alertSubTab === t.key ? '#f59e0b' : '#e2e8f0', color: alertSubTab === t.key ? 'white' : '#64748b', fontSize: '10px', fontWeight: '700', padding: '2px 7px', borderRadius: '8px' }}>
-                  {t.count}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {/* Alert Rules */}
-          {alertSubTab === 'rules' && (
-            <motion.div variants={fadeIn} initial="hidden" animate="visible">
-              <Card className="shadow-sm" style={{ overflow: 'hidden' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 100px 120px 100px 80px', padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
-                  <span>שם ההתרעה</span><span>ישות</span><span>מדד</span><span>תנאי</span><span>סף</span><span>סטטוס</span><span>פעולות</span>
-                </div>
-                {alertRules.length === 0 ? (
-                  <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>
-                    <Bell size={40} color="#e2e8f0" style={{ marginBottom: '12px' }} />
-                    <div>אין כללי התרעה. לחץ "הוסף התרעה" כדי להתחיל.</div>
-                  </div>
-                ) : alertRules.map(rule => (
-                  <div key={rule.id} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 100px 120px 100px 80px', padding: '14px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: rule.active ? 1 : 0.5 }}>
-                    <span style={{ fontWeight: '600', color: '#0f172a' }}>{rule.name}</span>
-                    <span style={{ color: '#64748b' }}>
-                      <span style={{ fontSize: '10px', background: rule.entity_type === 'branch' ? '#dbeafe' : '#f3e8ff', color: rule.entity_type === 'branch' ? '#2563eb' : '#7c3aed', padding: '2px 6px', borderRadius: '4px', fontWeight: '600', marginLeft: '4px' }}>
-                        {rule.entity_type === 'branch' ? 'סניף' : 'מפעל'}
-                      </span>
-                      {' '}{getAlertEntityLabel(rule)}
-                    </span>
-                    <span style={{ color: '#64748b' }}>{ALERT_METRICS.find(m => m.value === rule.metric)?.label}</span>
-                    <span style={{ color: rule.condition === 'above' ? '#ef4444' : '#f59e0b', fontWeight: '600', fontSize: '12px' }}>
-                      {ALERT_CONDITIONS.find(c => c.value === rule.condition)?.label}
-                    </span>
-                    <span style={{ fontWeight: '700', color: '#374151' }}>
-                      {rule.threshold_type === 'percent' ? `${rule.threshold}%` : `₪${Number(rule.threshold).toLocaleString()}`}
-                    </span>
-                    <span>
-                      <button onClick={() => toggleAlertActive(rule)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600', color: rule.active ? '#34d399' : '#94a3b8' }}>
-                        {rule.active ? <ToggleRight size={18} color="#34d399" /> : <ToggleLeft size={18} color="#94a3b8" />}
-                        {rule.active ? 'פעיל' : 'מושבת'}
-                      </button>
-                    </span>
-                    <button onClick={() => openEditAlert(rule)}
-                      style={{ background: '#f1f5f9', color: '#818cf8', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
-                      ערוך
-                    </button>
-                  </div>
-                ))}
-              </Card>
-            </motion.div>
-          )}
-
-          {/* Alert Log */}
-          {alertSubTab === 'log' && (
-            <motion.div variants={fadeIn} initial="hidden" animate="visible">
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'center' }}>
-                <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600' }}>תקופה:</span>
-                {[7, 14, 30].map(d => (
-                  <button key={d} onClick={() => setAlertLogDays(d)}
-                    style={{
-                      padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
-                      border: alertLogDays === d ? '2px solid #f59e0b' : '1px solid #e2e8f0',
-                      background: alertLogDays === d ? '#fffbeb' : 'white', color: alertLogDays === d ? '#b45309' : '#64748b',
-                    }}>
-                    {d} ימים
-                  </button>
-                ))}
-              </div>
-              <Card className="shadow-sm" style={{ overflow: 'hidden' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 120px 120px 80px', padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
-                  <span>זמן</span><span>התרעה</span><span>ערך בפועל</span><span>סף</span><span>אימייל</span>
-                </div>
-                {alertLog.length === 0 ? (
-                  <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>אין התרעות בתקופה הנבחרת</div>
-                ) : alertLog.map(entry => (
-                  <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '180px 1fr 120px 120px 80px', padding: '14px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: '#64748b', fontSize: '12px' }}>{new Date(entry.triggered_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}</span>
-                    <span style={{ fontWeight: '600', color: '#0f172a' }}>{entry.rule_name}</span>
-                    <span style={{ fontWeight: '700', color: '#ef4444' }}>₪{Number(entry.actual_value).toLocaleString()}</span>
-                    <span style={{ color: '#64748b' }}>₪{Number(entry.threshold_value).toLocaleString()}</span>
-                    <span style={{ fontSize: '14px', color: entry.email_sent ? '#34d399' : '#fb7185' }}>{entry.email_sent ? '✓' : '✗'}</span>
-                  </div>
-                ))}
-              </Card>
-            </motion.div>
-          )}
-
-          {/* Alert Sheet (Add/Edit) */}
-          <Sheet open={alertSheetOpen} onOpenChange={setAlertSheetOpen}>
-            <SheetPortal>
-              <SheetBackdrop />
-              <SheetContent>
-                <SheetHeader>
-                  <SheetTitle>{alertForm.id ? 'עריכת התרעה' : 'התרעה חדשה'}</SheetTitle>
-                </SheetHeader>
-                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div>
-                    <label style={S_ALERT.label}>שם ההתרעה</label>
-                    <input value={alertForm.name} onChange={e => setAlertForm({ ...alertForm, name: e.target.value })}
-                      placeholder='למשל: "הכנסות נמוכות — אברהם אבינו"' style={S_ALERT.input} />
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={S_ALERT.label}>סוג ישות</label>
-                      <select value={alertForm.entity_type} onChange={e => {
-                        const et = e.target.value as 'branch' | 'factory'
-                        setAlertForm({ ...alertForm, entity_type: et, entity_id: et === 'branch' ? (branches[0]?.id?.toString() || '1') : 'creams' })
-                      }} style={S_ALERT.select}>
-                        <option value="branch">סניף</option>
-                        <option value="factory">מפעל (מחלקה)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={S_ALERT.label}>{alertForm.entity_type === 'branch' ? 'סניף' : 'מחלקה'}</label>
-                      <select value={alertForm.entity_id} onChange={e => setAlertForm({ ...alertForm, entity_id: e.target.value })} style={S_ALERT.select}>
-                        {alertEntityOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label style={S_ALERT.label}>מדד</label>
-                    <select value={alertForm.metric} onChange={e => setAlertForm({ ...alertForm, metric: e.target.value })} style={S_ALERT.select}>
-                      {ALERT_METRICS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                    </select>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={S_ALERT.label}>תנאי</label>
-                      <select value={alertForm.condition} onChange={e => setAlertForm({ ...alertForm, condition: e.target.value })} style={S_ALERT.select}>
-                        {ALERT_CONDITIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={S_ALERT.label}>סוג סף</label>
-                      <select value={alertForm.threshold_type} onChange={e => setAlertForm({ ...alertForm, threshold_type: e.target.value })} style={S_ALERT.select}>
-                        {ALERT_THRESHOLD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label style={S_ALERT.label}>ערך סף</label>
-                    <input type="number" value={alertForm.threshold} onChange={e => setAlertForm({ ...alertForm, threshold: e.target.value })}
-                      placeholder={alertForm.threshold_type === 'percent' ? '25' : '5000'}
-                      style={{ ...S_ALERT.input, textAlign: 'left' as const }} />
-                  </div>
-                  <button onClick={handleAlertSave}
-                    disabled={alertSaving || !alertForm.name.trim() || !alertForm.threshold}
-                    style={{
-                      background: alertSaving || !alertForm.name.trim() || !alertForm.threshold ? '#e2e8f0' : '#f59e0b',
-                      color: alertSaving || !alertForm.name.trim() || !alertForm.threshold ? '#94a3b8' : 'white',
-                      border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '15px', fontWeight: '700',
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                    }}>
-                    <Save size={16} /> {alertSaving ? 'שומר...' : alertForm.id ? 'עדכן התרעה' : 'הוסף התרעה'}
-                  </button>
-                </div>
-              </SheetContent>
-            </SheetPortal>
-          </Sheet>
-        </>
       )}
 
       {/* Branch Sheet (Add/Edit) */}
