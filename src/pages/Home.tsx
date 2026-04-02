@@ -21,6 +21,7 @@ import FactorySettings from './FactorySettings'
 import CEODashboard from './CEODashboard'
 import BranchHome from './BranchHome'
 import BranchManagerDashboard from './BranchManagerDashboard'
+import BranchComparisonDashboard from './BranchComparisonDashboard'
 import DepartmentHome from './DepartmentHome'
 import UserManagement from './UserManagement'
 import ReportsAlerts from './ReportsAlerts'
@@ -254,6 +255,7 @@ export default function Home() {
     if (page === 'dept_cleaning')  return <DepartmentHome department="cleaning"  onBack={() => setPage(null)} />
 
     if (page === 'branch_dashboard') return <BranchManagerDashboard onBack={() => setPage(null)} />
+    if (page === 'branch_comparison') return <BranchComparisonDashboard onBack={() => setPage(null)} />
 
     // Dynamic branch routing
     const branchMatch = page?.match(/^branch_(\d+)$/)
@@ -613,6 +615,21 @@ export default function Home() {
                       )
                     })}
                   </div>
+
+                  {/* Branch comparison dashboard */}
+                  <motion.div variants={fadeUp}>
+                    <button onClick={() => setPage('branch_comparison')}
+                      className="w-full bg-slate-50 border-[1.5px] border-indigo-400/20 rounded-xl p-3 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-indigo-400 hover:-translate-y-0.5 hover:shadow-md hover:shadow-indigo-400/10 mt-3">
+                      <div className="w-[38px] h-[38px] bg-indigo-400/10 rounded-[10px] flex items-center justify-center shrink-0">
+                        <BarChart3 size={18} color="#818cf8" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-[13px] font-bold text-slate-900">השוואת סניפים</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">רווח והפסד השוואתי · גרפים</div>
+                      </div>
+                      <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
+                    </button>
+                  </motion.div>
 
                   {/* Branch data import */}
                   <motion.div variants={fadeUp}>
