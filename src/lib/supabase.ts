@@ -58,6 +58,79 @@ export async function fetchBranches(): Promise<Branch[]> {
   return (data || []) as Branch[]
 }
 
+// ─── מגמות 6 חודשים ─────────────────────────────────────────────────────
+
+export interface MonthTrend {
+  month: string       // YYYY-MM
+  label: string       // שם חודש בעברית
+  revenue: number     // הכנסות כוללות
+  grossProfit: number // רווח גולמי
+  operatingProfit: number // רווח תפעולי
+}
+
+const HEB_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר']
+
+export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[]> {
+  const months = getLast6Months(refMonth)
+  const tFrom = months[0] + '-01'
+  const tTo = monthEnd(months[5])
+
+  // Parallel fetch all needed tables for the 6-month range
+  const [
+    branchRevRes, factorySalesRes, factoryB2bRes,
+    supplierRes, laborRes, branchLaborRes,
+    fixedCostsRes, factoryRepairsRes, branchExpensesRes,
+  ] = await Promise.all([
+    supabase.from('branch_revenue').select('date, amount').gte('date', tFrom).lt('date', tTo),
+    supabase.from('factory_sales').select('date, amount, is_internal').gte('date', tFrom).lt('date', tTo),
+    supabase.from('factory_b2b_sales').select('date, amount, is_internal').gte('date', tFrom).lt('date', tTo),
+    supabase.from('supplier_invoices').select('date, amount').gte('date', tFrom).lt('date', tTo),
+    supabase.from('labor').select('date, employer_cost').gte('date', tFrom).lt('date', tTo),
+    supabase.from('branch_labor').select('date, employer_cost').gte('date', tFrom).lt('date', tTo),
+    supabase.from('fixed_costs').select('month, amount'),
+    supabase.from('factory_repairs').select('date, amount').gte('date', tFrom).lt('date', tTo),
+    supabase.from('branch_expenses').select('date, amount').gte('date', tFrom).lt('date', tTo),
+  ])
+
+  // Group helper
+  const groupByMonth = (data: any[] | null, field: string, filterFn?: (r: any) => boolean) => {
+    const map: Record<string, number> = {}
+    ;(data || []).forEach(r => {
+      if (filterFn && !filterFn(r)) return
+      const m = r.date?.slice(0, 7) || r.month
+      if (m) map[m] = (map[m] || 0) + Number(r[field] || 0)
+    })
+    return map
+  }
+
+  // Revenue
+  const branchRevByM = groupByMonth(branchRevRes.data, 'amount')
+  const factorySalesByM = groupByMonth(factorySalesRes.data, 'amount', r => !r.is_internal)
+  const factoryB2bByM = groupByMonth(factoryB2bRes.data, 'amount', r => !r.is_internal)
+
+  // Costs for gross profit
+  const suppliersByM = groupByMonth(supplierRes.data, 'amount')
+  const factoryLaborByM = groupByMonth(laborRes.data, 'employer_cost')
+  const branchLaborByM = groupByMonth(branchLaborRes.data, 'employer_cost')
+
+  // Costs for operating profit
+  const fixedCostsByM: Record<string, number> = {}
+  ;(fixedCostsRes.data || []).forEach((r: any) => {
+    if (r.month) fixedCostsByM[r.month] = (fixedCostsByM[r.month] || 0) + Number(r.amount || 0)
+  })
+  const repairsByM = groupByMonth(factoryRepairsRes.data, 'amount')
+  const branchExpByM = groupByMonth(branchExpensesRes.data, 'amount')
+
+  return months.map(m => {
+    const revenue = (branchRevByM[m] || 0) + (factorySalesByM[m] || 0) + (factoryB2bByM[m] || 0)
+    const totalLabor = (factoryLaborByM[m] || 0) + (branchLaborByM[m] || 0)
+    const grossProfit = revenue - (suppliersByM[m] || 0) - totalLabor
+    const operatingProfit = grossProfit - (fixedCostsByM[m] || 0) - (repairsByM[m] || 0) - (branchExpByM[m] || 0)
+    const monthIdx = parseInt(m.split('-')[1]) - 1
+    return { month: m, label: HEB_MONTHS[monthIdx], revenue, grossProfit, operatingProfit }
+  })
+}
+
 // ─── עובדים גלובליים ──────────────────────────────────────────────────────
 
 export interface GlobalEmployee {

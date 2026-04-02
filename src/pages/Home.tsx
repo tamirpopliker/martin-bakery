@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, getLast6Months, monthEnd } from '../lib/supabase'
+import { supabase, getLast6Months, monthEnd, fetchSixMonthTrends, MonthTrend } from '../lib/supabase'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { usePeriod } from '../lib/PeriodContext'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
@@ -104,7 +105,7 @@ export default function Home() {
   const [prevBranchRevenue, setPrevBranchRevenue] = useState(0)
   const [prevBranchGross, setPrevBranchGross] = useState(0)
   const [prevAvgLaborPct, setPrevAvgLaborPct] = useState(0)
-  const [trendData, setTrendData] = useState<{ month: string; label: string; revenue: number; labor: number; profit: number }[]>([])
+  const [trendData, setTrendData] = useState<MonthTrend[]>([])
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -183,34 +184,10 @@ export default function Home() {
       const pAvgPct = pTotalBranchRev > 0 ? (pTotalBranchLab / pTotalBranchRev) * 100 : 0
       setPrevAvgLaborPct(pAvgPct)
 
-      // 6-month trend (optimized: single range query per table)
+      // 6-month trend
       const refMonth = period.monthKey || period.from.slice(0, 7)
-      const months6 = getLast6Months(refMonth)
-      const tFrom = months6[0] + '-01', tTo = monthEnd(months6[5])
-      const [tSalesFs, tSalesB2b, tLabor6, tSupp6] = await Promise.all([
-        supabase.from('factory_sales').select('date, amount').eq('is_internal', false).gte('date', tFrom).lt('date', tTo),
-        supabase.from('factory_b2b_sales').select('date, amount').eq('is_internal', false).gte('date', tFrom).lt('date', tTo),
-        supabase.from('labor').select('date, employer_cost').eq('entity_type', 'factory').gte('date', tFrom).lt('date', tTo),
-        supabase.from('supplier_invoices').select('date, amount').gte('date', tFrom).lt('date', tTo),
-      ])
-      const groupByMonth = (data: any[], field: string) => {
-        const map: Record<string, number> = {}
-        ;(data || []).forEach((r: any) => {
-          const m = r.date?.slice(0, 7)
-          if (m) map[m] = (map[m] || 0) + Number(r[field] || 0)
-        })
-        return map
-      }
-      const salesByM = groupByMonth([...(tSalesFs.data || []), ...(tSalesB2b.data || [])], 'amount')
-      const laborByM = groupByMonth(tLabor6.data || [], 'employer_cost')
-      const suppByM = groupByMonth(tSupp6.data || [], 'amount')
-      const hebrewMonths = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר']
-      setTrendData(months6.map(m => {
-        const rev = salesByM[m] || 0
-        const lab = laborByM[m] || 0
-        const sup = suppByM[m] || 0
-        return { month: m, label: hebrewMonths[parseInt(m.split('-')[1]) - 1], revenue: rev, labor: lab, profit: rev - lab - sup }
-      }))
+      const trends = await fetchSixMonthTrends(refMonth)
+      setTrendData(trends)
     }
     loadKpi()
   }, [from, to])
@@ -735,60 +712,26 @@ export default function Home() {
           <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.3 }} className="mb-5">
             <Card className="py-0">
               <CardContent className="chart-container py-4 px-5">
-                <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center justify-between mb-3">
                   <span className="text-[13px] font-bold text-slate-400 flex items-center gap-1.5 uppercase tracking-wider">מגמות 6 חודשים</span>
-                  <div className="flex gap-3.5">
-                    {[{ color: '#818cf8', label: 'הכנסות' }, { color: '#f59e0b', label: 'לייבור' }, { color: '#34d399', label: 'רווח' }].map(m => (
-                      <span key={m.label} className="flex items-center gap-1 text-[11px] text-slate-400">
-                        <span className="w-2 h-2 rounded-sm inline-block" style={{ background: m.color }} />
-                        {m.label}
-                      </span>
-                    ))}
-                  </div>
                 </div>
-                {(() => {
-                  const W = 650, H = 160, PL = 50, PR = 12, PT = 8, PB = 24
-                  const metrics = [
-                    { key: 'revenue' as const, color: '#818cf8' },
-                    { key: 'labor' as const, color: '#f59e0b' },
-                    { key: 'profit' as const, color: '#34d399' },
-                  ]
-                  const allVals = trendData.flatMap(d => metrics.map(m => d[m.key]))
-                  const maxPos = Math.max(...allVals, 0)
-                  const minNeg = Math.min(...allVals, 0)
-                  const totalRange = (maxPos - minNeg) || 1
-                  const chartH = H - PT - PB
-                  // Zero line position: fraction of chart height from top
-                  const zeroY = PT + (maxPos / totalRange) * chartH
-                  const groupW = (W - PL - PR) / trendData.length
-                  const barW = groupW / (metrics.length + 1)
-                  return (
-                    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxHeight: '160px' }}>
-                      {/* Zero / baseline */}
-                      <line x1={PL} y1={zeroY} x2={W - PR} y2={zeroY} stroke="#cbd5e1" strokeWidth="1" />
-                      {/* Dashed line for negative zone */}
-                      {minNeg < 0 && <text x={PL - 4} y={zeroY + 3} textAnchor="end" fontSize="9" fill="#94a3b8">0</text>}
-                      {trendData.map((d, di) => {
-                        const gx = PL + di * groupW
-                        return metrics.map((m, mi) => {
-                          const val = d[m.key]
-                          if (val === 0) return null
-                          const barX = gx + (mi + 0.5) * barW
-                          if (val >= 0) {
-                            const h = (val / totalRange) * chartH
-                            return <rect key={`${di}-${mi}`} x={barX} y={zeroY - h} width={barW * 0.8} height={h} rx={3} fill={m.color} opacity={0.85} />
-                          } else {
-                            const h = (Math.abs(val) / totalRange) * chartH
-                            return <rect key={`${di}-${mi}`} x={barX} y={zeroY} width={barW * 0.8} height={h} rx={3} fill="#fb7185" opacity={0.6} />
-                          }
-                        })
-                      })}
-                      {trendData.map((d, i) => (
-                        <text key={i} x={PL + i * groupW + groupW / 2} y={H - 6} textAnchor="middle" fontSize="10" fill="#94a3b8">{d.label}</text>
-                      ))}
-                    </svg>
-                  )
-                })()}
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={trendData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => v === 0 ? '0' : `${(v / 1000).toFixed(0)}K`} width={45} />
+                    <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
+                    <Tooltip
+                      formatter={(value: number, name: string) => [`₪${Math.round(value).toLocaleString()}`, name]}
+                      contentStyle={{ borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '12px', direction: 'rtl' }}
+                      labelStyle={{ fontWeight: 700, marginBottom: 4 }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                    <Line type="monotone" dataKey="revenue" name="הכנסות כוללות" stroke="#378ADD" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="grossProfit" name="רווח גולמי" stroke="#639922" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="operatingProfit" name="רווח תפעולי" stroke="#534AB7" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
           </motion.div>
