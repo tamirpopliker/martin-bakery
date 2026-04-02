@@ -419,14 +419,15 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
       // Auto-fill hourly_rate + retention_bonus from branch_employees
       if (rows.length > 0) {
-        const { data: emps } = await supabase.from('branch_employees').select('name, hourly_rate, retention_bonus')
+        const { data: emps, error: empErr } = await supabase.from('branch_employees').select('name, hourly_rate')
           .eq('branch_id', branchId).eq('active', true)
+        if (empErr) console.warn('branch_employees fetch failed:', empErr.message)
         if (emps) {
           for (const row of rows) {
             const match = emps.find((e: any) => row.name.includes(e.name) || e.name.includes(row.name))
             if (match) {
               row.hourly_rate = Number(match.hourly_rate) || 0
-              row.retention_bonus = Number(match.retention_bonus) || 0
+              row.retention_bonus = Number((match as any).retention_bonus) || 0
             }
           }
         }
@@ -501,7 +502,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
         .select('id').eq('branch_id', branchId).ilike('name', `%${name}%`).limit(1)
       if (!existing || existing.length === 0) {
         await supabase.from('branch_employees').insert({
-          branch_id: branchId, name, hourly_rate: rate, retention_bonus: bonus, active: true,
+          branch_id: branchId, name, hourly_rate: rate, active: true,
         })
         newEmps++
       }
