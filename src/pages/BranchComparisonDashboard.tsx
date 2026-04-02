@@ -88,9 +88,10 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
         const suppliers = expenses.filter(r => r.expense_type === 'suppliers').reduce((s, r) => s + Number(r.amount), 0)
         const repairs = expenses.filter(r => r.expense_type === 'repairs').reduce((s, r) => s + Number(r.amount), 0)
         const deliveries = expenses.filter(r => r.expense_type === 'deliveries').reduce((s, r) => s + Number(r.amount), 0)
-        const admin = expenses.filter(r => r.expense_type === 'other' || r.expense_type === 'infrastructure').reduce((s, r) => s + Number(r.amount), 0)
 
-        const fixedCosts = (fcRes.data || []).filter(r => r.entity_id !== 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
+        const fcData = fcRes.data || []
+        const fixedCosts = fcData.filter(r => r.entity_id !== 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
+        const admin = fcData.filter(r => r.entity_id === 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
         const waste = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
         const overhead = revenue * 0.05
 
