@@ -5,8 +5,10 @@ import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, Plus, Pencil, Trash2, Search, X, ShoppingBag, CreditCard, Monitor } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Search, X, ShoppingBag, CreditCard, Monitor, Upload, FileText, Check, AlertCircle } from 'lucide-react'
 import { RevenueIcon } from '@/components/icons'
+import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { parseCashOnTabPDF, CashOnTabRow } from '../lib/parseCashOnTab'
 
 interface Props {
   branchId: number
@@ -84,6 +86,80 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   const [customer, setCustomer] = useState('')
   const [docNumber, setDocNumber] = useState('')
   const [notes, setNotes]   = useState('')
+
+  // PDF import state
+  const [pdfSheetOpen, setPdfSheetOpen] = useState(false)
+  const [pdfParsing, setPdfParsing]     = useState(false)
+  const [pdfRows, setPdfRows]           = useState<(CashOnTabRow & { selected: boolean; exists: boolean })[]>([])
+  const [pdfImporting, setPdfImporting] = useState(false)
+  const [pdfResult, setPdfResult]       = useState<{ imported: number; skipped: number } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handlePdfFile(file: File) {
+    setPdfParsing(true)
+    setPdfResult(null)
+    try {
+      const parsed = await parseCashOnTabPDF(file)
+      // Check which dates already exist
+      const dates = parsed.map(r => r.date)
+      const { data: existing } = await supabase.from('branch_revenue')
+        .select('date')
+        .eq('branch_id', branchId)
+        .eq('source', 'cashier')
+        .in('date', dates)
+      const existingDates = new Set((existing || []).map((r: any) => r.date))
+
+      setPdfRows(parsed.map(r => ({
+        ...r,
+        selected: !existingDates.has(r.date),
+        exists: existingDates.has(r.date),
+      })))
+    } catch (err) {
+      console.error('PDF parse error:', err)
+      setPdfRows([])
+    }
+    setPdfParsing(false)
+  }
+
+  async function importPdfRows() {
+    const selected = pdfRows.filter(r => r.selected)
+    if (selected.length === 0) return
+    setPdfImporting(true)
+    let imported = 0, skipped = 0
+
+    for (const row of selected) {
+      // Check if already exists
+      const { data: existing } = await supabase.from('branch_revenue')
+        .select('id')
+        .eq('branch_id', branchId)
+        .eq('date', row.date)
+        .eq('source', 'cashier')
+        .limit(1)
+
+      if (existing && existing.length > 0) {
+        // Update existing
+        await supabase.from('branch_revenue').update({
+          amount: row.amount,
+          transaction_count: row.transactions || null,
+        }).eq('id', existing[0].id)
+        imported++
+      } else {
+        // Insert new
+        const { error } = await supabase.from('branch_revenue').insert({
+          branch_id: branchId,
+          date: row.date,
+          source: 'cashier' as Source,
+          amount: row.amount,
+          transaction_count: row.transactions || null,
+        })
+        if (error) { skipped++ } else { imported++ }
+      }
+    }
+
+    setPdfResult({ imported, skipped })
+    setPdfImporting(false)
+    await fetchEntries()
+  }
 
   async function fetchEntries() {
     const { data } = await supabase.from('branch_revenue').select('*')
@@ -182,6 +258,10 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
         {/* PeriodPicker + 4 כרטיסי סיכום בכותרת */}
         <div style={{ marginRight: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
+          <button onClick={() => { setPdfSheetOpen(true); setPdfRows([]); setPdfResult(null) }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+            <Upload size={15} /> העלאת PDF קופה
+          </button>
           <PeriodPicker period={period} onChange={setPeriod} />
           {[
             { label: 'קופה',  val: totalCashier, color: '#818cf8' },
@@ -375,6 +455,107 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         )}
 
       </div>
+
+      {/* PDF Import Sheet */}
+      <Sheet open={pdfSheetOpen} onOpenChange={setPdfSheetOpen}>
+        <SheetPortal>
+          <SheetBackdrop />
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>העלאת דוח קופה — CashOnTab</SheetTitle>
+            </SheetHeader>
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+              {/* File input area */}
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                style={{ border: '2px dashed #818cf8', borderRadius: '12px', padding: '32px', textAlign: 'center', cursor: 'pointer', background: '#f8fafc', transition: 'all 0.15s' }}
+                onDragOver={e => { e.preventDefault(); e.currentTarget.style.background = '#e0e7ff' }}
+                onDragLeave={e => { e.currentTarget.style.background = '#f8fafc' }}
+                onDrop={e => { e.preventDefault(); e.currentTarget.style.background = '#f8fafc'; const f = e.dataTransfer.files[0]; if (f?.type === 'application/pdf') handlePdfFile(f) }}>
+                <FileText size={32} color="#818cf8" style={{ margin: '0 auto 8px' }} />
+                <div style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>גרור קובץ PDF או לחץ לבחירה</div>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>דוח "השוואת מכירות - יומי" מ-CashOnTab</div>
+              </div>
+              <input ref={fileInputRef} type="file" accept=".pdf" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfFile(f); e.target.value = '' }} />
+
+              {pdfParsing && <div style={{ textAlign: 'center', color: '#818cf8', fontSize: '14px', padding: '16px' }}>מפענח PDF...</div>}
+
+              {/* Preview table */}
+              {pdfRows.length > 0 && !pdfResult && (
+                <>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                    זוהו {pdfRows.length} שורות · {pdfRows.filter(r => r.exists).length} קיימות כבר
+                  </div>
+                  <div style={{ maxHeight: '300px', overflow: 'auto', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '36px 100px 110px 80px', padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b', position: 'sticky', top: 0 }}>
+                      <span>✓</span><span>תאריך</span><span>סכום ללא מע"מ</span><span>עסקאות</span>
+                    </div>
+                    {pdfRows.map((row, i) => (
+                      <div key={row.date} style={{
+                        display: 'grid', gridTemplateColumns: '36px 100px 110px 80px',
+                        padding: '10px 14px', borderBottom: '1px solid #f1f5f9',
+                        background: row.exists ? '#fef9c3' : (i % 2 === 0 ? 'white' : '#fafafa'),
+                        alignItems: 'center',
+                      }}>
+                        <input type="checkbox" checked={row.selected}
+                          onChange={() => setPdfRows(prev => prev.map((r, j) => j === i ? { ...r, selected: !r.selected } : r))}
+                          style={{ width: '16px', height: '16px', accentColor: '#818cf8' }} />
+                        <span style={{ fontSize: '13px', color: '#374151' }}>
+                          {new Date(row.date + 'T12:00:00').toLocaleDateString('he-IL')}
+                          {row.exists && <AlertCircle size={12} color="#f59e0b" style={{ marginRight: '4px', verticalAlign: 'middle' }} />}
+                        </span>
+                        <span style={{ fontSize: '13px', fontWeight: '700', color: '#818cf8' }}>₪{row.amount.toLocaleString()}</span>
+                        <span style={{ fontSize: '13px', color: '#64748b', textAlign: 'center' }}>{row.transactions}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button onClick={() => setPdfRows(prev => prev.map(r => ({ ...r, selected: true })))}
+                      style={{ fontSize: '12px', color: '#818cf8', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>סמן הכל</button>
+                    <span style={{ color: '#e2e8f0' }}>|</span>
+                    <button onClick={() => setPdfRows(prev => prev.map(r => ({ ...r, selected: false })))}
+                      style={{ fontSize: '12px', color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>בטל הכל</button>
+                    <span style={{ color: '#e2e8f0' }}>|</span>
+                    <button onClick={() => setPdfRows(prev => prev.map(r => ({ ...r, selected: !r.exists })))}
+                      style={{ fontSize: '12px', color: '#f59e0b', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>רק חדשות</button>
+                  </div>
+
+                  <button onClick={importPdfRows}
+                    disabled={pdfImporting || pdfRows.filter(r => r.selected).length === 0}
+                    style={{
+                      background: pdfImporting || pdfRows.filter(r => r.selected).length === 0 ? '#e2e8f0' : '#818cf8',
+                      color: pdfImporting || pdfRows.filter(r => r.selected).length === 0 ? '#94a3b8' : 'white',
+                      border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                    }}>
+                    <Upload size={16} />
+                    {pdfImporting ? 'מייבא...' : `ייבא ${pdfRows.filter(r => r.selected).length} רשומות`}
+                  </button>
+                </>
+              )}
+
+              {/* Result */}
+              {pdfResult && (
+                <div style={{ background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+                  <Check size={32} color="#22c55e" style={{ margin: '0 auto 8px' }} />
+                  <div style={{ fontSize: '16px', fontWeight: '700', color: '#166534' }}>הייבוא הושלם!</div>
+                  <div style={{ fontSize: '14px', color: '#15803d', marginTop: '8px' }}>
+                    יובאו <strong>{pdfResult.imported}</strong> רשומות בהצלחה
+                    {pdfResult.skipped > 0 && <>, <strong>{pdfResult.skipped}</strong> נכשלו</>}
+                  </div>
+                  <button onClick={() => { setPdfSheetOpen(false); setPdfRows([]); setPdfResult(null) }}
+                    style={{ marginTop: '16px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                    סגור
+                  </button>
+                </div>
+              )}
+            </div>
+          </SheetContent>
+        </SheetPortal>
+      </Sheet>
     </div>
   )
 }
