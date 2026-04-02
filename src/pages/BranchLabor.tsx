@@ -444,22 +444,23 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                   <div style={{ position: 'relative' }}>
                     <button onClick={() => setHelpOpen(p => !p)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
-                      <HelpCircle size={18} color="#94a3b8" />
+                      <HelpCircle size={18} color={branchColor} />
                     </button>
                     {helpOpen && (
                       <>
                         <div onClick={() => setHelpOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-                        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', width: '320px', background: 'white', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0', padding: '16px', zIndex: 50, direction: 'rtl' }}>
+                        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', width: '340px', background: 'white', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0', padding: '16px', zIndex: 50, direction: 'rtl' }}>
                           <div style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a', marginBottom: '12px' }}>איך להוריד דוח נוכחות מ-CashOnTab?</div>
                           {[
-                            'היכנס למערכת CashOnTab → עובדים',
-                            'לחץ על "דו״ח נוכחות" בתפריט העליון',
-                            'בשדה "סוג דו״ח" בחר "מרוכז"',
-                            'ב"בחר סניפים" — סמן את הסניף הרלוונטי',
-                            'הגדר טווח תאריכים (לדוגמה: 1-15 לחודש)',
-                            'ב"בחר פורמט" בחר PDF',
-                            'לחץ "הפק דו״ח" ושמור את הקובץ',
-                            'חזור לכאן והעלה את הקובץ',
+                            'היכנס למערכת CashOnTab → לחץ "עובדים" בתפריט הימני',
+                            'בתפריט העליון לחץ על "דו״ח נוכחות"',
+                            'סוג דו״ח: בחר "מרוכז" (לא מפורט)',
+                            'הצג כל עובד בדף נפרד: "כן"',
+                            'להציג חלוקה לשעות נוספות: "כן"',
+                            'בחר סניפים: סמן את הסניף הרלוונטי',
+                            'הגדר תאריך התחלה וסיום (למשל 15-31 לחודש)',
+                            'בחר פורמט: PDF → לחץ "הפק דו״ח"',
+                            'שמור את הקובץ → חזור לכאן והעלה',
                           ].map((step, i) => (
                             <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px', fontSize: '13px', color: '#374151', lineHeight: '1.5' }}>
                               <span style={{ background: branchColor, color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0, marginTop: '1px' }}>{i + 1}</span>
