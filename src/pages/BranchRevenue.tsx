@@ -5,7 +5,7 @@ import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, Plus, Pencil, Trash2, Search, X, ShoppingBag, CreditCard, Monitor, Upload, FileText, Check, AlertCircle } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Search, X, ShoppingBag, CreditCard, Monitor, Upload, FileText, Check, AlertCircle, HelpCircle } from 'lucide-react'
 import { RevenueIcon } from '@/components/icons'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { parseCashOnTabPDF, CashOnTabRow } from '../lib/parseCashOnTab'
@@ -94,6 +94,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   const [pdfImporting, setPdfImporting] = useState(false)
   const [pdfResult, setPdfResult]       = useState<{ imported: number; skipped: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   async function handlePdfFile(file: File) {
     setPdfParsing(true)
@@ -258,10 +259,41 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
         {/* PeriodPicker + 4 כרטיסי סיכום בכותרת */}
         <div style={{ marginRight: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
-          <button onClick={() => { setPdfSheetOpen(true); setPdfRows([]); setPdfResult(null) }}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-            <Upload size={15} /> העלאת PDF קופה
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
+            <button onClick={() => { setPdfSheetOpen(true); setPdfRows([]); setPdfResult(null) }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+              <Upload size={15} /> העלאת PDF קופה
+            </button>
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setHelpOpen(p => !p)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
+                <HelpCircle size={18} color="#94a3b8" />
+              </button>
+              {helpOpen && (
+                <>
+                  <div onClick={() => setHelpOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                  <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: '8px', width: '320px', background: 'white', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0', padding: '16px', zIndex: 50, direction: 'rtl' }}>
+                    <div style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a', marginBottom: '12px' }}>איך להוריד את הקובץ מ-CashOnTab?</div>
+                    {[
+                      'היכנס למערכת CashOnTab של הסניף',
+                      'בתפריט הימני לחץ על "דוחות מכירות"',
+                      'בשדה "מחזור מכירות" בחר "דוח מכירות יומי"',
+                      'ב"רשימת קופות" — סמן את כל הקופות של הסניף',
+                      'בחר את טווח התאריכים הרצוי',
+                      'ב"בחר פורמט" בחר PDF',
+                      'לחץ "הפק דו״ח" ושמור את הקובץ',
+                      'חזור לכאן והעלה את הקובץ',
+                    ].map((step, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px', fontSize: '13px', color: '#374151', lineHeight: '1.5' }}>
+                        <span style={{ background: '#818cf8', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0, marginTop: '1px' }}>{i + 1}</span>
+                        <span>{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
           <PeriodPicker period={period} onChange={setPeriod} />
           {[
             { label: 'קופה',  val: totalCashier, color: '#818cf8' },
