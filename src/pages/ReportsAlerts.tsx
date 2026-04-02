@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useBranches } from '../lib/BranchContext'
 import {
   ArrowRight, Plus, Save, Bell, Mail, History, AlertTriangle,
-  ToggleLeft, ToggleRight, Send, FileText
+  ToggleLeft, ToggleRight, Send, FileText, Users, Power, PowerOff, Check
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,12 @@ interface AlertLogEntry {
   id: number; rule_id: number; triggered_at: string; actual_value: number
   threshold_value: number; email_sent: boolean; recipient_emails: string[]
   rule_name?: string
+}
+
+interface UserSub {
+  id: string; name: string; email: string; role: string
+  report_daily: boolean; report_weekly: boolean; report_monthly: boolean
+  reports_enabled: boolean; alerts_enabled: boolean
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -68,13 +74,19 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
   const [reportLoading, setReportLoading] = useState(true)
   const [reportDays, setReportDays] = useState(14)
   const [reportTypeFilter, setReportTypeFilter] = useState<string>('all')
+  const [reportSubTab, setReportSubTab] = useState<'log' | 'subscriptions'>('log')
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState<string | null>(null)
+
+  // ── Subscription state ──
+  const [users, setUsers] = useState<UserSub[]>([])
+  const [reportsGlobalEnabled, setReportsGlobalEnabled] = useState(true)
+  const [alertsGlobalEnabled, setAlertsGlobalEnabled] = useState(true)
 
   // ── Alerts state ──
   const [alertRules, setAlertRules] = useState<AlertRule[]>([])
   const [alertLog, setAlertLog] = useState<AlertLogEntry[]>([])
-  const [alertSubTab, setAlertSubTab] = useState<'rules' | 'log'>('rules')
+  const [alertSubTab, setAlertSubTab] = useState<'rules' | 'log' | 'subscriptions'>('rules')
   const [alertSheetOpen, setAlertSheetOpen] = useState(false)
   const [alertSaving, setAlertSaving] = useState(false)
   const [alertLogDays, setAlertLogDays] = useState(7)
@@ -125,7 +137,50 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
     setTimeout(() => setSendResult(null), 6000)
   }
 
-  useEffect(() => { if (tab === 'reports') loadReportLog() }, [tab, reportDays, reportTypeFilter])
+  useEffect(() => { if (tab === 'reports' && reportSubTab === 'log') loadReportLog() }, [tab, reportSubTab, reportDays, reportTypeFilter])
+
+  // ── Subscription functions ──
+  async function loadUsers() {
+    const { data } = await supabase.from('app_users')
+      .select('id, name, email, role, report_daily, report_weekly, report_monthly, reports_enabled, alerts_enabled')
+      .order('name')
+    setUsers((data || []).map(u => ({
+      ...u,
+      report_daily: u.report_daily ?? true,
+      report_weekly: u.report_weekly ?? true,
+      report_monthly: u.report_monthly ?? true,
+      reports_enabled: u.reports_enabled ?? true,
+      alerts_enabled: u.alerts_enabled ?? true,
+    })))
+  }
+
+  async function loadGlobalSettings() {
+    const { data } = await supabase.from('system_settings').select('key, value')
+    if (data) {
+      const rg = data.find(d => d.key === 'reports_global_enabled')
+      const ag = data.find(d => d.key === 'alerts_global_enabled')
+      if (rg) setReportsGlobalEnabled(rg.value === 'true')
+      if (ag) setAlertsGlobalEnabled(ag.value === 'true')
+    }
+  }
+
+  async function toggleUserField(userId: string, field: string, value: boolean) {
+    await supabase.from('app_users').update({ [field]: value }).eq('id', userId)
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, [field]: value } : u))
+  }
+
+  async function toggleGlobalSetting(key: string, value: boolean) {
+    await supabase.from('system_settings').upsert({ key, value: String(value), updated_at: new Date().toISOString() })
+    if (key === 'reports_global_enabled') setReportsGlobalEnabled(value)
+    if (key === 'alerts_global_enabled') setAlertsGlobalEnabled(value)
+  }
+
+  useEffect(() => {
+    if ((tab === 'reports' && reportSubTab === 'subscriptions') || tab === 'alerts') {
+      loadUsers()
+      loadGlobalSettings()
+    }
+  }, [tab, reportSubTab])
 
   // ── Alert functions ──
   async function loadAlertRules() {
@@ -244,6 +299,41 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
         {/* ═══ REPORTS TAB ═══ */}
         {tab === 'reports' && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            {/* Reports sub-tabs */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'center' }}>
+              {([
+                { key: 'log' as const, label: 'לוג דוחות', icon: FileText },
+                { key: 'subscriptions' as const, label: 'ניהול מנויים', icon: Users },
+              ]).map(t => (
+                <button key={t.key} onClick={() => setReportSubTab(t.key)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: '8px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: '700',
+                    border: reportSubTab === t.key ? '2px solid #818cf8' : '2px solid #e2e8f0',
+                    background: reportSubTab === t.key ? '#eef2ff' : 'white', color: reportSubTab === t.key ? '#4f46e5' : '#64748b',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                  }}>
+                  <t.icon size={14} />
+                  {t.label}
+                </button>
+              ))}
+              <div style={{ flex: 1 }} />
+              {/* Global reports toggle */}
+              <button onClick={() => toggleGlobalSetting('reports_global_enabled', !reportsGlobalEnabled)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+                  border: 'none',
+                  background: reportsGlobalEnabled ? '#f0fdf4' : '#fef2f2',
+                  color: reportsGlobalEnabled ? '#16a34a' : '#dc2626',
+                }}>
+                {reportsGlobalEnabled ? <Power size={14} /> : <PowerOff size={14} />}
+                {reportsGlobalEnabled ? 'דוחות פעילים' : 'דוחות מושבתים'}
+              </button>
+            </div>
+
+            {/* Report log sub-tab */}
+            {reportSubTab === 'log' && <>
             {/* Filters */}
             <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -315,6 +405,51 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
                 </div>
               ))}
             </Card>
+            </>}
+
+            {/* Subscriptions sub-tab */}
+            {reportSubTab === 'subscriptions' && (
+              <Card className="shadow-sm" style={{ overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 80px 80px 80px 80px', padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                  <span>משתמש</span><span>תפקיד</span><span>יומי</span><span>שבועי</span><span>חודשי</span><span>פעיל</span>
+                </div>
+                {users.length === 0 ? (
+                  <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>טוען...</div>
+                ) : users.map(u => (
+                  <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '1fr 150px 80px 80px 80px 80px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: u.reports_enabled ? 1 : 0.45 }}>
+                    <div>
+                      <div style={{ fontWeight: '600', color: '#0f172a' }}>{u.name}</div>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', direction: 'ltr', textAlign: 'left' }}>{u.email}</div>
+                    </div>
+                    <span style={{ fontSize: '11px' }}>
+                      <span style={{ background: u.role === 'admin' ? '#c084fc15' : u.role === 'factory' ? '#818cf815' : '#34d39915', color: u.role === 'admin' ? '#c084fc' : u.role === 'factory' ? '#818cf8' : '#34d399', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                        {ROLE_LABELS[u.role] || u.role}
+                      </span>
+                    </span>
+                    {['report_daily', 'report_weekly', 'report_monthly'].map(field => (
+                      <div key={field} style={{ textAlign: 'center' }}>
+                        <button onClick={() => toggleUserField(u.id, field, !(u as any)[field])}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}>
+                          {(u as any)[field]
+                            ? <Check size={16} color="#16a34a" />
+                            : <span style={{ color: '#e2e8f0' }}>—</span>
+                          }
+                        </button>
+                      </div>
+                    ))}
+                    <div style={{ textAlign: 'center' }}>
+                      <button onClick={() => toggleUserField(u.id, 'reports_enabled', !u.reports_enabled)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                        {u.reports_enabled
+                          ? <ToggleRight size={20} color="#16a34a" />
+                          : <ToggleLeft size={20} color="#dc2626" />
+                        }
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </Card>
+            )}
           </motion.div>
         )}
 
@@ -322,12 +457,13 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
         {tab === 'alerts' && (
           <>
             {/* Sub-tab switcher */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'center' }}>
               {([
-                { key: 'rules' as const, label: 'כללי התרעה', icon: AlertTriangle, count: alertRules.length },
-                { key: 'log' as const, label: 'לוג התראות', icon: History, count: alertLog.length },
+                { key: 'rules' as const, label: 'כללי התרעה', icon: AlertTriangle },
+                { key: 'log' as const, label: 'לוג התראות', icon: History },
+                { key: 'subscriptions' as const, label: 'נמענים', icon: Users },
               ]).map(t => (
-                <button key={t.key} onClick={() => setAlertSubTab(t.key)}
+                <button key={t.key} onClick={() => setAlertSubTab(t.key as any)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '8px',
                     padding: '8px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: '700',
@@ -337,11 +473,20 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
                   }}>
                   <t.icon size={14} />
                   {t.label}
-                  <span style={{ background: alertSubTab === t.key ? '#f59e0b' : '#e2e8f0', color: alertSubTab === t.key ? 'white' : '#64748b', fontSize: '10px', fontWeight: '700', padding: '2px 7px', borderRadius: '8px' }}>
-                    {t.count}
-                  </span>
                 </button>
               ))}
+              <div style={{ flex: 1 }} />
+              <button onClick={() => toggleGlobalSetting('alerts_global_enabled', !alertsGlobalEnabled)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+                  border: 'none',
+                  background: alertsGlobalEnabled ? '#f0fdf4' : '#fef2f2',
+                  color: alertsGlobalEnabled ? '#16a34a' : '#dc2626',
+                }}>
+                {alertsGlobalEnabled ? <Power size={14} /> : <PowerOff size={14} />}
+                {alertsGlobalEnabled ? 'התראות פעילות' : 'התראות מושבתות'}
+              </button>
             </div>
 
             {/* Alert Rules */}
@@ -418,6 +563,41 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
                       <span style={{ fontWeight: '700', color: '#ef4444' }}>₪{Number(entry.actual_value).toLocaleString()}</span>
                       <span style={{ color: '#64748b' }}>₪{Number(entry.threshold_value).toLocaleString()}</span>
                       <span style={{ fontSize: '14px', color: entry.email_sent ? '#34d399' : '#fb7185' }}>{entry.email_sent ? '✓' : '✗'}</span>
+                    </div>
+                  ))}
+                </Card>
+              </motion.div>
+            )}
+
+            {/* Alert subscriptions */}
+            {alertSubTab === 'subscriptions' && (
+              <motion.div variants={fadeIn} initial="hidden" animate="visible">
+                <Card className="shadow-sm" style={{ overflow: 'hidden' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 100px', padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                    <span>משתמש</span><span>תפקיד</span><span>מקבל התראות</span>
+                  </div>
+                  {users.length === 0 ? (
+                    <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>טוען...</div>
+                  ) : users.map(u => (
+                    <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '1fr 150px 100px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: u.alerts_enabled ? 1 : 0.45 }}>
+                      <div>
+                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{u.name}</div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', direction: 'ltr', textAlign: 'left' }}>{u.email}</div>
+                      </div>
+                      <span style={{ fontSize: '11px' }}>
+                        <span style={{ background: u.role === 'admin' ? '#c084fc15' : u.role === 'factory' ? '#818cf815' : '#34d39915', color: u.role === 'admin' ? '#c084fc' : u.role === 'factory' ? '#818cf8' : '#34d399', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                          {ROLE_LABELS[u.role] || u.role}
+                        </span>
+                      </span>
+                      <div style={{ textAlign: 'center' }}>
+                        <button onClick={() => toggleUserField(u.id, 'alerts_enabled', !u.alerts_enabled)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                          {u.alerts_enabled
+                            ? <ToggleRight size={20} color="#16a34a" />
+                            : <ToggleLeft size={20} color="#dc2626" />
+                          }
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </Card>
