@@ -419,7 +419,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
       // Auto-fill hourly_rate + retention_bonus from branch_employees
       if (rows.length > 0) {
-        const { data: emps } = await supabase.from('branch_employees').select('name, hourly_rate, retention_bonus')
+        const { data: emps } = await supabase.from('branch_employees').select('*')
           .eq('branch_id', branchId).eq('active', true)
         if (emps) {
           for (const row of rows) {
