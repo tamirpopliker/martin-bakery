@@ -488,8 +488,27 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       saved++
     }
 
+    // Auto-save new employees to branch_employees
+    const uniqueEmps = new Map<string, { rate: number; bonus: number }>()
+    for (const r of toSave) {
+      if (r.hourly_rate > 0 && !uniqueEmps.has(r.name)) {
+        uniqueEmps.set(r.name, { rate: r.hourly_rate, bonus: r.retention_bonus || 0 })
+      }
+    }
+    let newEmps = 0
+    for (const [name, { rate, bonus }] of uniqueEmps) {
+      const { data: existing } = await supabase.from('branch_employees')
+        .select('id').eq('branch_id', branchId).ilike('name', `%${name}%`).limit(1)
+      if (!existing || existing.length === 0) {
+        await supabase.from('branch_employees').insert({
+          branch_id: branchId, name, hourly_rate: rate, retention_bonus: bonus, active: true,
+        })
+        newEmps++
+      }
+    }
+
     setParsedRows([]); setUploadStatus('done')
-    setUploadMsg(`✓ נשמרו ${saved} רשומות`)
+    setUploadMsg(`✓ נשמרו ${saved} רשומות` + (newEmps > 0 ? ` · ${newEmps} עובדים חדשים נוספו למערכת` : ''))
     await fetchEntries(); setLoading(false)
   }
 
@@ -749,7 +768,11 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                             <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_150 > 0 ? row.hours_150 : '—'}</span>
                             {isDetailedMode && (
                               <input type="number" value={row.hourly_rate || ''}
-                                onChange={e => setParsedRows(prev => prev.map((r, j) => j === i ? { ...r, hourly_rate: parseFloat(e.target.value) || 0, gross_salary: 0, employer_cost: 0 } : r))}
+                                onChange={e => {
+                                  const newRate = parseFloat(e.target.value) || 0
+                                  // Apply rate to ALL rows of the same employee
+                                  setParsedRows(prev => prev.map(r => r.name === row.name ? { ...r, hourly_rate: newRate, gross_salary: 0, employer_cost: 0 } : r))
+                                }}
                                 placeholder="₪"
                                 style={{ width: '60px', border: `1.5px solid ${row.hourly_rate > 0 ? '#e2e8f0' : '#fca5a5'}`, borderRadius: '6px', padding: '4px 6px', fontSize: '13px', fontWeight: '700', textAlign: 'center', background: row.hourly_rate > 0 ? 'white' : '#fef2f2' }} />
                             )}
