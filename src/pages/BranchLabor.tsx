@@ -205,6 +205,83 @@ function parseCashOnTab(items: PdfItem[]): { rows: ParsedRow[]; rawLines: string
   return { rows, rawLines }
 }
 
+// ─── פרסור פורמט מפורט (כל עובד בדף נפרד) ──────────────────────────────────
+// מזהה "שם עובד: XXX" + "סיכום לעובד" עם רגילות/רמה 1/רמה 2
+function parseDetailedFormat(items: PdfItem[]): { rows: ParsedRow[]; rawLines: string[] } {
+  const groups = groupByY(items)
+  const yKeys = [...groups.keys()].sort((a, b) => b - a) // top to bottom
+  const rawLines: string[] = []
+  const rows: ParsedRow[] = []
+  const toNum = (s: string) => parseFloat(s.replace(/,/g, '')) || 0
+
+  // Build all lines
+  const lines: { y: number; text: string; items: PdfItem[] }[] = []
+  for (const y of yKeys) {
+    const row = groups.get(y)!
+    const text = row.map(i => i.text).join(' ')
+    rawLines.push(text)
+    lines.push({ y, text, items: row })
+  }
+  lines.sort((a, b) => b.y - a.y) // top first
+
+  let currentName = ''
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+
+    // Detect employee name: "שם עובד: XXX"
+    const nameMatch = line.text.match(/שם עובד:\s*(.+?)(?:\s*$|\s*קוד)/)
+    if (nameMatch) {
+      currentName = nameMatch[1].trim()
+      continue
+    }
+
+    // Detect "סה"כ שעות" summary line in סיכום לעובד
+    if (line.text.includes('סה"כ שעות') && currentName) {
+      // Look for the numeric totals line nearby (within next 3 lines)
+      // The summary structure:  סה"כ שעות | totalHours | regular | level1 | level2
+      // Find the line with the actual numbers (the last row of סיכום with 4+ numbers)
+      let totalHours = 0, regular = 0, level1 = 0, level2 = 0
+
+      // Search up to 5 lines below for the totals
+      for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+        const nums = lines[j].items
+          .map(it => it.text.replace(/,/g, ''))
+          .filter(t => /^\d+(\.\d+)?$/.test(t))
+          .map(parseFloat)
+
+        // The summary "סה"כ שעות" row has: totalHours, regular, level1, level2
+        if (nums.length >= 2) {
+          // Largest number is total hours, second is regular, etc.
+          const sorted = [...nums].sort((a, b) => b - a)
+          totalHours = sorted[0] || 0
+          regular = sorted[1] || 0
+          level1 = nums.length >= 3 ? sorted[2] || 0 : 0
+          level2 = nums.length >= 4 ? sorted[3] || 0 : 0
+          break
+        }
+      }
+
+      if (totalHours > 0 && currentName) {
+        // No salary in detailed format — hours only, salary = 0
+        rows.push({
+          name: currentName,
+          hours_100: regular, cost_100: 0,
+          hours_125: level1, cost_125: 0,
+          hours_150: level2, cost_150: 0,
+          total_hours: totalHours,
+          gross_salary: 0,
+          employer_cost: 0,
+          selected: true,
+        })
+        currentName = '' // Reset for next employee
+      }
+    }
+  }
+
+  return { rows, rawLines }
+}
+
 // ─── Animation variants ──────────────────────────────────────────────────────
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
@@ -232,6 +309,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   const [uploadMsg, setUploadMsg]       = useState('')
   const [rawLines, setRawLines]         = useState<string[]>([])
   const [showRaw, setShowRaw]           = useState(false)
+  const [hourlyRate, setHourlyRate]     = useState('35')
 
   // הזנה ידנית
   const [manDate, setManDate]   = useState(new Date().toISOString().split('T')[0])
@@ -295,7 +373,18 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
     try {
       const items = await extractPdfItems(file)
-      const { rows, rawLines: lines } = parseCashOnTab(items)
+
+      // Try מרוכז format first, then מפורט
+      let { rows, rawLines: lines } = parseCashOnTab(items)
+      let isDetailed = false
+
+      if (rows.length === 0) {
+        const detailed = parseDetailedFormat(items)
+        rows = detailed.rows
+        lines = detailed.rawLines
+        isDetailed = rows.length > 0
+      }
+
       setRawLines(lines)
 
       if (rows.length === 0) {
@@ -307,7 +396,9 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
       setParsedRows(rows)
       setUploadStatus('confirm')
-      setUploadMsg(`זוהו ${rows.length} עובדים — בדוק ואשר`)
+      setUploadMsg(isDetailed
+        ? `זוהו ${rows.length} עובדים (פורמט מפורט — שעות בלבד, ללא שכר)`
+        : `זוהו ${rows.length} עובדים — בדוק ואשר`)
     } catch (err: any) {
       setUploadStatus('error')
       setUploadMsg('שגיאה: ' + (err.message || 'נסה שוב'))
@@ -527,7 +618,25 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
             </Card>
 
             {/* ── טבלת אישור ── */}
-            {uploadStatus === 'confirm' && parsedRows.length > 0 && (
+            {uploadStatus === 'confirm' && parsedRows.length > 0 && (() => {
+              const isDetailedMode = parsedRows.some(r => r.gross_salary === 0 && r.total_hours > 0)
+              const rate = parseFloat(hourlyRate) || 0
+
+              // For detailed format: calculate salary from hourly rate
+              if (isDetailedMode && rate > 0) {
+                for (const r of parsedRows) {
+                  if (r.gross_salary === 0 && r.total_hours > 0) {
+                    const c100 = r.hours_100 * rate
+                    const c125 = r.hours_125 * rate * 1.25
+                    const c150 = r.hours_150 * rate * 1.5
+                    r.cost_100 = c100; r.cost_125 = c125; r.cost_150 = c150
+                    r.gross_salary = parseFloat((c100 + c125 + c150).toFixed(2))
+                    r.employer_cost = parseFloat(((c100 * EMPLOYER_FACTOR) + c125 + c150).toFixed(2))
+                  }
+                }
+              }
+
+              return (
               <motion.div variants={fadeIn} initial="hidden" animate="visible">
                 <div className="table-scroll">
                   <Card className="shadow-sm">
@@ -537,9 +646,20 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                           <h3 style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>
                             אישור לפני שמירה
                           </h3>
-                          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>בדוק שהנתונים נכונים — ניתן לבטל עובדים בודדים</p>
+                          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
+                            {isDetailedMode ? 'פורמט מפורט — הזן תעריף שעתי לחישוב שכר' : 'בדוק שהנתונים נכונים — ניתן לבטל עובדים בודדים'}
+                          </p>
                         </div>
                         <div style={{ textAlign: 'left' as const, fontSize: '13px' }}>
+                          {isDetailedMode && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                              <span style={{ fontSize: '12px', color: '#64748b' }}>תעריף שעתי:</span>
+                              <input type="number" value={hourlyRate}
+                                onChange={e => setHourlyRate(e.target.value)}
+                                style={{ width: '70px', border: '1.5px solid #e2e8f0', borderRadius: '8px', padding: '4px 8px', fontSize: '14px', fontWeight: '700', textAlign: 'center' }} />
+                              <span style={{ fontSize: '12px', color: '#64748b' }}>₪/שעה</span>
+                            </div>
+                          )}
                           <div style={{ color: '#64748b' }}>ברוטו: <strong style={{ color: branchColor }}>₪{parsedTotal.toLocaleString()}</strong></div>
                           <div style={{ color: '#64748b' }}>עלות מעסיק: <strong style={{ color: '#fb7185' }}>₪{Math.round(parsedEmpTotal).toLocaleString()}</strong></div>
                         </div>
@@ -587,7 +707,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                   </Card>
                 </div>
               </motion.div>
-            )}
+              ) })()}
 
             {uploadStatus === 'done' && (
               <Card className="shadow-sm">
