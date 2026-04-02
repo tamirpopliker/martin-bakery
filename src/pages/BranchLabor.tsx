@@ -5,8 +5,9 @@ import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, Plus, Pencil, Trash2, CheckCircle, AlertTriangle, FileText, Eye, HelpCircle } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, CheckCircle, AlertTriangle, FileText, Eye, HelpCircle, BarChart3 } from 'lucide-react'
 import { LaborIcon } from '@/components/icons'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts'
 
 interface Props {
   branchId: number
@@ -215,8 +216,13 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   const [editData, setEditData]         = useState<Partial<Entry>>({})
   const [loading, setLoading]           = useState(false)
   const [monthRevenue, setMonthRevenue] = useState(0)
-  const [tab, setTab]                   = useState<'upload' | 'manual' | 'history'>('upload')
+  const [tab, setTab]                   = useState<'upload' | 'manual' | 'history' | 'daily_report'>('upload')
   const [helpOpen, setHelpOpen]         = useState(false)
+
+  // Daily report
+  interface DailyRow { date: string; employees: number; hours100: number; hours125: number; hours150: number; gross: number; employer: number }
+  const [dailyData, setDailyData] = useState<DailyRow[]>([])
+  const [dailyLoading, setDailyLoading] = useState(false)
   const [laborTargetPct, setLaborTargetPct] = useState(28)
 
   // העלאה
@@ -255,6 +261,30 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   }
 
   useEffect(() => { fetchEntries(); fetchRevenue(); fetchLaborTarget() }, [from, to, branchId])
+
+  async function fetchDailyReport() {
+    setDailyLoading(true)
+    const { data } = await supabase.from('branch_labor').select('date, hours_100, hours_125, hours_150, gross_salary, employer_cost')
+      .eq('branch_id', branchId)
+      .gte('date', from).lt('date', to)
+      .order('date')
+    if (data) {
+      const byDate: Record<string, DailyRow> = {}
+      for (const r of data) {
+        if (!byDate[r.date]) byDate[r.date] = { date: r.date, employees: 0, hours100: 0, hours125: 0, hours150: 0, gross: 0, employer: 0 }
+        byDate[r.date].employees++
+        byDate[r.date].hours100 += Number(r.hours_100 || 0)
+        byDate[r.date].hours125 += Number(r.hours_125 || 0)
+        byDate[r.date].hours150 += Number(r.hours_150 || 0)
+        byDate[r.date].gross += Number(r.gross_salary || 0)
+        byDate[r.date].employer += Number(r.employer_cost || 0)
+      }
+      setDailyData(Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)))
+    }
+    setDailyLoading(false)
+  }
+
+  useEffect(() => { if (tab === 'daily_report') fetchDailyReport() }, [tab, from, to, branchId])
 
   // ─── handleFile ───────────────────────────────────────────────────────────
   async function handleFile(file: File) {
@@ -389,7 +419,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
       {/* טאבים */}
       <div className="flex px-8 bg-white border-b border-slate-200">
-        {(['upload','manual','history'] as const).map(key => (
+        {(['upload','manual','history','daily_report'] as const).map(key => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-5 py-3.5 bg-transparent border-0 border-b-[3px] cursor-pointer text-sm transition-colors ${
               tab === key
@@ -397,7 +427,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                 : 'font-medium border-transparent text-slate-500 hover:text-slate-700'
             }`}
             style={{ color: tab === key ? branchColor : undefined }}>
-            {key === 'upload' ? 'העלאת CashOnTab' : key === 'manual' ? 'הזנה ידנית' : 'היסטוריה'}
+            {key === 'upload' ? 'העלאת CashOnTab' : key === 'manual' ? 'הזנה ידנית' : key === 'history' ? 'היסטוריה' : 'דוח יומי'}
           </button>
         ))}
       </div>
@@ -681,6 +711,89 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
               </div>
             </motion.div>
           </>
+        )}
+
+        {/* ══ דוח יומי ════════════════════════════════════════════════════ */}
+        {tab === 'daily_report' && (
+          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5 } } }} initial="hidden" animate="visible">
+            {dailyLoading ? (
+              <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>טוען...</div>
+            ) : dailyData.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>אין נתוני לייבור לתקופה</div>
+            ) : (
+              <>
+                {/* Summary cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+                  {[
+                    { label: 'עלות גולמית', value: dailyData.reduce((s, d) => s + d.gross, 0), color: branchColor },
+                    { label: 'עלות מעסיק', value: dailyData.reduce((s, d) => s + d.employer, 0), color: '#fb7185' },
+                    { label: 'ממוצע יומי (מעסיק)', value: dailyData.reduce((s, d) => s + d.employer, 0) / dailyData.length, color: '#818cf8' },
+                  ].map(c => (
+                    <Card key={c.label} className="shadow-sm">
+                      <CardContent className="p-4 text-center">
+                        <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>{c.label}</div>
+                        <div style={{ fontSize: '20px', fontWeight: '800', color: c.color }}>₪{Math.round(c.value).toLocaleString()}</div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Daily table */}
+                <Card className="shadow-sm mb-4">
+                  <CardContent className="p-0">
+                    <div style={{ display: 'grid', gridTemplateColumns: '100px 60px 70px 70px 70px 100px 110px', padding: '10px 16px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                      <span>תאריך</span><span style={{ textAlign: 'center' }}>עובדים</span>
+                      <span style={{ textAlign: 'center' }}>100%</span><span style={{ textAlign: 'center' }}>125%</span><span style={{ textAlign: 'center' }}>150%</span>
+                      <span style={{ textAlign: 'left' }}>גולמי</span><span style={{ textAlign: 'left' }}>מעסיק</span>
+                    </div>
+                    {dailyData.map((d, i) => (
+                      <div key={d.date} style={{ display: 'grid', gridTemplateColumns: '100px 60px 70px 70px 70px 100px 110px', padding: '10px 16px', borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa', alignItems: 'center', fontSize: '13px' }}>
+                        <span style={{ color: '#374151', fontWeight: '600' }}>{new Date(d.date + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })}</span>
+                        <span style={{ textAlign: 'center', color: '#64748b' }}>{d.employees}</span>
+                        <span style={{ textAlign: 'center', color: '#64748b' }}>{d.hours100 > 0 ? d.hours100.toFixed(1) : '—'}</span>
+                        <span style={{ textAlign: 'center', color: '#64748b' }}>{d.hours125 > 0 ? d.hours125.toFixed(1) : '—'}</span>
+                        <span style={{ textAlign: 'center', color: '#64748b' }}>{d.hours150 > 0 ? d.hours150.toFixed(1) : '—'}</span>
+                        <span style={{ fontWeight: '700', color: branchColor }}>₪{Math.round(d.gross).toLocaleString()}</span>
+                        <span style={{ fontWeight: '700', color: '#fb7185' }}>₪{Math.round(d.employer).toLocaleString()}</span>
+                      </div>
+                    ))}
+                    <div style={{ display: 'grid', gridTemplateColumns: '100px 60px 70px 70px 70px 100px 110px', padding: '12px 16px', background: branchColor + '15', borderTop: `2px solid ${branchColor}33`, borderRadius: '0 0 10px 10px', fontWeight: '700', fontSize: '13px' }}>
+                      <span style={{ color: '#374151' }}>סה"כ</span>
+                      <span style={{ textAlign: 'center', color: '#64748b' }}>{dailyData.reduce((s, d) => s + d.employees, 0)}</span>
+                      <span style={{ textAlign: 'center', color: '#64748b' }}>{dailyData.reduce((s, d) => s + d.hours100, 0).toFixed(1)}</span>
+                      <span style={{ textAlign: 'center', color: '#64748b' }}>{dailyData.reduce((s, d) => s + d.hours125, 0).toFixed(1)}</span>
+                      <span style={{ textAlign: 'center', color: '#64748b' }}>{dailyData.reduce((s, d) => s + d.hours150, 0).toFixed(1)}</span>
+                      <span style={{ color: branchColor }}>₪{Math.round(dailyData.reduce((s, d) => s + d.gross, 0)).toLocaleString()}</span>
+                      <span style={{ color: '#fb7185' }}>₪{Math.round(dailyData.reduce((s, d) => s + d.employer, 0)).toLocaleString()}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Chart */}
+                <Card className="shadow-sm">
+                  <CardContent className="p-4">
+                    <h3 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>עלות יומית</h3>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <LineChart data={dailyData.map(d => ({
+                        name: new Date(d.date + 'T12:00:00').toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' }),
+                        'עלות גולמית': Math.round(d.gross),
+                        'עלות מעסיק': Math.round(d.employer),
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => `₪${(v / 1000).toFixed(0)}K`} axisLine={false} tickLine={false} />
+                        <RTooltip formatter={(v: number) => [`₪${v.toLocaleString()}`, '']} />
+                        <Legend wrapperStyle={{ fontSize: '12px' }} />
+                        <ReferenceLine y={0} stroke="#e2e8f0" />
+                        <Line type="monotone" dataKey="עלות גולמית" stroke={branchColor} strokeWidth={2} dot={{ r: 3, fill: 'white', stroke: branchColor, strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="עלות מעסיק" stroke="#fb7185" strokeWidth={2} dot={{ r: 3, fill: 'white', stroke: '#fb7185', strokeWidth: 2 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </motion.div>
         )}
 
       </div>
