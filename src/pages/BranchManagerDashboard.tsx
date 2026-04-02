@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
+import { useBranches } from '../lib/BranchContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -45,16 +46,12 @@ interface BranchData {
   operatingPct: number
 }
 
-const BRANCHES = [
-  { id: 1, name: 'אברהם אבינו', color: '#818cf8' },
-  { id: 2, name: 'הפועלים',     color: '#34d399' },
-  { id: 3, name: 'יעקב כהן',   color: '#c084fc' },
-]
 
 function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString() }
 
 export default function BranchManagerDashboard({ onBack }: Props) {
   const { period, setPeriod, from, to, comparisonPeriod } = usePeriod()
+  const { branches: BRANCHES } = useBranches()
   const [loading, setLoading] = useState(true)
   const [branches, setBranches] = useState<BranchData[]>([])
   const [prevBranches, setPrevBranches] = useState<BranchData[]>([])

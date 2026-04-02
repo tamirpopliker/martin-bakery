@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { supabase, getLast6Months, monthEnd } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import { useAppUser } from '../lib/UserContext'
+import { useBranches } from '../lib/BranchContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import PeriodPicker from '../components/PeriodPicker'
@@ -32,11 +33,6 @@ import {
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
 // ─── קבועים ─────────────────────────────────────────────────────────────────
-const BRANCHES = [
-  { id: 1, name: 'אברהם אבינו', color: '#818cf8', page: 'branch_1' },
-  { id: 2, name: 'הפועלים',     color: '#34d399', page: 'branch_2' },
-  { id: 3, name: 'יעקב כהן',   color: '#c084fc', page: 'branch_3' },
-]
 
 const PANEL_FACTORY = [
   { label: 'קרמים',        subtitle: 'ייצור · פחת · תיקונים',         Icon: FlaskConical, color: '#818cf8', page: 'dept_creams' },
@@ -69,8 +65,12 @@ const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, tra
 export default function Home() {
   const { period, setPeriod, from, to, comparisonPeriod } = usePeriod()
   const { appUser, canAccessPage, logout } = useAppUser()
+  const { branches: branchList } = useBranches()
   const [page, setPage]         = useState<string | null>(null)
   const [expandedSection, setExpandedSection] = useState<string | null>('factory')
+
+  // ─── Dynamic branches for navigation ──────────────────────────────────────
+  const BRANCHES = branchList.map(b => ({ id: b.id, name: b.name, color: b.color, page: `branch_${b.id}` }))
 
   // ─── Filtered navigation based on permissions ─────────────────────────────
   const filteredBranches = BRANCHES.filter(br => canAccessPage(br.page))
@@ -250,9 +250,14 @@ export default function Home() {
     if (page === 'dept_cleaning')  return <DepartmentHome department="cleaning"  onBack={() => setPage(null)} />
 
     if (page === 'branch_dashboard') return <BranchManagerDashboard onBack={() => setPage(null)} />
-    if (page === 'branch_1') return <BranchHome branch={{ id: 1, name: 'אברהם אבינו', color: '#818cf8' }} onBack={() => setPage(null)} />
-    if (page === 'branch_2') return <BranchHome branch={{ id: 2, name: 'הפועלים',     color: '#34d399' }} onBack={() => setPage(null)} />
-    if (page === 'branch_3') return <BranchHome branch={{ id: 3, name: 'יעקב כהן',   color: '#c084fc' }} onBack={() => setPage(null)} />
+
+    // Dynamic branch routing
+    const branchMatch = page?.match(/^branch_(\d+)$/)
+    if (branchMatch) {
+      const branchId = Number(branchMatch[1])
+      const br = BRANCHES.find(b => b.id === branchId)
+      if (br) return <BranchHome branch={{ id: br.id, name: br.name, color: br.color }} onBack={() => setPage(null)} />
+    }
 
     return null
   }

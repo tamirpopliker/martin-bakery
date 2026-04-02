@@ -6,6 +6,7 @@ import { ArrowRight, TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon, TrophyIcon } from '@/components/icons'
 import { BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { usePeriod } from '../lib/PeriodContext'
+import { useBranches } from '../lib/BranchContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -19,12 +20,6 @@ type KpiSheetType =
   | 'fixed_costs' | 'labor_total' | 'suppliers_total'
   | 'rev_cashier' | 'rev_credit' | 'rev_website' | 'rev_all_channels'
 
-// Softer color palette: indigo / emerald / violet
-const BRANCHES = [
-  { id: 1, name: 'אברהם אבינו', color: '#818cf8' },
-  { id: 2, name: 'הפועלים',     color: '#34d399' },
-  { id: 3, name: 'יעקב כהן',   color: '#c084fc' },
-]
 
 const PIE_COLORS = ['#818cf8', '#fb7185', '#fbbf24', '#34d399', '#c084fc', '#38bdf8', '#94a3b8']
 
@@ -91,6 +86,7 @@ function PieTooltip({ active, payload }: any) {
 
 export default function CEODashboard({ onBack }: Props) {
   const { period, setPeriod, from, to, monthKey, comparisonPeriod } = usePeriod()
+  const { branches: BRANCHES } = useBranches()
   const [loading, setLoading] = useState(false)
   const [branches, setBranches] = useState<BranchData[]>([])
   const [prevTotalRev, setPrevTotalRev] = useState(0)

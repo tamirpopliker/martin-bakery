@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ArrowRight, Plus, Pencil, Trash2, Save, X, UserCog } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Save, X, UserCog, Store, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { useBranches } from '../lib/BranchContext'
 
 interface AppUser {
   id: string
@@ -20,12 +22,6 @@ const ROLE_LABELS: Record<string, string> = {
   admin: 'אדמין',
   factory: 'מפעל',
   branch: 'סניף',
-}
-
-const BRANCH_LABELS: Record<number, string> = {
-  1: 'אברהם אבינו',
-  2: 'הפועלים',
-  3: 'יעקב כהן',
 }
 
 const DEPT_LABELS: Record<string, string> = {
@@ -46,6 +42,7 @@ const ROLE_COLORS: Record<string, string> = {
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 export default function UserManagement({ onBack }: { onBack: () => void }) {
+  const { branches, getBranchName, refreshBranches } = useBranches()
   const [users, setUsers] = useState<AppUser[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -53,6 +50,11 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
   const [addMode, setAddMode] = useState(false)
   const [newUser, setNewUser] = useState({ email: '', name: '', role: 'branch' as string, branch_id: 1, excluded_departments: [] as string[], can_settings: false })
   const [saving, setSaving] = useState(false)
+  // ─── Branch management state ──────────────────────────────────────────────
+  const [tab, setTab] = useState<'users' | 'branches'>('users')
+  const [branchSheetOpen, setBranchSheetOpen] = useState(false)
+  const [editBranch, setEditBranch] = useState<{ id?: number; name: string; short_name: string; address: string }>({ name: '', short_name: '', address: '' })
+  const [branchSaving, setBranchSaving] = useState(false)
 
   async function loadUsers() {
     const { data } = await supabase.from('app_users').select('*').order('created_at')
@@ -135,26 +137,52 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
             <UserCog size={22} color="white" />
           </div>
           <div>
-            <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: 0 }}>ניהול משתמשים</h1>
-            <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>הרשאות גישה · {users.length} משתמשים</p>
+            <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: 0 }}>ניהול מערכת</h1>
+            <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>משתמשים · סניפים · הרשאות</p>
           </div>
         </div>
         <div style={{ flex: 1 }} />
-        {!addMode && (
-          <button
-            onClick={() => setAddMode(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              background: '#c084fc', color: 'white', border: 'none', borderRadius: '10px',
-              padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer',
-            }}
-          >
+        {tab === 'users' && !addMode && (
+          <button onClick={() => setAddMode(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#c084fc', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
             <Plus size={16} /> הוסף משתמש
+          </button>
+        )}
+        {tab === 'branches' && (
+          <button onClick={() => { setEditBranch({ name: '', short_name: '', address: '' }); setBranchSheetOpen(true) }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            <Plus size={16} /> הוסף סניף
           </button>
         )}
       </div>
 
       <div style={{ padding: '28px 36px', maxWidth: '1100px', margin: '0 auto' }}>
+
+      {/* Tab switcher */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+        {[
+          { key: 'users' as const, label: 'משתמשים', icon: UserCog, count: users.length },
+          { key: 'branches' as const, label: 'סניפים', icon: Store, count: branches.length },
+        ].map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '10px 20px', borderRadius: '12px', fontSize: '14px', fontWeight: '700',
+              border: tab === t.key ? '2px solid #818cf8' : '2px solid #e2e8f0',
+              background: tab === t.key ? '#eef2ff' : 'white', color: tab === t.key ? '#4f46e5' : '#64748b',
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}>
+            <t.icon size={16} />
+            {t.label}
+            <span style={{ background: tab === t.key ? '#818cf8' : '#e2e8f0', color: tab === t.key ? 'white' : '#64748b', fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
+              {t.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* ═══ USERS TAB ═══ */}
+      {tab === 'users' && <>
 
       {/* Add user form */}
       {addMode && (
@@ -190,9 +218,7 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
                   <select value={newUser.branch_id} onChange={e => setNewUser({ ...newUser, branch_id: Number(e.target.value) })}
                     style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', boxSizing: 'border-box' }}
                   >
-                    <option value={1}>אברהם אבינו</option>
-                    <option value={2}>הפועלים</option>
-                    <option value={3}>יעקב כהן</option>
+                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                 </div>
               )}
@@ -279,9 +305,7 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
                       <select value={editData.branch_id ?? 1} onChange={e => setEditData({ ...editData, branch_id: Number(e.target.value) })}
                         style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }}
                       >
-                        <option value={1}>אברהם אבינו</option>
-                        <option value={2}>הפועלים</option>
-                        <option value={3}>יעקב כהן</option>
+                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                       </select>
                     )}
                     {editData.role === 'factory' && <span style={{ fontSize: '11px', color: '#94a3b8' }}>כל המפעל</span>}
@@ -337,7 +361,7 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
                   </span>
                   <span style={{ color: '#374151' }}>
                     {user.role === 'admin' ? 'הכל' :
-                     user.role === 'branch' && user.branch_id ? BRANCH_LABELS[user.branch_id] :
+                     user.role === 'branch' && user.branch_id ? getBranchName(user.branch_id) :
                      'כל המפעל'}
                   </span>
                   <span style={{ fontSize: '11px', color: '#94a3b8' }}>
@@ -367,6 +391,111 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
         </Card></div>
         </motion.div>
       )}
+
+      </>}
+
+      {/* ═══ BRANCHES TAB ═══ */}
+      {tab === 'branches' && (
+        <motion.div variants={fadeIn} initial="hidden" animate="visible">
+          <Card className="shadow-sm" style={{ overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr 1fr 100px 80px', padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+              <span>ID</span><span>שם</span><span>שם קצר</span><span>כתובת</span><span>סטטוס</span><span>פעולות</span>
+            </div>
+            {branches.map(branch => (
+              <div key={branch.id} style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr 1fr 100px 80px', padding: '14px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px' }}>
+                <span style={{ fontWeight: '700', color: '#818cf8' }}>#{branch.id}</span>
+                <span style={{ fontWeight: '600', color: '#0f172a' }}>{branch.name}</span>
+                <span style={{ color: '#64748b' }}>{branch.short_name || '—'}</span>
+                <span style={{ color: '#64748b' }}>{branch.address || '—'}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600', color: '#34d399' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34d399' }} /> פעיל
+                </span>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button onClick={() => { setEditBranch({ id: branch.id, name: branch.name, short_name: branch.short_name || '', address: branch.address || '' }); setBranchSheetOpen(true) }}
+                    style={{ background: '#f1f5f9', color: '#818cf8', border: 'none', borderRadius: '6px', padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                    <Pencil size={13} />
+                  </button>
+                  <button onClick={async () => {
+                    if (!confirm(`האם להשבית את סניף "${branch.name}"?`)) return
+                    await supabase.from('branches').update({ active: false }).eq('id', branch.id)
+                    refreshBranches()
+                  }}
+                    style={{ background: '#fff1f2', color: '#fb7185', border: 'none', borderRadius: '6px', padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                    title="השבת סניף">
+                    <ToggleLeft size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {branches.length === 0 && (
+              <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>אין סניפים פעילים</div>
+            )}
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Branch Sheet (Add/Edit) */}
+      <Sheet open={branchSheetOpen} onOpenChange={setBranchSheetOpen}>
+        <SheetPortal>
+          <SheetBackdrop />
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>{editBranch.id ? 'עריכת סניף' : 'סניף חדש'}</SheetTitle>
+            </SheetHeader>
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '6px' }}>שם הסניף</label>
+                <input value={editBranch.name} onChange={e => setEditBranch({ ...editBranch, name: e.target.value })}
+                  placeholder="שם הסניף..."
+                  style={{ width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '6px' }}>שם קצר</label>
+                <input value={editBranch.short_name} onChange={e => setEditBranch({ ...editBranch, short_name: e.target.value })}
+                  placeholder="שם קצר לתצוגה..."
+                  style={{ width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '6px' }}>כתובת</label>
+                <input value={editBranch.address} onChange={e => setEditBranch({ ...editBranch, address: e.target.value })}
+                  placeholder="כתובת הסניף..."
+                  style={{ width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box' }} />
+              </div>
+              <button
+                onClick={async () => {
+                  if (!editBranch.name.trim()) return
+                  setBranchSaving(true)
+                  if (editBranch.id) {
+                    await supabase.from('branches').update({
+                      name: editBranch.name.trim(),
+                      short_name: editBranch.short_name.trim() || editBranch.name.trim(),
+                      address: editBranch.address.trim(),
+                    }).eq('id', editBranch.id)
+                  } else {
+                    await supabase.from('branches').insert({
+                      name: editBranch.name.trim(),
+                      short_name: editBranch.short_name.trim() || editBranch.name.trim(),
+                      address: editBranch.address.trim(),
+                      active: true,
+                    })
+                  }
+                  setBranchSaving(false)
+                  setBranchSheetOpen(false)
+                  refreshBranches()
+                }}
+                disabled={branchSaving || !editBranch.name.trim()}
+                style={{
+                  background: branchSaving || !editBranch.name.trim() ? '#e2e8f0' : '#818cf8',
+                  color: branchSaving || !editBranch.name.trim() ? '#94a3b8' : 'white',
+                  border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '15px', fontWeight: '700',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                }}>
+                <Save size={16} /> {branchSaving ? 'שומר...' : editBranch.id ? 'עדכן סניף' : 'הוסף סניף'}
+              </button>
+            </div>
+          </SheetContent>
+        </SheetPortal>
+      </Sheet>
 
       </div>
     </div>

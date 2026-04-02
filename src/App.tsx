@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 import { PeriodProvider } from './lib/PeriodContext'
 import { UserProvider } from './lib/UserContext'
+import { BranchProvider } from './lib/BranchContext'
 import Login from './pages/Login'
 import Home from './pages/Home'
 
@@ -28,9 +29,11 @@ function App() {
 
   return (
     <UserProvider session={session}>
-      <PeriodProvider>
-        <Home />
-      </PeriodProvider>
+      <BranchProvider>
+        <PeriodProvider>
+          <Home />
+        </PeriodProvider>
+      </BranchProvider>
     </UserProvider>
   )
 }

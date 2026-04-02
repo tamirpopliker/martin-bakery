@@ -5,6 +5,7 @@ import Papa from 'papaparse'
 import JSZip from 'jszip'
 import { Upload, CheckCircle, AlertCircle, XCircle, FileText, Loader2, Download, Trash2 } from 'lucide-react'
 import { detectBranchId } from '../lib/internalCustomers'
+import { useBranches } from '../lib/BranchContext'
 import { Card, CardContent } from '@/components/ui/card'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -49,11 +50,7 @@ const REPAIR_TYPE_MAP: Record<string, string> = {
   'ציוד חדש': 'new_equipment', 'new_equipment': 'new_equipment', 'new equipment': 'new_equipment',
 }
 
-const BRANCH_MAP: Record<string, number> = {
-  'אברהם אבינו': 1,
-  'הפועלים': 2,
-  'יעקב כהן': 3,
-}
+let BRANCH_MAP: Record<string, number> = {}
 function parseBranch(val: string | undefined): number | null {
   if (!val) return null
   const v = val.trim()
@@ -473,6 +470,13 @@ export default function DataImport({ branchOnly }: Props) {
   const [importMode, setImportMode] = useState<'zip' | 'single'>('zip')
   const singleFileRef = useRef<HTMLInputElement>(null)
   const [selectedTable, setSelectedTable] = useState<string | null>(null)
+
+  const { branches } = useBranches()
+  BRANCH_MAP = {}
+  for (const b of branches) {
+    BRANCH_MAP[b.name] = b.id
+    if (b.short_name && b.short_name !== b.name) BRANCH_MAP[b.short_name] = b.id
+  }
 
   // ─── Identify file ─────────────────────────────────────────────────────────
   function identifyFile(name: string): { key: string; def: TableDef } | { key: string; skip: true } | null {

@@ -38,6 +38,26 @@ export function getLast6Months(yyyyMM: string): string[] {
   return months
 }
 
+// ─── סניפים ─────────────────────────────────────────────────────────────────
+
+export interface Branch {
+  id: number
+  name: string
+  short_name: string | null
+  address: string | null
+  active: boolean
+}
+
+/** Fetch all active branches, ordered by id */
+export async function fetchBranches(): Promise<Branch[]> {
+  const { data } = await supabase
+    .from('branches')
+    .select('id, name, short_name, address, active')
+    .eq('active', true)
+    .order('id')
+  return (data || []) as Branch[]
+}
+
 // ─── עובדים גלובליים ──────────────────────────────────────────────────────
 
 export interface GlobalEmployee {

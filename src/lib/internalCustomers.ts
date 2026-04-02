@@ -9,12 +9,27 @@ export interface InternalMapping {
   branchName: string
 }
 
-/** מיפוי קבוע: שם לקוח במפעל → סניף */
-export const INTERNAL_CUSTOMER_MAP: InternalMapping[] = [
+/**
+ * מיפוי קבוע: שם לקוח במפעל → סניף.
+ * מילות המפתח נשארות קשיחות כי הן מבוססות על שמות לקוחות
+ * במערכת הנהלת חשבונות (Base44). סניפים חדשים יוסיפו ערכים
+ * למערך דרך setInternalCustomerMap.
+ */
+let INTERNAL_CUSTOMER_MAP: InternalMapping[] = [
   { customerPattern: 'מרטין- אברהם אבינו', keywords: ['אברהם'],       branchId: 1, branchName: 'אברהם אבינו' },
   { customerPattern: 'מרטין - עמק שרה',    keywords: ['עמק שרה'],     branchId: 2, branchName: 'הפועלים' },
   { customerPattern: 'מרטין - יעקב כהן',   keywords: ['יעקב'],        branchId: 3, branchName: 'יעקב כהן' },
 ]
+
+/** Allow updating the internal customer map (e.g. from DB data) */
+export function setInternalCustomerMap(map: InternalMapping[]) {
+  INTERNAL_CUSTOMER_MAP = map
+}
+
+/** Get the current map (for consumers that need to iterate) */
+export function getInternalCustomerMap(): InternalMapping[] {
+  return INTERNAL_CUSTOMER_MAP
+}
 
 /**
  * בודק אם שם לקוח מתאים לסניף פנימי.
@@ -41,7 +56,7 @@ export function detectInternalMapping(customerName: string): InternalMapping | n
     }
   }
   // שם מכיל "מרטין" אבל לא תואם סניף ספציפי — עדיין פנימי, ברירת מחדל סניף 1
-  return INTERNAL_CUSTOMER_MAP[0]
+  return INTERNAL_CUSTOMER_MAP[0] || null
 }
 
 /**
