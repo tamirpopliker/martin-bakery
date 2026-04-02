@@ -20,6 +20,7 @@ interface Employee {
   email: string | null
   phone: string | null
   hourly_rate: number | null
+  retention_bonus: number | null
   active: boolean
 }
 
@@ -37,7 +38,7 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     id: undefined as number | undefined,
-    name: '', email: '', phone: '', hourly_rate: '', active: true,
+    name: '', email: '', phone: '', hourly_rate: '', retention_bonus: '', active: true,
   })
 
   async function fetchEmployees() {
@@ -58,6 +59,7 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
       email: form.email || null,
       phone: form.phone || null,
       hourly_rate: parseFloat(form.hourly_rate) || null,
+      retention_bonus: parseFloat(form.retention_bonus) || 0,
       active: form.active,
     }
     if (form.id) {
@@ -76,14 +78,15 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   }
 
   function openNew() {
-    setForm({ id: undefined, name: '', email: '', phone: '', hourly_rate: '', active: true })
+    setForm({ id: undefined, name: '', email: '', phone: '', hourly_rate: '', retention_bonus: '', active: true })
     setSheetOpen(true)
   }
 
   function openEdit(emp: Employee) {
     setForm({
       id: emp.id, name: emp.name, email: emp.email || '', phone: emp.phone || '',
-      hourly_rate: emp.hourly_rate ? String(emp.hourly_rate) : '', active: emp.active,
+      hourly_rate: emp.hourly_rate ? String(emp.hourly_rate) : '',
+      retention_bonus: emp.retention_bonus ? String(emp.retention_bonus) : '', active: emp.active,
     })
     setSheetOpen(true)
   }
@@ -118,8 +121,8 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
         ) : (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <Card className="shadow-sm" style={{ overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 100px 80px 60px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
-                <span>שם</span><span>אימייל</span><span>טלפון</span><span>תעריף שעתי</span><span>סטטוס</span><span>פעולות</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 80px 70px 80px 60px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                <span>שם</span><span>אימייל</span><span>טלפון</span><span>₪/שעה</span><span>בונוס</span><span>סטטוס</span><span>פעולות</span>
               </div>
               {employees.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
@@ -127,11 +130,12 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
                   <div>אין עובדים. לחץ "הוסף עובד" כדי להתחיל.</div>
                 </div>
               ) : employees.map(emp => (
-                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 100px 80px 60px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: emp.active ? 1 : 0.5 }}>
+                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 80px 70px 80px 60px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: emp.active ? 1 : 0.5 }}>
                   <span style={{ fontWeight: '600', color: '#0f172a' }}>{emp.name}</span>
                   <span style={{ color: '#64748b', fontSize: '12px' }}>{emp.email || '—'}</span>
                   <span style={{ color: '#64748b', fontSize: '12px' }}>{emp.phone || '—'}</span>
                   <span style={{ fontWeight: '700', color: branchColor }}>{emp.hourly_rate ? `₪${emp.hourly_rate}` : '—'}</span>
+                  <span style={{ fontWeight: '600', color: emp.retention_bonus ? '#f59e0b' : '#94a3b8', fontSize: '12px' }}>{emp.retention_bonus ? `₪${emp.retention_bonus}` : '—'}</span>
                   <button onClick={() => toggleActive(emp)}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600', color: emp.active ? '#34d399' : '#94a3b8' }}>
                     {emp.active ? <ToggleRight size={18} color="#34d399" /> : <ToggleLeft size={18} color="#94a3b8" />}
@@ -166,6 +170,12 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
                 <label style={S.label}>תעריף שעתי *</label>
                 <input type="number" value={form.hourly_rate} onChange={e => setForm({ ...form, hourly_rate: e.target.value })}
                   placeholder="35" style={{ ...S.input, textAlign: 'left' as const }} />
+              </div>
+              <div>
+                <label style={S.label}>בונוס התמדה (₪ לשעה)</label>
+                <input type="number" value={form.retention_bonus} onChange={e => setForm({ ...form, retention_bonus: e.target.value })}
+                  placeholder="אין בונוס" style={{ ...S.input, textAlign: 'left' as const }} />
+                <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>יוכפל בסה"כ שעות העבודה, ללא עלות מעסיק</span>
               </div>
               <div>
                 <label style={S.label}>אימייל</label>

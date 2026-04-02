@@ -25,6 +25,7 @@ interface ParsedRow {
   gross_salary: number
   employer_cost: number
   hourly_rate: number
+  retention_bonus: number
   selected: boolean
 }
 
@@ -218,6 +219,7 @@ function parseCashOnTab(items: PdfItem[]): { rows: ParsedRow[]; rawLines: string
         gross_salary,
         employer_cost: parseFloat(((c100 * EMPLOYER_FACTOR) + c125 + c150).toFixed(2)),
         hourly_rate: 0,
+        retention_bonus: 0,
         selected: true,
       })
     }
@@ -287,6 +289,7 @@ function parseDetailedFormat(pages: PdfItem[][]): { rows: ParsedRow[]; rawLines:
         gross_salary: 0,
         employer_cost: 0,
         hourly_rate: 0,
+        retention_bonus: 0,
         selected: true,
       })
     }
@@ -400,6 +403,21 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       }
 
       setRawLines(lines)
+
+      // Auto-fill hourly_rate + retention_bonus from branch_employees
+      if (rows.length > 0) {
+        const { data: emps } = await supabase.from('branch_employees').select('name, hourly_rate, retention_bonus')
+          .eq('branch_id', branchId).eq('active', true)
+        if (emps) {
+          for (const row of rows) {
+            const match = emps.find((e: any) => row.name.includes(e.name) || e.name.includes(row.name))
+            if (match) {
+              row.hourly_rate = Number(match.hourly_rate) || 0
+              row.retention_bonus = Number(match.retention_bonus) || 0
+            }
+          }
+        }
+      }
 
       if (rows.length === 0) {
         setUploadStatus('error')
@@ -635,7 +653,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
             {uploadStatus === 'confirm' && parsedRows.length > 0 && (() => {
               const isDetailedMode = parsedRows.some(r => r.total_hours > 0 && r.hourly_rate >= 0)
 
-              // For detailed format: recalculate salary from per-employee hourly rate
+              // For detailed format: recalculate salary from per-employee hourly rate + bonus
               if (isDetailedMode) {
                 for (const r of parsedRows) {
                   const rate = r.hourly_rate || 0
@@ -643,9 +661,10 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                     const c100 = r.hours_100 * rate
                     const c125 = r.hours_125 * rate * 1.25
                     const c150 = r.hours_150 * rate * 1.5
+                    const bonusAmount = r.total_hours * (r.retention_bonus || 0)
                     r.cost_100 = c100; r.cost_125 = c125; r.cost_150 = c150
-                    r.gross_salary = parseFloat((c100 + c125 + c150).toFixed(2))
-                    r.employer_cost = parseFloat(((c100 * EMPLOYER_FACTOR) + c125 + c150).toFixed(2))
+                    r.gross_salary = parseFloat((c100 + c125 + c150 + bonusAmount).toFixed(2))
+                    r.employer_cost = parseFloat(((c100 * EMPLOYER_FACTOR) + c125 + c150 + bonusAmount).toFixed(2))
                   }
                 }
               }
