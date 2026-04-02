@@ -12,6 +12,7 @@ import BranchSettings from './BranchSettings'
 import BranchCreditCustomers from './BranchCreditCustomers'
 import BranchSuppliers from './BranchSuppliers'
 import BranchOrders from './BranchOrders'
+import BranchEmployees from './BranchEmployees'
 import DataImport from './DataImport'
 
 // ─── אנימציות ─────────────────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ type BranchPage =
   | 'settings'
   | 'data_import'
   | 'orders'
+  | 'employees'
 
 interface MenuItem {
   page: BranchPage
@@ -56,6 +58,7 @@ const MENU_ITEMS: MenuItem[] = [
   { page: 'revenue',   label: 'הכנסות',        subtitle: 'קופה · אתר · הקפה',        Icon: ShoppingBag, ready: true, cardBg: '#f0fdf4', cardBorder: '#bbf7d0' },
   { page: 'expenses',  label: 'הוצאות',         subtitle: 'ספקים · תיקונים · תשתיות', Icon: Receipt,     ready: true, cardBg: '#fef2f2', cardBorder: '#fecaca' },
   { page: 'labor',     label: 'לייבור',          subtitle: 'שעות · עלות מעסיק',         Icon: Users,       ready: true, cardBg: '#fffbeb', cardBorder: '#fde68a' },
+  { page: 'employees', label: 'עובדים',          subtitle: 'תעריפים · פרטי עובד',      Icon: Users,       ready: true, cardBg: '#f0f9ff', cardBorder: '#bae6fd' },
   { page: 'waste',     label: 'פחת',             subtitle: 'סחורה · חומרי גלם',         Icon: Trash2,      ready: true, cardBg: '#fdf2f8', cardBorder: '#fbcfe8' },
   { page: 'suppliers', label: 'ספקים',           subtitle: 'ניהול · קטגוריות',           Icon: Building2,   ready: true, cardBg: '#ecfeff', cardBorder: '#a5f3fc' },
   { page: 'customers', label: 'לקוחות הקפה',    subtitle: 'חובות · תשלומים',            Icon: TrendingUp,  ready: true, cardBg: '#f5f3ff', cardBorder: '#ddd6fe' },
@@ -111,6 +114,9 @@ export default function BranchHome({ branch, onBack }: Props) {
   )
   if (page === 'orders') return (
     <BranchOrders branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
+  )
+  if (page === 'employees') return (
+    <BranchEmployees branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
   if (page === 'data_import') return (
     <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>

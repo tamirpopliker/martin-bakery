@@ -53,7 +53,8 @@ const EMPLOYER_FACTOR = 1.3
 function calcCost(emp: Employee | null, h100: number, h125: number, h150: number, hourlyRate?: number): number {
   const rate = hourlyRate ?? emp?.hourly_rate ?? 0
   if (!rate) return 0
-  const baseCost = (h100 * rate + h125 * rate * 1.25 + h150 * rate * 1.5) * EMPLOYER_FACTOR
+  // Employer cost only on 100% hours, overtime at face value
+  const baseCost = (h100 * rate * EMPLOYER_FACTOR) + (h125 * rate * 1.25) + (h150 * rate * 1.5)
   const hourlyBonus = emp?.bonus || 0
   const totalHours = h100 + h125 + h150
   return baseCost + (totalHours * hourlyBonus)
@@ -373,7 +374,7 @@ export default function DepartmentLabor({ department, onBack }: Props) {
               {previewCost > 0 && (() => {
                 const ph100 = parseFloat(manH100) || 0, ph125 = parseFloat(manH125) || 0, ph150 = parseFloat(manH150) || 0
                 const pTotalH = ph100 + ph125 + ph150
-                const pBase = selEmp?.hourly_rate ? (ph100 * selEmp.hourly_rate + ph125 * selEmp.hourly_rate * 1.25 + ph150 * selEmp.hourly_rate * 1.5) * EMPLOYER_FACTOR : 0
+                const pBase = selEmp?.hourly_rate ? (ph100 * selEmp.hourly_rate * EMPLOYER_FACTOR) + (ph125 * selEmp.hourly_rate * 1.25) + (ph150 * selEmp.hourly_rate * 1.5) : 0
                 const pBonus = (selEmp?.bonus || 0) * pTotalH
                 return (
                   <div style={{ background: cfg.bg, border: `1px solid ${cfg.color}33`, borderRadius: '10px', padding: '12px 16px', marginBottom: '14px', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
