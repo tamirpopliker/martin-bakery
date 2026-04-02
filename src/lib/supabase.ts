@@ -80,6 +80,7 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
     branchRevRes, factorySalesRes, factoryB2bRes,
     supplierRes, laborRes, branchLaborRes,
     fixedCostsRes, factoryRepairsRes, branchExpensesRes,
+    factoryWasteRes, branchWasteRes, globalEmpRes,
   ] = await Promise.all([
     supabase.from('branch_revenue').select('date, amount').gte('date', tFrom).lt('date', tTo),
     supabase.from('factory_sales').select('date, amount, is_internal').gte('date', tFrom).lt('date', tTo),
@@ -90,7 +91,15 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
     supabase.from('fixed_costs').select('month, amount'),
     supabase.from('factory_repairs').select('date, amount').gte('date', tFrom).lt('date', tTo),
     supabase.from('branch_expenses').select('date, amount').gte('date', tFrom).lt('date', tTo),
+    supabase.from('factory_waste').select('date, amount').gte('date', tFrom).lt('date', tTo),
+    supabase.from('branch_waste').select('date, amount').gte('date', tFrom).lt('date', tTo),
+    supabase.from('employees').select('global_daily_rate, bonus').eq('wage_type', 'global').eq('active', true),
   ])
+
+  // Global employee monthly cost: (salary × 1.3 + bonus) per employee
+  const globalEmpMonthlyCost = (globalEmpRes.data || []).reduce((s, emp: any) => {
+    return s + ((emp.global_daily_rate || 0) * 1.3) + (emp.bonus || 0)
+  }, 0)
 
   // Group helper
   const groupByMonth = (data: any[] | null, field: string, filterFn?: (r: any) => boolean) => {
@@ -112,6 +121,8 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
   const suppliersByM = groupByMonth(supplierRes.data, 'amount')
   const factoryLaborByM = groupByMonth(laborRes.data, 'employer_cost')
   const branchLaborByM = groupByMonth(branchLaborRes.data, 'employer_cost')
+  const factoryWasteByM = groupByMonth(factoryWasteRes.data, 'amount')
+  const branchWasteByM = groupByMonth(branchWasteRes.data, 'amount')
 
   // Costs for operating profit
   const fixedCostsByM: Record<string, number> = {}
@@ -123,9 +134,10 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
 
   return months.map(m => {
     const revenue = (branchRevByM[m] || 0) + (factorySalesByM[m] || 0) + (factoryB2bByM[m] || 0)
-    const totalLabor = (factoryLaborByM[m] || 0) + (branchLaborByM[m] || 0)
+    const totalLabor = (factoryLaborByM[m] || 0) + (branchLaborByM[m] || 0) + globalEmpMonthlyCost
+    const totalWaste = (factoryWasteByM[m] || 0) + (branchWasteByM[m] || 0)
     const grossProfit = revenue - (suppliersByM[m] || 0) - totalLabor
-    const operatingProfit = grossProfit - (fixedCostsByM[m] || 0) - (repairsByM[m] || 0) - (branchExpByM[m] || 0)
+    const operatingProfit = grossProfit - (fixedCostsByM[m] || 0) - (repairsByM[m] || 0) - (branchExpByM[m] || 0) - totalWaste
     const monthIdx = parseInt(m.split('-')[1]) - 1
     return { month: m, label: HEB_MONTHS[monthIdx], revenue, grossProfit, operatingProfit }
   })
