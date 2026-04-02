@@ -80,8 +80,8 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
       return user.can_settings
     }
 
-    // CEO dashboard - admin only
-    if (pageKey === 'ceo_dashboard') return user.role === 'admin'
+    // CEO dashboard & alerts - admin only
+    if (pageKey === 'ceo_dashboard' || pageKey === 'alerts') return user.role === 'admin'
 
     // Factory pages
     const dept = getDeptFromPage(pageKey)
