@@ -187,7 +187,7 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
             <Bell size={22} color="white" />
           </div>
           <div>
-            <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: 0 }}>ניהול התרעות</h1>
+            <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: 0 }}>ניהול התראות</h1>
             <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>כללי התרעה · לוג · {rules.length} כללים</p>
           </div>
         </div>
@@ -206,7 +206,7 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
           {([
             { key: 'rules' as const, label: 'כללי התרעה', icon: AlertTriangle, count: rules.length },
-            { key: 'log' as const, label: 'לוג התרעות', icon: History, count: logEntries.length },
+            { key: 'log' as const, label: 'לוג התראות', icon: History, count: logEntries.length },
           ]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               style={{
@@ -297,7 +297,7 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
               </div>
               {logEntries.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>
-                  אין התרעות בתקופה הנבחרת
+                  אין התראות בתקופה הנבחרת
                 </div>
               ) : logEntries.map(entry => (
                 <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '180px 1fr 120px 120px 80px', padding: '14px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px' }}>

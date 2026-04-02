@@ -185,7 +185,7 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
             <Mail size={22} color="white" />
           </div>
           <div>
-            <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: 0 }}>דוחות והתרעות</h1>
+            <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: 0 }}>דוחות והתראות</h1>
             <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>לוג דוחות · כללי התרעה · שליחה ידנית</p>
           </div>
         </div>
@@ -222,7 +222,7 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
           {[
             { key: 'reports' as const, label: 'דוחות', icon: FileText, count: reportLog.length },
-            { key: 'alerts' as const, label: 'התרעות', icon: Bell, count: alertRules.length },
+            { key: 'alerts' as const, label: 'התראות', icon: Bell, count: alertRules.length },
           ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               style={{
@@ -325,7 +325,7 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
             <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
               {([
                 { key: 'rules' as const, label: 'כללי התרעה', icon: AlertTriangle, count: alertRules.length },
-                { key: 'log' as const, label: 'לוג התרעות', icon: History, count: alertLog.length },
+                { key: 'log' as const, label: 'לוג התראות', icon: History, count: alertLog.length },
               ]).map(t => (
                 <button key={t.key} onClick={() => setAlertSubTab(t.key)}
                   style={{
@@ -410,7 +410,7 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
                     <span>זמן</span><span>התרעה</span><span>ערך בפועל</span><span>סף</span><span>אימייל</span>
                   </div>
                   {alertLog.length === 0 ? (
-                    <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>אין התרעות בתקופה הנבחרת</div>
+                    <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>אין התראות בתקופה הנבחרת</div>
                   ) : alertLog.map(entry => (
                     <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '180px 1fr 120px 120px 80px', padding: '14px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px' }}>
                       <span style={{ color: '#64748b', fontSize: '12px' }}>{new Date(entry.triggered_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}</span>

@@ -28,8 +28,8 @@ import DataImport from './DataImport'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
-  AlertTriangle, ClipboardList, Truck, UserCog,
-  Factory, ChevronDown, ChevronLeft, Database,
+  AlertTriangle, ClipboardList, Truck, UserCog, Activity,
+  Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
   LayoutDashboard
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
@@ -50,7 +50,7 @@ const PANEL_FACTORY = [
 
 const PANEL_MANAGE = [
   { label: 'דשבורד מנכ"ל', subtitle: 'מבט רשתי · כל הסניפים', Icon: TrophyIcon,   color: '#f59e0b', page: 'ceo_dashboard' },
-  { label: 'דוחות והתרעות', subtitle: 'לוג דוחות · כללי התרעה', Icon: Mail,         color: '#f59e0b', page: 'reports_alerts' },
+  { label: 'דוחות והתראות', subtitle: 'לוג דוחות · כללי התראה', Icon: Mail,         color: '#f59e0b', page: 'reports_alerts' },
   { label: 'הגדרות מערכת', subtitle: 'יעדים · עובדים · עלויות', Icon: Settings, color: '#64748b', page: 'settings' },
   { label: 'ייבוא נתונים', subtitle: 'CSV מ-Base44 · העלאה',   Icon: Database, color: '#818cf8', page: 'data_import' },
 ]
@@ -431,224 +431,284 @@ export default function Home() {
           </Card>
         </motion.div>
 
-        {/* ═══ Section 1: מפעל ═══════════════════════════════════════════════ */}
-        {showFactory && (
-          <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.15 }}>
-            <Card className="mb-4 py-0 overflow-hidden">
-              {/* Section Header */}
+        {/* ═══ 4-Card Grid Navigation ═══════════════════════════════════════ */}
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}
+        >
+          {/* Card 1: מפעל */}
+          {showFactory && (
+            <motion.div variants={fadeUp}>
               <button
-                onClick={() => toggleSection('factory')}
-                className="w-full bg-transparent border-none cursor-pointer p-4 px-5 flex items-center gap-3"
-                style={{ borderBottom: expandedSection === 'factory' ? '1px solid #e2e8f0' : 'none' }}
+                onClick={() => setExpandedSection(expandedSection === 'factory' ? null : 'factory')}
+                style={{
+                  width: '100%', border: 'none', borderRadius: '12px', padding: '14px',
+                  background: '#EEEDFE', cursor: 'pointer', textAlign: 'right',
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                  outline: expandedSection === 'factory' ? '2.5px solid #534AB7' : 'none',
+                }}
+                className="hover:-translate-y-0.5 hover:shadow-md"
               >
-                <div className="w-10 h-10 bg-indigo-400/10 rounded-xl flex items-center justify-center shrink-0">
-                  <Factory size={22} color="#818cf8" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#534AB7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Monitor size={16} color="white" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e1b4b' }}>מפעל</div>
+                    <div style={{ fontSize: '10px', color: '#7c6fcd', marginTop: '1px' }}>מחלקות · מכירות · לייבור</div>
+                  </div>
                 </div>
-                <div className="flex-1 text-right">
-                  <div className="text-base font-extrabold text-slate-900">מפעל</div>
-                  <div className="text-[11px] text-slate-400 mt-px">מחלקות · לייבור · מכירות · דשבורד</div>
-                </div>
-                <ChevronDown
-                  size={20} color="#94a3b8"
-                  className="shrink-0 transition-transform duration-200"
-                  style={{ transform: expandedSection === 'factory' ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                />
               </button>
-              {/* Section Content */}
-              {expandedSection === 'factory' && (
-                <CardContent className="pb-5 pt-4">
-                  <motion.div
-                    variants={staggerContainer}
-                    initial="hidden"
-                    animate="visible"
-                    className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5"
-                  >
-                    {filteredPanelFactory.map(item => {
-                      const Icon = item.Icon
-                      return (
-                        <motion.div key={item.page} variants={fadeUp}>
-                          <button
-                            onClick={() => setPage(item.page)}
-                            className="w-full bg-slate-50 border-[1.5px] border-slate-200 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-current hover:-translate-y-0.5 hover:shadow-md"
-                            style={{ '--tw-shadow-color': item.color + '15' } as React.CSSProperties}
-                          >
-                            <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: item.color + '15' }}>
-                              <Icon size={18} color={item.color} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[13px] font-bold text-slate-900">{item.label}</div>
-                              <div className="text-[10px] text-slate-400 mt-0.5">{item.subtitle}</div>
-                            </div>
-                            <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
-                          </button>
-                        </motion.div>
-                      )
-                    })}
-                  </motion.div>
-                </CardContent>
-              )}
+            </motion.div>
+          )}
+
+          {/* Card 2: סניפים */}
+          {showBranches && (
+            <motion.div variants={fadeUp}>
+              <button
+                onClick={() => setExpandedSection(expandedSection === 'branches' ? null : 'branches')}
+                style={{
+                  width: '100%', border: 'none', borderRadius: '12px', padding: '14px',
+                  background: '#E1F5EE', cursor: 'pointer', textAlign: 'right',
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                  outline: expandedSection === 'branches' ? '2.5px solid #0F6E56' : 'none',
+                }}
+                className="hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#0F6E56', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <HomeIcon size={16} color="white" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#064e3b' }}>סניפים</div>
+                    <div style={{ fontSize: '10px', color: '#3d9b7f', marginTop: '1px' }}>{branchList.map(b => b.name).join(' · ') || 'ניהול סניפים'}</div>
+                  </div>
+                </div>
+              </button>
+            </motion.div>
+          )}
+
+          {/* Card 3: ישיבות הנהלה */}
+          {(canAccessPage('ceo_dashboard') || canAccessPage('branch_dashboard')) && (
+            <motion.div variants={fadeUp}>
+              <button
+                onClick={() => setExpandedSection(expandedSection === 'meetings' ? null : 'meetings')}
+                style={{
+                  width: '100%', border: 'none', borderRadius: '12px', padding: '14px',
+                  background: '#FAEEDA', cursor: 'pointer', textAlign: 'right',
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                  outline: expandedSection === 'meetings' ? '2.5px solid #BA7517' : 'none',
+                }}
+                className="hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#BA7517', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Activity size={16} color="white" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#78350f' }}>ישיבות הנהלה</div>
+                    <div style={{ fontSize: '10px', color: '#c68a2e', marginTop: '1px' }}>דשבורד מנכ"ל · השוואת סניפים</div>
+                  </div>
+                </div>
+              </button>
+            </motion.div>
+          )}
+
+          {/* Card 4: ניהול — admin only */}
+          {appUser?.role === 'admin' && (
+            <motion.div variants={fadeUp}>
+              <button
+                onClick={() => setExpandedSection(expandedSection === 'manage' ? null : 'manage')}
+                style={{
+                  width: '100%', border: 'none', borderRadius: '12px', padding: '14px',
+                  background: '#f1f5f9', cursor: 'pointer', textAlign: 'right',
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                  outline: expandedSection === 'manage' ? '2.5px solid #64748b' : 'none',
+                }}
+                className="hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Settings size={16} color="white" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#334155' }}>ניהול</div>
+                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '1px' }}>משתמשים · דוחות · הגדרות</div>
+                  </div>
+                </div>
+              </button>
+            </motion.div>
+          )}
+        </motion.div>
+
+        {/* ═══ Expanded Content Area ═══════════════════════════════════════════ */}
+
+        {/* Factory content */}
+        {expandedSection === 'factory' && showFactory && (
+          <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <Card className="mb-4 py-0 overflow-hidden">
+              <CardContent className="pb-5 pt-4">
+                <motion.div variants={staggerContainer} initial="hidden" animate="visible"
+                  className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
+                  {filteredPanelFactory.map(item => {
+                    const Icon = item.Icon
+                    return (
+                      <motion.div key={item.page} variants={fadeUp}>
+                        <button onClick={() => setPage(item.page)}
+                          className="w-full bg-slate-50 border-[1.5px] border-slate-200 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-current hover:-translate-y-0.5 hover:shadow-md">
+                          <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: item.color + '15' }}>
+                            <Icon size={18} color={item.color} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[13px] font-bold text-slate-900">{item.label}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">{item.subtitle}</div>
+                          </div>
+                          <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
+                        </button>
+                      </motion.div>
+                    )
+                  })}
+                </motion.div>
+              </CardContent>
             </Card>
           </motion.div>
         )}
 
-        {/* ═══ Section 2: סניפים ═════════════════════════════════════════════ */}
-        {showBranches && (
-          <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.2 }}>
+        {/* Branches content */}
+        {expandedSection === 'branches' && showBranches && (
+          <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <Card className="mb-4 py-0 overflow-hidden">
-              {/* Section Header */}
-              <button
-                onClick={() => toggleSection('branches')}
-                className="w-full bg-transparent border-none cursor-pointer p-4 px-5 flex items-center gap-3"
-                style={{ borderBottom: expandedSection === 'branches' ? '1px solid #e2e8f0' : 'none' }}
-              >
-                <div className="w-10 h-10 bg-emerald-400/10 rounded-xl flex items-center justify-center shrink-0">
-                  <Store size={22} color="#34d399" />
-                </div>
-                <div className="flex-1 text-right">
-                  <div className="text-base font-extrabold text-slate-900">סניפים</div>
-                  <div className="text-[11px] text-slate-400 mt-px">ניהול סניפים · דשבורד מנהל</div>
-                </div>
-                <ChevronDown
-                  size={20} color="#94a3b8"
-                  className="shrink-0 transition-transform duration-200"
-                  style={{ transform: expandedSection === 'branches' ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                />
-              </button>
-              {/* Section Content */}
-              {expandedSection === 'branches' && (
-                <CardContent className="pb-5 pt-4">
-                  <motion.div variants={staggerContainer} initial="hidden" animate="visible">
-                    {/* Branch Manager Dashboard button */}
-                    {canAccessPage('branch_dashboard') && (
-                      <motion.div variants={fadeUp}>
-                        <button
-                          onClick={() => setPage('branch_dashboard')}
-                          className="w-full bg-gradient-to-br from-indigo-400/5 to-emerald-400/5 border-[1.5px] border-emerald-400/20 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-emerald-400 hover:-translate-y-0.5 hover:shadow-md hover:shadow-emerald-400/10 mb-3"
-                        >
-                          <div className="w-[38px] h-[38px] bg-gradient-to-br from-indigo-400 to-emerald-400 rounded-[10px] flex items-center justify-center shrink-0">
-                            <ProfitIcon size={18} color="white" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="text-sm font-bold text-slate-900">דשבורד מנהל סניפים</div>
-                            <div className="text-[11px] text-slate-400 mt-px">השוואת סניפים · P&L · KPI</div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[15px] font-extrabold text-slate-900">{fmtK(totalBranchRevenue)}</span>
-                            <ChevronLeft size={14} color="#cbd5e1" />
-                          </div>
-                        </button>
-                      </motion.div>
-                    )}
-
-                    {/* Individual branch cards */}
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
-                      {filteredBranches.map(br => {
-                        const kpi = branchKpi.find(b => b.id === br.id)
-                        const rev = kpi?.revenue ?? 0
-                        const labPct = kpi?.laborPct ?? 0
-                        return (
-                          <motion.div key={br.id} variants={fadeUp}>
-                            <button
-                              onClick={() => setPage(br.page)}
-                              className="w-full bg-slate-50 rounded-xl p-3.5 px-4 cursor-pointer text-right transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
-                              style={{ border: `1.5px solid ${br.color}30` }}
-                            >
-                              <div className="flex items-center gap-2.5 mb-2.5">
-                                <div className="w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: br.color }}>
-                                  <Store size={16} color="white" />
-                                </div>
-                                <span className="text-sm font-bold text-slate-900">{br.name}</span>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-base font-extrabold text-slate-900">{fmtK(rev)}</span>
+              <CardContent className="pb-5 pt-4">
+                <motion.div variants={staggerContainer} initial="hidden" animate="visible">
+                  {/* Individual branch cards — stacked vertically */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {filteredBranches.map(br => {
+                      const kpi = branchKpi.find(b => b.id === br.id)
+                      const rev = kpi?.revenue ?? 0
+                      const labPct = kpi?.laborPct ?? 0
+                      return (
+                        <motion.div key={br.id} variants={fadeUp}>
+                          <button onClick={() => setPage(br.page)}
+                            className="w-full bg-slate-50 rounded-xl p-3.5 px-4 cursor-pointer text-right transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
+                            style={{ border: `1.5px solid ${br.color}30`, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: br.color }}>
+                              <Store size={18} color="white" />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div className="text-sm font-bold text-slate-900">{br.name}</div>
+                              <div className="text-[11px] text-slate-400 mt-0.5">{rev > 0 ? `הכנסות: ${fmtK(rev)}` : 'אין נתונים'}</div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {rev > 0 && (
                                 <span className={`text-xs font-bold ${labPct <= 28 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                  {rev > 0 ? labPct.toFixed(1) + '%' : '—'} {rev > 0 ? (labPct <= 28 ? '✓' : '✗') : ''}
+                                  {labPct.toFixed(1)}% {labPct <= 28 ? '✓' : '✗'}
                                 </span>
-                              </div>
-                            </button>
-                          </motion.div>
-                        )
-                      })}
-                    </div>
+                              )}
+                              <ChevronLeft size={14} color="#cbd5e1" />
+                            </div>
+                          </button>
+                        </motion.div>
+                      )
+                    })}
+                  </div>
 
-                    {/* Branch data import button */}
+                  {/* Branch data import */}
+                  <motion.div variants={fadeUp}>
+                    <button onClick={() => setPage('branch_import')}
+                      className="w-full bg-slate-50 border-[1.5px] border-indigo-400/20 rounded-xl p-3 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-indigo-400 hover:-translate-y-0.5 hover:shadow-md hover:shadow-indigo-400/10 mt-3">
+                      <div className="w-[38px] h-[38px] bg-indigo-400/10 rounded-[10px] flex items-center justify-center shrink-0">
+                        <Database size={18} color="#818cf8" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-[13px] font-bold text-slate-900">ייבוא נתוני סניפים</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">CSV מ-Base44 · כל הסניפים ביחד</div>
+                      </div>
+                      <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
+                    </button>
+                  </motion.div>
+                </motion.div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* Meetings content */}
+        {expandedSection === 'meetings' && (
+          <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <Card className="mb-4 py-0 overflow-hidden">
+              <CardContent className="pb-5 pt-4">
+                <motion.div variants={staggerContainer} initial="hidden" animate="visible"
+                  className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
+                  {canAccessPage('ceo_dashboard') && (
                     <motion.div variants={fadeUp}>
-                      <button
-                        onClick={() => setPage('branch_import')}
-                        className="w-full bg-slate-50 border-[1.5px] border-indigo-400/20 rounded-xl p-3 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-indigo-400 hover:-translate-y-0.5 hover:shadow-md hover:shadow-indigo-400/10 mt-3"
-                      >
-                        <div className="w-[38px] h-[38px] bg-indigo-400/10 rounded-[10px] flex items-center justify-center shrink-0">
-                          <Database size={18} color="#818cf8" />
+                      <button onClick={() => setPage('ceo_dashboard')}
+                        className="w-full bg-slate-50 border-[1.5px] border-slate-200 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-amber-400 hover:-translate-y-0.5 hover:shadow-md">
+                        <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: '#f59e0b15' }}>
+                          <TrophyIcon size={18} color="#f59e0b" />
                         </div>
-                        <div className="flex-1">
-                          <div className="text-[13px] font-bold text-slate-900">ייבוא נתוני סניפים</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">CSV מ-Base44 · כל הסניפים ביחד</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[13px] font-bold text-slate-900">דשבורד מנכ"ל</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">מבט רשתי · כל הסניפים</div>
                         </div>
                         <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
                       </button>
                     </motion.div>
-                  </motion.div>
-                </CardContent>
-              )}
+                  )}
+                  {canAccessPage('branch_dashboard') && (
+                    <motion.div variants={fadeUp}>
+                      <button onClick={() => setPage('branch_dashboard')}
+                        className="w-full bg-slate-50 border-[1.5px] border-slate-200 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-emerald-400 hover:-translate-y-0.5 hover:shadow-md">
+                        <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: '#34d39915' }}>
+                          <ProfitIcon size={18} color="#34d399" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[13px] font-bold text-slate-900">דשבורד מנהל סניפים</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">השוואת סניפים · P&L · KPI</div>
+                        </div>
+                        <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
+                      </button>
+                    </motion.div>
+                  )}
+                </motion.div>
+              </CardContent>
             </Card>
           </motion.div>
         )}
 
-        {/* ═══ Section 3: דשבורד מנכ"ל + ניהול ═══════════════════════════════ */}
-        {showManage && (
-          <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.25 }}>
+        {/* Manage content — admin only */}
+        {expandedSection === 'manage' && appUser?.role === 'admin' && (
+          <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <Card className="mb-4 py-0 overflow-hidden">
-              {/* Section Header */}
-              <button
-                onClick={() => toggleSection('manage')}
-                className="w-full bg-transparent border-none cursor-pointer p-4 px-5 flex items-center gap-3"
-                style={{ borderBottom: expandedSection === 'manage' ? '1px solid #e2e8f0' : 'none' }}
-              >
-                <div className="w-10 h-10 bg-amber-400/10 rounded-xl flex items-center justify-center shrink-0">
-                  <TrophyIcon size={22} color="#f59e0b" />
-                </div>
-                <div className="flex-1 text-right">
-                  <div className="text-base font-extrabold text-slate-900">דשבורד מנכ"ל + ניהול</div>
-                  <div className="text-[11px] text-slate-400 mt-px">דשבורד · הגדרות · ייבוא נתונים</div>
-                </div>
-                <ChevronDown
-                  size={20} color="#94a3b8"
-                  className="shrink-0 transition-transform duration-200"
-                  style={{ transform: expandedSection === 'manage' ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                />
-              </button>
-              {/* Section Content */}
-              {expandedSection === 'manage' && (
-                <CardContent className="pb-5 pt-4">
-                  <motion.div
-                    variants={staggerContainer}
-                    initial="hidden"
-                    animate="visible"
-                    className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5"
-                  >
-                    {managePanelItems.map(item => {
-                      const Icon = item.Icon
-                      return (
-                        <motion.div key={item.page} variants={fadeUp}>
-                          <button
-                            onClick={() => setPage(item.page)}
-                            className="w-full bg-slate-50 border-[1.5px] border-slate-200 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-current hover:-translate-y-0.5 hover:shadow-md"
-                          >
-                            <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: item.color + '15' }}>
-                              <Icon size={18} color={item.color} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[13px] font-bold text-slate-900">{item.label}</div>
-                              <div className="text-[10px] text-slate-400 mt-0.5">{item.subtitle}</div>
-                            </div>
-                            <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
-                          </button>
-                        </motion.div>
-                      )
-                    })}
-                  </motion.div>
-                </CardContent>
-              )}
+              <CardContent className="pb-5 pt-4">
+                <motion.div variants={staggerContainer} initial="hidden" animate="visible"
+                  className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
+                  {[
+                    { label: 'ניהול משתמשים', subtitle: 'הרשאות · משתמשים · סניפים', Icon: UserCog, color: '#8b5cf6', page: 'user_management' },
+                    { label: 'דוחות והתראות', subtitle: 'לוג דוחות · כללי התראה', Icon: Mail, color: '#f59e0b', page: 'reports_alerts' },
+                    { label: 'הגדרות מערכת', subtitle: 'יעדים · עובדים · עלויות', Icon: Settings, color: '#64748b', page: 'settings' },
+                    { label: 'ייבוא נתונים', subtitle: 'CSV מ-Base44 · העלאה', Icon: Database, color: '#818cf8', page: 'data_import' },
+                  ].map(item => {
+                    const Icon = item.Icon
+                    return (
+                      <motion.div key={item.page} variants={fadeUp}>
+                        <button onClick={() => setPage(item.page)}
+                          className="w-full bg-slate-50 border-[1.5px] border-slate-200 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-current hover:-translate-y-0.5 hover:shadow-md">
+                          <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: item.color + '15' }}>
+                            <Icon size={18} color={item.color} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[13px] font-bold text-slate-900">{item.label}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">{item.subtitle}</div>
+                          </div>
+                          <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
+                        </button>
+                      </motion.div>
+                    )
+                  })}
+                </motion.div>
+              </CardContent>
             </Card>
           </motion.div>
         )}
@@ -722,19 +782,25 @@ export default function Home() {
       {/* Mobile Bottom Nav */}
       <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 h-14 bg-slate-900 hidden items-center justify-around z-[300] border-t border-slate-800" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <button onClick={() => setExpandedSection('factory')} className={`bg-transparent border-none flex flex-col items-center gap-0.5 text-[10px] cursor-pointer py-1.5 px-3 ${expandedSection === 'factory' ? 'text-sky-400' : 'text-slate-400'}`}>
-          <Factory size={22} />
+          <Monitor size={20} />
           <span>מפעל</span>
         </button>
         <button onClick={() => setExpandedSection('branches')} className={`bg-transparent border-none flex flex-col items-center gap-0.5 text-[10px] cursor-pointer py-1.5 px-3 ${expandedSection === 'branches' ? 'text-sky-400' : 'text-slate-400'}`}>
-          <Store size={22} />
+          <Store size={20} />
           <span>סניפים</span>
         </button>
-        <button onClick={() => setExpandedSection('manage')} className={`bg-transparent border-none flex flex-col items-center gap-0.5 text-[10px] cursor-pointer py-1.5 px-3 ${expandedSection === 'manage' ? 'text-sky-400' : 'text-slate-400'}`}>
-          <Settings size={22} />
-          <span>ניהול</span>
+        <button onClick={() => setExpandedSection('meetings')} className={`bg-transparent border-none flex flex-col items-center gap-0.5 text-[10px] cursor-pointer py-1.5 px-3 ${expandedSection === 'meetings' ? 'text-sky-400' : 'text-slate-400'}`}>
+          <Activity size={20} />
+          <span>הנהלה</span>
         </button>
+        {appUser?.role === 'admin' && (
+          <button onClick={() => setExpandedSection('manage')} className={`bg-transparent border-none flex flex-col items-center gap-0.5 text-[10px] cursor-pointer py-1.5 px-3 ${expandedSection === 'manage' ? 'text-sky-400' : 'text-slate-400'}`}>
+            <Settings size={20} />
+            <span>ניהול</span>
+          </button>
+        )}
         <button onClick={() => logout()} className="bg-transparent border-none flex flex-col items-center gap-0.5 text-[10px] cursor-pointer py-1.5 px-3 text-slate-400">
-          <LogOut size={22} />
+          <LogOut size={20} />
           <span>יציאה</span>
         </button>
       </nav>
