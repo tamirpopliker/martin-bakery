@@ -72,12 +72,32 @@ async function extractPdfItems(file: File): Promise<PdfItem[]> {
         allItems.push({
           text: item.str.trim(),
           x: Math.round(item.transform[4]),
-          y: Math.round(item.transform[5]),  // y מהתחתית
+          y: Math.round(item.transform[5]),
         })
       }
     }
   }
   return allItems
+}
+
+// Extract items per page (for detailed format)
+async function extractPdfItemsPerPage(file: File): Promise<PdfItem[][]> {
+  const lib = await loadPdfJs()
+  const buf = await file.arrayBuffer()
+  const pdf = await lib.getDocument({ data: new Uint8Array(buf) }).promise
+  const pages: PdfItem[][] = []
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p)
+    const content = await page.getTextContent()
+    const items: PdfItem[] = []
+    for (const item of content.items as any[]) {
+      if (item.str?.trim()) {
+        items.push({ text: item.str.trim(), x: Math.round(item.transform[4]), y: Math.round(item.transform[5]) })
+      }
+    }
+    pages.push(items)
+  }
+  return pages
 }
 
 // ─── קיבוץ items לשורות לפי y ────────────────────────────────────────────────
@@ -206,76 +226,66 @@ function parseCashOnTab(items: PdfItem[]): { rows: ParsedRow[]; rawLines: string
 }
 
 // ─── פרסור פורמט מפורט (כל עובד בדף נפרד) ──────────────────────────────────
-// מזהה "שם עובד: XXX" + "סיכום לעובד" עם רגילות/רמה 1/רמה 2
-function parseDetailedFormat(items: PdfItem[]): { rows: ParsedRow[]; rawLines: string[] } {
-  const groups = groupByY(items)
-  const yKeys = [...groups.keys()].sort((a, b) => b - a) // top to bottom
+// עובד per-page: מחלץ שם + שעות סיכום מכל עמוד בנפרד
+function parseDetailedFormat(pages: PdfItem[][]): { rows: ParsedRow[]; rawLines: string[] } {
   const rawLines: string[] = []
   const rows: ParsedRow[] = []
-  const toNum = (s: string) => parseFloat(s.replace(/,/g, '')) || 0
+  const seenNames = new Set<string>()
 
-  // Build all lines
-  const lines: { y: number; text: string; items: PdfItem[] }[] = []
-  for (const y of yKeys) {
-    const row = groups.get(y)!
-    const text = row.map(i => i.text).join(' ')
-    rawLines.push(text)
-    lines.push({ y, text, items: row })
-  }
-  lines.sort((a, b) => b.y - a.y) // top first
+  for (const pageItems of pages) {
+    // Full text of this page
+    const fullText = pageItems.map(it => it.text).join(' ')
+    rawLines.push(`--- PAGE ---`)
+    rawLines.push(fullText.substring(0, 200))
 
-  let currentName = ''
+    // Extract employee name
+    const nameMatch = fullText.match(/שם עובד:\s*([^\n]+?)(?:\s+קוד|\s+מחסנים|\s+תאריך)/)
+    if (!nameMatch) continue
+    const name = nameMatch[1].trim().replace(/\s+/g, ' ')
+    if (!name || seenNames.has(name)) continue
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+    // Find "סה"כ שעות" summary — look for the last set of 4 numbers at bottom
+    // The summary has: totalHours, regular, level1, level2
+    // Group by Y to find summary lines
+    const groups = groupByY(pageItems)
+    const yKeys = [...groups.keys()].sort((a, b) => a - b) // bottom first (lowest y = bottom)
 
-    // Detect employee name: "שם עובד: XXX"
-    const nameMatch = line.text.match(/שם עובד:\s*(.+?)(?:\s*$|\s*קוד)/)
-    if (nameMatch) {
-      currentName = nameMatch[1].trim()
-      continue
-    }
+    let totalHours = 0, regular = 0, level1 = 0, level2 = 0
 
-    // Detect "סה"כ שעות" summary line in סיכום לעובד
-    if (line.text.includes('סה"כ שעות') && currentName) {
-      // Look for the numeric totals line nearby (within next 3 lines)
-      // The summary structure:  סה"כ שעות | totalHours | regular | level1 | level2
-      // Find the line with the actual numbers (the last row of סיכום with 4+ numbers)
-      let totalHours = 0, regular = 0, level1 = 0, level2 = 0
+    // Look at the bottom lines for "סה"כ שעות" text and numbers
+    for (const y of yKeys) {
+      const row = groups.get(y)!
+      const lineText = row.map(i => i.text).join(' ')
 
-      // Search up to 5 lines below for the totals
-      for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
-        const nums = lines[j].items
-          .map(it => it.text.replace(/,/g, ''))
+      // The final summary line has the totals
+      if (lineText.includes('סה"כ שעות') || (totalHours === 0 && lineText.match(/^\d/))) {
+        const nums = row.map(i => i.text.replace(/,/g, ''))
           .filter(t => /^\d+(\.\d+)?$/.test(t))
           .map(parseFloat)
+          .filter(n => n > 0)
 
-        // The summary "סה"כ שעות" row has: totalHours, regular, level1, level2
         if (nums.length >= 2) {
-          // Largest number is total hours, second is regular, etc.
           const sorted = [...nums].sort((a, b) => b - a)
-          totalHours = sorted[0] || 0
+          totalHours = sorted[0]
           regular = sorted[1] || 0
-          level1 = nums.length >= 3 ? sorted[2] || 0 : 0
-          level2 = nums.length >= 4 ? sorted[3] || 0 : 0
-          break
+          level1 = sorted.length >= 3 ? sorted[2] : 0
+          level2 = sorted.length >= 4 ? sorted[3] : 0
         }
       }
+    }
 
-      if (totalHours > 0 && currentName) {
-        // No salary in detailed format — hours only, salary = 0
-        rows.push({
-          name: currentName,
-          hours_100: regular, cost_100: 0,
-          hours_125: level1, cost_125: 0,
-          hours_150: level2, cost_150: 0,
-          total_hours: totalHours,
-          gross_salary: 0,
-          employer_cost: 0,
-          selected: true,
-        })
-        currentName = '' // Reset for next employee
-      }
+    if (totalHours > 0) {
+      seenNames.add(name)
+      rows.push({
+        name,
+        hours_100: regular, cost_100: 0,
+        hours_125: level1, cost_125: 0,
+        hours_150: level2, cost_150: 0,
+        total_hours: totalHours,
+        gross_salary: 0,
+        employer_cost: 0,
+        selected: true,
+      })
     }
   }
 
@@ -374,12 +384,13 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
     try {
       const items = await extractPdfItems(file)
 
-      // Try מרוכז format first, then מפורט
+      // Try מרוכז format first, then מפורט (per-page)
       let { rows, rawLines: lines } = parseCashOnTab(items)
       let isDetailed = false
 
       if (rows.length === 0) {
-        const detailed = parseDetailedFormat(items)
+        const pages = await extractPdfItemsPerPage(file)
+        const detailed = parseDetailedFormat(pages)
         rows = detailed.rows
         lines = detailed.rawLines
         isDetailed = rows.length > 0
