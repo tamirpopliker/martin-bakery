@@ -5,7 +5,7 @@ import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, Plus, Pencil, Trash2, CheckCircle, AlertTriangle, FileText, Eye } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, CheckCircle, AlertTriangle, FileText, Eye, HelpCircle } from 'lucide-react'
 import { LaborIcon } from '@/components/icons'
 
 interface Props {
@@ -194,7 +194,7 @@ function parseCashOnTab(items: PdfItem[]): { rows: ParsedRow[]; rawLines: string
         hours_150: h150, cost_150: c150,
         total_hours,
         gross_salary,
-        employer_cost: parseFloat((gross_salary * EMPLOYER_FACTOR).toFixed(2)),
+        employer_cost: parseFloat(((c100 * EMPLOYER_FACTOR) + c125 + c150).toFixed(2)),
         selected: true,
       })
     }
@@ -216,6 +216,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   const [loading, setLoading]           = useState(false)
   const [monthRevenue, setMonthRevenue] = useState(0)
   const [tab, setTab]                   = useState<'upload' | 'manual' | 'history'>('upload')
+  const [helpOpen, setHelpOpen]         = useState(false)
   const [laborTargetPct, setLaborTargetPct] = useState(28)
 
   // העלאה
@@ -408,7 +409,38 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
           <>
             <Card className="shadow-sm mb-5">
               <CardContent className="p-6">
-                <h2 style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>העלאת דוח שעות CashOnTab</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <h2 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#374151' }}>העלאת דוח שעות CashOnTab</h2>
+                  <div style={{ position: 'relative' }}>
+                    <button onClick={() => setHelpOpen(p => !p)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
+                      <HelpCircle size={18} color="#94a3b8" />
+                    </button>
+                    {helpOpen && (
+                      <>
+                        <div onClick={() => setHelpOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', width: '320px', background: 'white', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0', padding: '16px', zIndex: 50, direction: 'rtl' }}>
+                          <div style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a', marginBottom: '12px' }}>איך להוריד דוח נוכחות מ-CashOnTab?</div>
+                          {[
+                            'היכנס למערכת CashOnTab → עובדים',
+                            'לחץ על "דו״ח נוכחות" בתפריט העליון',
+                            'בשדה "סוג דו״ח" בחר "מרוכז"',
+                            'ב"בחר סניפים" — סמן את הסניף הרלוונטי',
+                            'הגדר טווח תאריכים (לדוגמה: 1-15 לחודש)',
+                            'ב"בחר פורמט" בחר PDF',
+                            'לחץ "הפק דו״ח" ושמור את הקובץ',
+                            'חזור לכאן והעלה את הקובץ',
+                          ].map((step, i) => (
+                            <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px', fontSize: '13px', color: '#374151', lineHeight: '1.5' }}>
+                              <span style={{ background: branchColor, color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0, marginTop: '1px' }}>{i + 1}</span>
+                              <span>{step}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
                 <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#94a3b8' }}>PDF דוח נוכחות מרוכז מאוטוסופט — פרסור אוטומטי ללא שרת</p>
 
                 <div style={{ marginBottom: '16px' }}>
