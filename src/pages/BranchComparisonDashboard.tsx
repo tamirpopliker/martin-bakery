@@ -15,11 +15,18 @@ interface BranchPL {
   name: string
   color: string
   revenue: number
-  expenses: number
   labor: number
+  suppliers: number
+  repairs: number
+  deliveries: number
+  fixedCosts: number
+  admin: number
   waste: number
-  grossProfit: number
+  overhead: number
+  operatingProfit: number
 }
+
+type PLKey = 'revenue' | 'labor' | 'suppliers' | 'repairs' | 'deliveries' | 'fixedCosts' | 'admin' | 'waste' | 'overhead' | 'operatingProfit'
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
@@ -29,9 +36,15 @@ const fmtK = (n: number) => {
   return prefix + '₪' + Math.abs(Math.round(n)).toLocaleString()
 }
 
+const fmtPct = (value: number, revenue: number) => {
+  if (revenue === 0) return '(0.0%)'
+  const pct = (Math.abs(value) / revenue) * 100
+  return `(${pct.toFixed(1)}%)`
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 export default function BranchComparisonDashboard({ onBack }: { onBack: () => void }) {
-  const { period, setPeriod, from, to } = usePeriod()
+  const { period, setPeriod, from, to, monthKey } = usePeriod()
   const { branches } = useBranches()
 
   const [selectedIds, setSelectedIds] = useState<number[]>([])
@@ -54,19 +67,39 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
       const results: BranchPL[] = []
 
       for (const br of branches.filter(b => selectedIds.includes(b.id))) {
-        const [revRes, expRes, labRes, wasteRes] = await Promise.all([
-          supabase.from('branch_revenue').select('amount').eq('branch_id', br.id).gte('date', from).lt('date', to),
-          supabase.from('branch_expenses').select('amount').eq('branch_id', br.id).gte('date', from).lt('date', to),
-          supabase.from('branch_labor').select('employer_cost').eq('branch_id', br.id).gte('date', from).lt('date', to),
-          supabase.from('branch_waste').select('amount').eq('branch_id', br.id).gte('date', from).lt('date', to),
+        const [revRes, labRes, expRes, wasteRes, fcRes] = await Promise.all([
+          supabase.from('branch_revenue').select('amount')
+            .eq('branch_id', br.id).gte('date', from).lt('date', to),
+          supabase.from('branch_labor').select('employer_cost')
+            .eq('branch_id', br.id).gte('date', from).lt('date', to),
+          supabase.from('branch_expenses').select('amount, expense_type')
+            .eq('branch_id', br.id).gte('date', from).lt('date', to),
+          supabase.from('branch_waste').select('amount')
+            .eq('branch_id', br.id).gte('date', from).lt('date', to),
+          supabase.from('fixed_costs').select('amount, entity_id')
+            .eq('entity_type', `branch_${br.id}`)
+            .eq('month', monthKey || from.slice(0, 7)),
         ])
-        const revenue = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
-        const expenses = (expRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
-        const labor = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
-        const waste = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
-        const grossProfit = revenue - expenses - labor - waste
 
-        results.push({ id: br.id, name: br.name, color: br.color, revenue, expenses, labor, waste, grossProfit })
+        const revenue = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+        const labor = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+
+        const expenses = expRes.data || []
+        const suppliers = expenses.filter(r => r.expense_type === 'suppliers').reduce((s, r) => s + Number(r.amount), 0)
+        const repairs = expenses.filter(r => r.expense_type === 'repairs').reduce((s, r) => s + Number(r.amount), 0)
+        const deliveries = expenses.filter(r => r.expense_type === 'deliveries').reduce((s, r) => s + Number(r.amount), 0)
+        const admin = expenses.filter(r => r.expense_type === 'other' || r.expense_type === 'infrastructure').reduce((s, r) => s + Number(r.amount), 0)
+
+        const fixedCosts = (fcRes.data || []).filter(r => r.entity_id !== 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
+        const waste = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+        const overhead = revenue * 0.05
+
+        const operatingProfit = revenue - labor - suppliers - repairs - deliveries - fixedCosts - admin - waste - overhead
+
+        results.push({
+          id: br.id, name: br.name, color: br.color,
+          revenue, labor, suppliers, repairs, deliveries, fixedCosts, admin, waste, overhead, operatingProfit,
+        })
       }
 
       setData(results)
@@ -87,28 +120,38 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
   }
 
   // Totals
-  const totals = {
+  const totals: Record<PLKey, number> = {
     revenue: data.reduce((s, d) => s + d.revenue, 0),
-    expenses: data.reduce((s, d) => s + d.expenses, 0),
     labor: data.reduce((s, d) => s + d.labor, 0),
+    suppliers: data.reduce((s, d) => s + d.suppliers, 0),
+    repairs: data.reduce((s, d) => s + d.repairs, 0),
+    deliveries: data.reduce((s, d) => s + d.deliveries, 0),
+    fixedCosts: data.reduce((s, d) => s + d.fixedCosts, 0),
+    admin: data.reduce((s, d) => s + d.admin, 0),
     waste: data.reduce((s, d) => s + d.waste, 0),
-    grossProfit: data.reduce((s, d) => s + d.grossProfit, 0),
+    overhead: data.reduce((s, d) => s + d.overhead, 0),
+    operatingProfit: data.reduce((s, d) => s + d.operatingProfit, 0),
   }
 
   // Chart data
   const chartData = data.map(d => ({
     name: d.name,
-    הכנסות: d.revenue,
-    רווח: d.grossProfit,
+    'הכנסות': d.revenue,
+    'רווח תפעולי': d.operatingProfit,
   }))
 
   // P&L rows
-  const plRows = [
-    { label: 'הכנסות', key: 'revenue' as const, positive: true },
-    { label: 'הוצאות', key: 'expenses' as const, positive: false },
-    { label: 'לייבור', key: 'labor' as const, positive: false },
-    { label: 'פחת', key: 'waste' as const, positive: false },
-    { label: 'רווח גולמי', key: 'grossProfit' as const, positive: true },
+  const plRows: { label: string; key: PLKey; positive: boolean; bold?: boolean }[] = [
+    { label: 'הכנסות', key: 'revenue', positive: true },
+    { label: 'לייבור', key: 'labor', positive: false },
+    { label: 'ספקים', key: 'suppliers', positive: false },
+    { label: 'תיקונים', key: 'repairs', positive: false },
+    { label: 'משלוחים', key: 'deliveries', positive: false },
+    { label: 'הוצאות קבועות', key: 'fixedCosts', positive: false },
+    { label: 'הנהלה וכלליות', key: 'admin', positive: false },
+    { label: 'פחת וסחורה שנזרקה', key: 'waste', positive: false },
+    { label: 'העמסת מטה', key: 'overhead', positive: false },
+    { label: 'רווח תפעולי', key: 'operatingProfit', positive: true, bold: true },
   ]
 
   return (
@@ -171,7 +214,7 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
               <Card className="shadow-sm" style={{ overflow: 'hidden' }}>
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: `140px ${data.map(() => '1fr').join(' ')} 1fr`,
+                  gridTemplateColumns: `160px ${data.map(() => '1fr').join(' ')} 1fr`,
                   padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0',
                   fontSize: '12px', fontWeight: '700', color: '#64748b',
                 }}>
@@ -185,48 +228,64 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
                   <span style={{ textAlign: 'center', fontWeight: '800', color: '#0f172a' }}>סה"כ</span>
                 </div>
 
-                {plRows.map((row, ri) => (
-                  <div key={row.key} style={{
-                    display: 'grid',
-                    gridTemplateColumns: `140px ${data.map(() => '1fr').join(' ')} 1fr`,
-                    padding: '12px 20px', borderBottom: '1px solid #f1f5f9',
-                    fontSize: '13px', alignItems: 'center',
-                    background: ri === plRows.length - 1 ? '#f8fafc' : 'white',
-                    fontWeight: ri === plRows.length - 1 ? '700' : '400',
-                  }}>
-                    <span style={{ fontWeight: '600', color: '#374151' }}>{row.label}</span>
-                    {data.map(d => {
-                      const val = d[row.key]
-                      const color = val === 0 ? '#94a3b8'
-                        : row.key === 'grossProfit' ? (val >= 0 ? '#16a34a' : '#dc2626')
-                        : row.positive ? '#0f172a' : '#64748b'
-                      return (
-                        <span key={d.id} style={{ textAlign: 'center', color, fontWeight: ri === plRows.length - 1 ? '800' : '500' }}>
-                          {fmtK(val)}
-                        </span>
-                      )
-                    })}
-                    <span style={{
-                      textAlign: 'center', fontWeight: '800',
-                      color: row.key === 'grossProfit'
-                        ? (totals.grossProfit >= 0 ? '#16a34a' : '#dc2626')
-                        : '#0f172a',
+                {plRows.map((row, ri) => {
+                  const isProfit = row.key === 'operatingProfit'
+                  const isRevenue = row.key === 'revenue'
+                  const isLast = ri === plRows.length - 1
+                  return (
+                    <div key={row.key} style={{
+                      display: 'grid',
+                      gridTemplateColumns: `160px ${data.map(() => '1fr').join(' ')} 1fr`,
+                      padding: '12px 20px', borderBottom: '1px solid #f1f5f9',
+                      fontSize: '13px', alignItems: 'center',
+                      background: isLast ? '#f8fafc' : isRevenue ? '#f0fdf4' : 'white',
+                      fontWeight: row.bold ? '700' : '400',
                     }}>
-                      {fmtK(totals[row.key])}
-                    </span>
-                  </div>
-                ))}
+                      <span style={{ fontWeight: '600', color: '#374151' }}>{row.label}</span>
+                      {data.map(d => {
+                        const val = d[row.key]
+                        const displayVal = isRevenue ? val : -Math.abs(val)
+                        const color = val === 0 ? '#94a3b8'
+                          : isProfit ? (val >= 0 ? '#16a34a' : '#dc2626')
+                          : isRevenue ? '#0f172a' : '#64748b'
+                        return (
+                          <span key={d.id} style={{ textAlign: 'center', color, fontWeight: row.bold ? '800' : '500' }}>
+                            {isRevenue
+                              ? fmtK(val)
+                              : isProfit
+                                ? `${fmtK(val)} ${fmtPct(val, d.revenue)}`
+                                : `${fmtK(displayVal)} ${fmtPct(val, d.revenue)}`
+                            }
+                          </span>
+                        )
+                      })}
+                      <span style={{
+                        textAlign: 'center', fontWeight: '800',
+                        color: isProfit
+                          ? (totals.operatingProfit >= 0 ? '#16a34a' : '#dc2626')
+                          : '#0f172a',
+                      }}>
+                        {isRevenue
+                          ? fmtK(totals[row.key])
+                          : isProfit
+                            ? `${fmtK(totals[row.key])} ${fmtPct(totals[row.key], totals.revenue)}`
+                            : `${fmtK(-Math.abs(totals[row.key]))} ${fmtPct(totals[row.key], totals.revenue)}`
+                        }
+                      </span>
+                    </div>
+                  )
+                })}
 
                 {/* Margin % row */}
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: `140px ${data.map(() => '1fr').join(' ')} 1fr`,
+                  gridTemplateColumns: `160px ${data.map(() => '1fr').join(' ')} 1fr`,
                   padding: '12px 20px', fontSize: '12px', alignItems: 'center',
                   background: '#eef2ff',
                 }}>
                   <span style={{ fontWeight: '600', color: '#4f46e5' }}>מרג'ין %</span>
                   {data.map(d => {
-                    const pct = d.revenue > 0 ? (d.grossProfit / d.revenue) * 100 : 0
+                    const pct = d.revenue > 0 ? (d.operatingProfit / d.revenue) * 100 : 0
                     return (
                       <span key={d.id} style={{ textAlign: 'center', fontWeight: '700', color: pct >= 0 ? '#16a34a' : '#dc2626' }}>
                         {pct.toFixed(1)}%
@@ -235,9 +294,9 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
                   })}
                   <span style={{
                     textAlign: 'center', fontWeight: '800',
-                    color: totals.revenue > 0 && totals.grossProfit >= 0 ? '#16a34a' : '#dc2626',
+                    color: totals.revenue > 0 && totals.operatingProfit >= 0 ? '#16a34a' : '#dc2626',
                   }}>
-                    {totals.revenue > 0 ? ((totals.grossProfit / totals.revenue) * 100).toFixed(1) : '0.0'}%
+                    {totals.revenue > 0 ? ((totals.operatingProfit / totals.revenue) * 100).toFixed(1) : '0.0'}%
                   </span>
                 </div>
               </Card>
@@ -248,7 +307,7 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
               <Card className="shadow-sm">
                 <CardContent className="p-5">
                   <div style={{ fontSize: '14px', fontWeight: '700', color: '#374151', marginBottom: '16px' }}>
-                    הכנסות מול רווח גולמי
+                    הכנסות מול רווח תפעולי
                   </div>
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={chartData} layout="vertical" barGap={4}>
@@ -261,7 +320,7 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
                       />
                       <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
                       <Bar dataKey="הכנסות" fill="#818cf8" radius={[0, 4, 4, 0]} />
-                      <Bar dataKey="רווח" fill="#34d399" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="רווח תפעולי" fill="#34d399" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
