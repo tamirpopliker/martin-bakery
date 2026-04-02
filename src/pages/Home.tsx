@@ -7,6 +7,7 @@ import { useBranches } from '../lib/BranchContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import PeriodPicker from '../components/PeriodPicker'
+import InstallPWA from '../components/InstallPWA'
 import DailyProduction from './DailyProduction'
 import FactoryWaste from './FactoryWaste'
 import FactoryRepairs from './FactoryRepairs'
@@ -348,6 +349,7 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-2.5">
+            <InstallPWA />
             <PeriodPicker period={period} onChange={setPeriod} />
             <Button
               variant="outline"
