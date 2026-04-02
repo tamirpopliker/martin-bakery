@@ -372,7 +372,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
   async function fetchDailyReport() {
     setDailyLoading(true)
-    const { data } = await supabase.from('branch_labor').select('date, hours_100, hours_125, hours_150, gross_salary, employer_cost')
+    const { data } = await supabase.from('branch_labor').select('date, hours, gross_salary, employer_cost')
       .eq('branch_id', branchId)
       .gte('date', from).lt('date', to)
       .order('date')
@@ -381,8 +381,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       for (const r of data) {
         if (!byDate[r.date]) byDate[r.date] = { date: r.date, employees: 0, hours100: 0, hours125: 0, hours150: 0, gross: 0, employer: 0 }
         byDate[r.date].employees++
-        byDate[r.date].hours100 += Number(r.hours_100 || 0)
-        byDate[r.date].hours125 += Number(r.hours_125 || 0)
+        byDate[r.date].hours100 += Number(r.hours || 0) // total hours as proxy
         byDate[r.date].hours150 += Number(r.hours_150 || 0)
         byDate[r.date].gross += Number(r.gross_salary || 0)
         byDate[r.date].employer += Number(r.employer_cost || 0)
@@ -466,11 +465,10 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       const { data: existing } = await supabase.from('branch_labor')
         .select('id').eq('branch_id', branchId).eq('date', rowDate).eq('employee_name', r.name).limit(1)
 
-      const payload = {
+      const payload: Record<string, any> = {
         branch_id: branchId, date: rowDate,
         employee_name: r.name,
         hours: r.total_hours,
-        hours_100: r.hours_100, hours_125: r.hours_125, hours_150: r.hours_150,
         gross_salary: r.gross_salary,
         employer_cost: r.employer_cost,
         notes: [
@@ -481,9 +479,11 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       }
 
       if (existing && existing.length > 0) {
-        await supabase.from('branch_labor').update(payload).eq('id', existing[0].id)
+        const { error } = await supabase.from('branch_labor').update(payload).eq('id', existing[0].id)
+        if (error) console.error('Update error:', error)
       } else {
-        await supabase.from('branch_labor').insert(payload)
+        const { error } = await supabase.from('branch_labor').insert(payload)
+        if (error) console.error('Insert error:', error)
       }
       saved++
     }
