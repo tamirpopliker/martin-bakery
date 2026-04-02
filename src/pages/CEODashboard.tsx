@@ -694,138 +694,154 @@ export default function CEODashboard({ onBack }: Props) {
           <div className="text-center py-16 text-slate-400">טוען נתונים...</div>
         ) : (
           <>
-            {/* KPI cards — Row 1 */}
-            <motion.div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3.5 mb-6" variants={staggerContainer} initial="hidden" animate="visible">
+            {/* ═══ ROW 1: 4 Golden KPIs ═══ */}
+            <motion.div className="grid grid-cols-4 gap-2.5 mb-2.5" variants={staggerContainer} initial="hidden" animate="visible">
               <motion.div variants={fadeUp}>
-                <KpiCard
-                  icon={<RevenueIcon size={16} color="#10B981" />}
-                  label="סה&quot;כ הכנסות"
-                  numericValue={Math.round(grandRevenue)}
-                  borderColor="#818cf8"
-                  iconBg="#10B981"
-                  diff={<DiffBadge current={grandRevenue} previous={prevTotalRev} />}
-                  onClick={() => setSheetType('revenue_total')}
-                />
-              </motion.div>
-              <motion.div variants={fadeUp}>
-                <KpiCard
-                  icon={<ProfitIcon size={16} color={grandGross >= 0 ? '#7C3AED' : '#fb7185'} />}
-                  label="רווח גולמי"
-                  numericValue={Math.round(grandGross)}
-                  valueColor={grandGross >= 0 ? '#059669' : '#e11d48'}
-                  borderColor={grandGross >= 0 ? '#34d399' : '#fb7185'}
-                  iconBg="#7C3AED"
-                  diff={<DiffBadge current={grandGross} previous={prevTotalGross} />}
-                  onClick={() => setSheetType('gross_profit')}
-                />
-              </motion.div>
-              <motion.div variants={fadeUp}>
-                <KpiCard
-                  icon={<ProfitIcon size={16} color={grandOperating >= 0 ? '#7C3AED' : '#fb7185'} />}
-                  label="רווח תפעולי"
-                  numericValue={Math.round(grandOperating)}
-                  valueColor={grandOperating >= 0 ? '#059669' : '#e11d48'}
-                  borderColor={grandOperating >= 0 ? '#34d399' : '#fb7185'}
-                  iconBg="#7C3AED"
-                  diff={<DiffBadge current={grandOperating} previous={prevTotalOperating} />}
-                  onClick={() => setSheetType('operating_profit')}
-                />
-              </motion.div>
-              <motion.div variants={fadeUp}>
-                <KpiCard
-                  icon={<LaborIcon size={16} color="#3B82F6" />}
-                  label="% לייבור כולל"
-                  numericValue={grandLaborPct}
-                  prefix=""
-                  suffix="%"
-                  decimals={1}
-                  valueColor={grandLaborPct <= avgLaborTarget ? '#059669' : '#e11d48'}
-                  borderColor="#fbbf24"
-                  iconBg="#3B82F6"
-                  diff={<span className="text-xs text-slate-400">יעד {avgLaborTarget.toFixed(0)}%</span>}
-                  onClick={() => setSheetType('labor_pct_total')}
-                />
-              </motion.div>
-            </motion.div>
-
-            {/* KPI cards — Row 2 */}
-            <motion.div className="grid grid-cols-[repeat(auto-fill,minmax(155px,1fr))] gap-3.5 mb-6" variants={staggerContainer} initial="hidden" animate="visible">
-              <motion.div variants={fadeUp}><KpiCardSm icon={<FixedCostIcon size={15} color="#3B82F6" />} label='סה"כ עלויות קבועות' numericValue={Math.round(totalFixed + factoryFixed)} borderColor="#94a3b8" iconBg="#3B82F6" onClick={() => setSheetType('fixed_costs')} /></motion.div>
-              <motion.div variants={fadeUp}><KpiCardSm icon={<LaborIcon size={15} color="#3B82F6" />} label='סה"כ לייבור' numericValue={Math.round(grandLabor)} borderColor="#fbbf24" iconBg="#3B82F6" onClick={() => setSheetType('labor_total')} /></motion.div>
-              <motion.div variants={fadeUp}><KpiCardSm icon={<Truck size={15} className="text-rose-400" />} label='סה"כ ספקים' numericValue={Math.round(factorySuppliers + branchSuppliers)} borderColor="#fb7185" onClick={() => setSheetType('suppliers_total')} /></motion.div>
-              <motion.div variants={fadeUp}><KpiCardSm icon={<Receipt size={15} className="text-indigo-400" />} label="הכנסות קופה" numericValue={Math.round(revCashier)} borderColor="#818cf8" onClick={() => setSheetType('rev_cashier')} /></motion.div>
-              <motion.div variants={fadeUp}><KpiCardSm icon={<CreditCard size={15} className="text-amber-400" />} label="הכנסות הקפה" numericValue={Math.round(revCredit + factoryB2b)} borderColor="#fbbf24" onClick={() => setSheetType('rev_credit')} /></motion.div>
-              <motion.div variants={fadeUp}><KpiCardSm icon={<Globe size={15} className="text-violet-400" />} label="הכנסות אתר" numericValue={Math.round(revWebsite)} borderColor="#c084fc" onClick={() => setSheetType('rev_website')} /></motion.div>
-              <motion.div variants={fadeUp}>
-                <KpiCardSm
-                  icon={<TrendingUp size={15} className="text-emerald-400" />}
-                  label='סה"כ הכנסות כולל'
-                  numericValue={Math.round(revCashier + revCredit + factoryB2b + revWebsite)}
-                  valueColor="#059669"
-                  borderColor="#34d399"
-                  onClick={() => setSheetType('rev_all_channels')}
-                />
-              </motion.div>
-            </motion.div>
-
-            {/* Revenue breakdown cards */}
-            <motion.div className="grid grid-cols-3 gap-3.5 mb-6" variants={staggerContainer} initial="hidden" animate="visible">
-              <motion.div variants={fadeUp}>
-                <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-t-[3px] border-t-indigo-400 h-full">
+                <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('revenue_total')}>
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Receipt size={16} className="text-indigo-400" />
-                      <span className="text-xs font-semibold text-slate-500">קופות סניפים</span>
+                    <span className="text-[11px] font-semibold text-slate-400">הכנסות כוללות</span>
+                    <div className="text-[22px] font-medium text-slate-900 mt-1">
+                      <CountUp end={Math.round(grandRevenue)} duration={1.5} separator="," prefix="₪" />
                     </div>
-                    <div className="text-[22px] font-extrabold text-slate-900">
-                      <CountUp end={Math.round(revCashier)} duration={1.5} separator="," prefix="₪" />
-                    </div>
-                    {grandRevenue > 0 && <span className="text-xs text-slate-400">{((revCashier / grandRevenue) * 100).toFixed(1)}% מסה"כ הכנסות</span>}
+                    <DiffBadge current={grandRevenue} previous={prevTotalRev} />
                   </CardContent>
                 </Card>
               </motion.div>
-
               <motion.div variants={fadeUp}>
-                <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-t-[3px] border-t-amber-400 h-full">
+                <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('gross_profit')}>
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CreditCard size={16} className="text-amber-400" />
-                      <span className="text-xs font-semibold text-slate-500">הקפה (סניפים + B2B מפעל)</span>
+                    <span className="text-[11px] font-semibold text-slate-400">רווח גולמי</span>
+                    <div className="text-[22px] font-medium mt-1" style={{ color: grandGross >= 0 ? '#639922' : '#E24B4A' }}>
+                      <CountUp end={Math.round(grandGross)} duration={1.5} separator="," prefix="₪" />
                     </div>
-                    <div className="text-[22px] font-extrabold text-slate-900">
-                      <CountUp end={Math.round(revCredit + factoryB2b)} duration={1.5} separator="," prefix="₪" />
-                    </div>
-                    <div className="flex gap-3 mt-1">
-                      <span className="text-[11px] text-slate-400">סניפים: {fmtN(revCredit)}</span>
-                      <span className="text-[11px] text-slate-400">B2B: {fmtN(factoryB2b)}</span>
-                    </div>
+                    <span className="text-[11px] text-slate-400">{grandRevenue > 0 ? ((grandGross / grandRevenue) * 100).toFixed(1) : '0.0'}% מהכנסות</span>
                   </CardContent>
                 </Card>
               </motion.div>
-
               <motion.div variants={fadeUp}>
-                <Card className="shadow-sm hover:shadow-md transition-all duration-200 border-t-[3px] border-t-violet-400 h-full">
+                <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('operating_profit')}>
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Globe size={16} className="text-violet-400" />
-                      <span className="text-xs font-semibold text-slate-500">הכנסות מהאתר</span>
+                    <span className="text-[11px] font-semibold text-slate-400">רווח תפעולי</span>
+                    <div className="text-[22px] font-medium mt-1" style={{ color: grandOperating >= 0 ? '#639922' : '#E24B4A' }}>
+                      <CountUp end={Math.round(grandOperating)} duration={1.5} separator="," prefix="₪" />
                     </div>
-                    <div className="text-[22px] font-extrabold text-slate-900">
-                      <CountUp end={Math.round(revWebsite)} duration={1.5} separator="," prefix="₪" />
+                    <span className="text-[11px] text-slate-400">{grandRevenue > 0 ? ((grandOperating / grandRevenue) * 100).toFixed(1) : '0.0'}% מהכנסות</span>
+                  </CardContent>
+                </Card>
+              </motion.div>
+              <motion.div variants={fadeUp}>
+                <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('labor_pct_total')}>
+                  <CardContent className="p-4">
+                    <span className="text-[11px] font-semibold text-slate-400">% לייבור כולל</span>
+                    <div className="text-[22px] font-medium mt-1" style={{ color: grandLaborPct <= avgLaborTarget ? '#639922' : '#E24B4A' }}>
+                      <CountUp end={grandLaborPct} duration={1.5} separator="," suffix="%" decimals={1} />
                     </div>
-                    {grandRevenue > 0 && <span className="text-xs text-slate-400">{((revWebsite / grandRevenue) * 100).toFixed(1)}% מסה"כ הכנסות</span>}
+                    <span className="text-[11px] text-slate-400">יעד {avgLaborTarget.toFixed(0)}%</span>
                   </CardContent>
                 </Card>
               </motion.div>
             </motion.div>
 
-            {/* Charts row */}
-            <motion.div className="grid grid-cols-2 gap-5 mb-6" variants={fadeIn} initial="hidden" animate="visible">
-              {/* Bar chart */}
+            {/* ═══ ROW 2: Revenue Breakdown | Expense Breakdown ═══ */}
+            <motion.div className="grid grid-cols-2 gap-2.5 mb-2.5" variants={fadeIn} initial="hidden" animate="visible">
+              {/* Revenue breakdown */}
               <Card className="shadow-sm">
-                <CardHeader className="pb-0">
-                  <CardTitle className="text-sm font-bold text-slate-700">הכנסות/הוצאות לפי יחידה</CardTitle>
-                </CardHeader>
+                <CardContent className="p-4">
+                  <span className="text-[13px] font-bold text-slate-700 block mb-3">פירוט הכנסות</span>
+                  {(() => {
+                    const items = [
+                      { label: 'קופה', value: revCashier, sheet: 'rev_cashier' as KpiSheetType },
+                      { label: 'הקפה / B2B', value: revCredit + factoryB2b, sheet: 'rev_credit' as KpiSheetType },
+                      { label: 'אתר', value: revWebsite, sheet: 'rev_website' as KpiSheetType },
+                    ]
+                    const maxVal = Math.max(...items.map(i => i.value), 1)
+                    return items.map(item => (
+                      <div key={item.label} className="mb-3 cursor-pointer" onClick={() => setSheetType(item.sheet)}>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-[12px] text-slate-600">{item.label}</span>
+                          <span className="text-[12px] font-bold text-slate-700">{fmtN(item.value)}</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${(item.value / maxVal) * 100}%`, background: '#534AB7' }} />
+                        </div>
+                      </div>
+                    ))
+                  })()}
+                </CardContent>
+              </Card>
+
+              {/* Expense breakdown */}
+              <Card className="shadow-sm">
+                <CardContent className="p-4">
+                  <span className="text-[13px] font-bold text-slate-700 block mb-3">פירוט הוצאות</span>
+                  {(() => {
+                    const items = [
+                      { label: 'ספקים', value: factorySuppliers + branchSuppliers, sheet: 'suppliers_total' as KpiSheetType },
+                      { label: 'לייבור', value: grandLabor, sheet: 'labor_total' as KpiSheetType },
+                      { label: 'עלויות קבועות', value: totalFixed + factoryFixed, sheet: 'fixed_costs' as KpiSheetType },
+                    ]
+                    const maxVal = Math.max(...items.map(i => i.value), 1)
+                    return items.map(item => (
+                      <div key={item.label} className="mb-3 cursor-pointer" onClick={() => setSheetType(item.sheet)}>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-[12px] text-slate-600">{item.label}</span>
+                          <span className="text-[12px] font-bold text-slate-700">{fmtN(item.value)}</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${(item.value / maxVal) * 100}%`, background: '#E24B4A' }} />
+                        </div>
+                      </div>
+                    ))
+                  })()}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* ═══ ROW 3: Branch Performance ═══ */}
+            <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5">
+              <Card className="shadow-sm">
+                <CardContent className="p-4">
+                  <span className="text-[13px] font-bold text-slate-700 block mb-3">ביצועי סניפים</span>
+                  <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${branches.length + 1}, 1fr)` }}>
+                    {branches.map(br => {
+                      const opPct = br.revenue > 0 ? (br.operatingProfit / br.revenue) * 100 : 0
+                      return (
+                        <div key={br.id} className="bg-slate-50 rounded-lg p-3">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <div className="w-2 h-2 rounded-full" style={{ background: br.color }} />
+                            <span className="text-[12px] font-semibold text-slate-700">{br.name}</span>
+                          </div>
+                          <div className="text-[15px] font-bold text-slate-900">{fmtN(br.revenue)}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">הכנסות</div>
+                          <div className="mt-2 text-[15px] font-bold" style={{ color: opPct >= 0 ? '#639922' : '#E24B4A' }}>
+                            {opPct.toFixed(1)}%
+                          </div>
+                          <div className="text-[11px] text-slate-400">רווח תפעולי</div>
+                        </div>
+                      )
+                    })}
+                    {/* Factory column */}
+                    <div className="bg-indigo-50 rounded-lg p-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className="w-2 h-2 rounded-full bg-indigo-400" />
+                        <span className="text-[12px] font-semibold text-slate-700">מפעל</span>
+                      </div>
+                      <div className="text-[15px] font-bold text-slate-900">{fmtN(factorySales)}</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">הכנסות</div>
+                      <div className="mt-2 text-[15px] font-bold" style={{ color: factoryOperatingProfit >= 0 ? '#639922' : '#E24B4A' }}>
+                        {factorySales > 0 ? ((factoryOperatingProfit / factorySales) * 100).toFixed(1) : '0.0'}%
+                      </div>
+                      <div className="text-[11px] text-slate-400">רווח תפעולי</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* ═══ Charts ═══ */}
+            <motion.div className="grid grid-cols-2 gap-2.5 mb-2.5" variants={fadeIn} initial="hidden" animate="visible">
+              <Card className="shadow-sm">
+                <CardHeader className="pb-0"><CardTitle className="text-sm font-bold text-slate-700">הכנסות/הוצאות לפי יחידה</CardTitle></CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={barData} barGap={4}>
@@ -845,19 +861,14 @@ export default function CEODashboard({ onBack }: Props) {
                 </CardContent>
               </Card>
 
-              {/* Pie chart */}
               <Card className="shadow-sm">
-                <CardHeader className="pb-0">
-                  <CardTitle className="text-sm font-bold text-slate-700">התפלגות הוצאות</CardTitle>
-                </CardHeader>
+                <CardHeader className="pb-0"><CardTitle className="text-sm font-bold text-slate-700">התפלגות הוצאות</CardTitle></CardHeader>
                 <CardContent>
                   {expenseBreakdown.length > 0 ? (
                     <ResponsiveContainer width="100%" height={250}>
                       <PieChart>
                         <Pie data={expenseBreakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={40} paddingAngle={2} label={({ name, percent }: any) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false} style={{ fontSize: '11px' }}>
-                          {expenseBreakdown.map((_, i) => (
-                            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                          ))}
+                          {expenseBreakdown.map((_, i) => (<Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />))}
                         </Pie>
                         <Tooltip content={<PieTooltip />} />
                       </PieChart>
@@ -869,15 +880,13 @@ export default function CEODashboard({ onBack }: Props) {
               </Card>
             </motion.div>
 
-            {/* Area chart — daily revenue with gradient fill */}
+            {/* Daily revenue area chart */}
             {dailyRevenue.length > 0 && (
               <motion.div variants={fadeIn} initial="hidden" animate="visible">
-              <Card className="shadow-sm mb-6">
-                <CardHeader className="pb-0">
-                  <CardTitle className="text-sm font-bold text-slate-700">הכנסות יומיות לפי סניף</CardTitle>
-                </CardHeader>
+              <Card className="shadow-sm mb-2.5">
+                <CardHeader className="pb-0"><CardTitle className="text-sm font-bold text-slate-700">הכנסות יומיות לפי סניף</CardTitle></CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={250}>
                     <AreaChart data={dailyRevenue}>
                       <defs>
                         {BRANCHES.map(br => (
@@ -900,167 +909,6 @@ export default function CEODashboard({ onBack }: Props) {
               </Card>
               </motion.div>
             )}
-
-            {/* Ranking table */}
-            <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <Card className="shadow-sm mb-6">
-              <CardHeader className="pb-0">
-                <CardTitle className="text-sm font-bold text-slate-700">דירוג יחידות לפי רווחיות</CardTitle>
-              </CardHeader>
-              <CardContent className="table-scroll">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50 hover:bg-slate-50">
-                      <TableHead className="w-10 text-[11px] font-bold text-slate-500">#</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">יחידה</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">הכנסות</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">הוצאות</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">לייבור</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500 text-center">% לייבור</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">רווח גולמי</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">רווח תפעולי</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(() => {
-                      const fLabPct = factorySales > 0 ? (factoryLabor / factorySales) * 100 : 0
-                      const fExpenses = factoryLabor + factorySuppliers
-                      return (
-                        <TableRow className="bg-indigo-50/50 hover:bg-indigo-50 border-b-2 border-indigo-200">
-                          <TableCell className="text-sm">🏭</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-2.5 h-2.5 rounded-full bg-indigo-400" />
-                              <span className="text-sm font-bold text-slate-700">מפעל</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-[13px] font-semibold text-slate-700">{fmtN(factorySales)}</TableCell>
-                          <TableCell className="text-[13px] text-rose-500">{fmtN(fExpenses)}</TableCell>
-                          <TableCell className="text-[13px] text-amber-500">{fmtN(factoryLabor)}</TableCell>
-                          <TableCell className="text-center">
-                            <span className={`text-xs font-bold ${fLabPct <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>{fLabPct.toFixed(1)}%</span>
-                          </TableCell>
-                          <TableCell>
-                            <span className={`text-[13px] font-bold ${factoryGrossProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(factoryGrossProfit)}</span>
-                          </TableCell>
-                          <TableCell>
-                            <span className={`text-sm font-extrabold ${factoryOperatingProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(factoryOperatingProfit)}</span>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })()}
-
-                    {ranked.map((br, i) => {
-                      const labPct = br.revenue > 0 ? (br.labor / br.revenue) * 100 : 0
-                      return (
-                        <TableRow key={br.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                          <TableCell>
-                            <span className="text-base font-extrabold" style={{ color: i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : '#cd7f32' }}>
-                              {i + 1}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-2.5 h-2.5 rounded-full" style={{ background: br.color }} />
-                              <span className="text-sm font-semibold text-slate-700">{br.name}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-[13px] font-semibold text-slate-700">{fmtN(br.revenue)}</TableCell>
-                          <TableCell className="text-[13px] text-rose-500">{fmtN(br.expenses + br.labor)}</TableCell>
-                          <TableCell className="text-[13px] text-amber-500">{fmtN(br.labor)}</TableCell>
-                          <TableCell className="text-center">
-                            <span className={`text-xs font-bold ${labPct <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>{labPct.toFixed(1)}%</span>
-                          </TableCell>
-                          <TableCell>
-                            <span className={`text-[13px] font-bold ${br.grossProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(br.grossProfit)}</span>
-                          </TableCell>
-                          <TableCell>
-                            <span className={`text-sm font-extrabold ${br.operatingProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(br.operatingProfit)}</span>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-
-                    <TableRow className="bg-amber-50 hover:bg-amber-100 border-t-2 border-amber-200 font-bold">
-                      <TableCell />
-                      <TableCell className="text-sm text-slate-700">סה"כ כולל</TableCell>
-                      <TableCell className="text-[13px] text-slate-700">{fmtN(grandRevenue)}</TableCell>
-                      <TableCell className="text-[13px] text-rose-500">{fmtN(totalExpenses + totalLabor + factoryLabor + factorySuppliers)}</TableCell>
-                      <TableCell className="text-[13px] text-amber-500">{fmtN(grandLabor)}</TableCell>
-                      <TableCell className="text-center">
-                        <span className={`text-xs ${grandLaborPct <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>{grandLaborPct.toFixed(1)}%</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`text-[13px] font-bold ${grandGross >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(grandGross)}</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`text-sm font-extrabold ${grandOperating >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(grandOperating)}</span>
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-            </motion.div>
-
-            {/* Revenue breakdown table */}
-            <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <Card className="shadow-sm">
-              <CardHeader className="pb-0">
-                <CardTitle className="text-sm font-bold text-slate-700">פירוק הכנסות לפי סניף</CardTitle>
-              </CardHeader>
-              <CardContent className="table-scroll">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50 hover:bg-slate-50">
-                      <TableHead className="text-[11px] font-bold text-slate-500">סניף</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">הכנסות קופה</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">הכנסות הקפה</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">הכנסות אתר</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">סה"כ הכנסות</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">לייבור</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">עלויות קבועות</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500">רווח תפעולי</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {branches.map((br, i) => (
-                      <TableRow key={br.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                        <TableCell>
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-2.5 h-2.5 rounded-full" style={{ background: br.color }} />
-                            <span className="text-sm font-semibold text-slate-700">{br.name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-[13px] text-slate-700">{fmtN(br.revCashier)}</TableCell>
-                        <TableCell className="text-[13px] text-slate-700">{fmtN(br.revCredit)}</TableCell>
-                        <TableCell className="text-[13px] text-slate-700">{fmtN(br.revWebsite)}</TableCell>
-                        <TableCell className="text-[13px] font-bold text-slate-700">{fmtN(br.revenue)}</TableCell>
-                        <TableCell className="text-[13px] text-amber-500">{fmtN(br.labor)}</TableCell>
-                        <TableCell className="text-[13px] text-slate-500">{fmtN(br.fixedCosts)}</TableCell>
-                        <TableCell>
-                          <span className={`text-sm font-extrabold ${br.operatingProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(br.operatingProfit)}</span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-
-                    <TableRow className="bg-amber-50 hover:bg-amber-100 border-t-2 border-amber-200 font-bold">
-                      <TableCell className="text-sm text-slate-700">סה"כ כולל</TableCell>
-                      <TableCell className="text-[13px] text-slate-700">{fmtN(revCashier)}</TableCell>
-                      <TableCell className="text-[13px] text-slate-700">{fmtN(revCredit + factoryB2b)}</TableCell>
-                      <TableCell className="text-[13px] text-slate-700">{fmtN(revWebsite)}</TableCell>
-                      <TableCell className="text-[13px] font-extrabold text-slate-700">{fmtN(grandRevenue)}</TableCell>
-                      <TableCell className="text-[13px] text-amber-500">{fmtN(grandLabor)}</TableCell>
-                      <TableCell className="text-[13px] text-slate-500">{fmtN(totalFixed + factoryFixed)}</TableCell>
-                      <TableCell>
-                        <span className={`text-sm font-extrabold ${grandOperating >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(grandOperating)}</span>
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-            </motion.div>
           </>
         )}
       </div>
