@@ -12,9 +12,9 @@
  */
 
 import * as pdfjsLib from 'pdfjs-dist'
+import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-// Worker — use CDN
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
 
 export interface CashOnTabRow {
   date: string        // YYYY-MM-DD
