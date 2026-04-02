@@ -531,7 +531,9 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       const newEmpPayloads: any[] = []
       for (const [name, { rate, bonus }] of uniqueEmps) {
         if (!existingNames.some((n: string) => name.toLowerCase().includes(n) || n.includes(name.toLowerCase()))) {
-          newEmpPayloads.push({ branch_id: branchId, name, hourly_rate: rate, retention_bonus: bonus, active: true })
+          const empPayload: Record<string, any> = { branch_id: branchId, name, hourly_rate: rate, active: true }
+          if (bonus > 0) empPayload.retention_bonus = bonus
+          newEmpPayloads.push(empPayload)
         }
       }
       if (newEmpPayloads.length > 0) {

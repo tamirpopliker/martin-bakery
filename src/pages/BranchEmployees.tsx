@@ -53,15 +53,17 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   async function handleSave() {
     if (!form.name.trim() || !form.hourly_rate) return
     setSaving(true)
-    const payload = {
+    const payload: Record<string, any> = {
       branch_id: branchId,
       name: form.name.trim(),
       email: form.email || null,
       phone: form.phone || null,
       hourly_rate: parseFloat(form.hourly_rate) || null,
-      retention_bonus: parseFloat(form.retention_bonus) || 0,
       active: form.active,
     }
+    // Only include retention_bonus if the column exists (avoid 400 if PostgREST cache is stale)
+    const bonusVal = parseFloat(form.retention_bonus) || 0
+    if (bonusVal > 0) payload.retention_bonus = bonusVal
     if (form.id) {
       await supabase.from('branch_employees').update(payload).eq('id', form.id)
     } else {
