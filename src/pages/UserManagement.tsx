@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ChevronRight, Plus, Pencil, Trash2, Save, X, UserCog } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Save, X, UserCog } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 interface AppUser {
   id: string
@@ -35,10 +38,12 @@ const DEPT_LABELS: Record<string, string> = {
 const ALL_DEPTS = ['creams', 'dough', 'packaging', 'cleaning']
 
 const ROLE_COLORS: Record<string, string> = {
-  admin: '#8b5cf6',
-  factory: '#3b82f6',
-  branch: '#10b981',
+  admin: '#c084fc',
+  factory: '#818cf8',
+  branch: '#34d399',
 }
+
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 export default function UserManagement({ onBack }: { onBack: () => void }) {
   const [users, setUsers] = useState<AppUser[]>([])
@@ -118,14 +123,15 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="page-container" style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl', padding: '28px 36px' }}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
       {/* Header */}
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px' }}>
-        <button onClick={onBack} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-          <ChevronRight size={20} color="#64748b" />
-        </button>
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
+          חזרה
+        </Button>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '40px', height: '40px', background: '#8b5cf6', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '40px', height: '40px', background: '#c084fc', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <UserCog size={22} color="white" />
           </div>
           <div>
@@ -139,7 +145,7 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
             onClick={() => setAddMode(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: '6px',
-              background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '10px',
+              background: '#c084fc', color: 'white', border: 'none', borderRadius: '10px',
               padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer',
             }}
           >
@@ -148,92 +154,97 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
         )}
       </div>
 
+      <div style={{ padding: '28px 36px', maxWidth: '1100px', margin: '0 auto' }}>
+
       {/* Add user form */}
       {addMode && (
-        <div style={{ background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '2px solid #8b5cf6' }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>משתמש חדש</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>שם</label>
-              <input value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })}
-                style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', direction: 'rtl', boxSizing: 'border-box' }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>אימייל</label>
-              <input value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })}
-                style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', direction: 'ltr', boxSizing: 'border-box' }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>תפקיד</label>
-              <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}
-                style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', boxSizing: 'border-box' }}
-              >
-                <option value="admin">אדמין</option>
-                <option value="factory">מפעל</option>
-                <option value="branch">סניף</option>
-              </select>
-            </div>
-            {newUser.role === 'branch' && (
+        <Card className="shadow-sm" style={{ marginBottom: '20px', border: '2px solid #c084fc' }}>
+          <CardContent className="p-6">
+            <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>משתמש חדש</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '14px', marginBottom: '16px' }}>
               <div>
-                <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>סניף</label>
-                <select value={newUser.branch_id} onChange={e => setNewUser({ ...newUser, branch_id: Number(e.target.value) })}
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>שם</label>
+                <input value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })}
+                  style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', direction: 'rtl', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>אימייל</label>
+                <input value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                  style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', direction: 'ltr', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>תפקיד</label>
+                <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}
                   style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', boxSizing: 'border-box' }}
                 >
-                  <option value={1}>אברהם אבינו</option>
-                  <option value={2}>הפועלים</option>
-                  <option value={3}>יעקב כהן</option>
+                  <option value="admin">אדמין</option>
+                  <option value="factory">מפעל</option>
+                  <option value="branch">סניף</option>
                 </select>
               </div>
-            )}
-            {newUser.role === 'factory' && (
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>מחלקות חסומות</label>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {ALL_DEPTS.map(d => (
-                    <button key={d} onClick={() => toggleExcludedDept(d, 'new')}
-                      style={{
-                        padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
-                        border: '1px solid',
-                        background: newUser.excluded_departments.includes(d) ? '#fef2f2' : '#f0fdf4',
-                        borderColor: newUser.excluded_departments.includes(d) ? '#fca5a5' : '#86efac',
-                        color: newUser.excluded_departments.includes(d) ? '#ef4444' : '#10b981',
-                      }}
-                    >
-                      {DEPT_LABELS[d]} {newUser.excluded_departments.includes(d) ? '✗' : '✓'}
-                    </button>
-                  ))}
+              {newUser.role === 'branch' && (
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>סניף</label>
+                  <select value={newUser.branch_id} onChange={e => setNewUser({ ...newUser, branch_id: Number(e.target.value) })}
+                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', boxSizing: 'border-box' }}
+                  >
+                    <option value={1}>אברהם אבינו</option>
+                    <option value={2}>הפועלים</option>
+                    <option value={3}>יעקב כהן</option>
+                  </select>
                 </div>
-              </div>
-            )}
-            {newUser.role !== 'admin' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '20px' }}>
-                <input type="checkbox" checked={newUser.can_settings} onChange={e => setNewUser({ ...newUser, can_settings: e.target.checked })} />
-                <label style={{ fontSize: '13px', color: '#374151' }}>גישה להגדרות</label>
-              </div>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={handleAdd} disabled={saving || !newUser.name || !newUser.email}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', opacity: saving || !newUser.name || !newUser.email ? 0.5 : 1 }}
-            >
-              <Save size={14} /> {saving ? 'שומר...' : 'שמור'}
-            </button>
-            <button onClick={() => setAddMode(false)}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
-            >
-              <X size={14} /> ביטול
-            </button>
-          </div>
-        </div>
+              )}
+              {newUser.role === 'factory' && (
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>מחלקות חסומות</label>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {ALL_DEPTS.map(d => (
+                      <button key={d} onClick={() => toggleExcludedDept(d, 'new')}
+                        style={{
+                          padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                          border: '1px solid',
+                          background: newUser.excluded_departments.includes(d) ? '#fff1f2' : '#f0fdf4',
+                          borderColor: newUser.excluded_departments.includes(d) ? '#fca5a5' : '#86efac',
+                          color: newUser.excluded_departments.includes(d) ? '#fb7185' : '#34d399',
+                        }}
+                      >
+                        {DEPT_LABELS[d]} {newUser.excluded_departments.includes(d) ? '✗' : '✓'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {newUser.role !== 'admin' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '20px' }}>
+                  <input type="checkbox" checked={newUser.can_settings} onChange={e => setNewUser({ ...newUser, can_settings: e.target.checked })} />
+                  <label style={{ fontSize: '13px', color: '#374151' }}>גישה להגדרות</label>
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={handleAdd} disabled={saving || !newUser.name || !newUser.email}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#c084fc', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', opacity: saving || !newUser.name || !newUser.email ? 0.5 : 1 }}
+              >
+                <Save size={14} /> {saving ? 'שומר...' : 'שמור'}
+              </button>
+              <button onClick={() => setAddMode(false)}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+              >
+                <X size={14} /> ביטול
+              </button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Users table */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8', fontSize: '16px' }}>טוען...</div>
       ) : (
-        <div className="table-scroll"><div style={{ background: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+        <motion.div variants={fadeIn} initial="hidden" animate="visible">
+        <div className="table-scroll"><Card className="shadow-sm" style={{ overflow: 'hidden' }}>
           {/* Header row */}
           <div style={{ display: 'grid', gridTemplateColumns: '180px 200px 90px 160px 180px 80px 100px', padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
             <span>שם</span>
@@ -282,9 +293,9 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
                         style={{
                           padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '600', cursor: 'pointer',
                           border: '1px solid',
-                          background: (editData.excluded_departments || []).includes(d) ? '#fef2f2' : '#f0fdf4',
+                          background: (editData.excluded_departments || []).includes(d) ? '#fff1f2' : '#f0fdf4',
                           borderColor: (editData.excluded_departments || []).includes(d) ? '#fca5a5' : '#86efac',
-                          color: (editData.excluded_departments || []).includes(d) ? '#ef4444' : '#10b981',
+                          color: (editData.excluded_departments || []).includes(d) ? '#fb7185' : '#34d399',
                         }}
                       >
                         {DEPT_LABELS[d]}
@@ -295,12 +306,12 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
                     {editData.role !== 'admin' ? (
                       <input type="checkbox" checked={editData.can_settings || false} onChange={e => setEditData({ ...editData, can_settings: e.target.checked })} />
                     ) : (
-                      <span style={{ fontSize: '11px', color: '#10b981' }}>✓</span>
+                      <span style={{ fontSize: '11px', color: '#34d399' }}>✓</span>
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <button onClick={() => handleSave(user.id)} disabled={saving}
-                      style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                     >
                       <Save size={13} />
                     </button>
@@ -334,17 +345,17 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
                       ? user.excluded_departments.map(d => DEPT_LABELS[d]).join(', ')
                       : '—'}
                   </span>
-                  <span style={{ textAlign: 'center', fontSize: '14px', color: user.can_settings ? '#10b981' : '#ef4444' }}>
+                  <span style={{ textAlign: 'center', fontSize: '14px', color: user.can_settings ? '#34d399' : '#fb7185' }}>
                     {user.can_settings ? '✓' : '✗'}
                   </span>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <button onClick={() => startEdit(user)}
-                      style={{ background: '#f1f5f9', color: '#3b82f6', border: 'none', borderRadius: '6px', padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      style={{ background: '#f1f5f9', color: '#818cf8', border: 'none', borderRadius: '6px', padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                     >
                       <Pencil size={13} />
                     </button>
                     <button onClick={() => handleDelete(user.id)}
-                      style={{ background: '#fef2f2', color: '#ef4444', border: 'none', borderRadius: '6px', padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      style={{ background: '#fff1f2', color: '#fb7185', border: 'none', borderRadius: '6px', padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                     >
                       <Trash2 size={13} />
                     </button>
@@ -353,8 +364,11 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
               )}
             </div>
           ))}
-        </div></div>
+        </Card></div>
+        </motion.div>
       )}
+
+      </div>
     </div>
   )
 }

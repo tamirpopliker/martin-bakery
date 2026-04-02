@@ -42,7 +42,7 @@ function hebrewDate(dateStr: string) {
   })
 }
 
-const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 // ─── גרף קו פשוט (SVG) ─────────────────────────────────────────────────────
 function LineChart({ entries, color, isQty, previousData }: { entries: Entry[]; color: string; isQty: boolean; previousData?: Entry[] }) {

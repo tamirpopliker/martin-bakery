@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { supabase, monthEnd } from '../lib/supabase'
 import JSZip from 'jszip'
 import { Download, CheckCircle, Loader2, FileText } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface TableExport {
@@ -201,6 +203,8 @@ function buildCsv(columns: string[], rows: (string | number | boolean | null)[][
   return BOM + header + '\n' + body
 }
 
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
+
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function DataExport() {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
@@ -250,21 +254,19 @@ export default function DataExport() {
     setExporting(false)
   }
 
-  const S = {
-    card: { background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' } as React.CSSProperties,
-  }
-
   return (
     <div className="page-container" style={{ direction: 'rtl', fontFamily: "'Segoe UI', Arial, sans-serif", display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
       {/* Controls */}
-      <div style={S.card}>
+      <motion.div variants={fadeIn} initial="hidden" animate="visible">
+      <Card className="shadow-sm">
+        <CardContent className="p-6">
         <h2 style={{ margin: '0 0 16px', fontSize: '17px', fontWeight: '800', color: '#0f172a' }}>ייצוא נתונים לקובץ ZIP</h2>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: '20px' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
             <input type="checkbox" checked={allTime} onChange={e => setAllTime(e.target.checked)}
-              style={{ width: '18px', height: '18px', accentColor: '#3b82f6' }} />
+              style={{ width: '18px', height: '18px', accentColor: '#818cf8' }} />
             <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>כל הזמנים</span>
           </label>
 
@@ -290,16 +292,20 @@ export default function DataExport() {
         <div style={{ fontSize: '12px', color: '#94a3b8' }}>
           מייצא {EXPORT_TABLES.length} טבלאות · UTF-8 BOM · כל קובץ CSV נפרד ב-ZIP
         </div>
-      </div>
+        </CardContent>
+      </Card>
+      </motion.div>
 
       {/* Results */}
       {results && (
-        <div style={S.card}>
+        <motion.div variants={fadeIn} initial="hidden" animate="visible">
+        <Card className="shadow-sm">
+          <CardContent className="p-6">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-            <CheckCircle size={22} color="#10b981" />
+            <CheckCircle size={22} color="#34d399" />
             <div>
               <div style={{ fontSize: '16px', fontWeight: '800', color: '#065f46' }}>הייצוא הושלם!</div>
-              <div style={{ fontSize: '13px', color: '#10b981', fontWeight: '600' }}>
+              <div style={{ fontSize: '13px', color: '#34d399', fontWeight: '600' }}>
                 מייצא {EXPORT_TABLES.length} טבלאות · {totalRecords.toLocaleString()} רשומות סה"כ · {allTime ? 'כל הזמנים' : month}
               </div>
             </div>
@@ -313,19 +319,21 @@ export default function DataExport() {
                 background: r.count > 0 ? '#f0fdf4' : '#f8fafc',
               }}>
                 {r.count > 0
-                  ? <CheckCircle size={14} color="#10b981" />
+                  ? <CheckCircle size={14} color="#34d399" />
                   : <FileText size={14} color="#94a3b8" />
                 }
                 <span style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: r.count > 0 ? '#374151' : '#94a3b8' }}>
                   {r.label}
                 </span>
-                <span style={{ fontSize: '12px', color: r.count > 0 ? '#10b981' : '#94a3b8', fontWeight: '600' }}>
+                <span style={{ fontSize: '12px', color: r.count > 0 ? '#34d399' : '#94a3b8', fontWeight: '600' }}>
                   {r.count > 0 ? `${r.count} רשומות` : 'ריק'}
                 </span>
               </div>
             ))}
           </div>
-        </div>
+          </CardContent>
+        </Card>
+        </motion.div>
       )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>

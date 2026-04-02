@@ -1,10 +1,16 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { ArrowRight, TrendingUp, Trash2, Wrench, ClipboardList, LayoutDashboard, FlaskConical, Croissant, Package, Truck } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import DailyProduction from './DailyProduction'
 import FactoryWaste from './FactoryWaste'
 import FactoryRepairs from './FactoryRepairs'
 import DepartmentLabor from './DepartmentLabor'
 import DepartmentDashboard from './DepartmentDashboard'
+
+// ─── אנימציות ─────────────────────────────────────────────────────────────────
+const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }
+const fadeUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } } }
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 type Department = 'creams' | 'dough' | 'packaging' | 'cleaning'
@@ -27,8 +33,8 @@ interface MenuItem {
 
 // ─── קונפיגורציה ────────────────────────────────────────────────────────────
 const DEPT_CONFIG: Record<Department, { label: string; color: string; Icon: any; subtitle: string }> = {
-  creams:    { label: 'קרמים',       color: '#3b82f6', Icon: FlaskConical, subtitle: 'ייצור · פחת · תיקונים · לייבור · דשבורד' },
-  dough:     { label: 'בצקים',       color: '#8b5cf6', Icon: Croissant,    subtitle: 'ייצור · פחת · תיקונים · לייבור · דשבורד' },
+  creams:    { label: 'קרמים',       color: '#818cf8', Icon: FlaskConical, subtitle: 'ייצור · פחת · תיקונים · לייבור · דשבורד' },
+  dough:     { label: 'בצקים',       color: '#c084fc', Icon: Croissant,    subtitle: 'ייצור · פחת · תיקונים · לייבור · דשבורד' },
   packaging: { label: 'אריזה',       color: '#0ea5e9', Icon: Package,      subtitle: 'כמויות · פחת · תיקונים · לייבור' },
   cleaning:  { label: 'ניקיון/נהג',  color: '#64748b', Icon: Truck,        subtitle: 'תיקונים · לייבור' },
 }
@@ -69,17 +75,14 @@ export default function DepartmentHome({ department, onBack }: Props) {
 
   // ─── מסך Hub ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' }}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
+        </Button>
         <div style={{ width: '44px', height: '44px', background: cfg.color, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 4px 14px ${cfg.color}55` }}>
           <cfg.Icon size={22} color="white" />
         </div>
@@ -91,38 +94,45 @@ export default function DepartmentHome({ department, onBack }: Props) {
 
       {/* ─── כרטיסי מודולים ──────────────────────────────────────────────── */}
       <div className="page-container" style={{ padding: '36px', maxWidth: '960px', margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+        <motion.div
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+        >
           {items.map(item => {
             const Icon = item.Icon
             const isHov = hovCard === item.page
             return (
-              <button
-                key={item.page}
-                onClick={() => setPage(item.page)}
-                onMouseEnter={() => setHovCard(item.page)}
-                onMouseLeave={() => setHovCard(null)}
-                style={{
-                  background: isHov ? cfg.color : item.cardBg,
-                  border: `2px solid ${isHov ? cfg.color : item.cardBorder}`,
-                  borderRadius: '22px', padding: '32px',
-                  display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '18px',
-                  cursor: 'pointer', transition: 'all 0.18s',
-                  transform: isHov ? 'translateY(-4px)' : 'none',
-                  boxShadow: isHov ? `0 16px 40px ${cfg.color}35` : '0 2px 8px rgba(0,0,0,0.06)',
-                  textAlign: 'right',
-                }}
-              >
-                <div style={{ width: '60px', height: '60px', background: isHov ? 'rgba(255,255,255,0.22)' : cfg.color + '18', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon size={30} color={isHov ? 'white' : cfg.color} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '19px', fontWeight: '800', color: isHov ? 'white' : '#0f172a' }}>{item.label}</div>
-                  <div style={{ fontSize: '14px', color: isHov ? 'rgba(255,255,255,0.7)' : '#64748b', marginTop: '5px' }}>{item.subtitle}</div>
-                </div>
-              </button>
+              <motion.div key={item.page} variants={fadeUp}>
+                <button
+                  onClick={() => setPage(item.page)}
+                  onMouseEnter={() => setHovCard(item.page)}
+                  onMouseLeave={() => setHovCard(null)}
+                  style={{
+                    width: '100%',
+                    background: isHov ? cfg.color : item.cardBg,
+                    border: `2px solid ${isHov ? cfg.color : item.cardBorder}`,
+                    borderRadius: '22px', padding: '32px',
+                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '18px',
+                    cursor: 'pointer', transition: 'all 0.18s',
+                    transform: isHov ? 'translateY(-4px)' : 'none',
+                    boxShadow: isHov ? `0 16px 40px ${cfg.color}35` : '0 2px 8px rgba(0,0,0,0.06)',
+                    textAlign: 'right',
+                  }}
+                >
+                  <div style={{ width: '60px', height: '60px', background: isHov ? 'rgba(255,255,255,0.22)' : cfg.color + '18', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon size={30} color={isHov ? 'white' : cfg.color} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '19px', fontWeight: '800', color: isHov ? 'white' : '#0f172a' }}>{item.label}</div>
+                    <div style={{ fontSize: '14px', color: isHov ? 'rgba(255,255,255,0.7)' : '#64748b', marginTop: '5px' }}>{item.subtitle}</div>
+                  </div>
+                </button>
+              </motion.div>
             )
           })}
-        </div>
+        </motion.div>
       </div>
     </div>
   )

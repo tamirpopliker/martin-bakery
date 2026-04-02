@@ -25,7 +25,7 @@ interface Supplier {
 
 const CATEGORIES = ['מזון', 'אריזה', 'ניקיון', 'ציוד', 'תשתיות', 'שונות']
 
-const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 export default function BranchSuppliers({ branchId, branchName, branchColor, onBack }: Props) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])

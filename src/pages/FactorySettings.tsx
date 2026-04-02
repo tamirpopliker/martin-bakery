@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { ArrowRight, Plus, Pencil, Trash2, Save, Settings, Users, Target, DollarSign, Database, Download, Calendar } from 'lucide-react'
 import DataImport from './DataImport'
 import DataExport from './DataExport'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Props { onBack: () => void }
@@ -40,10 +43,13 @@ interface Employee {
   active: boolean
 }
 
+// ─── Animation variants ─────────────────────────────────────────────────────
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
+
 // ─── קבועים ─────────────────────────────────────────────────────────────────
 const DEPTS: { key: Dept; label: string; color: string }[] = [
-  { key: 'creams', label: 'קרמים', color: '#3b82f6' },
-  { key: 'dough',  label: 'בצקים', color: '#8b5cf6' },
+  { key: 'creams', label: 'קרמים', color: '#818cf8' },
+  { key: 'dough',  label: 'בצקים', color: '#c084fc' },
 ]
 
 const ALL_DEPTS = [
@@ -295,24 +301,19 @@ export default function FactorySettings({ onBack }: Props) {
 
   // ─── סגנונות ─────────────────────────────────────────────────────────────
   const S = {
-    page:  { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' as const },
-    card:  { background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
     label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
     input: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
   }
 
   return (
-    <div style={S.page}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
+        </Button>
         <div style={{ width: '40px', height: '40px', background: '#f1f5f9', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Settings size={20} color="#64748b" />
         </div>
@@ -323,16 +324,16 @@ export default function FactorySettings({ onBack }: Props) {
       </div>
 
       {/* ─── טאבים ───────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', padding: '0 32px', background: 'white', borderBottom: '1px solid #e2e8f0' }}>
+      <div className="flex px-8 bg-white border-b border-slate-200">
         {([
-          ['kpi',              '🎯 יעדי KPI',       Target],
-          ['costs',            '💰 עלויות קבועות',  DollarSign],
-          ['employees',        '👷 עובדים',          Users],
-          ['import',           '📥 ייבוא נתונים',  Database],
-          ['export',           '📤 ייצוא נתונים',  Download],
+          ['kpi',              'יעדי KPI',       Target],
+          ['costs',            'עלויות קבועות',  DollarSign],
+          ['employees',        'עובדים',          Users],
+          ['import',           'ייבוא נתונים',  Database],
+          ['export',           'ייצוא נתונים',  Download],
         ] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key as Tab)}
-            style={{ padding: '14px 22px', background: 'none', border: 'none', borderBottom: tab === key ? '3px solid #64748b' : '3px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: tab === key ? '700' : '500', color: tab === key ? '#0f172a' : '#64748b' }}>
+            className={`py-3.5 px-5 bg-transparent border-0 border-b-[3px] cursor-pointer text-sm ${tab === key ? 'font-bold text-slate-900 border-b-slate-500' : 'font-medium text-slate-500 border-b-transparent'}`}>
             {label}
           </button>
         ))}
@@ -340,16 +341,17 @@ export default function FactorySettings({ onBack }: Props) {
 
       <div className="page-container" style={{ padding: '28px 32px', maxWidth: '960px', margin: '0 auto' }}>
 
-        {/* ══ יעדי KPI ════════════════════════════════════════════════════ */}
+        {/* KPI targets */}
         {tab === 'kpi' && (
           <>
             <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px', background: '#f8fafc', borderRadius: '10px', padding: '12px 16px' }}>
-              💡 יעדים נפרדים לקרמים ולבצקים. 4 רמות צבע: ✅ תקין · 🟡 סביר · 🟠 חריגה · 🔴 קריטי
+              יעדים נפרדים לקרמים ולבצקים. 4 רמות צבע: תקין · סביר · חריגה · קריטי
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
               {DEPTS.map(dept => (
-                <div key={dept.key} style={{ ...S.card, borderTop: `4px solid ${dept.color}` }}>
+                <Card key={dept.key} className="shadow-sm" style={{ borderTop: `4px solid ${dept.color}` }}>
+                  <CardContent className="p-6">
                   <h3 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: '800', color: dept.color }}>{dept.label}</h3>
                   {KPI_FIELDS.map(field => (
                     <div key={field.key} style={{ marginBottom: '16px' }}>
@@ -371,10 +373,10 @@ export default function FactorySettings({ onBack }: Props) {
                         {/* ויזואל 4 רמות */}
                         <div style={{ display: 'flex', gap: '3px', marginRight: 'auto' }}>
                           {[
-                            { label: '±0%', color: '#10b981' },
-                            { label: '±3%', color: '#f59e0b' },
+                            { label: '±0%', color: '#34d399' },
+                            { label: '±3%', color: '#fbbf24' },
                             { label: '±7%', color: '#f97316' },
-                            { label: '>7%', color: '#ef4444' },
+                            { label: '>7%', color: '#fb7185' },
                           ].map(r => (
                             <span key={r.label} style={{ background: r.color + '20', color: r.color, fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: '600' }}>{r.label}</span>
                           ))}
@@ -382,18 +384,19 @@ export default function FactorySettings({ onBack }: Props) {
                       </div>
                     </div>
                   ))}
-                </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
 
             <button onClick={saveKpi}
-              style={{ background: kpiSaved ? '#10b981' : '#0f172a', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 32px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              style={{ background: kpiSaved ? '#34d399' : '#0f172a', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 32px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Save size={18} />{kpiSaved ? '✓ נשמר!' : 'שמור יעדים'}
             </button>
           </>
         )}
 
-        {/* ══ עלויות קבועות ════════════════════════════════════════════════ */}
+        {/* Fixed costs */}
         {tab === 'costs' && (
           <>
             {/* כותרת + פילטר חודש */}
@@ -402,11 +405,11 @@ export default function FactorySettings({ onBack }: Props) {
                 style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '8px 14px', fontSize: '14px', background: 'white', fontFamily: 'inherit' }} />
               <button onClick={loadDefaults} disabled={loadingCost}
                 style={{ background: '#0f172a', color: 'white', border: 'none', borderRadius: '10px', padding: '9px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-                ⚡ טען ברירות מחדל
+                טען ברירות מחדל
               </button>
               <button onClick={copyFromPrevMonth}
                 style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '9px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-                📋 העתק מחודש קודם
+                העתק מחודש קודם
               </button>
               <div style={{ marginRight: 'auto', fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>
                 סה"כ: {fmtM(totalFixedCosts)}
@@ -414,7 +417,8 @@ export default function FactorySettings({ onBack }: Props) {
             </div>
 
             {/* הוספה מהירה */}
-            <div style={{ ...S.card, marginBottom: '20px' }}>
+            <Card className="shadow-sm mb-5">
+              <CardContent className="p-6">
               <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת עלות קבועה</h2>
 
               {/* כפתורי ברירת מחדל */}
@@ -446,10 +450,13 @@ export default function FactorySettings({ onBack }: Props) {
                   <Plus size={16} />הוסף
                 </button>
               </div>
-            </div>
+              </CardContent>
+            </Card>
 
             {/* רשימת עלויות */}
-            <div style={S.card}>
+            <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <Card className="shadow-sm">
+              <CardContent className="p-6">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
                 <span>סעיף</span><span style={{ textAlign: 'center' }}>סכום חודשי</span><span /><span />
               </div>
@@ -459,11 +466,11 @@ export default function FactorySettings({ onBack }: Props) {
                   <div style={{ marginBottom: '16px' }}>אין עלויות לחודש זה</div>
                   <button onClick={loadDefaults} disabled={loadingCost}
                     style={{ background: '#0f172a', color: 'white', border: 'none', borderRadius: '12px', padding: '12px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', marginLeft: '8px' }}>
-                    ⚡ טען ברירות מחדל ({fmtM(DEFAULT_FIXED_COSTS.reduce((s, d) => s + d.amount, 0))})
+                    טען ברירות מחדל ({fmtM(DEFAULT_FIXED_COSTS.reduce((s, d) => s + d.amount, 0))})
                   </button>
                   <button onClick={copyFromPrevMonth}
                     style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '12px', padding: '12px 28px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' }}>
-                    📋 העתק מחודש קודם
+                    העתק מחודש קודם
                   </button>
                 </div>
               ) : costs.map((cost, i) => (
@@ -474,7 +481,7 @@ export default function FactorySettings({ onBack }: Props) {
                         autoFocus style={{ border: '1.5px solid #0f172a', borderRadius: '8px', padding: '6px 10px', fontSize: '14px', fontFamily: 'inherit' }} />
                       <input type="number" value={editCostData.amount || ''} onChange={e => setEditCostData({ ...editCostData, amount: parseFloat(e.target.value) })}
                         style={{ border: '1.5px solid #0f172a', borderRadius: '8px', padding: '6px 10px', fontSize: '14px', textAlign: 'center' as const }} />
-                      <button onClick={() => saveCost(cost.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
+                      <button onClick={() => saveCost(cost.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                       <button onClick={() => setEditCostId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                     </>
                   ) : (
@@ -482,7 +489,7 @@ export default function FactorySettings({ onBack }: Props) {
                       <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{cost.name}</span>
                       <span style={{ textAlign: 'center', fontWeight: '700', color: '#0f172a', fontSize: '15px' }}>{fmtM(cost.amount)}</span>
                       <button onClick={() => { setEditCostId(cost.id); setEditCostData(cost) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                      <button onClick={() => deleteCost(cost.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
+                      <button onClick={() => deleteCost(cost.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
                     </>
                   )}
                 </div>
@@ -495,11 +502,13 @@ export default function FactorySettings({ onBack }: Props) {
                   <span /><span />
                 </div>
               )}
-            </div>
+              </CardContent>
+            </Card>
+            </motion.div>
           </>
         )}
 
-        {/* ══ עובדים ══════════════════════════════════════════════════════ */}
+        {/* Employees */}
         {tab === 'employees' && (
           <>
             {/* פילטר סוג שכר + מחלקה + הוספה */}
@@ -507,7 +516,7 @@ export default function FactorySettings({ onBack }: Props) {
               <div style={{ display: 'flex', gap: '6px' }}>
                 {([['all', 'הכל'], ['hourly', 'שעתי'], ['global', 'גלובלי']] as const).map(([val, lbl]) => (
                   <button key={val} onClick={() => setWageFilter(val)}
-                    style={{ background: wageFilter === val ? '#0f172a' : '#f1f5f9', color: wageFilter === val ? 'white' : '#64748b', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                    className={`border-0 rounded-lg py-1.5 px-3.5 text-[13px] font-semibold cursor-pointer ${wageFilter === val ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
                     {lbl}
                   </button>
                 ))}
@@ -515,12 +524,12 @@ export default function FactorySettings({ onBack }: Props) {
               <div style={{ width: '1px', height: '24px', background: '#e2e8f0' }} />
               <div style={{ display: 'flex', gap: '6px' }}>
                 <button onClick={() => setDeptFilter('all')}
-                  style={{ background: deptFilter === 'all' ? '#64748b' : '#f1f5f9', color: deptFilter === 'all' ? 'white' : '#94a3b8', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
+                  className={`border-0 rounded-lg py-1.5 px-3.5 text-xs font-semibold cursor-pointer ${deptFilter === 'all' ? 'bg-slate-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
                   הכל
                 </button>
                 {[...ALL_DEPTS, { key: 'both', label: 'שניהם' }].map(d => (
                   <button key={d.key} onClick={() => setDeptFilter(d.key)}
-                    style={{ background: deptFilter === d.key ? '#64748b' : '#f1f5f9', color: deptFilter === d.key ? 'white' : '#94a3b8', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
+                    className={`border-0 rounded-lg py-1.5 px-3.5 text-xs font-semibold cursor-pointer ${deptFilter === d.key ? 'bg-slate-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
                     {d.label}
                   </button>
                 ))}
@@ -533,7 +542,8 @@ export default function FactorySettings({ onBack }: Props) {
 
             {/* טופס הוספת עובד */}
             {showAddEmp && (
-              <div style={{ ...S.card, marginBottom: '20px', borderTop: '3px solid #0f172a' }}>
+              <Card className="shadow-sm mb-5" style={{ borderTop: '3px solid #0f172a' }}>
+                <CardContent className="p-6">
                 <h3 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>עובד חדש</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column' as const, gridColumn: 'span 2' }}>
@@ -602,11 +612,14 @@ export default function FactorySettings({ onBack }: Props) {
                   style={{ background: loadingEmp || !newEmp.name ? '#e2e8f0' : '#0f172a', color: loadingEmp || !newEmp.name ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Plus size={18} />הוסף עובד
                 </button>
-              </div>
+                </CardContent>
+              </Card>
             )}
 
             {/* רשימת עובדים */}
-            <div className="table-scroll"><div style={S.card}>
+            <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <div className="table-scroll"><Card className="shadow-sm">
+              <CardContent className="p-6">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 90px 70px 110px 90px 50px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
                 <span>שם</span><span>מ.עובד</span><span>מחלקה</span><span>סוג</span><span style={{ textAlign: 'center' }}>שכר</span><span style={{ textAlign: 'center' }}>בונוס</span><span style={{ textAlign: 'center' }}>פעיל</span><span /><span />
               </div>
@@ -614,7 +627,7 @@ export default function FactorySettings({ onBack }: Props) {
               {filteredEmps.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין עובדים</div>
               ) : filteredEmps.map((emp, i) => (
-                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 90px 70px 110px 90px 50px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < filteredEmps.length - 1 ? '1px solid #f1f5f9' : 'none', background: !emp.active ? '#fef2f2' : i % 2 === 0 ? 'white' : '#fafafa', opacity: emp.active ? 1 : 0.6 }}>
+                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 90px 70px 110px 90px 50px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < filteredEmps.length - 1 ? '1px solid #f1f5f9' : 'none', background: !emp.active ? '#fff1f2' : i % 2 === 0 ? 'white' : '#fafafa', opacity: emp.active ? 1 : 0.6 }}>
                   {editEmpId === emp.id ? (
                     <>
                       <input type="text" value={editEmpData.name || ''} onChange={e => setEditEmpData(p => ({ ...p, name: e.target.value }))} autoFocus style={{ border: '1.5px solid #0f172a', borderRadius: '8px', padding: '5px 8px', fontSize: '13px', fontFamily: 'inherit' }} />
@@ -629,7 +642,7 @@ export default function FactorySettings({ onBack }: Props) {
                       <input type="number" value={editEmpData.wage_type === 'global' ? (editEmpData.global_daily_rate || '') : (editEmpData.hourly_rate || '')} onChange={e => setEditEmpData(p => p.wage_type === 'global' ? { ...p, global_daily_rate: parseFloat(e.target.value) } : { ...p, hourly_rate: parseFloat(e.target.value) })} style={{ border: '1px solid #0f172a', borderRadius: '6px', padding: '5px 8px', fontSize: '12px', textAlign: 'center' as const }} placeholder={editEmpData.wage_type === 'global' ? 'חודשי' : 'שעתי'} />
                       <input type="number" value={editEmpData.bonus || ''} onChange={e => setEditEmpData(p => ({ ...p, bonus: parseFloat(e.target.value) || null }))} style={{ border: '1px solid #0f172a', borderRadius: '6px', padding: '5px 8px', fontSize: '12px', textAlign: 'center' as const }} placeholder="בונוס" />
                       <span />
-                      <button onClick={() => saveEmployee(emp.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
+                      <button onClick={() => saveEmployee(emp.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                       <button onClick={() => setEditEmpId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                     </>
                   ) : (
@@ -647,17 +660,17 @@ export default function FactorySettings({ onBack }: Props) {
                           ? (emp.hourly_rate ? `₪${emp.hourly_rate}/ש׳` : '—')
                           : (emp.global_daily_rate ? fmtM(emp.global_daily_rate) : '—')}
                       </span>
-                      <span style={{ textAlign: 'center', color: '#f59e0b', fontWeight: '600', fontSize: '12px' }}>
+                      <span style={{ textAlign: 'center', color: '#fbbf24', fontWeight: '600', fontSize: '12px' }}>
                         {emp.bonus ? (emp.wage_type === 'hourly' ? `₪${emp.bonus}/ש׳` : fmtM(emp.bonus)) : '—'}
                       </span>
                       <span style={{ textAlign: 'center' }}>
                         <button onClick={() => toggleActive(emp)}
-                          style={{ background: emp.active ? '#d1fae5' : '#fee2e2', color: emp.active ? '#065f46' : '#991b1b', border: 'none', borderRadius: '20px', padding: '2px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
+                          style={{ background: emp.active ? '#d1fae5' : '#fecdd3', color: emp.active ? '#065f46' : '#991b1b', border: 'none', borderRadius: '20px', padding: '2px 10px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}>
                           {emp.active ? '✓' : '✕'}
                         </button>
                       </span>
                       <button onClick={() => { setEditEmpId(emp.id); setEditEmpData(emp) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                      <button onClick={() => deleteEmployee(emp.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
+                      <button onClick={() => deleteEmployee(emp.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
                     </>
                   )}
                 </div>
@@ -673,7 +686,9 @@ export default function FactorySettings({ onBack }: Props) {
                   )}
                 </div>
               )}
-            </div></div>
+              </CardContent>
+            </Card></div>
+            </motion.div>
 
             {/* ── ימי עבודה לפי חודש ── */}
             <div style={{ borderTop: '2px solid #e2e8f0', marginTop: '32px', paddingTop: '24px' }}>
@@ -703,7 +718,9 @@ export default function FactorySettings({ onBack }: Props) {
               </div>
 
               {/* טבלת ימי עבודה */}
-              <div className="table-scroll"><div style={S.card}>
+              <motion.div variants={fadeIn} initial="hidden" animate="visible">
+              <div className="table-scroll"><Card className="shadow-sm">
+                <CardContent className="p-6">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
                   <span>חודש</span><span style={{ textAlign: 'center' }}>ימי עבודה</span><span /><span />
                 </div>
@@ -716,7 +733,7 @@ export default function FactorySettings({ onBack }: Props) {
                         <span style={{ fontWeight: '600' }}>{wd.month}</span>
                         <input type="number" min="1" max="31" value={editWdVal} onChange={e => setEditWdVal(parseInt(e.target.value) || 26)}
                           autoFocus style={{ border: '1px solid #0f172a', borderRadius: '6px', padding: '5px 8px', fontSize: '14px', textAlign: 'center' as const, width: '80px', margin: '0 auto' }} />
-                        <button onClick={() => saveWorkingDay(wd.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
+                        <button onClick={() => saveWorkingDay(wd.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                         <button onClick={() => setEditWdId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                       </>
                     ) : (
@@ -724,22 +741,24 @@ export default function FactorySettings({ onBack }: Props) {
                         <span style={{ fontWeight: '600', color: '#374151' }}>{wd.month}</span>
                         <span style={{ textAlign: 'center', fontWeight: '700', color: '#0f172a', fontSize: '16px' }}>{wd.amount}</span>
                         <button onClick={() => { setEditWdId(wd.id); setEditWdVal(wd.amount) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                        <button onClick={() => deleteWorkingDay(wd.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
+                        <button onClick={() => deleteWorkingDay(wd.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
                       </>
                     )}
                   </div>
                 ))}
-              </div></div>
+                </CardContent>
+              </Card></div>
+              </motion.div>
             </div>
           </>
         )}
 
-        {/* ══ ייבוא נתונים ═══════════════════════════════════════════════ */}
+        {/* Data import */}
         {tab === 'import' && (
           <DataImport onBack={() => setTab('kpi')} />
         )}
 
-        {/* ══ ייצוא נתונים ═══════════════════════════════════════════════ */}
+        {/* Data export */}
         {tab === 'export' && (
           <DataExport />
         )}

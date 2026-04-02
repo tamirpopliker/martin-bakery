@@ -29,7 +29,7 @@ const DOC_TYPES = ['חשבונית מס', 'חשבונית עסקה', 'תעודת
 const COLOR = '#34d399'
 const BG    = '#d1fae5'
 
-const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 // ─── Autocomplete ────────────────────────────────────────────────────────────
 function AutocompleteInput({ value, onChange, options, placeholder }: {

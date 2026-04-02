@@ -38,7 +38,7 @@ const TYPE_CONFIG: Record<ExpenseType, { label: string; color: string; bg: strin
   other:          { label: 'אחר',             color: '#64748b', bg: '#f1f5f9' },
 }
 
-const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 function AutocompleteInput({ value, onChange, options, placeholder, color }: {
   value: string; onChange: (v: string) => void

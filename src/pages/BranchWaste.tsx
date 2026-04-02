@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { ArrowRight, Plus, Pencil, Trash2, Trash } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 interface Props {
   branchId: number
@@ -20,10 +23,12 @@ interface Entry {
 }
 
 const CATEGORIES = {
-  finished:  { label: 'מוצר מוגמר',   color: '#ef4444', bg: '#fef2f2' },
+  finished:  { label: 'מוצר מוגמר',   color: '#fb7185', bg: '#fff1f2' },
   raw:       { label: 'חומרי גלם',     color: '#f97316', bg: '#fff7ed' },
-  packaging: { label: 'אריזה',         color: '#f59e0b', bg: '#fffbeb' },
+  packaging: { label: 'אריזה',         color: '#fbbf24', bg: '#fffbeb' },
 }
+
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 export default function BranchWaste({ branchId, branchName, branchColor, onBack }: Props) {
   const { period, setPeriod, from, to } = usePeriod()
@@ -85,24 +90,19 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
   }))
 
   const S = {
-    page:  { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' as const },
-    card:  { background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
     label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
     input: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
   }
 
   return (
-    <div style={S.page}>
-      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
-        <div style={{ width: '40px', height: '40px', background: '#fef2f2', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Trash size={20} color="#ef4444" />
+        </Button>
+        <div style={{ width: '40px', height: '40px', background: '#fff1f2', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Trash size={20} color="#fb7185" />
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>פחת — {branchName}</h1>
@@ -110,8 +110,8 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
         </div>
         <div style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <PeriodPicker period={period} onChange={setPeriod} />
-          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '8px 18px' }}>
-            <span style={{ fontSize: '18px', fontWeight: '800', color: '#ef4444' }}>₪{total.toLocaleString()}</span>
+          <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '10px', padding: '8px 18px' }}>
+            <span style={{ fontSize: '18px', fontWeight: '800', color: '#fb7185' }}>₪{total.toLocaleString()}</span>
             <span style={{ fontSize: '12px', color: '#64748b', marginRight: '6px' }}>סה"כ</span>
           </div>
         </div>
@@ -131,38 +131,40 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
         </div>
 
         {/* טופס */}
-        <div style={{ ...S.card, marginBottom: '20px' }}>
-          <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת פחת</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>תאריך</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={S.input} />
+        <Card className="shadow-sm" style={{ marginBottom: '20px' }}>
+          <CardContent className="p-6">
+            <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת פחת</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                <label style={S.label}>תאריך</label>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} style={S.input} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                <label style={S.label}>סכום (₪)</label>
+                <input type="number" placeholder="0" value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addEntry()}
+                  style={{ ...S.input, textAlign: 'right' as const }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                <label style={S.label}>קטגוריה</label>
+                <select value={category} onChange={e => setCategory(e.target.value as any)}
+                  style={{ ...S.input, background: 'white' }}>
+                  {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gridColumn: 'span 2' }}>
+                <label style={S.label}>הסבר <span style={{ fontWeight: 400, color: '#94a3b8' }}>(חשוב)</span></label>
+                <input type="text" placeholder="מה נפסל ולמה..." value={notes}
+                  onChange={e => setNotes(e.target.value)} style={S.input} />
+              </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>סכום (₪)</label>
-              <input type="number" placeholder="0" value={amount}
-                onChange={e => setAmount(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addEntry()}
-                style={{ ...S.input, textAlign: 'right' as const }} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>קטגוריה</label>
-              <select value={category} onChange={e => setCategory(e.target.value as any)}
-                style={{ ...S.input, background: 'white' }}>
-                {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-              </select>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' as const, gridColumn: 'span 2' }}>
-              <label style={S.label}>הסבר <span style={{ fontWeight: 400, color: '#94a3b8' }}>(חשוב)</span></label>
-              <input type="text" placeholder="מה נפסל ולמה..." value={notes}
-                onChange={e => setNotes(e.target.value)} style={S.input} />
-            </div>
-          </div>
-          <button onClick={addEntry} disabled={loading || !amount}
-            style={{ background: loading || !amount ? '#e2e8f0' : '#ef4444', color: loading || !amount ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={18} />הוסף פחת
-          </button>
-        </div>
+            <button onClick={addEntry} disabled={loading || !amount}
+              style={{ background: loading || !amount ? '#e2e8f0' : '#fb7185', color: loading || !amount ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Plus size={18} />הוסף פחת
+            </button>
+          </CardContent>
+        </Card>
 
         {/* פילטרים */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', alignItems: 'center' }}>
@@ -175,7 +177,8 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
         </div>
 
         {/* טבלה */}
-        <div className="table-scroll"><div style={S.card}>
+        <motion.div variants={fadeIn} initial="hidden" animate="visible">
+        <div className="table-scroll"><Card className="shadow-sm"><CardContent className="p-6">
           <div style={{ display: 'grid', gridTemplateColumns: '100px 100px 1fr 130px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
             <span>תאריך</span><span>קטגוריה</span><span>הסבר</span><span style={{ textAlign: 'left' }}>סכום</span><span /><span />
           </div>
@@ -191,13 +194,13 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
                   onClick={() => entry.notes && setExpandedId(isExpanded ? null : entry.id)}>
                   {editId === entry.id ? (
                     <>
-                      <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid #ef4444', borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
-                      <select value={editData.category || ''} onChange={e => setEditData({ ...editData, category: e.target.value as any })} style={{ border: '1px solid #ef4444', borderRadius: '6px', padding: '4px 6px', fontSize: '11px', fontFamily: 'inherit' }}>
+                      <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid #fb7185', borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
+                      <select value={editData.category || ''} onChange={e => setEditData({ ...editData, category: e.target.value as any })} style={{ border: '1px solid #fb7185', borderRadius: '6px', padding: '4px 6px', fontSize: '11px', fontFamily: 'inherit' }}>
                         {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                       </select>
-                      <input type="text" value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} style={{ border: '1px solid #ef4444', borderRadius: '6px', padding: '4px 8px', fontSize: '13px', fontFamily: 'inherit' }} />
-                      <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid #ef4444', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                      <button onClick={e => { e.stopPropagation(); saveEdit(entry.id) }} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
+                      <input type="text" value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} style={{ border: '1px solid #fb7185', borderRadius: '6px', padding: '4px 8px', fontSize: '13px', fontFamily: 'inherit' }} />
+                      <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid #fb7185', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
+                      <button onClick={e => { e.stopPropagation(); saveEdit(entry.id) }} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                       <button onClick={e => { e.stopPropagation(); setEditId(null) }} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                     </>
                   ) : (
@@ -205,9 +208,9 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
                       <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(entry.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
                       <span style={{ fontSize: '11px', background: cat.bg, color: cat.color, padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>{cat.label}</span>
                       <span style={{ fontSize: '13px', color: '#374151' }}>{entry.notes || '—'}</span>
-                      <span style={{ fontWeight: '800', color: '#ef4444', fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString()}</span>
+                      <span style={{ fontWeight: '800', color: '#fb7185', fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString()}</span>
                       <button onClick={e => { e.stopPropagation(); setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                      <button onClick={e => { e.stopPropagation(); deleteEntry(entry.id) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#ef4444" /></button>
+                      <button onClick={e => { e.stopPropagation(); deleteEntry(entry.id) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
                     </>
                   )}
                 </div>
@@ -216,12 +219,13 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
           })}
 
           {filtered.length > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', background: '#fef2f2', borderTop: '2px solid #fecaca', borderRadius: '0 0 20px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', background: '#fff1f2', borderTop: '2px solid #fecdd3', borderRadius: '0 0 20px 20px' }}>
               <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>סה"כ — {filtered.length} רשומות</span>
-              <span style={{ fontSize: '20px', fontWeight: '800', color: '#ef4444' }}>₪{total.toLocaleString()}</span>
+              <span style={{ fontSize: '20px', fontWeight: '800', color: '#fb7185' }}>₪{total.toLocaleString()}</span>
             </div>
           )}
-        </div></div>
+        </CardContent></Card></div>
+        </motion.div>
       </div>
     </div>
   )

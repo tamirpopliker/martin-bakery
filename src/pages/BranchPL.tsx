@@ -18,7 +18,7 @@ interface Props {
 
 function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString() }
 
-const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 export default function BranchPL({ branchId, branchName, branchColor, onBack }: Props) {
   const { period, setPeriod, from, to, monthKey, comparisonPeriod } = usePeriod()

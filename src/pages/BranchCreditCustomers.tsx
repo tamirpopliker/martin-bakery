@@ -37,7 +37,7 @@ interface Payment {
   notes: string | null
 }
 
-const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 export default function BranchCreditCustomers({ branchId, branchName, branchColor, onBack }: Props) {
   const [customers, setCustomers] = useState<Customer[]>([])

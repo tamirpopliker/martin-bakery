@@ -34,7 +34,7 @@ const SOURCE_CONFIG: Record<Source, { label: string; Icon: any; color: string; b
   credit:  { label: 'הקפה',  Icon: CreditCard,  color: '#fbbf24', bg: '#fef3c7' },
 }
 
-const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 function AutocompleteInput({ value, onChange, suggestions, placeholder, color }: {
   value: string; onChange: (v: string) => void

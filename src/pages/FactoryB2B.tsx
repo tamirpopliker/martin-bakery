@@ -37,7 +37,7 @@ interface TabConfig {
 }
 
 // ─── Animation variants ─────────────────────────────────────────────────────
-const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 // ─── קונפיגורציה לכל טאב ─────────────────────────────────────────────────────
 const TAB_CONFIG: Record<SaleTab, TabConfig> = {

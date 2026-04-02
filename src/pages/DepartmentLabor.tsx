@@ -69,7 +69,7 @@ function calcGross(emp: Employee | null, h100: number, h125: number, h150: numbe
 
 function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString() }
 
-const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 // ─── קומפוננטה ראשית ─────────────────────────────────────────────────────────
 export default function DepartmentLabor({ department, onBack }: Props) {

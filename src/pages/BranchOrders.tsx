@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { ArrowRight, Package, CheckCircle, Pencil, Check, X, AlertTriangle, CheckSquare, Square } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Props {
@@ -38,6 +41,8 @@ const SOURCE_LABELS: Record<string, string> = {
   b2b: 'B2B',
   misc: 'שונות',
 }
+
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 // ─── קומפוננטה ראשית ─────────────────────────────────────────────────────────
 export default function BranchOrders({ branchId, branchName, branchColor, onBack }: Props) {
@@ -181,24 +186,15 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
     { key: 'disputed', label: 'נערכו',   count: orders.filter(o => o.branch_status === 'disputed').length },
   ]
 
-  // ─── סגנונות ──────────────────────────────────────────────────────────────
-  const S = {
-    page:  { minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl' as const },
-    card:  { background: 'white', borderRadius: '20px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' },
-  }
-
   return (
-    <div style={S.page}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div className="page-header" style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', borderBottom: '1px solid #e2e8f0' }}>
-        <button onClick={onBack} style={{ background: '#f1f5f9', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '15px', fontWeight: '700', color: '#64748b', fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b' }}
-        >
-          <ArrowRight size={22} color="currentColor" />
+      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
+          <ArrowRight size={22} />
           חזרה
-        </button>
+        </Button>
         <div style={{ width: '44px', height: '44px', background: branchColor, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 4px 14px ${branchColor}55` }}>
           <Package size={22} color="white" />
         </div>
@@ -270,7 +266,8 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
         </div>
 
         {/* ─── טבלת הזמנות ────────────────────────────────────────────────── */}
-        <div className="table-scroll"><div style={S.card}>
+        <motion.div variants={fadeIn} initial="hidden" animate="visible">
+        <div className="table-scroll"><Card className="shadow-sm"><CardContent className="p-6">
           <div style={{ display: 'grid', gridTemplateColumns: '36px 100px 80px 1fr 120px 100px 100px 80px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b', alignItems: 'center' }}>
             <span />
             <span>תאריך</span>
@@ -349,7 +346,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
                   {isEditing ? (
                     <>
                       <button onClick={() => saveEditedAmount(order)}
-                        style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>
+                        style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>
                         <Check size={14} />
                       </button>
                       <button onClick={() => { setEditId(null); setEditAmount('') }}
@@ -392,7 +389,8 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
               </span>
             </div>
           )}
-        </div></div>
+        </CardContent></Card></div>
+        </motion.div>
 
       </div>
     </div>

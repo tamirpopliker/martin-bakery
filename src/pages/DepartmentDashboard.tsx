@@ -67,8 +67,8 @@ function kpiColor(actual: number, target: number, higherIsBetter = false): { col
 
 // ─── Animation variants ─────────────────────────────────────────────────────
 const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.1 } } }
-const fadeUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } } }
-const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } } }
+const fadeUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } } }
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 // ─── KpiTooltip ──────────────────────────────────────────────────────────────
 function KpiTooltip({ text, children }: { text: string; children: React.ReactNode }) {

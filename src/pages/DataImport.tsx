@@ -1,9 +1,11 @@
 import { useState, useRef, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { supabase, monthEnd } from '../lib/supabase'
 import Papa from 'papaparse'
 import JSZip from 'jszip'
 import { Upload, CheckCircle, AlertCircle, XCircle, FileText, Loader2, Download, Trash2 } from 'lucide-react'
 import { detectBranchId } from '../lib/internalCustomers'
+import { Card, CardContent } from '@/components/ui/card'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Props { onBack?: () => void; branchOnly?: boolean }
@@ -452,6 +454,8 @@ function detectAllMonths(allFiles: FileMapping[]): string[] {
   return [...months].sort()
 }
 
+const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
+
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function DataImport({ branchOnly }: Props) {
   const [files, setFiles] = useState<FileMapping[]>([])
@@ -857,16 +861,13 @@ export default function DataImport({ branchOnly }: Props) {
   const totalSkipped = files.reduce((s, f) => s + (f.result?.skipped || 0), 0)
   const detectedMonth = files.length > 0 ? detectMonth(files) : ''
 
-  const S = {
-    card: { background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' } as React.CSSProperties,
-  }
-
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ direction: 'rtl', fontFamily: "'Segoe UI', Arial, sans-serif" }}>
+    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* Purge all data */}
-      <div style={{ ...S.card, border: '2px solid #fca5a5', background: '#fff5f5', marginBottom: '8px' }}>
+      <Card className="shadow-sm mb-2" style={{ border: '2px solid #fecdd3', background: '#fff5f5' }}>
+        <CardContent className="p-6">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <div style={{ fontSize: '15px', fontWeight: '700', color: '#991b1b' }}>🗑️ מחיקת כל הנתונים</div>
@@ -878,7 +879,7 @@ export default function DataImport({ branchOnly }: Props) {
           </div>
           {!confirmPurge ? (
             <button onClick={() => setConfirmPurge(true)} disabled={purgingAll}
-              style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              style={{ background: '#fb7185', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Trash2 size={16} /> מחק הכל
             </button>
           ) : (
@@ -895,30 +896,33 @@ export default function DataImport({ branchOnly }: Props) {
             </div>
           )}
         </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Purge result */}
       {purgeResult && (
-        <div style={{ ...S.card, border: '2px solid #86efac', background: '#f0fdf4', marginBottom: '8px' }}>
+        <Card className="shadow-sm mb-2" style={{ border: '2px solid #86efac', background: '#f0fdf4' }}>
+          <CardContent className="p-6">
           <div style={{ fontSize: '15px', fontWeight: '700', color: '#065f46', marginBottom: '10px' }}>
             ✅ מחיקה הושלמה
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '6px' }}>
             {purgeResult.map(r => (
               <div key={r.table} style={{
-                background: r.ok ? '#ecfdf5' : '#fef2f2', border: `1px solid ${r.ok ? '#86efac' : '#fca5a5'}`,
+                background: r.ok ? '#ecfdf5' : '#fff1f2', border: `1px solid ${r.ok ? '#86efac' : '#fecdd3'}`,
                 borderRadius: '8px', padding: '8px 10px', textAlign: 'center',
               }}>
                 <div style={{ fontSize: '16px' }}>{r.ok ? '✓' : '✗'}</div>
                 <div style={{ fontSize: '11px', fontWeight: '600', color: r.ok ? '#065f46' : '#991b1b' }}>{r.label}</div>
-                {r.error && <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '2px' }}>{r.error}</div>}
+                {r.error && <div style={{ fontSize: '10px', color: '#fb7185', marginTop: '2px' }}>{r.error}</div>}
               </div>
             ))}
           </div>
-          <div style={{ fontSize: '12px', color: '#10b981', fontWeight: '600', marginTop: '10px' }}>
+          <div style={{ fontSize: '12px', color: '#34d399', fontWeight: '600', marginTop: '10px' }}>
             ניתן להעלות קבצים מחדש למטה ↓
           </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Import mode toggle */}
@@ -957,12 +961,13 @@ export default function DataImport({ branchOnly }: Props) {
           onDrop={onDrop}
           onClick={() => fileRef.current?.click()}
           style={{
-            ...S.card, border: `2.5px dashed ${dragOver ? '#3b82f6' : '#cbd5e1'}`,
             background: dragOver ? '#eff6ff' : '#fafafa',
-            textAlign: 'center', padding: '60px 40px', cursor: 'pointer', transition: 'all 0.2s',
+            border: `2.5px dashed ${dragOver ? '#818cf8' : '#cbd5e1'}`,
+            borderRadius: '16px', padding: '60px 40px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
           }}
         >
-          <Upload size={48} color={dragOver ? '#3b82f6' : '#94a3b8'} style={{ marginBottom: '16px' }} />
+          <Upload size={48} color={dragOver ? '#818cf8' : '#94a3b8'} style={{ marginBottom: '16px' }} />
           <div style={{ fontSize: '18px', fontWeight: '700', color: '#374151', marginBottom: '8px' }}>
             גרור קבצי CSV או ZIP לכאן
           </div>
@@ -983,7 +988,7 @@ export default function DataImport({ branchOnly }: Props) {
 
       {/* Single file mode: Table selection grid */}
       {files.length === 0 && importMode === 'single' && (
-        <div style={S.card}>
+        <Card className="shadow-sm"><CardContent className="p-6">
           <div style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
             בחר טבלה להחלפה
           </div>
@@ -998,11 +1003,11 @@ export default function DataImport({ branchOnly }: Props) {
                 onClick={() => { setSelectedTable(key); singleFileRef.current?.click() }}
                 style={{
                   background: selectedTable === key ? '#eff6ff' : '#fafafa',
-                  border: `2px solid ${selectedTable === key ? '#3b82f6' : '#e2e8f0'}`,
+                  border: `2px solid ${selectedTable === key ? '#818cf8' : '#e2e8f0'}`,
                   borderRadius: '12px', padding: '16px 12px', textAlign: 'center',
                   cursor: 'pointer', transition: 'all 0.15s',
                 }}>
-                <FileText size={24} color={selectedTable === key ? '#3b82f6' : '#94a3b8'} style={{ marginBottom: '8px' }} />
+                <FileText size={24} color={selectedTable === key ? '#818cf8' : '#94a3b8'} style={{ marginBottom: '8px' }} />
                 <div style={{ fontSize: '13px', fontWeight: '700', color: '#374151' }}>{def.label}</div>
                 <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', direction: 'ltr' as const }}>{key}.csv</div>
               </div>
@@ -1016,7 +1021,7 @@ export default function DataImport({ branchOnly }: Props) {
               }
               e.target.value = ''
             }} />
-        </div>
+        </CardContent></Card>
       )}
 
       <input ref={fileRef} type="file" accept=".csv,.zip" multiple style={{ display: 'none' }}
@@ -1027,7 +1032,7 @@ export default function DataImport({ branchOnly }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
           {/* Header */}
-          <div style={{ ...S.card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          <Card className="shadow-sm"><CardContent className="p-6" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
             <div>
               <div style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>
                 {done ? `יובאו ${totalInserted.toLocaleString()} שורות` : `${readyFiles.length} קבצים מוכנים לייבוא`}
@@ -1038,7 +1043,7 @@ export default function DataImport({ branchOnly }: Props) {
                   : `${totalReady.toLocaleString()} שורות סה"כ`}
               </div>
               {detectedMonth && !done && (
-                <div style={{ fontSize: '13px', color: '#3b82f6', fontWeight: '600', marginTop: '4px' }}>
+                <div style={{ fontSize: '13px', color: '#818cf8', fontWeight: '600', marginTop: '4px' }}>
                   חודש נתונים: {new Date(detectedMonth + '-01').toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
                 </div>
               )}
@@ -1047,14 +1052,14 @@ export default function DataImport({ branchOnly }: Props) {
               {!done && !importing && importMode === 'zip' && (
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#64748b', cursor: 'pointer' }}>
                   <input type="checkbox" checked={clearExisting} onChange={e => setClearExisting(e.target.checked)}
-                    style={{ accentColor: '#ef4444', width: '16px', height: '16px' }} />
-                  <Trash2 size={14} color={clearExisting ? '#ef4444' : '#94a3b8'} />
+                    style={{ accentColor: '#fb7185', width: '16px', height: '16px' }} />
+                  <Trash2 size={14} color={clearExisting ? '#fb7185' : '#94a3b8'} />
                   נקה נתונים קודמים
                 </label>
               )}
               {!done && !importing && importMode === 'single' && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#ef4444', fontWeight: '600' }}>
-                  <Trash2 size={14} color="#ef4444" />
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#fb7185', fontWeight: '600' }}>
+                  <Trash2 size={14} color="#fb7185" />
                   הנתונים הקיימים יוחלפו
                 </span>
               )}
@@ -1088,39 +1093,39 @@ export default function DataImport({ branchOnly }: Props) {
                 </button>
               )}
             </div>
-          </div>
+          </CardContent></Card>
 
           {/* Progress */}
           {importing && progress.total > 0 && (
-            <div style={S.card}>
+            <Card className="shadow-sm"><CardContent className="p-6">
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#64748b' }}>
                 <span>{progress.label}</span>
                 <span>{Math.round((progress.current / progress.total) * 100)}%</span>
               </div>
               <div style={{ background: '#e2e8f0', borderRadius: '8px', height: '8px', overflow: 'hidden' }}>
                 <div style={{
-                  background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)', height: '100%', borderRadius: '8px',
+                  background: 'linear-gradient(90deg, #818cf8, #c084fc)', height: '100%', borderRadius: '8px',
                   width: `${(progress.current / progress.total) * 100}%`, transition: 'width 0.3s',
                 }} />
               </div>
-            </div>
+            </CardContent></Card>
           )}
 
           {/* Files */}
           {files.map((fm, i) => {
-            const color = fm.status === 'done' ? '#10b981' : fm.status === 'error' ? '#ef4444' : fm.status === 'skip' ? '#94a3b8' : fm.status === 'warning' ? '#f59e0b' : '#3b82f6'
+            const color = fm.status === 'done' ? '#34d399' : fm.status === 'error' ? '#fb7185' : fm.status === 'skip' ? '#94a3b8' : fm.status === 'warning' ? '#fbbf24' : '#818cf8'
             return (
-              <div key={fm.csvName + i} style={{
-                ...S.card, padding: '16px 20px', borderRight: `4px solid ${color}`,
+              <Card key={fm.csvName + i} className="shadow-sm" style={{
+                borderRight: `4px solid ${color}`,
                 opacity: fm.status === 'skip' ? 0.6 : 1,
-              }}>
+              }}><CardContent className="p-4 px-5">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {fm.status === 'done' && <CheckCircle size={20} color="#10b981" />}
-                  {fm.status === 'error' && <XCircle size={20} color="#ef4444" />}
+                  {fm.status === 'done' && <CheckCircle size={20} color="#34d399" />}
+                  {fm.status === 'error' && <XCircle size={20} color="#fb7185" />}
                   {fm.status === 'skip' && <XCircle size={20} color="#94a3b8" />}
-                  {fm.status === 'warning' && <AlertCircle size={20} color="#f59e0b" />}
-                  {fm.status === 'importing' && <Loader2 size={20} color="#3b82f6" style={{ animation: 'spin 1s linear infinite' }} />}
-                  {fm.status === 'ready' && <FileText size={20} color="#3b82f6" />}
+                  {fm.status === 'warning' && <AlertCircle size={20} color="#fbbf24" />}
+                  {fm.status === 'importing' && <Loader2 size={20} color="#818cf8" style={{ animation: 'spin 1s linear infinite' }} />}
+                  {fm.status === 'ready' && <FileText size={20} color="#818cf8" />}
 
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1133,28 +1138,28 @@ export default function DataImport({ branchOnly }: Props) {
                         <span style={{ fontSize: '12px', color: '#94a3b8' }}>
                           {fm.rowCount} שורות תקינות
                           {fm.rawCount && fm.rawCount !== fm.rowCount && (
-                            <span style={{ color: '#f59e0b' }}> (מתוך {fm.rawCount} ב-CSV, {fm.rawCount - fm.rowCount} נדחו)</span>
+                            <span style={{ color: '#fbbf24' }}> (מתוך {fm.rawCount} ב-CSV, {fm.rawCount - fm.rowCount} נדחו)</span>
                           )}
                         </span>
                       )}
-                      {fm.warning && <span style={{ fontSize: '12px', color: '#f59e0b', fontWeight: '600' }}>{fm.warning}</span>}
+                      {fm.warning && <span style={{ fontSize: '12px', color: '#fbbf24', fontWeight: '600' }}>{fm.warning}</span>}
                       {fm.result && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <span style={{ fontSize: '12px', color: '#10b981', fontWeight: '600' }}>
+                          <span style={{ fontSize: '12px', color: '#34d399', fontWeight: '600' }}>
                             {fm.result.inserted} יובאו
                             {fm.result.skipped > 0 && ` · ${fm.result.skipped} כפילויות`}
-                            {fm.result.errors > 0 && <span style={{ color: '#ef4444' }}> · {fm.result.errors} שגיאות</span>}
+                            {fm.result.errors > 0 && <span style={{ color: '#fb7185' }}> · {fm.result.errors} שגיאות</span>}
                             {fm.result.nullRows != null && fm.result.nullRows > 0 && (
-                              <span style={{ color: '#f59e0b' }}> · {fm.result.nullRows} שורות נדחו</span>
+                              <span style={{ color: '#fbbf24' }}> · {fm.result.nullRows} שורות נדחו</span>
                             )}
                           </span>
                           {fm.result.deleteError && (
-                            <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: '700' }}>
+                            <span style={{ fontSize: '11px', color: '#fb7185', fontWeight: '700' }}>
                               ⚠️ {fm.result.deleteError}
                             </span>
                           )}
                           {fm.result.firstError && !fm.result.deleteError && (
-                            <span style={{ fontSize: '11px', color: '#ef4444', maxWidth: '500px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            <span style={{ fontSize: '11px', color: '#fb7185', maxWidth: '500px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                               title={fm.result.firstError}>
                               {fm.result.firstError.slice(0, 100)}
                             </span>
@@ -1166,7 +1171,7 @@ export default function DataImport({ branchOnly }: Props) {
                     {fm.warnings && fm.warnings.length > 0 && !fm.result && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
                         {fm.warnings.map((w, wi) => (
-                          <span key={wi} style={{ fontSize: '11px', color: '#f59e0b', fontWeight: '500' }}>⚠️ {w}</span>
+                          <span key={wi} style={{ fontSize: '11px', color: '#fbbf24', fontWeight: '500' }}>⚠️ {w}</span>
                         ))}
                       </div>
                     )}
@@ -1192,24 +1197,29 @@ export default function DataImport({ branchOnly }: Props) {
                     </button>
                   )}
                 </div>
-              </div>
+              </CardContent></Card>
             )
           })}
 
           {/* Done */}
           {done && (
-            <div style={{ ...S.card, background: '#f0fdf4', borderTop: '3px solid #10b981', textAlign: 'center', padding: '32px' }}>
-              <CheckCircle size={40} color="#10b981" style={{ marginBottom: '12px' }} />
+            <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <Card className="shadow-sm" style={{ background: '#f0fdf4', borderTop: '3px solid #34d399', textAlign: 'center' }}>
+              <CardContent className="p-8">
+              <CheckCircle size={40} color="#34d399" style={{ marginBottom: '12px' }} />
               <div style={{ fontSize: '20px', fontWeight: '800', color: '#065f46', marginBottom: '8px' }}>הייבוא הושלם בהצלחה!</div>
-              <div style={{ fontSize: '15px', color: '#10b981', fontWeight: '600' }}>
+              <div style={{ fontSize: '15px', color: '#34d399', fontWeight: '600' }}>
                 יובאו {totalInserted.toLocaleString()} שורות{totalSkipped > 0 && ` · דולגו ${totalSkipped} כפילויות`}
               </div>
-            </div>
+              </CardContent>
+            </Card>
+            </motion.div>
           )}
 
           {/* DB Status Verification */}
           {dbStatus && (
-            <div style={{ ...S.card, border: '2px solid #3b82f6', background: '#fafcff' }}>
+            <Card className="shadow-sm" style={{ border: '2px solid #818cf8', background: '#fafcff' }}>
+              <CardContent className="p-6">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                 <div style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a' }}>
                   🔍 מצב מסד נתונים — {new Date(dbStatus.month + '-01').toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
@@ -1219,11 +1229,11 @@ export default function DataImport({ branchOnly }: Props) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px' }}>
                 {Object.entries(dbStatus.tables).map(([table, info]) => (
                   <div key={table} style={{
-                    background: info.error ? '#fef2f2' : info.count > 0 ? '#f0fdf4' : '#fffbeb',
-                    border: `1.5px solid ${info.error ? '#fca5a5' : info.count > 0 ? '#86efac' : '#fde68a'}`,
+                    background: info.error ? '#fff1f2' : info.count > 0 ? '#f0fdf4' : '#fffbeb',
+                    border: `1.5px solid ${info.error ? '#fecdd3' : info.count > 0 ? '#86efac' : '#fde68a'}`,
                     borderRadius: '12px', padding: '12px', textAlign: 'center',
                   }}>
-                    <div style={{ fontSize: '24px', fontWeight: '800', color: info.error ? '#ef4444' : info.count > 0 ? '#10b981' : '#f59e0b' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '800', color: info.error ? '#fb7185' : info.count > 0 ? '#34d399' : '#fbbf24' }}>
                       {info.error ? '✗' : info.count}
                     </div>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151', marginTop: '4px' }}>{info.label}</div>
@@ -1233,7 +1243,7 @@ export default function DataImport({ branchOnly }: Props) {
                       </div>
                     )}
                     <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', direction: 'ltr' }}>{table}</div>
-                    {info.error && <div style={{ fontSize: '10px', color: '#ef4444', marginTop: '4px' }}>{info.error}</div>}
+                    {info.error && <div style={{ fontSize: '10px', color: '#fb7185', marginTop: '4px' }}>{info.error}</div>}
                   </div>
                 ))}
               </div>
@@ -1242,7 +1252,8 @@ export default function DataImport({ branchOnly }: Props) {
                   ⚠️ כל הטבלאות ריקות לחודש זה! ודא שהקבצים הועלו בהצלחה ושאין שגיאות בייבוא.
                 </div>
               )}
-            </div>
+              </CardContent>
+            </Card>
           )}
         </div>
       )}
