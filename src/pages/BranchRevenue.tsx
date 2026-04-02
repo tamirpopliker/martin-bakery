@@ -115,9 +115,13 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         selected: !existingDates.has(r.date),
         exists: existingDates.has(r.date),
       })))
+      if (parsed.length === 0) {
+        setPdfResult({ imported: 0, skipped: 0 })
+      }
     } catch (err) {
       console.error('PDF parse error:', err)
       setPdfRows([])
+      setPdfResult({ imported: 0, skipped: 0 })
     }
     setPdfParsing(false)
   }
@@ -571,15 +575,32 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
               {/* Result */}
               {pdfResult && (
-                <div style={{ background: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
-                  <Check size={32} color="#22c55e" style={{ margin: '0 auto 8px' }} />
-                  <div style={{ fontSize: '16px', fontWeight: '700', color: '#166534' }}>הייבוא הושלם!</div>
-                  <div style={{ fontSize: '14px', color: '#15803d', marginTop: '8px' }}>
-                    יובאו <strong>{pdfResult.imported}</strong> רשומות בהצלחה
-                    {pdfResult.skipped > 0 && <>, <strong>{pdfResult.skipped}</strong> נכשלו</>}
+                <div style={{
+                  background: pdfResult.imported > 0 ? '#f0fdf4' : '#fef2f2',
+                  border: `1.5px solid ${pdfResult.imported > 0 ? '#86efac' : '#fca5a5'}`,
+                  borderRadius: '12px', padding: '20px', textAlign: 'center'
+                }}>
+                  {pdfResult.imported > 0 ? (
+                    <Check size={32} color="#22c55e" style={{ margin: '0 auto 8px' }} />
+                  ) : (
+                    <AlertCircle size={32} color="#ef4444" style={{ margin: '0 auto 8px' }} />
+                  )}
+                  <div style={{ fontSize: '16px', fontWeight: '700', color: pdfResult.imported > 0 ? '#166534' : '#991b1b' }}>
+                    {pdfResult.imported > 0 ? 'הייבוא הושלם!' : 'לא זוהו נתונים בקובץ'}
                   </div>
+                  {pdfResult.imported > 0 && (
+                    <div style={{ fontSize: '14px', color: '#15803d', marginTop: '8px' }}>
+                      יובאו <strong>{pdfResult.imported}</strong> רשומות בהצלחה
+                      {pdfResult.skipped > 0 && <>, <strong>{pdfResult.skipped}</strong> נכשלו</>}
+                    </div>
+                  )}
+                  {pdfResult.imported === 0 && pdfRows.length === 0 && (
+                    <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '8px' }}>
+                      ודא שהקובץ הוא דוח "השוואת מכירות - יומי" מ-CashOnTab בפורמט PDF
+                    </div>
+                  )}
                   <button onClick={() => { setPdfSheetOpen(false); setPdfRows([]); setPdfResult(null) }}
-                    style={{ marginTop: '16px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                    style={{ marginTop: '16px', background: pdfResult.imported > 0 ? '#22c55e' : '#94a3b8', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 20px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
                     סגור
                   </button>
                 </div>

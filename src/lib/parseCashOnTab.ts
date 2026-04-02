@@ -4,14 +4,16 @@
  * Parses "השוואת מכירות - יומי" reports from CashOnTab POS system.
  * Extracts: date, amount (ללא מע"מ), transactions count.
  *
- * PDF row format (RTL):
- *   ממוצע | כמות מסמכים | סה"כ מע"מ | סה"כ ללא מע"מ | סה"כ כולל מע"מ | תאריך
- *   37.14    236          1,337.10     7,427.87         8,764.97         15/03/26
+ * PDF text line format (extracted as single string per row):
+ *   61.00 7 65.15 361.85 427.00 13/03/26
+ *   37.14 236 1,337.10 7,427.87 8,764.97 15/03/26
+ *
+ * Numbers appear in order: average, transactions, vat, noVat, withVat, date
  */
 
 import * as pdfjsLib from 'pdfjs-dist'
 
-// Use bundled worker
+// Worker — use CDN
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
 
 export interface CashOnTabRow {
@@ -21,128 +23,124 @@ export interface CashOnTabRow {
 }
 
 /**
- * Parse a number string like "7,427.87" or "361.85" into a float
- */
-function parseNumber(s: string): number {
-  const cleaned = s.replace(/,/g, '').trim()
-  const n = parseFloat(cleaned)
-  return isNaN(n) ? 0 : n
-}
-
-/**
  * Convert DD/MM/YY to YYYY-MM-DD
- * e.g. "15/03/26" → "2026-03-15"
  */
-function parseDate(s: string): string | null {
-  const match = s.match(/^(\d{1,2})\/(\d{2})\/(\d{2})$/)
-  if (!match) return null
-  const day = match[1].padStart(2, '0')
-  const month = match[2]
-  const year = '20' + match[3]
-  // Validate
+function convertDate(ddmmyy: string): string | null {
+  const m = ddmmyy.match(/^(\d{1,2})\/(\d{2})\/(\d{2})$/)
+  if (!m) return null
+  const day = m[1].padStart(2, '0')
+  const month = m[2]
+  const year = '20' + m[3]
   const d = new Date(`${year}-${month}-${day}T12:00:00`)
   if (isNaN(d.getTime())) return null
   return `${year}-${month}-${day}`
 }
 
 /**
- * Main parser: reads a CashOnTab PDF file and extracts daily sales rows.
+ * Main parser
  */
 export async function parseCashOnTabPDF(file: File): Promise<CashOnTabRow[]> {
   const arrayBuffer = await file.arrayBuffer()
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+
+  let pdf: any
+  try {
+    pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise
+  } catch (err) {
+    console.error('PDF load error:', err)
+    return []
+  }
+
+  // Extract ALL text from all pages into one big string
+  let fullText = ''
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i)
+    const content = await page.getTextContent()
+    const pageText = content.items.map((item: any) => item.str).join(' ')
+    fullText += pageText + ' '
+  }
+
+  console.log('PDF full text:', fullText.substring(0, 500))
 
   const rows: CashOnTabRow[] = []
 
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum)
-    const textContent = await page.getTextContent()
+  // Strategy: find all date patterns DD/MM/YY and extract the numbers around them
+  // The PDF text has numbers and dates in sequence. We'll find each date
+  // and grab the 5 numbers that precede it.
 
-    // Extract all text items with their positions
-    const items = textContent.items
-      .filter((item: any) => item.str && item.str.trim())
-      .map((item: any) => ({
-        text: item.str.trim(),
-        x: Math.round(item.transform[4]),
-        y: Math.round(item.transform[5]),
-      }))
+  // Tokenize the full text
+  const tokens = fullText.split(/\s+/).filter(t => t.length > 0)
 
-    // Group items by Y position (same row = within 3px)
-    const yGroups: Record<number, typeof items> = {}
-    for (const item of items) {
-      const yKey = Object.keys(yGroups).find(k => Math.abs(Number(k) - item.y) < 3)
-      if (yKey) {
-        yGroups[Number(yKey)].push(item)
-      } else {
-        yGroups[item.y] = [item]
+  for (let idx = 0; idx < tokens.length; idx++) {
+    const token = tokens[idx]
+
+    // Check if this token is a date DD/MM/YY
+    if (!/^\d{1,2}\/\d{2}\/\d{2}$/.test(token)) continue
+
+    const dateStr = convertDate(token)
+    if (!dateStr) continue
+
+    // Look backwards for numbers (up to 10 tokens back)
+    const nums: number[] = []
+    for (let j = idx - 1; j >= Math.max(0, idx - 10) && nums.length < 5; j--) {
+      const cleaned = tokens[j].replace(/,/g, '')
+      if (/^\d+(\.\d+)?$/.test(cleaned)) {
+        nums.unshift(parseFloat(cleaned))
       }
     }
 
-    // Process each row
-    for (const [, groupItems] of Object.entries(yGroups)) {
-      // Sort by X position (right to left for RTL — highest X first = rightmost)
-      const sorted = [...groupItems].sort((a, b) => b.x - a.x)
-      const texts = sorted.map(i => i.text)
+    // We expect 5 numbers: average, transactions, vat, noVat, withVat
+    // But let's be flexible — at minimum we need 2 (noVat + transactions)
+    if (nums.length < 2) continue
 
-      // Find the date token (DD/MM/YY format)
-      const dateIdx = texts.findIndex(t => /^\d{1,2}\/\d{2}\/\d{2}$/.test(t))
-      if (dateIdx === -1) continue
+    // The numbers from the PDF text appear in this order (left to right):
+    // average | transactions | vat | noVat | withVat
+    // But since we collected backwards from the date, they are in natural order
 
-      const dateStr = parseDate(texts[dateIdx])
-      if (!dateStr) continue
+    if (nums.length >= 5) {
+      // Full row: [average, transactions, vat, noVat, withVat]
+      const average = nums[0]
+      const transactions = Math.round(nums[1])
+      const vat = nums[2]
+      const noVat = nums[3]
+      const withVat = nums[4]
 
-      // Extract all number tokens from this row (excluding the date)
-      const numbers = texts
-        .filter((_, i) => i !== dateIdx)
-        .map(t => t.replace(/,/g, ''))
-        .filter(t => /^\d+(\.\d+)?$/.test(t))
-        .map(parseFloat)
+      // Validate: withVat should be the largest, noVat second
+      // Also withVat ≈ noVat + vat
+      if (noVat > 0 && withVat >= noVat) {
+        rows.push({ date: dateStr, amount: Math.round(noVat * 100) / 100, transactions })
+        continue
+      }
+    }
 
-      // CashOnTab format has 5 numbers per row:
-      // [total_with_vat, total_no_vat, total_vat, transactions, average]
-      // Sorted by X descending (rightmost first), date is rightmost, then:
-      // total_with_vat > total_no_vat > total_vat > transactions > average
-      if (numbers.length < 4) continue
-
-      // Sort numbers descending to identify them by magnitude
-      // total_with_vat is largest, then total_no_vat, then total_vat
-      // transactions is an integer (no decimal typically), average is small
-      const sortedNums = [...numbers].sort((a, b) => b - a)
-
-      // The second largest number is "סה"כ ללא מע"מ" (total without VAT)
-      const amountNoVat = sortedNums[1]
-
-      // Find transactions: integer, typically between 1 and 999, not a money amount
-      // It's the number that when multiplied by average ≈ total_with_vat
+    // Fallback: sort numbers by size and take second largest as noVat
+    if (nums.length >= 4) {
+      const sorted = [...nums].sort((a, b) => b - a)
+      const withVat = sorted[0]
+      const noVat = sorted[1]
+      // transactions is likely the integer that's not a money amount
       let transactions = 0
-      for (const n of numbers) {
-        if (n === Math.floor(n) && n >= 1 && n < 1000 && n !== amountNoVat && n !== sortedNums[0]) {
-          // This is likely the transaction count
+      for (const n of nums) {
+        if (n === Math.floor(n) && n >= 1 && n < 2000 && n !== withVat && n !== noVat) {
           transactions = n
           break
         }
       }
-
-      if (amountNoVat <= 0) continue
-
-      rows.push({
-        date: dateStr,
-        amount: Math.round(amountNoVat * 100) / 100,
-        transactions,
-      })
+      if (noVat > 0) {
+        rows.push({ date: dateStr, amount: Math.round(noVat * 100) / 100, transactions })
+      }
     }
   }
 
-  // Sort by date ascending
+  // Sort by date
   rows.sort((a, b) => a.date.localeCompare(b.date))
 
-  // Deduplicate by date (in case of multi-page overlap)
+  // Deduplicate
   const unique = new Map<string, CashOnTabRow>()
   for (const row of rows) {
-    if (!unique.has(row.date)) {
-      unique.set(row.date, row)
-    }
+    if (!unique.has(row.date)) unique.set(row.date, row)
   }
 
-  return [...unique.values()]
+  const result = [...unique.values()]
+  console.log('Parsed CashOnTab rows:', result)
+  return result
 }
