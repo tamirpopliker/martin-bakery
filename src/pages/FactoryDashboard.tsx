@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
-import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept } from '../lib/supabase'
-import type { GlobalEmployee } from '../lib/supabase'
+import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept, fetchFactoryTrends } from '../lib/supabase'
+import type { GlobalEmployee, MonthTrend } from '../lib/supabase'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { ArrowRight, TrendingUp, TrendingDown, ChevronDown, ChevronUp, AlertTriangle, Trash2, Wrench, Truck } from 'lucide-react'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon } from '@/components/icons'
 import { usePeriod } from '../lib/PeriodContext'
@@ -141,6 +142,9 @@ export default function FactoryDashboard({ onBack }: Props) {
 
   // חודש קודם
   const [prev, setPrev] = useState({ sales: 0, suppliers: 0, waste: 0, repairs: 0, labor: 0, production: 0 })
+
+  // מגמות 6 חודשים
+  const [trendData, setTrendData] = useState<MonthTrend[]>([])
 
   // ─── שליפת נתונים ────────────────────────────────────────────────────────
   async function fetchAll() {
@@ -285,6 +289,10 @@ export default function FactoryDashboard({ onBack }: Props) {
   }
 
   useEffect(() => { fetchAll() }, [from, to])
+
+  useEffect(() => {
+    fetchFactoryTrends(monthKey || from.slice(0, 7)).then(setTrendData)
+  }, [from, to])
 
   // ─── חישובים ─────────────────────────────────────────────────────────────
   const totalSales   = salesCreams + salesDough + salesB2B + salesMisc
@@ -793,6 +801,32 @@ export default function FactoryDashboard({ onBack }: Props) {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* ── מגמות מפעל — 6 חודשים ── */}
+        {trendData.length > 0 && (
+          <motion.div variants={fadeIn}>
+            <Card className="shadow-sm border-0 bg-white/80 backdrop-blur">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-bold text-slate-700">📈 מגמות מפעל — 6 חודשים</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={trendData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => `₪${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(value: number, name: string) => [`₪${Math.round(value).toLocaleString()}`, name]} />
+                    <Legend />
+                    <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
+                    <Line type="monotone" dataKey="revenue" name="מכירות" stroke="#378ADD" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="grossProfit" name="רווח גולמי" stroke="#639922" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="operatingProfit" name="רווח תפעולי" stroke="#534AB7" strokeWidth={2} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
       </div>
     </div>

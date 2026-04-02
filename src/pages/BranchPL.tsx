@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase } from '../lib/supabase'
+import { supabase, fetchBranchTrends, MonthTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import PeriodPicker from '../components/PeriodPicker'
 import { ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon } from '@/components/icons'
@@ -136,6 +137,11 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   }
 
   useEffect(() => { fetchData() }, [from, to, branchId])
+
+  const [trendData, setTrendData] = useState<MonthTrend[]>([])
+  useEffect(() => {
+    fetchBranchTrends(branchId, monthKey || from.slice(0, 7)).then(setTrendData)
+  }, [branchId, monthKey, from])
 
   // calculations
   const totalRevenue   = revCashier + revWebsite + revCredit
@@ -391,6 +397,28 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
               </div>
             </CardContent></Card>
             </motion.div>
+
+            {/* 6-month trend chart */}
+            {trendData.length > 0 && (
+              <motion.div variants={fadeIn} initial="hidden" animate="visible">
+              <Card className="shadow-sm" style={{ marginTop: '20px' }}><CardContent className="p-6">
+                <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>מגמות 6 חודשים</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={trendData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'k'} />
+                    <Tooltip formatter={(value: number, name: string) => ['₪' + Math.round(value).toLocaleString(), name]} />
+                    <Legend />
+                    <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
+                    <Line type="monotone" dataKey="revenue" name="הכנסות" stroke="#378ADD" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="grossProfit" name="רווח גולמי" stroke="#639922" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="operatingProfit" name="רווח תפעולי" stroke="#534AB7" strokeWidth={2} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent></Card>
+              </motion.div>
+            )}
           </>
         )}
 

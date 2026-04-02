@@ -143,6 +143,82 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
   })
 }
 
+/** Fetch 6-month trends for a single branch */
+export async function fetchBranchTrends(branchId: number, refMonth: string): Promise<MonthTrend[]> {
+  const months = getLast6Months(refMonth)
+  const tFrom = months[0] + '-01'
+  const tTo = monthEnd(months[5])
+
+  const [revRes, labRes, expRes, wasteRes, fcRes] = await Promise.all([
+    supabase.from('branch_revenue').select('date, amount').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
+    supabase.from('branch_labor').select('date, employer_cost').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
+    supabase.from('branch_expenses').select('date, amount').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
+    supabase.from('branch_waste').select('date, amount').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
+    supabase.from('fixed_costs').select('month, amount').eq('entity_type', `branch_${branchId}`).in('month', months),
+  ])
+
+  const grp = (data: any[] | null, field: string) => {
+    const map: Record<string, number> = {}
+    ;(data || []).forEach(r => { const m = r.date?.slice(0, 7); if (m) map[m] = (map[m] || 0) + Number(r[field] || 0) })
+    return map
+  }
+  const revByM = grp(revRes.data, 'amount')
+  const labByM = grp(labRes.data, 'employer_cost')
+  const expByM = grp(expRes.data, 'amount')
+  const wasteByM = grp(wasteRes.data, 'amount')
+  const fcByM: Record<string, number> = {}
+  ;(fcRes.data || []).forEach((r: any) => { if (r.month) fcByM[r.month] = (fcByM[r.month] || 0) + Number(r.amount || 0) })
+
+  return months.map(m => {
+    const revenue = revByM[m] || 0
+    const grossProfit = revenue - (labByM[m] || 0) - (expByM[m] || 0)
+    const operatingProfit = grossProfit - (fcByM[m] || 0) - (wasteByM[m] || 0) - (revenue * 0.05)
+    return { month: m, label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1], revenue, grossProfit, operatingProfit }
+  })
+}
+
+/** Fetch 6-month trends for factory only (no branches) */
+export async function fetchFactoryTrends(refMonth: string): Promise<MonthTrend[]> {
+  const months = getLast6Months(refMonth)
+  const tFrom = months[0] + '-01'
+  const tTo = monthEnd(months[5])
+
+  const [salesRes, b2bRes, suppRes, labRes, wasteRes, repairsRes, fcRes, empRes] = await Promise.all([
+    supabase.from('factory_sales').select('date, amount, is_internal').gte('date', tFrom).lt('date', tTo),
+    supabase.from('factory_b2b_sales').select('date, amount, is_internal').gte('date', tFrom).lt('date', tTo),
+    supabase.from('supplier_invoices').select('date, amount').gte('date', tFrom).lt('date', tTo),
+    supabase.from('labor').select('date, employer_cost').gte('date', tFrom).lt('date', tTo),
+    supabase.from('factory_waste').select('date, amount').gte('date', tFrom).lt('date', tTo),
+    supabase.from('factory_repairs').select('date, amount').gte('date', tFrom).lt('date', tTo),
+    supabase.from('fixed_costs').select('month, amount').eq('entity_type', 'factory').in('month', months),
+    supabase.from('employees').select('global_daily_rate, bonus').eq('wage_type', 'global').eq('active', true),
+  ])
+
+  const globalEmpCost = (empRes.data || []).reduce((s, e: any) => s + ((e.global_daily_rate || 0) * 1.3) + (e.bonus || 0), 0)
+
+  const grp = (data: any[] | null, field: string, filterFn?: (r: any) => boolean) => {
+    const map: Record<string, number> = {}
+    ;(data || []).forEach(r => { if (filterFn && !filterFn(r)) return; const m = r.date?.slice(0, 7); if (m) map[m] = (map[m] || 0) + Number(r[field] || 0) })
+    return map
+  }
+  const salesByM = grp(salesRes.data, 'amount', r => !r.is_internal)
+  const b2bByM = grp(b2bRes.data, 'amount', r => !r.is_internal)
+  const suppByM = grp(suppRes.data, 'amount')
+  const labByM = grp(labRes.data, 'employer_cost')
+  const wasteByM = grp(wasteRes.data, 'amount')
+  const repByM = grp(repairsRes.data, 'amount')
+  const fcByM: Record<string, number> = {}
+  ;(fcRes.data || []).forEach((r: any) => { if (r.month) fcByM[r.month] = (fcByM[r.month] || 0) + Number(r.amount || 0) })
+
+  return months.map(m => {
+    const revenue = (salesByM[m] || 0) + (b2bByM[m] || 0)
+    const totalLabor = (labByM[m] || 0) + globalEmpCost
+    const grossProfit = revenue - (suppByM[m] || 0) - totalLabor
+    const operatingProfit = grossProfit - (fcByM[m] || 0) - (repByM[m] || 0) - (wasteByM[m] || 0)
+    return { month: m, label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1], revenue, grossProfit, operatingProfit }
+  })
+}
+
 // ─── עובדים גלובליים ──────────────────────────────────────────────────────
 
 export interface GlobalEmployee {
