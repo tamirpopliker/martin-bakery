@@ -104,7 +104,7 @@ export default function Labor({ onBack }: Props) {
       for (const tw of twRows) {
         if (tw.date) seenDates.add(tw.date)
         // זיהוי: מספר עובד → שם מדויק → שם ללא רווחים → שם חלקי
-        const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase()
+        const normalize = (s: string) => s.replace(/[\s'"׳`']/g, '').toLowerCase()
         const twNorm = normalize(tw.name)
         const emp = (tw.employee_number && employees.find(e => e.employee_number === tw.employee_number))
           || employees.find(e => e.name.trim().toLowerCase() === tw.name.trim().toLowerCase())
@@ -113,8 +113,8 @@ export default function Labor({ onBack }: Props) {
           || undefined
         newRows.push({
           id: Math.random().toString(36).slice(2),
-          name: tw.name,
-          employee_number: tw.employee_number,
+          name: emp ? emp.name : tw.name, // Use DB name (with proper spacing) when matched
+          employee_number: tw.employee_number || (emp?.employee_number ?? ''),
           date: tw.date,
           hours_100: tw.hours_100,
           hours_125: tw.hours_125,
