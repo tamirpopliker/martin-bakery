@@ -70,34 +70,40 @@ export async function parseTimeWatchPDF(file: File): Promise<TimeWatchRow[]> {
   }
 
   // ─── Step 1: Find header column X positions ───
-  // Search ALL pages for header items: "רגילות", "125", "150"
-  // The header may span multiple Y lines (main header + sub-header)
+  // Dump all unique text items from page 1 for debugging
+  if (allPages.length > 0) {
+    const p1 = allPages[0].items
+    const uniqueTexts = [...new Set(p1.map(it => it.text))]
+    console.log('[parseTimeWatch] Page 1 unique texts:', uniqueTexts.join(' | '))
+    // Show items that might be header-related
+    const headerItems = p1.filter(it =>
+      it.text.includes('שעות') || it.text.includes('רגיל') || it.text.includes('תקן') ||
+      it.text.includes('125') || it.text.includes('150') || it.text.includes('ש.נ') ||
+      it.text.includes('עבודה') || it.text.includes('נוכחות')
+    )
+    console.log('[parseTimeWatch] Header-related items:', headerItems.map(it => `"${it.text}"(x=${it.x},y=${it.y})`))
+  }
+
   let h100X = -1 // שעות רגילות
   let h125X = -1 // ש.נ 125%
   let h150X = -1 // ש.נ 150%
 
-  for (const { page, items } of allPages) {
+  for (const { items } of allPages) {
     for (const it of items) {
-      // Look for "רגילות" that's NOT part of "סה"כ" (there might be multiple)
-      if (it.text === 'רגילות' || it.text.includes('רגילות')) {
-        if (h100X < 0 || it.x < h100X) h100X = it.x // take lowest X (leftmost)
+      // Look for "רגילות" or "רגילה" or variations
+      if (it.text.includes('רגיל')) {
+        if (h100X < 0 || it.x < h100X) h100X = it.x
       }
-      // Look for "125" in header (not data)
-      if (it.text.includes('125') && it.text.includes('%')) {
-        h125X = it.x
+      // Look for "125" anywhere (header sub-row)
+      if (it.text.includes('125')) {
+        if (h125X < 0) h125X = it.x
       }
-      if (it.text === '125.00%' || it.text === '125%') {
-        h125X = it.x
-      }
-      // Look for "150" in header
-      if (it.text.includes('150') && it.text.includes('%')) {
-        h150X = it.x
-      }
-      if (it.text === '150.00%' || it.text === '150%') {
-        h150X = it.x
+      // Look for "150" anywhere
+      if (it.text.includes('150')) {
+        if (h150X < 0) h150X = it.x
       }
     }
-    if (h100X >= 0 && h125X >= 0) break // found enough
+    if (h100X >= 0 && h125X >= 0) break
   }
 
   console.log('[parseTimeWatch] Header columns:', { h100X, h125X, h150X })
