@@ -103,6 +103,9 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
   const [fixedCosts, setFixedCosts] = useState(0)
   const [mgmtCosts, setMgmtCosts] = useState(0)
 
+  // KPI targets
+  const [laborTarget, setLaborTarget] = useState(28)
+
   // Previous period
   const [prevRevenue, setPrevRevenue] = useState(0)
   const [prevGross, setPrevGross] = useState(0)
@@ -201,10 +204,11 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
   async function fetchData() {
     setLoading(true)
     try {
-      const [current, prev, trend] = await Promise.all([
+      const [current, prev, trend, kpiRes] = await Promise.all([
         fetchPeriodData(from, to, monthKey),
         fetchPeriodData(comparisonPeriod.from, comparisonPeriod.to, comparisonPeriod.monthKey),
         fetchTrend(),
+        supabase.from('branch_kpi_targets').select('labor_pct').eq('branch_id', branchId).maybeSingle(),
       ])
 
       setTotalRevenue(current.totalRevenue)
@@ -226,6 +230,8 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
       setPrevGross(prev.grossProfit)
       setPrevOperating(prev.operatingProfit)
       setPrevLaborPct(prev.laborPct)
+
+      if (kpiRes.data?.labor_pct) setLaborTarget(kpiRes.data.labor_pct)
 
       setTrendData(trend)
     } catch (err) {
@@ -331,12 +337,12 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                     <span className="text-[11px] text-slate-400">% לייבור</span>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-[22px] font-medium" style={{ color: laborPct <= 28 ? '#639922' : '#E24B4A' }}>
+                    <span className="text-[22px] font-medium" style={{ color: laborPct <= laborTarget ? '#639922' : '#E24B4A' }}>
                       <CountUp end={laborPct} decimals={1} suffix="%" duration={0.8} />
                     </span>
                     <DiffBadge current={laborPct} previous={prevLaborPct} inverse />
                   </div>
-                  <span className="text-[11px] text-slate-400">יעד 28%</span>
+                  <span className="text-[11px] text-slate-400">יעד {laborTarget}%</span>
                 </CardContent>
               </Card>
             </motion.div>
