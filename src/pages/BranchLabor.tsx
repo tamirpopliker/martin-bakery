@@ -271,42 +271,66 @@ function parseDetailedFormat(pages: PdfItem[][]): { rows: ParsedRow[]; rawLines:
       const key = `${name}|${dateStr}`
       if (seenKeys.has(key)) continue
 
-      // Extract ALL number items with X position (excluding dates and times)
-      const allNumItems = row
+      // Extract numbers from line (excluding dates DD/MM/YYYY and times HH:MM)
+      const nums = row
         .filter(it => !/^\d{2}\/\d{2}\/\d{4}$/.test(it.text) && !/^\d{2}:\d{2}$/.test(it.text))
         .filter(it => /^[\d,.]+$/.test(it.text.replace(/,/g, '')))
-        .map(it => ({ val: parseFloat(it.text.replace(/,/g, '')), x: it.x }))
-        .filter(it => !isNaN(it.val))
+        .map(it => parseFloat(it.text.replace(/,/g, '')))
+        .filter(v => !isNaN(v))
 
-      // CashOnTab detailed PDF layout (RTL document):
-      // Visual left-to-right: חריגות | רמה2(150%) | רמה1(125%) | רגילות(100%) | סה"כ שעות | סניף | קופה | סוג דיווח | יציאה | כניסה | יום | תאריך
-      // PDF X coordinates: lower X = visual LEFT = hour columns, higher X = visual RIGHT = date/code columns
-      // Sort by X ascending (leftmost first)
-      allNumItems.sort((a, b) => a.x - b.x)
+      if (nums.length < 3) continue
 
-      if (allNumItems.length < 3) continue
+      // Strategy: use MATHEMATICAL RELATIONSHIP instead of X positions
+      // In CashOnTab: סה"כ שעות = רגילות(100%) + רמה1(125%) + רמה2(150%)
+      // סה"כ שעות is the largest value ≤ 24
+      // Filter to hour-range values only (0–24)
+      const hourNums = nums.filter(v => v >= 0 && v <= 24)
+      if (hourNums.length < 2) continue
 
-      // The hour columns are the leftmost numbers (lowest X values)
-      // Find סה"כ שעות: largest value ≤ 24 among first ~6 leftmost items
-      const leftItems = allNumItems.slice(0, Math.min(7, allNumItems.length))
-      const hourCandidates = leftItems.filter(it => it.val > 0 && it.val <= 24)
-      if (hourCandidates.length < 1) continue
-
-      // סה"כ שעות is the RIGHTMOST among the hour columns (highest X among left items with val ≤ 24)
-      // because it sits between the breakdown columns and the non-hour columns
-      hourCandidates.sort((a, b) => b.x - a.x)
-      const totalHItem = hourCandidates[0]
-      const totalH = totalHItem.val
+      // סה"כ שעות = largest hour value
+      const totalH = Math.max(...hourNums)
       if (totalH <= 0) continue
 
-      // Find position of totalH in the X-sorted leftItems
-      const totalIdx = leftItems.indexOf(totalHItem)
+      // Remove totalH from candidates, then find 100%, 125%, 150%
+      // They should sum to approximately totalH
+      const remaining = [...hourNums]
+      const totalIdx = remaining.indexOf(totalH)
+      if (totalIdx >= 0) remaining.splice(totalIdx, 1)
 
-      // Columns to the LEFT of סה"כ שעות (lower X) are: רגילות(100%), רמה1(125%), רמה2(150%), חריגות
-      // Reading leftward from totalH: idx-1 = רגילות, idx-2 = רמה1, idx-3 = רמה2
-      const finalH100 = totalIdx >= 1 ? (leftItems[totalIdx - 1]?.val || 0) : totalH
-      const finalH125 = totalIdx >= 2 ? (leftItems[totalIdx - 2]?.val || 0) : 0
-      const finalH150 = totalIdx >= 3 ? (leftItems[totalIdx - 3]?.val || 0) : 0
+      // Sort remaining descending — largest is רגילות(100%), then רמה1(125%), then רמה2(150%)
+      remaining.sort((a, b) => b - a)
+
+      // Try to find the best combination of 3 values that sum to ~totalH
+      // This filters out non-hour numbers like סוג דיווח (4, 9, 10) and קופה (999)
+      let finalH100 = 0, finalH125 = 0, finalH150 = 0
+      let found = false
+
+      // Try all combinations of up to 3 remaining values
+      for (let i = 0; i < remaining.length && !found; i++) {
+        for (let j = i + 1; j < remaining.length && !found; j++) {
+          // Try 2 values
+          if (Math.abs(remaining[i] + remaining[j] - totalH) < 0.1) {
+            finalH100 = remaining[i]; finalH125 = remaining[j]; finalH150 = 0
+            found = true; break
+          }
+          for (let k = j + 1; k < remaining.length && !found; k++) {
+            // Try 3 values
+            if (Math.abs(remaining[i] + remaining[j] + remaining[k] - totalH) < 0.1) {
+              finalH100 = remaining[i]; finalH125 = remaining[j]; finalH150 = remaining[k]
+              found = true; break
+            }
+          }
+        }
+        // Try single value (all hours at 100%)
+        if (!found && Math.abs(remaining[i] - totalH) < 0.1) {
+          finalH100 = remaining[i]; found = true
+        }
+      }
+
+      // Fallback: if no combination found, put all in 100%
+      if (!found) {
+        finalH100 = totalH; finalH125 = 0; finalH150 = 0
+      }
 
       seenKeys.add(key)
       rows.push({
