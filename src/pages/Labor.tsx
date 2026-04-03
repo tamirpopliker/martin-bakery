@@ -107,6 +107,8 @@ export default function Labor({ onBack }: Props) {
   const [saved, setSaved] = useState(false)
   const [isMonthly, setIsMonthly] = useState(false)
   const [replaceMode, setReplaceMode] = useState(false)
+  const [duplicateDates, setDuplicateDates] = useState<string[]>([])
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
   const [showAddEmp, setShowAddEmp] = useState(false)
   const [addForm, setAddForm] = useState<AddForm>(emptyForm)
   const [editEmpId, setEditEmpId] = useState<number | null>(null)
@@ -209,6 +211,24 @@ export default function Labor({ onBack }: Props) {
       setIsMonthly(seenDates.size > 1)
       setReplaceMode(false)
       setSaved(false)
+
+      // Check for duplicate dates in DB
+      if (seenDates.size > 0) {
+        const dateArr = [...seenDates]
+        const { data: existing } = await supabase
+          .from('labor')
+          .select('date')
+          .eq('entity_type', 'factory')
+          .in('date', dateArr)
+        const existingDates = [...new Set((existing || []).map((r: any) => r.date))]
+        if (existingDates.length > 0) {
+          setDuplicateDates(existingDates)
+          setShowDuplicateWarning(true)
+        } else {
+          setDuplicateDates([])
+          setShowDuplicateWarning(false)
+        }
+      }
     } catch (err: any) {
       console.error('[Labor] PDF parse error:', err?.message || err, err?.stack)
       alert('שגיאה בקריאת קובץ PDF: ' + (err?.message || 'unknown'))
@@ -277,15 +297,12 @@ export default function Labor({ onBack }: Props) {
     const knownRows = rows.filter(r => r.found && r.employee)
     if (!knownRows.length) return
     setSaving(true)
-    // מצב החלפה — מחיקת נתונים קיימים לחודש
-    if (isMonthly && replaceMode) {
-      const firstDate = knownRows.find(r => r.date)?.date
-      if (firstDate) {
-        const month = firstDate.slice(0, 7) // YYYY-MM
+    // Delete existing data for duplicate dates before inserting
+    if (duplicateDates.length > 0 && replaceMode) {
+      for (const d of duplicateDates) {
         await supabase.from('labor').delete()
           .eq('entity_type', 'factory')
-          .gte('date', month + '-01')
-          .lt('date', monthEnd(month))
+          .eq('date', d)
       }
     }
     const inserts = knownRows.map(r => ({
@@ -527,22 +544,51 @@ export default function Labor({ onBack }: Props) {
                 </Card>
                 </motion.div>
 
-                {isMonthly && replaceMode && (
-                  <div style={{ background: '#fff1f2', border: '1.5px solid #fecdd3', borderRadius: '12px', padding: '12px 20px', marginBottom: '12px', fontSize: '13px', color: '#dc2626', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <AlertTriangle size={16} />
-                    שים לב: כל נתוני הלייבור הקיימים לחודש זה יימחקו ויוחלפו בנתונים החדשים
+                {/* Duplicate dates warning */}
+                {showDuplicateWarning && duplicateDates.length > 0 && (
+                  <div style={{ background: '#fef3c7', border: '1.5px solid #fde68a', borderRadius: '14px', padding: '16px 20px', marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                      <AlertTriangle size={18} color="#f59e0b" />
+                      <span style={{ fontWeight: '700', color: '#92400e', fontSize: '14px' }}>
+                        נמצאו נתונים קיימים ל-{duplicateDates.length} {duplicateDates.length === 1 ? 'יום' : 'ימים'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#78350f', marginBottom: '12px' }}>
+                      {duplicateDates.slice(0, 5).map(d => new Date(d + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })).join(' · ')}
+                      {duplicateDates.length > 5 && ` ועוד ${duplicateDates.length - 5}...`}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => { setReplaceMode(true); setShowDuplicateWarning(false) }}
+                        style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Trash2 size={14} />מחק קיימים והחלף
+                      </button>
+                      <button onClick={() => { setRows([]); setShowDuplicateWarning(false); setDuplicateDates([]) }}
+                        style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+                        בטל העלאה
+                      </button>
+                    </div>
                   </div>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ background: '#0f172a', color: 'white', borderRadius: '12px', padding: '12px 24px', fontWeight: '800', fontSize: '18px' }}>
-                    סה"כ עלות מעביד: ₪{totalCost.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                    {isMonthly && <span style={{ fontSize: '13px', fontWeight: '500', marginRight: '12px', opacity: 0.7 }}>{knownRows.length} רשומות</span>}
+
+                {replaceMode && duplicateDates.length > 0 && (
+                  <div style={{ background: '#fff1f2', border: '1.5px solid #fecdd3', borderRadius: '12px', padding: '12px 20px', marginBottom: '12px', fontSize: '13px', color: '#dc2626', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <AlertTriangle size={16} />
+                    שים לב: הנתונים הקיימים ל-{duplicateDates.length} ימים יימחקו ויוחלפו בנתונים החדשים
                   </div>
-                  <button onClick={handleSave} disabled={saving || saved || knownRows.length === 0}
-                    style={{ background: saved ? '#34d399' : saving || knownRows.length === 0 ? '#e2e8f0' : replaceMode ? '#dc2626' : '#818cf8', color: saved || knownRows.length > 0 ? 'white' : '#94a3b8', border: 'none', borderRadius: '12px', padding: '12px 32px', fontWeight: '700', fontSize: '16px', cursor: knownRows.length > 0 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {saved ? <><Check size={18} />נשמר!</> : saving ? 'שומר...' : replaceMode ? <><Save size={18} />מחק והחלף</> : <><Save size={18} />אשר ושמור</>}
-                  </button>
-                </div>
+                )}
+
+                {!showDuplicateWarning && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ background: '#0f172a', color: 'white', borderRadius: '12px', padding: '12px 24px', fontWeight: '800', fontSize: '18px' }}>
+                      סה"כ עלות מעביד: ₪{totalCost.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                      {isMonthly && <span style={{ fontSize: '13px', fontWeight: '500', marginRight: '12px', opacity: 0.7 }}>{knownRows.length} רשומות</span>}
+                    </div>
+                    <button onClick={handleSave} disabled={saving || saved || knownRows.length === 0}
+                      style={{ background: saved ? '#34d399' : saving || knownRows.length === 0 ? '#e2e8f0' : replaceMode ? '#dc2626' : '#818cf8', color: saved || knownRows.length > 0 ? 'white' : '#94a3b8', border: 'none', borderRadius: '12px', padding: '12px 32px', fontWeight: '700', fontSize: '16px', cursor: knownRows.length > 0 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {saved ? <><Check size={18} />נשמר!</> : saving ? 'שומר...' : replaceMode ? <><Save size={18} />מחק והחלף</> : <><Save size={18} />אשר ושמור</>}
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </>
