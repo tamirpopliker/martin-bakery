@@ -43,6 +43,10 @@ interface BranchData {
   wastePct: number
   grossPct: number
   operatingPct: number
+  totalTransactions: number
+  workingDays: number
+  avgBasket: number
+  avgDailyTransactions: number
 }
 
 function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString() }
@@ -85,7 +89,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
     const entityType = `branch_${branchId}`
 
     const [revRes, expRes, labRes, wstRes, fcRes] = await Promise.all([
-      supabase.from('branch_revenue').select('source, amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
+      supabase.from('branch_revenue').select('source, amount, transaction_count, date').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
       supabase.from('branch_expenses').select('expense_type, amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
       supabase.from('branch_labor').select('employer_cost, gross_salary').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
       supabase.from('branch_waste').select('amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
@@ -119,6 +123,13 @@ export default function BranchManagerDashboard({ onBack }: Props) {
     const grossProfit = totalRevenue - laborEmployer - totalExpenses
     const operatingProfit = grossProfit - fixedCosts - mgmtCosts - wasteTotal
 
+    // Transaction & basket calculations
+    const totalTransactions = revData.filter(r => r.source === 'cashier').reduce((s, r) => s + (Number(r.transaction_count) || 0), 0)
+    const uniqueDays = new Set(revData.filter(r => r.source === 'cashier' && Number(r.transaction_count) > 0).map(r => r.date)).size
+    const workingDays = uniqueDays || 1
+    const avgBasket = totalTransactions > 0 ? revCashier / totalTransactions : 0
+    const avgDailyTransactions = totalTransactions / workingDays
+
     return {
       id: branchId, name, color,
       revCashier, revWebsite, revCredit, totalRevenue,
@@ -129,6 +140,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       wastePct: totalRevenue > 0 ? (wasteTotal / totalRevenue) * 100 : 0,
       grossPct: totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0,
       operatingPct: totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0,
+      totalTransactions, workingDays, avgBasket, avgDailyTransactions,
     }
   }
 
@@ -615,6 +627,63 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                             })}
                             <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.revenue > 0 ? ((totals.operatingProfit / totals.revenue * 100) >= 0 ? '#34d399' : '#fb7185') : '#94a3b8' }}>
                               {totals.revenue > 0 ? (totals.operatingProfit / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
+                            </TableCell>
+                          </TableRow>
+                        )
+
+                        // Revenue target row
+                        rows.push(
+                          <TableRow key="kpi-revenue" className="border-t-2 border-indigo-200 bg-indigo-50/30">
+                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">יעד הכנסות</TableCell>
+                            {branches.map(br => {
+                              const target = getTarget(br.id, 'revenue_target')
+                              const hit = target > 0 && br.totalRevenue >= target
+                              return (
+                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: target === 0 ? '#94a3b8' : hit ? '#34d399' : '#fb7185' }}>
+                                  {target > 0 ? <>{fmtM(br.totalRevenue)} <span className="text-[10px] text-slate-400 font-normal">/ {fmtM(target)}</span></> : '\u2014'}
+                                </TableCell>
+                              )
+                            })}
+                            <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
+                              {fmtM(totals.revenue)}
+                            </TableCell>
+                          </TableRow>
+                        )
+
+                        // Average basket row
+                        rows.push(
+                          <TableRow key="kpi-basket" className="bg-indigo-50/30">
+                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">סל ממוצע</TableCell>
+                            {branches.map(br => {
+                              const target = getTarget(br.id, 'basket_target')
+                              const hit = target > 0 && br.avgBasket >= target
+                              return (
+                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: target === 0 ? '#94a3b8' : hit ? '#34d399' : '#fb7185' }}>
+                                  {br.avgBasket > 0 ? <>₪{Math.round(br.avgBasket)} <span className="text-[10px] text-slate-400 font-normal">(יעד ₪{target})</span></> : '\u2014'}
+                                </TableCell>
+                              )
+                            })}
+                            <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
+                              {(() => { const t = branches.reduce((s, b) => s + b.totalTransactions, 0); const r = branches.reduce((s, b) => s + b.revCashier, 0); return t > 0 ? '₪' + Math.round(r / t) : '\u2014' })()}
+                            </TableCell>
+                          </TableRow>
+                        )
+
+                        // Daily transactions row
+                        rows.push(
+                          <TableRow key="kpi-transactions" className="bg-indigo-50/30">
+                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">עסקאות יומי (ממוצע)</TableCell>
+                            {branches.map(br => {
+                              const target = getTarget(br.id, 'transaction_target')
+                              const hit = target > 0 && br.avgDailyTransactions >= target
+                              return (
+                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: target === 0 ? '#94a3b8' : hit ? '#34d399' : '#fb7185' }}>
+                                  {br.avgDailyTransactions > 0 ? <>{Math.round(br.avgDailyTransactions)} <span className="text-[10px] text-slate-400 font-normal">(יעד {target})</span></> : '\u2014'}
+                                </TableCell>
+                              )
+                            })}
+                            <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
+                              {Math.round(branches.reduce((s, b) => s + b.avgDailyTransactions, 0))}
                             </TableCell>
                           </TableRow>
                         )
