@@ -301,7 +301,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                 />
               </div>
               <div className="mt-4 flex items-center justify-between mb-2">
-                <span className="text-[13px] text-slate-600">רווח גולמי</span>
+                <span className="text-[13px] text-slate-600 cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span>
                 <span className="text-[14px] font-bold" style={{ color: grossProfit >= 0 ? '#639922' : '#E24B4A' }}>{fmtMoney(grossProfit)}</span>
               </div>
               <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
@@ -392,7 +392,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                 <span style={{ textAlign: 'left' }}>לייבור</span>
                 <span style={{ textAlign: 'left' }}>פחת</span>
                 <span style={{ textAlign: 'left' }}>תיקונים</span>
-                <span style={{ textAlign: 'left' }}>רווח גולמי</span>
+                <span style={{ textAlign: 'left' }} className="cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span>
                 <span style={{ textAlign: 'left' }}>רווח תפעולי</span>
               </div>
 

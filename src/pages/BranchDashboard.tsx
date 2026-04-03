@@ -146,7 +146,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
       const gross = revenue - labor - expenses
       const operating = gross - fixed - waste
       const label = new Date(mFrom + 'T12:00:00').toLocaleDateString('he-IL', { month: 'short', year: '2-digit' })
-      return { month: label, 'הכנסות': Math.round(revenue), 'רווח גולמי': Math.round(gross), 'רווח תפעולי': Math.round(operating) }
+      return { month: label, 'הכנסות': Math.round(revenue), 'רווח נשלט': Math.round(gross), 'רווח תפעולי': Math.round(operating) }
     }))
 
     return data
@@ -239,7 +239,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                 <CardContent className="p-0">
                   <div className="flex items-center gap-2 mb-2">
                     <ProfitIcon size={18} />
-                    <span className="text-[11px] text-slate-400 cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן">רווח נשלט</span>
+                    <span className="text-[11px] text-slate-400 cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span>
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-[22px] font-medium" style={{ color: controllableMargin >= 0 ? '#639922' : '#E24B4A' }}>
@@ -326,7 +326,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                       <Tooltip content={<ChartTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
                       <Line type="monotone" dataKey="הכנסות" stroke="#378ADD" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                      <Line type="monotone" dataKey="רווח גולמי" stroke="#639922" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                      <Line type="monotone" dataKey="רווח נשלט" stroke="#639922" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                       <Line type="monotone" dataKey="רווח תפעולי" stroke="#534AB7" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                     </LineChart>
                   </ResponsiveContainer>

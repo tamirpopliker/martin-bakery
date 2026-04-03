@@ -77,7 +77,7 @@ const KPI_FIELDS: { key: keyof KpiTarget; label: string; higher: boolean; hint: 
   { key: 'labor_pct',       label: 'לייבור / הכנסות %',     higher: false, hint: 'נמוך יותר = טוב יותר' },
   { key: 'waste_pct',       label: 'פחת / הכנסות %',        higher: false, hint: 'נמוך יותר = טוב יותר' },
   { key: 'repairs_pct',     label: 'תיקונים / הכנסות %',    higher: false, hint: 'נמוך יותר = טוב יותר' },
-  { key: 'gross_profit_pct',label: 'רווח גולמי %',          higher: true,  hint: 'גבוה יותר = טוב יותר' },
+  { key: 'gross_profit_pct',label: 'רווח נשלט %',          higher: true,  hint: 'גבוה יותר = טוב יותר' },
   { key: 'production_pct',  label: 'ייצור / הכנסות %',      higher: false, hint: 'נמוך יותר = טוב יותר' },
   { key: 'operating_profit_pct', label: 'רווח תפעולי %',   higher: true,  hint: 'גבוה יותר = טוב יותר' },
 ]

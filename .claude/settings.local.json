@@ -142,7 +142,30 @@
       "Bash(git add src/pages/CEODashboard.tsx)",
       "Bash(git add src/pages/BranchOrders.tsx)",
       "Bash(git add src/pages/BranchPL.tsx)",
-      "Bash(npx shadcn@latest init -d -y)"
+      "Bash(npx shadcn@latest init -d -y)",
+      "Bash(npx shadcn@latest add card table -y)",
+      "Bash(git add src/components/ui/card.tsx src/components/ui/table.tsx src/pages/CEODashboard.tsx src/index.css)",
+      "Bash(npx vercel --prod)",
+      "Bash(git add src/pages/CEODashboard.tsx src/components/PeriodPicker.tsx)",
+      "Bash(npm install framer-motion react-countup @tremor/react)",
+      "Bash(npm install framer-motion react-countup)",
+      "Bash(npm info @tremor/react versions --json)",
+      "Bash(npm install @tremor/react --legacy-peer-deps)",
+      "Bash(npm install react-is)",
+      "Bash(npm uninstall @tremor/react)",
+      "Bash(npm install)",
+      "Bash(git add package.json package-lock.json src/pages/CEODashboard.tsx)",
+      "Bash(ls src/pages/*.tsx)",
+      "Bash(ls -1 /c/Users/USER/martin-bakery/src/pages/*.tsx)",
+      "Bash(grep -l \"revenue\\\\|expense\\\\|labor\" C:/Users/USER/martin-bakery/src/pages/*.tsx)",
+      "Bash(find C:UsersUSERmartin-bakerysupabase -type f -name *.sql -o -name *.toml -o -name *.yaml -o -name *.yml -o -name *.json)",
+      "Bash(find C:UsersUSERmartin-bakery -not -path */node_modules/* -not -path */.git/* -not -path */dist/* -type d)",
+      "Bash(git stash:*)",
+      "Bash(git add:*)",
+      "Bash(xargs grep:*)",
+      "Bash(npm install:*)",
+      "Bash(node -e \"const p = require\\(''pdfjs-dist/package.json''\\); console.log\\(p.version\\)\")",
+      "WebFetch(domain:base-ui.com)"
     ]
   }
 }

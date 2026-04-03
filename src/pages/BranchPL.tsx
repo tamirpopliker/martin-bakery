@@ -150,7 +150,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>דוח רווח והפסד — {branchName}</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>P&L חודשי · רווח גולמי · רווח תפעולי</p>
+          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>P&L חודשי · רווח נשלט · רווח תפעולי</p>
         </div>
         <div style={{ marginRight: 'auto' }}>
           <PeriodPicker period={period} onChange={setPeriod} />
@@ -200,13 +200,13 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>יעד {laborTarget}%</span>
               </CardContent></Card>
 
-              {/* רווח גולמי */}
+              {/* רווח נשלט */}
               <Card className="shadow-sm" style={{ border: `2px solid ${grossProfit >= 0 ? '#34d399' : '#fb7185'}22` }}><CardContent className="p-6" style={{ padding: '18px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#7C3AED15' }}>
                     <ProfitIcon size={16} color={grossProfit >= 0 ? '#7C3AED' : '#fb7185'} />
                   </div>
-                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>רווח גולמי</span>
+                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }} className="cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span>
                 </div>
                 <div style={{ fontSize: '22px', fontWeight: '800', color: grossProfit >= 0 ? '#34d399' : '#fb7185' }}>{fmtM(grossProfit)}</div>
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>{grossPct.toFixed(1)}% מהכנסות</span>
@@ -229,7 +229,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
               <div style={{ background: 'white', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderRight: `4px solid ${grossProfit >= 0 ? '#34d399' : '#fb7185'}` }}>
                 <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>הכנסות − לייבור − הוצאות</div>
-                <div style={{ fontSize: '20px', fontWeight: '800', color: grossProfit >= 0 ? '#34d399' : '#fb7185' }}>= רווח גולמי {fmtM(grossProfit)}</div>
+                <div style={{ fontSize: '20px', fontWeight: '800', color: grossProfit >= 0 ? '#34d399' : '#fb7185' }}>= רווח נשלט {fmtM(grossProfit)}</div>
               </div>
               <div style={{ background: 'white', borderRadius: '16px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderRight: `4px solid ${operatingProfit >= 0 ? '#34d399' : '#fb7185'}` }}>
                 <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>גולמי − קבועות − הנהלה − פחת − מטה</div>
@@ -298,9 +298,9 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                   <span style={{ fontSize: '13px', fontWeight: '700', color: '#fb7185', textAlign: 'left' as const }}>{totalRevenue > 0 ? ((totalExpenses + laborEmployer) / totalRevenue * 100).toFixed(1) + '%' : '—'}</span>
                 </div>
 
-                {/* רווח גולמי */}
+                {/* רווח נשלט */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '14px 18px', background: grossProfit >= 0 ? '#f0fdf4' : '#fff1f2', borderBottom: '2px solid #e2e8f0' }}>
-                  <span style={{ fontSize: '15px', fontWeight: '800', color: grossProfit >= 0 ? '#34d399' : '#fb7185' }}>רווח גולמי</span>
+                  <span style={{ fontSize: '15px', fontWeight: '800', color: grossProfit >= 0 ? '#34d399' : '#fb7185' }} className="cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span>
                   <span style={{ fontSize: '18px', fontWeight: '800', color: grossProfit >= 0 ? '#34d399' : '#fb7185', textAlign: 'left' as const }}>{fmtM(grossProfit)}</span>
                   <span style={{ fontSize: '13px', fontWeight: '700', color: grossProfit >= 0 ? '#34d399' : '#fb7185', textAlign: 'left' as const }}>{grossPct.toFixed(1)}%</span>
                 </div>
@@ -411,7 +411,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                     <Legend />
                     <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
                     <Line type="monotone" dataKey="revenue" name="הכנסות" stroke="#378ADD" strokeWidth={2} dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="grossProfit" name="רווח גולמי" stroke="#639922" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="grossProfit" name="רווח נשלט" stroke="#639922" strokeWidth={2} dot={{ r: 3 }} />
                     <Line type="monotone" dataKey="operatingProfit" name="רווח תפעולי" stroke="#534AB7" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>

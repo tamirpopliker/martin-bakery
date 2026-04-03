@@ -278,7 +278,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
             {/* 2. Total Gross Profit */}
             <Card className="shadow-sm border border-slate-200 rounded-lg">
               <CardContent className="p-4">
-                <div className="text-[11px] font-semibold text-slate-400 mb-1">סה"כ רווח גולמי</div>
+                <div className="text-[11px] font-semibold text-slate-400 mb-1 cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">סה"כ רווח נשלט</div>
                 <div className="text-[22px] font-medium" style={{ color: totals.grossProfit >= 0 ? '#639922' : '#E24B4A' }}>
                   <CountUp end={Math.round(totals.grossProfit)} duration={1.5} separator="," prefix="₪" />
                 </div>
@@ -505,7 +505,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                         // Gross profit row
                         rows.push(
                           <TableRow key="grossProfit" className="bg-slate-50 border-t border-slate-200">
-                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">רווח גולמי</TableCell>
+                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700"><span className="cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span></TableCell>
                             {branches.map(br => {
                               const gp = brGross(br)
                               return (
@@ -523,7 +523,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                         // % Gross profit row
                         rows.push(
                           <TableRow key="kpi-gross-pct" className="bg-slate-50">
-                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% רווח גולמי</TableCell>
+                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% רווח נשלט</TableCell>
                             {branches.map(br => {
                               const gp = brGross(br)
                               const gpPct = br.totalRevenue > 0 ? (gp / br.totalRevenue * 100) : 0

@@ -240,7 +240,7 @@ export default function FactoryB2B({ onBack }: Props) {
         {/* ─── תיאור ────────────────────────────────────────────────────── */}
         <div style={{ background: cfg.bg, border: `1px solid ${cfg.color}22`, borderRadius: '12px', padding: '12px 18px', marginBottom: '20px', fontSize: '13px', color: cfg.color, fontWeight: '600' }}>
           {cfg.subtitle}
-          <span style={{ fontWeight: '400', color: '#64748b', marginRight: '8px' }}>— ללא מע״מ, נכנסות להכנסות ברווח גולמי</span>
+          <span style={{ fontWeight: '400', color: '#64748b', marginRight: '8px' }}>— ללא מע״מ, נכנסות להכנסות ברווח נשלט</span>
         </div>
 
         {/* ─── טופס הוספה ───────────────────────────────────────────────── */}

@@ -367,7 +367,7 @@ export default function CEODashboard({ onBack }: Props) {
   // ─── KPI Sheet metadata & content renderers ──────────────────────────────
   const KPI_META: Record<KpiSheetType, { title: string; icon: React.ReactNode; iconBg: string }> = {
     revenue_total:    { title: 'סה"כ הכנסות',        icon: <RevenueIcon size={18} color="#10B981" />,   iconBg: '#10B981' },
-    gross_profit:     { title: 'רווח גולמי',         icon: <ProfitIcon size={18} color="#7C3AED" />,    iconBg: '#7C3AED' },
+    gross_profit:     { title: 'רווח נשלט',         icon: <ProfitIcon size={18} color="#7C3AED" />,    iconBg: '#7C3AED' },
     operating_profit: { title: 'רווח תפעולי',        icon: <ProfitIcon size={18} color="#7C3AED" />,    iconBg: '#7C3AED' },
     labor_pct_total:  { title: '% לייבור כולל',      icon: <LaborIcon size={18} color="#3B82F6" />,     iconBg: '#3B82F6' },
     fixed_costs:      { title: 'סה"כ עלויות קבועות', icon: <FixedCostIcon size={18} color="#3B82F6" />, iconBg: '#3B82F6' },
@@ -782,7 +782,7 @@ export default function CEODashboard({ onBack }: Props) {
               <motion.div variants={fadeUp}>
                 <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('gross_profit')}>
                   <CardContent className="p-4">
-                    <span className="text-[11px] font-semibold text-slate-400">רווח גולמי</span>
+                    <span className="text-[11px] font-semibold text-slate-400 cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span>
                     <div className="text-[22px] font-medium mt-1" style={{ color: kpiGross >= 0 ? '#639922' : '#E24B4A' }}>
                       <CountUp end={Math.round(kpiGross)} duration={1.5} separator="," prefix="₪" />
                     </div>
@@ -839,7 +839,7 @@ export default function CEODashboard({ onBack }: Props) {
                             { label: 'הכנסות', factory: fAllSales, getBr: (br: BranchData) => br.revenue, bold: false, color: '' },
                             { label: 'הוצאות / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => br.expenses, bold: false, color: '' },
                             { label: 'לייבור', factory: factoryLabor, getBr: (br: BranchData) => br.labor, bold: false, color: '' },
-                            { label: 'רווח גולמי', factory: fAllSales - factorySuppliers - factoryLabor, getBr: (br: BranchData) => br.grossProfit, bold: true, color: 'profit' },
+                            { label: 'רווח נשלט', factory: fAllSales - factorySuppliers - factoryLabor, getBr: (br: BranchData) => br.grossProfit, bold: true, color: 'profit' },
                             { label: 'עלויות קבועות', factory: factoryFixed, getBr: (br: BranchData) => br.fixedCosts, bold: false, color: '' },
                             { label: 'פחת', factory: factoryWaste, getBr: (br: BranchData) => br.waste, bold: false, color: '' },
                             { label: 'רווח תפעולי', factory: fAllSales - factorySuppliers - factoryLabor - factoryFixed - factoryWaste - factoryRepairs, getBr: (br: BranchData) => br.operatingProfit, bold: true, color: 'profit' },

@@ -346,7 +346,7 @@ export default function FactoryDashboard({ onBack }: Props) {
           {/* 2. Gross Profit */}
           <Card className="shadow-sm">
             <CardContent className="p-4">
-              <div className="text-[11px] font-semibold text-slate-400 mb-1">רווח גולמי</div>
+              <div className="text-[11px] font-semibold text-slate-400 mb-1 cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</div>
               <div className="flex items-center gap-2">
                 <span className="text-[22px] font-medium" style={{ color: grossProfit >= 0 ? '#639922' : '#E24B4A' }}>{fmtM(grossProfit)}</span>
                 <DiffBadge current={grossProfit} previous={prevGrossProfit} />
@@ -425,7 +425,7 @@ export default function FactoryDashboard({ onBack }: Props) {
                     <Legend />
                     <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
                     <Line type="monotone" dataKey="revenue" name="מכירות" stroke="#378ADD" strokeWidth={2} dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="grossProfit" name="רווח גולמי" stroke="#639922" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="grossProfit" name="רווח נשלט" stroke="#639922" strokeWidth={2} dot={{ r: 3 }} />
                     <Line type="monotone" dataKey="operatingProfit" name="רווח תפעולי" stroke="#534AB7" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
