@@ -237,7 +237,7 @@ export async function getWorkingDays(month: string): Promise<number> {
     .select('amount')
     .eq('entity_type', 'working_days')
     .eq('month', month)
-    .single()
+    .maybeSingle()
   return data?.amount || 26
 }
 
