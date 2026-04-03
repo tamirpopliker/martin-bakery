@@ -271,33 +271,56 @@ function parseDetailedFormat(pages: PdfItem[][]): { rows: ParsedRow[]; rawLines:
       const key = `${name}|${dateStr}`
       if (seenKeys.has(key)) continue
 
-      // Extract number items with their X position (excluding dates and times)
-      const numItems = row
+      // Extract ALL number items with X position (excluding dates and times)
+      const allNumItems = row
         .filter(it => !/^\d{2}\/\d{2}\/\d{4}$/.test(it.text) && !/^\d{2}:\d{2}$/.test(it.text))
         .filter(it => /^[\d,.]+$/.test(it.text.replace(/,/g, '')))
         .map(it => ({ val: parseFloat(it.text.replace(/,/g, '')), x: it.x }))
-        .filter(it => !isNaN(it.val) && it.val <= 24) // Max 24 hours/day — filters out employee codes
+        .filter(it => !isNaN(it.val))
 
-      // CashOnTab detailed PDF columns from RIGHT to LEFT (descending X):
-      // סה"כ שעות | 100% | 125% | 150% | חריגות
-      // Sort by X descending (right first = totalHours first)
-      numItems.sort((a, b) => b.x - a.x)
+      // Sort by X descending (rightmost first — RTL layout)
+      allNumItems.sort((a, b) => b.x - a.x)
 
-      if (numItems.length < 2) continue
+      // CashOnTab detailed PDF daily row (RTL, right to left):
+      // Rightmost numbers: סה"כ שעות | שעות 100% | שעות 125% | שעות 150% | חריגות
+      // Then further left: employee code, other data
+      // Strategy: find totalHours as the largest value ≤ 24, then use positions after it
 
-      const totalH = numItems[0]?.val || 0
-      const h100 = numItems[1]?.val || 0
-      const h125 = numItems[2]?.val || 0
-      const h150 = numItems[3]?.val || 0
+      // Filter to only reasonable hour values (≤ 24)
+      const hourItems = allNumItems.filter(it => it.val <= 24)
+      if (hourItems.length < 2) continue
 
+      // The first item (rightmost, highest X) should be totalHours
+      const totalH = hourItems[0]?.val || 0
       if (totalH <= 0) continue
+
+      // Next items are 100%, 125%, 150% — but we need to validate:
+      // h100 + h125 + h150 should approximately equal totalH
+      // If hourItems[1] ≈ totalH (duplicate), skip it
+      let idx = 1
+      // Skip duplicates of totalH (same value, close X position)
+      if (hourItems[idx] && Math.abs(hourItems[idx].val - totalH) < 0.01) idx++
+
+      const h100 = hourItems[idx]?.val || 0
+      const h125 = hourItems[idx + 1]?.val || 0
+      const h150 = hourItems[idx + 2]?.val || 0
+
+      // Validate: if h100+h125+h150 > totalH * 1.1, the parsing is likely wrong
+      // Fall back to putting all hours in 100%
+      let finalH100 = h100, finalH125 = h125, finalH150 = h150
+      if (h100 + h125 + h150 > totalH * 1.1) {
+        // Likely wrong column assignment — put all in 100%
+        finalH100 = totalH
+        finalH125 = 0
+        finalH150 = 0
+      }
 
       seenKeys.add(key)
       rows.push({
         name, date: dateStr,
-        hours_100: h100, cost_100: 0,
-        hours_125: h125, cost_125: 0,
-        hours_150: h150, cost_150: 0,
+        hours_100: finalH100, cost_100: 0,
+        hours_125: finalH125, cost_125: 0,
+        hours_150: finalH150, cost_150: 0,
         total_hours: totalH,
         gross_salary: 0, employer_cost: 0,
         hourly_rate: 0, retention_bonus: 0,
