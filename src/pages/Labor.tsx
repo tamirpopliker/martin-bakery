@@ -176,38 +176,38 @@ export default function Labor({ onBack }: Props) {
     fetchHistory()
   }
 
-  async function parsePDF(file: File) {
+  async function parseMultiplePDFs(files: File[]) {
     try {
-      const twRows = await parseTimeWatchPDF(file)
-      const newRows: ParsedRow[] = []
+      const allNewRows: ParsedRow[] = []
       const seenDates = new Set<string>()
+      const normalize = (s: string) => s.replace(/[\s'"׳`']/g, '').toLowerCase()
 
-      for (const tw of twRows) {
-        if (tw.date) seenDates.add(tw.date)
-        // זיהוי: מספר עובד → שם מדויק → שם ללא רווחים → שם חלקי
-        // Search ALL employees (including inactive) for matching
-        const normalize = (s: string) => s.replace(/[\s'"׳`']/g, '').toLowerCase()
-        const twNorm = normalize(tw.name)
-        const emp = (tw.employee_number && allEmployees.find(e => e.employee_number === tw.employee_number))
-          || allEmployees.find(e => e.name.trim().toLowerCase() === tw.name.trim().toLowerCase())
-          || allEmployees.find(e => normalize(e.name) === twNorm)
-          || allEmployees.find(e => twNorm.includes(normalize(e.name)) || normalize(e.name).includes(twNorm))
-          || undefined
-        newRows.push({
-          id: Math.random().toString(36).slice(2),
-          name: emp ? emp.name : tw.name, // Use DB name (with proper spacing) when matched
-          employee_number: tw.employee_number || (emp?.employee_number ?? ''),
-          date: tw.date,
-          hours_100: tw.hours_100,
-          hours_125: tw.hours_125,
-          hours_150: tw.hours_150,
-          employee: emp || undefined,
-          found: !!emp,
-          editing: false,
-        })
+      for (const file of files) {
+        const twRows = await parseTimeWatchPDF(file)
+        for (const tw of twRows) {
+          if (tw.date) seenDates.add(tw.date)
+          const twNorm = normalize(tw.name)
+          const emp = (tw.employee_number && allEmployees.find(e => e.employee_number === tw.employee_number))
+            || allEmployees.find(e => e.name.trim().toLowerCase() === tw.name.trim().toLowerCase())
+            || allEmployees.find(e => normalize(e.name) === twNorm)
+            || allEmployees.find(e => twNorm.includes(normalize(e.name)) || normalize(e.name).includes(twNorm))
+            || undefined
+          allNewRows.push({
+            id: Math.random().toString(36).slice(2),
+            name: emp ? emp.name : tw.name,
+            employee_number: tw.employee_number || (emp?.employee_number ?? ''),
+            date: tw.date,
+            hours_100: tw.hours_100,
+            hours_125: tw.hours_125,
+            hours_150: tw.hours_150,
+            employee: emp || undefined,
+            found: !!emp,
+            editing: false,
+          })
+        }
       }
 
-      setRows(newRows)
+      setRows(allNewRows)
       setIsMonthly(seenDates.size > 1)
       setReplaceMode(false)
       setSaved(false)
@@ -236,12 +236,20 @@ export default function Labor({ onBack }: Props) {
   }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = e.target.files
+    if (!files || files.length === 0) return
 
-    if (file.name.endsWith('.pdf')) {
-      parsePDF(file)
-    } else {
+    // Collect PDF files
+    const pdfFiles = [...files].filter(f => f.name.toLowerCase().endsWith('.pdf'))
+    if (pdfFiles.length > 0) {
+      parseMultiplePDFs(pdfFiles)
+      e.target.value = ''
+      return
+    }
+
+    // CSV fallback (single file)
+    const file = files[0]
+    if (file && file.name.toLowerCase().endsWith('.csv')) {
       // CSV fallback
       const reader = new FileReader()
       reader.onload = ev => {
@@ -420,9 +428,9 @@ export default function Labor({ onBack }: Props) {
                 </div>
                 <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#94a3b8' }}>PDF דוח נוכחות מ-TimeWatch — פרסור אוטומטי ללא שרת</p>
                 <div>
-                  <input type="file" accept=".pdf,.csv" ref={fileRef} onChange={handleFile} style={{ display: 'none' }} />
+                  <input type="file" accept=".pdf,.csv" multiple ref={fileRef} onChange={handleFile} style={{ display: 'none' }} />
                   <button onClick={() => fileRef.current?.click()} style={{ background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Upload size={18} />בחר קובץ PDF
+                    <Upload size={18} />בחר קבצי PDF
                   </button>
                 </div>
               </CardContent>
