@@ -6,6 +6,7 @@ import { ArrowRight, Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save
 import { LaborIcon } from '@/components/icons'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useAppUser } from '../lib/UserContext'
 
 interface Props { onBack: () => void }
 
@@ -75,6 +76,18 @@ const emptyForm: AddForm = { name: '', employee_number: '', department: 'creams'
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 export default function Labor({ onBack }: Props) {
+  const { appUser } = useAppUser()
+  const isDeptManager = appUser?.role === 'factory' && !!appUser?.managed_department
+
+  // Department managers can't see salary of other dept managers
+  // Hide salary for employees whose department matches the OTHER manager's department
+  function shouldHideSalary(emp: Employee | undefined): boolean {
+    if (!isDeptManager || !emp) return false
+    // Hide global employees that manage the other main department
+    if (emp.wage_type === 'global') return true
+    return false
+  }
+
   const [tab, setTab] = useState<'upload' | 'employees' | 'history'>('upload')
   const [employees, setEmployees] = useState<Employee[]>([])
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]) // includes inactive, for PDF matching
@@ -450,7 +463,7 @@ export default function Labor({ onBack }: Props) {
                           {!row.found && <AlertTriangle size={14} color="#fbbf24" />}
                           <span style={{ fontWeight: '600', color: row.found ? '#374151' : '#92400e', fontSize: '14px' }}>{row.name}</span>
                         </div>
-                        {row.found && row.employee && (
+                        {row.found && row.employee && !shouldHideSalary(row.employee) && (
                           <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
                             {row.employee.wage_type === 'global'
                               ? `גלובלי: ₪${Math.round(row.employee.global_daily_rate).toLocaleString()}/חודש${row.employee.bonus ? ` + בונוס ₪${Math.round(row.employee.bonus).toLocaleString()}/חודש` : ''}`
@@ -467,7 +480,7 @@ export default function Labor({ onBack }: Props) {
                           <input type="number" value={row.hours_150} onChange={e => updateRow(row.id, 'hours_150', e.target.value)} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', width: '60px' }} />
                           <span style={{ fontSize: '12px', color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
                           <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>
-                            {row.employee ? '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150, workingDays).total.toFixed(0) : '—'}
+                            {row.employee ? (shouldHideSalary(row.employee) ? '—' : '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150, workingDays).total.toFixed(0)) : '—'}
                           </span>
                           <button onClick={() => saveRowEdit(row.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 6px', cursor: 'pointer' }}>
                             <Check size={14} />
@@ -483,7 +496,7 @@ export default function Labor({ onBack }: Props) {
                           <span style={{ fontSize: '13px', color: row.hours_150 > 0 ? '#fb7185' : '#64748b', fontWeight: row.hours_150 > 0 ? '600' : '400' }}>{row.hours_150 || '—'}</span>
                           <span style={{ fontSize: '12px', color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
                           <span style={{ fontWeight: '700', color: row.found ? '#0f172a' : '#94a3b8', fontSize: '14px' }}>
-                            {row.found && row.employee ? '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150, workingDays).total.toFixed(0) : '—'}
+                            {row.found && row.employee ? (shouldHideSalary(row.employee) ? '—' : '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150, workingDays).total.toFixed(0)) : '—'}
                           </span>
                           <button onClick={() => startEdit(row.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
                             <Pencil size={14} color="#94a3b8" />
@@ -609,7 +622,9 @@ export default function Labor({ onBack }: Props) {
                                     <span style={{ color: '#64748b' }}>{r.hours_100 || '—'}</span>
                                     <span style={{ color: r.hours_125 > 0 ? '#f59e0b' : '#d1d5db', fontWeight: r.hours_125 > 0 ? '600' : '400' }}>{r.hours_125 || '—'}</span>
                                     <span style={{ color: r.hours_150 > 0 ? '#fb7185' : '#d1d5db', fontWeight: r.hours_150 > 0 ? '600' : '400' }}>{r.hours_150 || '—'}</span>
-                                    <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '12px' }}>₪{Math.round(r.employer_cost || 0).toLocaleString()}</span>
+                                    <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '12px' }}>
+                                      {isDeptManager && allEmployees.find(e => e.name === r.employee_name)?.wage_type === 'global' ? '—' : `₪${Math.round(r.employer_cost || 0).toLocaleString()}`}
+                                    </span>
                                     <div style={{ display: 'flex', gap: '2px' }}>
                                       <button onClick={() => { setEditHistId(r.id); setEditHistData({ ...r }) }}
                                         style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px' }}><Pencil size={12} color="#94a3b8" /></button>
