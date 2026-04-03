@@ -606,13 +606,14 @@ export default function CEODashboard({ onBack }: Props) {
     }
   }
 
-  function DiffBadge({ current, previous }: { current: number; previous: number }) {
+  function DiffBadge({ current, previous, inverse }: { current: number; previous: number; inverse?: boolean }) {
     if (previous === 0 && current === 0) return <Minus size={12} className="text-slate-400" />
     if (previous === 0) return <TrendingUp size={12} className="text-emerald-400" />
     const pct = ((current - previous) / Math.abs(previous)) * 100
     const isUp = pct > 0
+    const isGood = inverse ? !isUp : isUp
     return (
-      <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${isUp ? 'text-emerald-500' : 'text-rose-500'}`}>
+      <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${isGood ? 'text-emerald-500' : 'text-rose-500'}`}>
         {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
         {Math.abs(pct).toFixed(1)}%
       </span>

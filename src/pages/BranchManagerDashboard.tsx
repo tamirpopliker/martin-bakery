@@ -47,13 +47,15 @@ interface BranchData {
 
 function fmtM(n: number) { return '\u20AA' + Math.round(n).toLocaleString() }
 
-function DiffBadge({ current, previous }: { current: number; previous: number }) {
+function DiffBadge({ current, previous, inverse }: { current: number; previous: number; inverse?: boolean }) {
   if (previous === 0 && current === 0) return null
   if (previous === 0) return <TrendingUp size={12} className="text-emerald-400" />
   const pct = ((current - previous) / Math.abs(previous)) * 100
+  const isUp = pct > 0
+  const isGood = inverse ? !isUp : isUp
   return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${pct > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-      {pct > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+    <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${isGood ? 'text-emerald-500' : 'text-rose-500'}`}>
+      {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
       {Math.abs(pct).toFixed(1)}%
     </span>
   )

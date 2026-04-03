@@ -57,13 +57,15 @@ function fmtMoney(n: number) { return '₪' + Math.round(n).toLocaleString() }
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 // --- DiffBadge ---
-function DiffBadge({ current, previous }: { current: number; previous: number }) {
+function DiffBadge({ current, previous, inverse }: { current: number; previous: number; inverse?: boolean }) {
   if (previous === 0 && current === 0) return null
   if (previous === 0) return <TrendingUp size={12} className="text-emerald-400" />
   const pctVal = ((current - previous) / Math.abs(previous)) * 100
+  const isUp = pctVal > 0
+  const isGood = inverse ? !isUp : isUp
   return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${pctVal > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-      {pctVal > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+    <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${isGood ? 'text-emerald-500' : 'text-rose-500'}`}>
+      {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
       {Math.abs(pctVal).toFixed(1)}%
     </span>
   )
@@ -262,7 +264,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                 {fmtPct(laborPct)}
               </div>
               <div className="text-[11px] text-slate-400">יעד: {fmtPct(targets.labor_pct)}</div>
-              <DiffBadge current={laborPct} previous={prevLaborPct} />
+              <DiffBadge current={laborPct} previous={prevLaborPct} inverse />
             </CardContent>
           </Card>
 
