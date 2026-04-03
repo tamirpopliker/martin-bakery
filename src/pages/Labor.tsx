@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { supabase, monthEnd } from '../lib/supabase'
-import { ArrowRight, Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save, Calendar } from 'lucide-react'
+import { parseTimeWatchPDF, type TimeWatchRow } from '../lib/parseTimeWatch'
+import { ArrowRight, Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save, Calendar, FileText } from 'lucide-react'
 import { LaborIcon } from '@/components/icons'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -50,23 +51,22 @@ const deptOptions = [
   { value: 'cleaning', label: 'ניקיון' },
 ]
 
-const EMPLOYER_RATE = 0.3
+const EMPLOYER_FACTOR = 1.3
 
 function calcWage(emp: Employee, h100: number, h125: number, h150: number): { gross: number; employerCost: number; total: number } {
   if (emp.wage_type === 'global') {
-    // שכר עובד = גלובלי חודשי + בונוס חודשי
     const gross = emp.global_daily_rate + (emp.bonus || 0)
-    // עלות מעסיק = גלובלי × 0.3 (על הגלובלי בלבד, לא על הבונוס)
-    const employerCost = emp.global_daily_rate * EMPLOYER_RATE
-    return { gross, employerCost, total: gross + employerCost }
+    const employerCost = emp.global_daily_rate * EMPLOYER_FACTOR + (emp.bonus || 0)
+    return { gross, employerCost, total: employerCost }
   }
   // שעתי:
-  // שכר עובד = (100% × שכר) + (125% × שכר × 1.25) + (150% × שכר × 1.5) + (סה"כ שעות × בונוס)
+  // שכר גולמי = (100% × שכר) + (125% × שכר × 1.25) + (150% × שכר × 1.5) + (סה"כ שעות × בונוס)
   const totalHours = h100 + h125 + h150
   const gross = (h100 * emp.hourly_rate) + (h125 * emp.hourly_rate * 1.25) + (h150 * emp.hourly_rate * 1.5) + ((emp.bonus || 0) * totalHours)
-  // עלות מעסיק = שעות 100% × שכר שעתי × 0.3 (על הבסיס בלבד, לא על נוספות ולא על בונוס)
-  const employerCost = h100 * emp.hourly_rate * EMPLOYER_RATE
-  return { gross, employerCost, total: gross + employerCost }
+  // עלות מעסיק = (100% × שכר × 1.3) + (125% × שכר × 1.25) + (150% × שכר × 1.5) + (שעות × בונוס)
+  // מכפיל 1.3 רק על שעות רגילות, שעות נוספות בערך נקוב
+  const employerCost = (h100 * emp.hourly_rate * EMPLOYER_FACTOR) + (h125 * emp.hourly_rate * 1.25) + (h150 * emp.hourly_rate * 1.5) + ((emp.bonus || 0) * totalHours)
+  return { gross, employerCost, total: employerCost }
 }
 
 const emptyForm: AddForm = { name: '', employee_number: '', department: 'creams', wage_type: 'hourly', hourly_rate: '', global_daily_rate: '', bonus: '' }
@@ -95,43 +95,82 @@ export default function Labor({ onBack }: Props) {
 
   useEffect(() => { fetchEmployees() }, [])
 
-  function parseCSV(text: string) {
-    const lines = text.split('\n').filter(l => l.trim())
-    const newRows: ParsedRow[] = []
-    const seenDates = new Set<string>()
-    for (const line of lines) {
-      const cols = line.split(',')
-      const name = cols[0]?.trim().replace(/"/g, '')
-      if (!name || name.includes('שם העובד') || name.includes('לתשומת') || name.includes('דוח') || name.includes('שם החברה')) continue
-      // תאריך מ-col[3]: "01-02-2026 א" → "2026-02-01"
-      const rawDate = cols[3]?.trim() || ''
-      const dateMatch = rawDate.match(/^(\d{2})-(\d{2})-(\d{4})/)
-      const rowDate = dateMatch ? `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}` : ''
-      if (rowDate) seenDates.add(rowDate)
-      // מספר עובד
-      const empNumber = cols[1]?.trim() || ''
-      const hours_100 = parseFloat(cols[18]) || 0
-      const hours_125 = parseFloat(cols[19]) || 0
-      const hours_150 = parseFloat(cols[20]) || 0
-      if (hours_100 === 0 && hours_125 === 0 && hours_150 === 0) continue
-      // זיהוי: קודם לפי מספר עובד, fallback לפי שם
-      const emp = (empNumber && employees.find(e => e.employee_number === empNumber))
-        || employees.find(e => e.name.trim().toLowerCase() === name.toLowerCase())
-        || undefined
-      newRows.push({ id: Math.random().toString(36).slice(2), name, employee_number: empNumber, date: rowDate, hours_100, hours_125, hours_150, employee: emp || undefined, found: !!emp, editing: false })
+  async function parsePDF(file: File) {
+    try {
+      const twRows = await parseTimeWatchPDF(file)
+      const newRows: ParsedRow[] = []
+      const seenDates = new Set<string>()
+
+      for (const tw of twRows) {
+        if (tw.date) seenDates.add(tw.date)
+        // זיהוי: קודם לפי מספר עובד, fallback לפי שם
+        const emp = (tw.employee_number && employees.find(e => e.employee_number === tw.employee_number))
+          || employees.find(e => e.name.trim().toLowerCase() === tw.name.trim().toLowerCase())
+          || employees.find(e => tw.name.includes(e.name) || e.name.includes(tw.name))
+          || undefined
+        newRows.push({
+          id: Math.random().toString(36).slice(2),
+          name: tw.name,
+          employee_number: tw.employee_number,
+          date: tw.date,
+          hours_100: tw.hours_100,
+          hours_125: tw.hours_125,
+          hours_150: tw.hours_150,
+          employee: emp || undefined,
+          found: !!emp,
+          editing: false,
+        })
+      }
+
+      setRows(newRows)
+      setIsMonthly(seenDates.size > 1)
+      setReplaceMode(false)
+      setSaved(false)
+    } catch (err) {
+      console.error('[Labor] PDF parse error:', err)
+      alert('שגיאה בקריאת קובץ PDF')
     }
-    setRows(newRows)
-    setIsMonthly(seenDates.size > 1)
-    setReplaceMode(false)
-    setSaved(false)
   }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => parseCSV(ev.target?.result as string)
-    reader.readAsText(file, 'utf-8')
+
+    if (file.name.endsWith('.pdf')) {
+      parsePDF(file)
+    } else {
+      // CSV fallback
+      const reader = new FileReader()
+      reader.onload = ev => {
+        const text = ev.target?.result as string
+        const lines = text.split('\n').filter(l => l.trim())
+        const newRows: ParsedRow[] = []
+        const seenDates = new Set<string>()
+        for (const line of lines) {
+          const cols = line.split(',')
+          const name = cols[0]?.trim().replace(/"/g, '')
+          if (!name || name.includes('שם העובד') || name.includes('לתשומת') || name.includes('דוח') || name.includes('שם החברה')) continue
+          const rawDate = cols[3]?.trim() || ''
+          const dateMatch = rawDate.match(/^(\d{2})-(\d{2})-(\d{4})/)
+          const rowDate = dateMatch ? `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}` : ''
+          if (rowDate) seenDates.add(rowDate)
+          const empNumber = cols[1]?.trim() || ''
+          const hours_100 = parseFloat(cols[18]) || 0
+          const hours_125 = parseFloat(cols[19]) || 0
+          const hours_150 = parseFloat(cols[20]) || 0
+          if (hours_100 === 0 && hours_125 === 0 && hours_150 === 0) continue
+          const emp = (empNumber && employees.find(e => e.employee_number === empNumber))
+            || employees.find(e => e.name.trim().toLowerCase() === name.toLowerCase())
+            || undefined
+          newRows.push({ id: Math.random().toString(36).slice(2), name, employee_number: empNumber, date: rowDate, hours_100, hours_125, hours_150, employee: emp || undefined, found: !!emp, editing: false })
+        }
+        setRows(newRows)
+        setIsMonthly(seenDates.size > 1)
+        setReplaceMode(false)
+        setSaved(false)
+      }
+      reader.readAsText(file, 'utf-8')
+    }
     e.target.value = ''
   }
 
@@ -233,7 +272,7 @@ export default function Labor({ onBack }: Props) {
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>לייבור מרוכז</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>העלאת נוכחות וניהול עובדים</p>
+          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>העלאת נוכחות PDF · ניהול עובדים · עלות מעסיק ×1.3</p>
         </div>
         <div style={{ marginRight: 'auto', display: 'flex', gap: '8px' }}>
           <button onClick={() => setTab('upload')} style={{ background: tab === 'upload' ? '#818cf8' : '#f1f5f9', color: tab === 'upload' ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 20px', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
@@ -251,7 +290,8 @@ export default function Labor({ onBack }: Props) {
           <>
             <Card className="shadow-sm" style={{ marginBottom: '24px' }}>
               <CardContent className="p-6">
-                <h2 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: '700', color: '#374151' }}>העלאת קובץ נוכחות</h2>
+                <h2 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: '700', color: '#374151' }}>העלאת קובץ נוכחות</h2>
+                <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#94a3b8' }}>PDF דוח נוכחות מ-TimeWatch — פרסור אוטומטי ללא שרת</p>
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                   {!isMonthly && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -261,9 +301,9 @@ export default function Labor({ onBack }: Props) {
                     </div>
                   )}
                   <div>
-                    <input type="file" accept=".csv" ref={fileRef} onChange={handleFile} style={{ display: 'none' }} />
+                    <input type="file" accept=".pdf,.csv" ref={fileRef} onChange={handleFile} style={{ display: 'none' }} />
                     <button onClick={() => fileRef.current?.click()} style={{ background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Upload size={18} />בחר קובץ CSV
+                      <Upload size={18} />בחר קובץ PDF
                     </button>
                   </div>
                 </div>
