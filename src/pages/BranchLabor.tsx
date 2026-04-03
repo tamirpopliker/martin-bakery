@@ -303,26 +303,34 @@ function parseDetailedFormat(pages: PdfItem[][]): { rows: ParsedRow[]; rawLines:
         if (idx >= 0) rest.splice(idx, 1)
         rest.sort((a, b) => b - a)
 
-        // Try combinations of 1, 2, or 3 values from rest that sum to candidateTotal
+        // Try combinations: prefer 3-value > 2-value > 1-value (more parts = more likely real hours)
+        // This prevents false matches like קופה(10) + רמה2(0.48) = 10.48
+
+        // Phase 1: Try 3 values
         for (let i = 0; i < rest.length && !found; i++) {
-          // Single value match
-          if (Math.abs(rest[i] - candidateTotal) < 0.1) {
-            totalH = candidateTotal; finalH100 = rest[i]
-            found = true; break
-          }
           for (let j = i + 1; j < rest.length && !found; j++) {
-            // Two values
-            if (Math.abs(rest[i] + rest[j] - candidateTotal) < 0.1) {
-              totalH = candidateTotal; finalH100 = rest[i]; finalH125 = rest[j]
-              found = true; break
-            }
             for (let k = j + 1; k < rest.length && !found; k++) {
-              // Three values
               if (Math.abs(rest[i] + rest[j] + rest[k] - candidateTotal) < 0.1) {
                 totalH = candidateTotal; finalH100 = rest[i]; finalH125 = rest[j]; finalH150 = rest[k]
-                found = true; break
+                found = true
               }
             }
+          }
+        }
+        // Phase 2: Try 2 values (only if no 3-value match found)
+        for (let i = 0; i < rest.length && !found; i++) {
+          for (let j = i + 1; j < rest.length && !found; j++) {
+            if (Math.abs(rest[i] + rest[j] - candidateTotal) < 0.1) {
+              totalH = candidateTotal; finalH100 = rest[i]; finalH125 = rest[j]
+              found = true
+            }
+          }
+        }
+        // Phase 3: Try single value
+        for (let i = 0; i < rest.length && !found; i++) {
+          if (Math.abs(rest[i] - candidateTotal) < 0.1) {
+            totalH = candidateTotal; finalH100 = rest[i]
+            found = true
           }
         }
       }
