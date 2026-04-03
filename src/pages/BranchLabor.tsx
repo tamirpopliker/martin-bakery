@@ -415,7 +415,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   }
 
   async function fetchLaborTarget() {
-    const { data } = await supabase.from('branch_kpi_targets').select('labor_pct').eq('branch_id', branchId).single()
+    const { data } = await supabase.from('branch_kpi_targets').select('labor_pct').eq('branch_id', branchId).maybeSingle()
     if (data) setLaborTargetPct(Number(data.labor_pct) || 28)
   }
 

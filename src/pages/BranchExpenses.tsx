@@ -352,18 +352,20 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
           <Card className="shadow-sm mt-4">
             <CardContent className="p-6">
               <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>מגמת 6 חודשים — הוצאות</h3>
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={trendData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
-                  <Tooltip formatter={(value: number) => '₪' + Math.round(value).toLocaleString()} />
+                  <YAxis yAxisId="amount" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
+                  <YAxis yAxisId="pct" orientation="left" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => v + '%'} />
+                  <Tooltip formatter={(value: number, name: string) => name === '% מהכנסות' ? value + '%' : '₪' + Math.round(value).toLocaleString()} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
-                  <Line type="monotone" dataKey="supplier" name="ספקים" stroke="#818cf8" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="repair" name="תיקונים" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="infrastructure" name="תשתיות" stroke="#c084fc" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="delivery" name="משלוחים" stroke="#34d399" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="total" name="סה״כ" stroke="#fb7185" strokeWidth={2.5} dot={{ r: 3 }} />
+                  <Line yAxisId="amount" type="monotone" dataKey="supplier" name="ספקים" stroke="#818cf8" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line yAxisId="amount" type="monotone" dataKey="repair" name="תיקונים" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line yAxisId="amount" type="monotone" dataKey="infrastructure" name="תשתיות" stroke="#c084fc" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line yAxisId="amount" type="monotone" dataKey="delivery" name="משלוחים" stroke="#34d399" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line yAxisId="amount" type="monotone" dataKey="total" name="סה״כ" stroke="#fb7185" strokeWidth={2.5} dot={{ r: 3 }} />
+                  <Line yAxisId="pct" type="monotone" dataKey="pctOfRevenue" name="% מהכנסות" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 4 }} strokeDasharray="5 3" />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>

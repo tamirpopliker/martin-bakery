@@ -97,7 +97,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
     }
 
     // KPI targets
-    const { data: kpiData } = await supabase.from('branch_kpi_targets').select('*').eq('branch_id', branchId).single()
+    const { data: kpiData } = await supabase.from('branch_kpi_targets').select('*').eq('branch_id', branchId).maybeSingle()
     if (kpiData) {
       setLaborTarget(Number(kpiData.labor_pct) || 28)
       setWasteTarget(Number(kpiData.waste_pct) || 3)
