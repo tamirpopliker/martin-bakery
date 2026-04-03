@@ -42,8 +42,9 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   })
 
   async function fetchEmployees() {
-    const { data } = await supabase.from('branch_employees').select('*')
+    const { data, error } = await supabase.from('branch_employees').select('*')
       .eq('branch_id', branchId).order('name')
+    console.log('[BranchEmployees] fetch:', { branchId, data, error })
     if (data) setEmployees(data)
     setLoading(false)
   }
