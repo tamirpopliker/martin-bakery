@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, monthEnd, getFixedCostTotal } from '../lib/supabase'
+import { supabase, monthEnd, getFixedCostTotal, fetchFactoryPL, fetchBranchPL } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
@@ -117,39 +117,31 @@ export default function Home() {
   // ─── Data Loading ─────────────────────────────────────────────────────────
   useEffect(() => {
     async function loadKpi() {
-      // Factory data
-      const [salesFs, salesB2b, laborRes, suppliersRes] = await Promise.all([
-        supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', from).lt('date', to),
-        supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', from).lt('date', to),
-        supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', from).lt('date', to),
-        supabase.from('supplier_invoices').select('amount').gte('date', from).lt('date', to),
-      ])
+      const monthKey = period.monthKey || from.slice(0, 7)
+      const overheadPct = Number(localStorage.getItem('overhead_pct') || '5')
 
-      const fSales = (salesFs.data || []).reduce((s, r) => s + Number(r.amount), 0)
-                   + (salesB2b.data || []).reduce((s, r) => s + Number(r.amount), 0)
-      const fLabor = (laborRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
-      const fSupp  = (suppliersRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+      // Factory P&L via shared function
+      const factoryPL = await fetchFactoryPL(from, to, monthKey)
+      const fSales = factoryPL.sales
+      const fLabor = factoryPL.labor
       setFactoryRevenue(fSales)
       setFactoryLabor(fLabor)
+      setFactoryGross(factoryPL.controllableMargin)
 
-      // Branch data
+      // Branch data via shared function
       const bKpi: BranchKpi[] = []
-      let totalBranchRev = 0, totalBranchLab = 0, totalBranchExp = 0, alertCount = 0
+      let totalBranchRev = 0, totalBranchLab = 0, alertCount = 0
+      let totalBranchOP = 0
 
       for (const br of BRANCHES) {
-        const [revRes, labRes, expRes] = await Promise.all([
-          supabase.from('branch_revenue').select('amount').eq('branch_id', br.id).gte('date', from).lt('date', to),
-          supabase.from('branch_labor').select('employer_cost').eq('branch_id', br.id).gte('date', from).lt('date', to),
-          supabase.from('branch_expenses').select('amount').eq('branch_id', br.id).gte('date', from).lt('date', to),
-        ])
-        const rev = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
-        const lab = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
-        const exp = (expRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+        const brPL = await fetchBranchPL(br.id, from, to, monthKey, overheadPct)
+        const rev = brPL.revenue
+        const lab = brPL.laborEmployer
         const labPct = rev > 0 ? (lab / rev) * 100 : 0
         if (labPct > 28) alertCount++
         totalBranchRev += rev
         totalBranchLab += lab
-        totalBranchExp += exp
+        totalBranchOP += brPL.operatingProfit
         bKpi.push({ id: br.id, name: br.name, color: br.color, revenue: rev, laborCost: lab, laborPct: labPct })
       }
 
@@ -159,76 +151,30 @@ export default function Home() {
       setAvgLaborPct(avgPct)
       setTotalLabor(fLabor + totalBranchLab)
       setAlerts(alertCount)
+      setTotalBranchGross(totalBranchRev > 0 ? totalBranchRev - totalBranchLab : 0)
+      setOperatingProfit(factoryPL.operatingProfit + totalBranchOP)
 
-      // Previous period (comparison)
+      // Previous period (comparison) via shared functions
       const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
-      const [pSalesFs, pSalesB2b, pLabor, pSupp] = await Promise.all([
-        supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', pFrom).lt('date', pTo),
-        supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', pFrom).lt('date', pTo),
-        supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', pFrom).lt('date', pTo),
-        supabase.from('supplier_invoices').select('amount').gte('date', pFrom).lt('date', pTo),
-      ])
-      const pFSales = (pSalesFs.data || []).reduce((s: any, r: any) => s + Number(r.amount), 0)
-                     + (pSalesB2b.data || []).reduce((s: any, r: any) => s + Number(r.amount), 0)
-      const pFLabor = (pLabor.data || []).reduce((s: any, r: any) => s + Number(r.employer_cost), 0)
-      const pFSupp = (pSupp.data || []).reduce((s: any, r: any) => s + Number(r.amount), 0)
-      setPrevFactoryRevenue(pFSales)
+      const pMonthKey = pFrom.slice(0, 7)
 
-      let pTotalBranchRev = 0, pTotalBranchLab = 0, pTotalBranchExp = 0
+      const prevFactoryPL = await fetchFactoryPL(pFrom, pTo, pMonthKey)
+      setPrevFactoryRevenue(prevFactoryPL.sales)
+      setPrevFactoryGross(prevFactoryPL.controllableMargin)
+
+      let pTotalBranchRev = 0, pTotalBranchLab = 0, pTotalBranchOP = 0
       for (const br of BRANCHES) {
-        const [pRevRes, pLabRes, pExpRes] = await Promise.all([
-          supabase.from('branch_revenue').select('amount').eq('branch_id', br.id).gte('date', pFrom).lt('date', pTo),
-          supabase.from('branch_labor').select('employer_cost').eq('branch_id', br.id).gte('date', pFrom).lt('date', pTo),
-          supabase.from('branch_expenses').select('amount').eq('branch_id', br.id).gte('date', pFrom).lt('date', pTo),
-        ])
-        pTotalBranchRev += (pRevRes.data || []).reduce((s: any, r: any) => s + Number(r.amount), 0)
-        pTotalBranchLab += (pLabRes.data || []).reduce((s: any, r: any) => s + Number(r.employer_cost), 0)
-        pTotalBranchExp += (pExpRes.data || []).reduce((s: any, r: any) => s + Number(r.amount), 0)
+        const pBrPL = await fetchBranchPL(br.id, pFrom, pTo, pMonthKey, overheadPct)
+        pTotalBranchRev += pBrPL.revenue
+        pTotalBranchLab += pBrPL.laborEmployer
+        pTotalBranchOP += pBrPL.operatingProfit
       }
       setPrevBranchRevenue(pTotalBranchRev)
       const pAvgPct = pTotalBranchRev > 0 ? (pTotalBranchLab / pTotalBranchRev) * 100 : 0
       setPrevAvgLaborPct(pAvgPct)
-      setPrevTotalLabor(pFLabor + pTotalBranchLab)
-
-      // Operating profit: revenue - suppliers - labor - waste - fixedCosts
-      const monthKey = period.monthKey || from.slice(0, 7)
-      const [wasteRes, fcFactory] = await Promise.all([
-        supabase.from('factory_waste').select('amount').gte('date', from).lt('date', to),
-        getFixedCostTotal('factory', monthKey),
-      ])
-      const fWaste = (wasteRes.data || []).reduce((s: any, r: any) => s + Number(r.amount || 0), 0)
-      const fGross = fSales - fSupp - fLabor - fWaste
-      setFactoryGross(fGross)
-      const fOP = fGross - fcFactory
-
-      // Branch operating profit
-      let totalBranchFC = 0, totalBranchWaste = 0
-      for (const br of BRANCHES) {
-        const [brFc, brWaste] = await Promise.all([
-          getFixedCostTotal(`branch_${br.id}`, monthKey),
-          supabase.from('branch_waste').select('amount').eq('branch_id', br.id).gte('date', from).lt('date', to),
-        ])
-        totalBranchFC += brFc
-        totalBranchWaste += (brWaste.data || []).reduce((s: any, r: any) => s + Number(r.amount || 0), 0)
-      }
-      const bGross = totalBranchRev - totalBranchExp - totalBranchLab - totalBranchWaste
-      setTotalBranchGross(bGross)
-      const bOP = bGross - totalBranchFC
-      setOperatingProfit(fOP + bOP)
-
-      // Previous period operating profit
-      const pMonthKey = comparisonPeriod.from.slice(0, 7)
-      const [pWasteRes, pFcFactory] = await Promise.all([
-        supabase.from('factory_waste').select('amount').gte('date', pFrom).lt('date', pTo),
-        getFixedCostTotal('factory', pMonthKey),
-      ])
-      const pFWaste = (pWasteRes.data || []).reduce((s: any, r: any) => s + Number(r.amount || 0), 0)
-      const pFGross = pFSales - pFSupp - pFLabor - pFWaste
-      setPrevFactoryGross(pFGross)
-      const pFOP = pFGross - pFcFactory
-      const pBGross = pTotalBranchRev - pTotalBranchExp - pTotalBranchLab
-      setPrevBranchGross(pBGross)
-      setPrevOperatingProfit(pFOP + pBGross)
+      setPrevTotalLabor(prevFactoryPL.labor + pTotalBranchLab)
+      setPrevBranchGross(pTotalBranchRev > 0 ? pTotalBranchRev - pTotalBranchLab : 0)
+      setPrevOperatingProfit(prevFactoryPL.operatingProfit + pTotalBranchOP)
     }
     loadKpi()
   }, [from, to])

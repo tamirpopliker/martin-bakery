@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
-import { supabase } from '../lib/supabase'
+import { supabase, fetchBranchPL, type BranchPLResult } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -87,87 +87,38 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
 
   const [loading, setLoading] = useState(true)
 
-  // Current period
-  const [totalRevenue, setTotalRevenue] = useState(0)
-  const [revCashier, setRevCashier] = useState(0)
-  const [revWebsite, setRevWebsite] = useState(0)
-  const [revCredit, setRevCredit] = useState(0)
-  const [totalExpenses, setTotalExpenses] = useState(0)
-  const [expSupplier, setExpSupplier] = useState(0)
-  const [_expRepair, setExpRepair] = useState(0)
-  const [_expInfra, setExpInfra] = useState(0)
-  const [_expDelivery, setExpDelivery] = useState(0)
-  const [_expOther, setExpOther] = useState(0)
-  const [laborEmployer, setLaborEmployer] = useState(0)
-  const [wasteTotal, setWasteTotal] = useState(0)
-  const [fixedCosts, setFixedCosts] = useState(0)
-  const [mgmtCosts, setMgmtCosts] = useState(0)
+  // Current period P&L
+  const [pl, setPl] = useState<BranchPLResult | null>(null)
 
   // KPI targets
   const [laborTarget, setLaborTarget] = useState(28)
 
-  // Previous period
-  const [prevRevenue, setPrevRevenue] = useState(0)
-  const [prevGross, setPrevGross] = useState(0)
-  const [prevOperating, setPrevOperating] = useState(0)
-  const [prevLaborPct, setPrevLaborPct] = useState(0)
+  // Previous period P&L
+  const [prevPl, setPrevPl] = useState<BranchPLResult | null>(null)
 
   // Trend
   const [trendData, setTrendData] = useState<any[]>([])
 
-  const grossProfit = totalRevenue - laborEmployer - totalExpenses
-  const operatingProfit = grossProfit - fixedCosts - mgmtCosts - wasteTotal
+  // Derived values from current P&L
+  const totalRevenue = pl?.revenue ?? 0
+  const revCashier = pl?.revCashier ?? 0
+  const revWebsite = pl?.revWebsite ?? 0
+  const revCredit = pl?.revCredit ?? 0
+  const expSupplier = pl?.expSuppliers ?? 0
+  const laborEmployer = pl?.laborEmployer ?? 0
+  const wasteTotal = pl?.wasteTotal ?? 0
+  const fixedCosts = pl?.fixedCosts ?? 0
+  const mgmtCosts = pl?.mgmtCosts ?? 0
+  const controllableMargin = pl?.controllableMargin ?? 0
+  const operatingProfit = pl?.operatingProfit ?? 0
   const laborPct = totalRevenue > 0 ? (laborEmployer / totalRevenue) * 100 : 0
+
+  const overheadPct = Number(localStorage.getItem('overhead_pct')) || 5
 
   useEffect(() => {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId, from, to, monthKey])
-
-  async function fetchPeriodData(pFrom: string, pTo: string, pMonthKey: string | null) {
-    const [revRes, expRes, labRes, wstRes, fcRes] = await Promise.all([
-      supabase.from('branch_revenue').select('source, amount').eq('branch_id', branchId).gte('date', pFrom).lt('date', pTo),
-      supabase.from('branch_expenses').select('expense_type, amount').eq('branch_id', branchId).gte('date', pFrom).lt('date', pTo),
-      supabase.from('branch_labor').select('employer_cost, gross_salary').eq('branch_id', branchId).gte('date', pFrom).lt('date', pTo),
-      supabase.from('branch_waste').select('amount').eq('branch_id', branchId).gte('date', pFrom).lt('date', pTo),
-      supabase.from('fixed_costs').select('amount, entity_id').eq('entity_type', 'branch_' + branchId).eq('month', pMonthKey || pFrom.slice(0, 7)),
-    ])
-
-    const revRows = revRes.data || []
-    const rCashier = revRows.filter(r => r.source === 'cashier').reduce((s, r) => s + Number(r.amount), 0)
-    const rWebsite = revRows.filter(r => r.source === 'website').reduce((s, r) => s + Number(r.amount), 0)
-    const rCredit = revRows.filter(r => r.source === 'credit').reduce((s, r) => s + Number(r.amount), 0)
-    const rTotal = rCashier + rWebsite + rCredit
-
-    const expRows = expRes.data || []
-    const eSupplier = expRows.filter(r => r.expense_type === 'supplier' || r.expense_type === 'inventory').reduce((s, r) => s + Number(r.amount), 0)
-    const eRepair = expRows.filter(r => r.expense_type === 'repair').reduce((s, r) => s + Number(r.amount), 0)
-    const eInfra = expRows.filter(r => r.expense_type === 'infrastructure').reduce((s, r) => s + Number(r.amount), 0)
-    const eDelivery = expRows.filter(r => r.expense_type === 'delivery').reduce((s, r) => s + Number(r.amount), 0)
-    const eOther = expRows.filter(r => r.expense_type === 'other').reduce((s, r) => s + Number(r.amount), 0)
-    const eTotal = eSupplier + eRepair + eInfra + eDelivery + eOther
-
-    const labRows = labRes.data || []
-    const lEmployer = labRows.reduce((s, r) => s + Number(r.employer_cost), 0)
-
-    const wstRows = wstRes.data || []
-    const wTotal = wstRows.reduce((s, r) => s + Number(r.amount), 0)
-
-    const fcRows = fcRes.data || []
-    const fFixed = fcRows.filter(r => r.entity_id !== 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
-    const fMgmt = fcRows.filter(r => r.entity_id === 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
-
-    const gross = rTotal - lEmployer - eTotal
-    const operating = gross - fFixed - fMgmt - wTotal
-    const lPct = rTotal > 0 ? (lEmployer / rTotal) * 100 : 0
-
-    return {
-      totalRevenue: rTotal, revCashier: rCashier, revWebsite: rWebsite, revCredit: rCredit,
-      totalExpenses: eTotal, expSupplier: eSupplier, expRepair: eRepair, expInfra: eInfra, expDelivery: eDelivery, expOther: eOther,
-      laborEmployer: lEmployer, wasteTotal: wTotal, fixedCosts: fFixed, mgmtCosts: fMgmt,
-      grossProfit: gross, operatingProfit: operating, laborPct: lPct,
-    }
-  }
 
   async function fetchTrend() {
     const months: string[] = []
@@ -204,32 +155,18 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
   async function fetchData() {
     setLoading(true)
     try {
+      const curMonthKey = monthKey || from.slice(0, 7)
+      const prevMonthKey = comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)
+
       const [current, prev, trend, kpiRes] = await Promise.all([
-        fetchPeriodData(from, to, monthKey),
-        fetchPeriodData(comparisonPeriod.from, comparisonPeriod.to, comparisonPeriod.monthKey),
+        fetchBranchPL(branchId, from, to, curMonthKey, overheadPct),
+        fetchBranchPL(branchId, comparisonPeriod.from, comparisonPeriod.to, prevMonthKey, overheadPct),
         fetchTrend(),
         supabase.from('branch_kpi_targets').select('labor_pct').eq('branch_id', branchId).maybeSingle(),
       ])
 
-      setTotalRevenue(current.totalRevenue)
-      setRevCashier(current.revCashier)
-      setRevWebsite(current.revWebsite)
-      setRevCredit(current.revCredit)
-      setTotalExpenses(current.totalExpenses)
-      setExpSupplier(current.expSupplier)
-      setExpRepair(current.expRepair)
-      setExpInfra(current.expInfra)
-      setExpDelivery(current.expDelivery)
-      setExpOther(current.expOther)
-      setLaborEmployer(current.laborEmployer)
-      setWasteTotal(current.wasteTotal)
-      setFixedCosts(current.fixedCosts)
-      setMgmtCosts(current.mgmtCosts)
-
-      setPrevRevenue(prev.totalRevenue)
-      setPrevGross(prev.grossProfit)
-      setPrevOperating(prev.operatingProfit)
-      setPrevLaborPct(prev.laborPct)
+      setPl(current)
+      setPrevPl(prev)
 
       if (kpiRes.data?.labor_pct) setLaborTarget(kpiRes.data.labor_pct)
 
@@ -292,23 +229,23 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                     <span className="text-[22px] font-medium" style={{ color: '#378ADD' }}>
                       <CountUp end={totalRevenue} prefix="₪" separator="," duration={0.8} />
                     </span>
-                    <DiffBadge current={totalRevenue} previous={prevRevenue} />
+                    <DiffBadge current={totalRevenue} previous={prevPl?.revenue ?? 0} />
                   </div>
                 </CardContent>
               </Card>
 
-              {/* רווח גולמי */}
+              {/* רווח נשלט */}
               <Card className="bg-white border border-slate-200 rounded-lg p-4">
                 <CardContent className="p-0">
                   <div className="flex items-center gap-2 mb-2">
                     <ProfitIcon size={18} />
-                    <span className="text-[11px] text-slate-400">רווח גולמי</span>
+                    <span className="text-[11px] text-slate-400 cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן">רווח נשלט</span>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-[22px] font-medium" style={{ color: grossProfit >= 0 ? '#639922' : '#E24B4A' }}>
-                      <CountUp end={grossProfit} prefix="₪" separator="," duration={0.8} />
+                    <span className="text-[22px] font-medium" style={{ color: controllableMargin >= 0 ? '#639922' : '#E24B4A' }}>
+                      <CountUp end={controllableMargin} prefix="₪" separator="," duration={0.8} />
                     </span>
-                    <DiffBadge current={grossProfit} previous={prevGross} />
+                    <DiffBadge current={controllableMargin} previous={prevPl?.controllableMargin ?? 0} />
                   </div>
                 </CardContent>
               </Card>
@@ -324,7 +261,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                     <span className="text-[22px] font-medium" style={{ color: operatingProfit >= 0 ? '#639922' : '#E24B4A' }}>
                       <CountUp end={operatingProfit} prefix="₪" separator="," duration={0.8} />
                     </span>
-                    <DiffBadge current={operatingProfit} previous={prevOperating} />
+                    <DiffBadge current={operatingProfit} previous={prevPl?.operatingProfit ?? 0} />
                   </div>
                 </CardContent>
               </Card>
@@ -340,7 +277,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                     <span className="text-[22px] font-medium" style={{ color: laborPct <= laborTarget ? '#639922' : '#E24B4A' }}>
                       <CountUp end={laborPct} decimals={1} suffix="%" duration={0.8} />
                     </span>
-                    <DiffBadge current={laborPct} previous={prevLaborPct} inverse />
+                    <DiffBadge current={laborPct} previous={prevPl && prevPl.revenue > 0 ? (prevPl.laborEmployer / prevPl.revenue) * 100 : 0} inverse />
                   </div>
                   <span className="text-[11px] text-slate-400">יעד {laborTarget}%</span>
                 </CardContent>

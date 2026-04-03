@@ -453,3 +453,231 @@ export function calcGlobalLaborForDept(
   }
   return total
 }
+
+// ─── Unified P&L Types & Functions ─────────────────────────────────────────
+
+export interface PLRow {
+  label: string
+  amount: number
+  pct?: number // % of revenue
+  bold?: boolean
+  separator?: boolean // render a line above this row
+  color?: 'profit' | 'expense' | '' // for coloring
+}
+
+export interface BranchPLResult {
+  revenue: number
+  revCashier: number
+  revWebsite: number
+  revCredit: number
+  expSuppliers: number
+  expRepairs: number
+  expInfra: number
+  expDelivery: number
+  expOther: number
+  laborEmployer: number
+  mgmtCosts: number
+  wasteTotal: number
+  fixedCosts: number
+  controllableMargin: number
+  overheadAmount: number
+  operatingProfit: number
+  rows: PLRow[]
+}
+
+export interface FactoryPLResult {
+  sales: number
+  salesInternal: number
+  suppliers: number
+  labor: number
+  waste: number
+  repairs: number
+  fixedCosts: number
+  controllableMargin: number
+  operatingProfit: number
+  rows: PLRow[]
+}
+
+export interface ConsolidatedPLResult {
+  revenue: number
+  suppliers: number
+  labor: number
+  waste: number
+  repairs: number
+  fixedCosts: number
+  controllableMargin: number
+  operatingProfit: number
+  rows: PLRow[]
+}
+
+/**
+ * Fetch complete P&L for a branch.
+ */
+export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: string, monthKey: string, overheadPct = 5): Promise<BranchPLResult> {
+  const [revRes, expRes, labRes, wasteRes, fcRes] = await Promise.all([
+    supabase.from('branch_revenue').select('source, amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('branch_expenses').select('expense_type, amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('branch_labor').select('employer_cost').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('branch_waste').select('amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('fixed_costs').select('amount, entity_id').eq('entity_type', `branch_${branchId}`).eq('month', monthKey),
+  ])
+
+  let revCashier = 0, revWebsite = 0, revCredit = 0
+  for (const r of (revRes.data || [])) {
+    const amt = Number(r.amount)
+    if (r.source === 'cashier') revCashier += amt
+    else if (r.source === 'website') revWebsite += amt
+    else if (r.source === 'credit') revCredit += amt
+    else revCashier += amt // default to cashier
+  }
+  const revenue = revCashier + revWebsite + revCredit
+
+  let expSuppliers = 0, expRepairs = 0, expInfra = 0, expDelivery = 0, expOther = 0
+  for (const r of (expRes.data || [])) {
+    const amt = Number(r.amount)
+    const t = r.expense_type || 'other'
+    if (t === 'suppliers' || t === 'supplier' || t === 'inventory') expSuppliers += amt
+    else if (t === 'repairs' || t === 'repair') expRepairs += amt
+    else if (t === 'infrastructure') expInfra += amt
+    else if (t === 'deliveries' || t === 'delivery') expDelivery += amt
+    else expOther += amt
+  }
+
+  const laborEmployer = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+  const wasteTotal = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+
+  let fixedCosts = 0, mgmtCosts = 0
+  for (const r of (fcRes.data || [])) {
+    const amt = Number(r.amount)
+    if (r.entity_id === 'mgmt') mgmtCosts += amt
+    else fixedCosts += amt
+  }
+
+  // Controllable margin = revenue - suppliers - labor - mgmt - waste - repairs
+  const controllableMargin = revenue - expSuppliers - laborEmployer - mgmtCosts - wasteTotal - expRepairs
+
+  // Operating profit = controllable - fixed costs - overhead
+  const overheadAmount = revenue * overheadPct / 100
+  const operatingProfit = controllableMargin - fixedCosts - overheadAmount
+
+  const pct = (n: number) => revenue > 0 ? (n / revenue) * 100 : 0
+
+  const rows: PLRow[] = [
+    { label: 'הכנסות', amount: revenue, bold: true, color: '' },
+    { label: 'ספקים', amount: expSuppliers, color: 'expense' },
+    { label: 'לייבור', amount: laborEmployer, color: 'expense' },
+    { label: 'שכר מנהל (הנהלה)', amount: mgmtCosts, color: 'expense' },
+    { label: 'פחת', amount: wasteTotal, color: 'expense' },
+    { label: 'תיקונים', amount: expRepairs, color: 'expense' },
+    { label: 'רווח נשלט', amount: controllableMargin, pct: pct(controllableMargin), bold: true, separator: true, color: 'profit' },
+    { label: 'עלויות קבועות', amount: fixedCosts, color: 'expense' },
+    { label: `העמסת מטה ${overheadPct}%`, amount: overheadAmount, color: 'expense' },
+    { label: 'רווח תפעולי', amount: operatingProfit, pct: pct(operatingProfit), bold: true, separator: true, color: 'profit' },
+  ]
+
+  return {
+    revenue, revCashier, revWebsite, revCredit,
+    expSuppliers, expRepairs, expInfra, expDelivery, expOther,
+    laborEmployer, mgmtCosts, wasteTotal, fixedCosts,
+    controllableMargin, overheadAmount, operatingProfit, rows,
+  }
+}
+
+/**
+ * Fetch complete P&L for the factory.
+ */
+export async function fetchFactoryPL(dateFrom: string, dateTo: string, monthKey: string): Promise<FactoryPLResult> {
+  const [salesFs, salesB2b, salesFsInt, salesB2bInt, labRes, suppRes, wasteRes, repairsRes] = await Promise.all([
+    supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('factory_sales').select('amount').eq('is_internal', true).gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('factory_b2b_sales').select('amount').eq('is_internal', true).gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('supplier_invoices').select('amount').gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('factory_waste').select('amount').gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('factory_repairs').select('amount').gte('date', dateFrom).lt('date', dateTo),
+  ])
+
+  const salesExternal = (salesFs.data || []).reduce((s, r) => s + Number(r.amount), 0)
+                      + (salesB2b.data || []).reduce((s, r) => s + Number(r.amount), 0)
+  const salesInternal = (salesFsInt.data || []).reduce((s, r) => s + Number(r.amount), 0)
+                      + (salesB2bInt.data || []).reduce((s, r) => s + Number(r.amount), 0)
+  const sales = salesExternal + salesInternal
+
+  const labor = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+  const suppliers = (suppRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+  const waste = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+  const repairs = (repairsRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+  const fixedCosts = await getFixedCostTotal('factory', monthKey)
+
+  const controllableMargin = sales - suppliers - labor - waste - repairs
+  const operatingProfit = controllableMargin - fixedCosts
+
+  const pct = (n: number) => sales > 0 ? (n / sales) * 100 : 0
+
+  const rows: PLRow[] = [
+    { label: 'מכירות', amount: sales, bold: true, color: '' },
+    { label: 'חומרי גלם', amount: suppliers, color: 'expense' },
+    { label: 'לייבור', amount: labor, color: 'expense' },
+    { label: 'פחת', amount: waste, color: 'expense' },
+    { label: 'תיקונים', amount: repairs, color: 'expense' },
+    { label: 'רווח נשלט', amount: controllableMargin, pct: pct(controllableMargin), bold: true, separator: true, color: 'profit' },
+    { label: 'עלויות קבועות', amount: fixedCosts, color: 'expense' },
+    { label: 'רווח תפעולי', amount: operatingProfit, pct: pct(operatingProfit), bold: true, separator: true, color: 'profit' },
+  ]
+
+  return { sales, salesInternal, suppliers, labor, waste, repairs, fixedCosts, controllableMargin, operatingProfit, rows }
+}
+
+/**
+ * Fetch consolidated P&L (intercompany eliminated).
+ * Revenue = branch revenue + factory external sales only.
+ * Costs = actual supplier costs (no internal transfer prices).
+ */
+export async function fetchConsolidatedPL(
+  branchIds: number[],
+  dateFrom: string,
+  dateTo: string,
+  monthKey: string,
+  overheadPct = 5
+): Promise<ConsolidatedPLResult> {
+  // Branch totals
+  let branchRevenue = 0, branchLabor = 0, branchWaste = 0, branchExpenses = 0, branchFixed = 0
+  for (const brId of branchIds) {
+    const pl = await fetchBranchPL(brId, dateFrom, dateTo, monthKey, overheadPct)
+    branchRevenue += pl.revenue
+    branchLabor += pl.laborEmployer
+    branchWaste += pl.wasteTotal
+    branchExpenses += pl.expSuppliers + pl.expRepairs
+    branchFixed += pl.fixedCosts
+  }
+
+  // Factory (external only for consolidated)
+  const factoryPL = await fetchFactoryPL(dateFrom, dateTo, monthKey)
+  const factoryExternalSales = factoryPL.sales - factoryPL.salesInternal
+
+  const revenue = branchRevenue + factoryExternalSales
+  const suppliers = factoryPL.suppliers // actual raw materials only
+  const labor = branchLabor + factoryPL.labor
+  const waste = branchWaste + factoryPL.waste
+  const repairs = branchExpenses + factoryPL.repairs
+  const fixedCosts = branchFixed + factoryPL.fixedCosts
+
+  const controllableMargin = revenue - suppliers - labor - waste - repairs
+  const operatingProfit = controllableMargin - fixedCosts
+
+  const pct = (n: number) => revenue > 0 ? (n / revenue) * 100 : 0
+
+  const rows: PLRow[] = [
+    { label: 'הכנסות אמיתיות', amount: revenue, bold: true, color: '' },
+    { label: 'חומרי גלם', amount: suppliers, color: 'expense' },
+    { label: 'לייבור', amount: labor, color: 'expense' },
+    { label: 'פחת', amount: waste, color: 'expense' },
+    { label: 'תיקונים / הוצאות', amount: repairs, color: 'expense' },
+    { label: 'רווח נשלט', amount: controllableMargin, pct: pct(controllableMargin), bold: true, separator: true, color: 'profit' },
+    { label: 'עלויות קבועות', amount: fixedCosts, color: 'expense' },
+    { label: 'רווח תפעולי', amount: operatingProfit, pct: pct(operatingProfit), bold: true, separator: true, color: 'profit' },
+  ]
+
+  return { revenue, suppliers, labor, waste, repairs, fixedCosts, controllableMargin, operatingProfit, rows }
+}
