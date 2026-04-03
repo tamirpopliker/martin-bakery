@@ -406,10 +406,11 @@ export default function Labor({ onBack }: Props) {
                         <li>היכנס ל-<strong>TimeWatch</strong> של המפעל</li>
                         <li>לחץ על <strong>"דוחות"</strong> בתפריט העליון</li>
                         <li>בחר <strong>"דוח נוכחות יומית / חודשית"</strong></li>
-                        <li>הגדר: תצוגה → <strong>"כל העובדים ברצף"</strong></li>
-                        <li>סמן <strong>"הצג בפורמט עשרוני"</strong></li>
-                        <li>בחר טווח תאריכים ולחץ <strong>"הצג"</strong></li>
-                        <li>לחץ על כפתור <strong>PDF</strong> להורדה</li>
+                        <li>בשדה <strong>סוג</strong> → בחר <strong>"תקופתי"</strong></li>
+                        <li>הגדר <strong>מתאריך</strong> ו<strong>עד תאריך</strong> לטווח הרצוי</li>
+                        <li>בשדה <strong>תצוגה</strong> → בחר <strong>"כל העובדים ברצף"</strong></li>
+                        <li>ודא שמסומן <strong>"הצג בפורמט עשרוני"</strong> ✓</li>
+                        <li>לחץ <strong>"הצג"</strong> ואז על כפתור <strong>PDF</strong> להורדה</li>
                       </ol>
                       <div style={{ marginTop: '10px', fontSize: '11px', color: '#94a3b8' }}>
                         הקובץ מכיל שעות רגילות + שעות נוספות לכל עובד לכל יום.
