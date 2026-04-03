@@ -746,7 +746,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                           {[
                             'היכנס למערכת CashOnTab → לחץ "עובדים" בתפריט הימני',
                             'בתפריט העליון לחץ על "דו״ח נוכחות"',
-                            'סוג דו״ח: בחר "מרוכז" (לא מפורט)',
+                            'סוג דו״ח: בחר "מפורט 1" (לא מרוכז)',
                             'הצג כל עובד בדף נפרד: "כן"',
                             'להציג חלוקה לשעות נוספות: "כן"',
                             'בחר סניפים: סמן את הסניף הרלוונטי',
@@ -764,7 +764,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                     )}
                   </div>
                 </div>
-                <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#94a3b8' }}>PDF דוח נוכחות מרוכז מאוטוסופט — פרסור אוטומטי ללא שרת</p>
+                <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#94a3b8' }}>PDF דוח נוכחות מפורט מאוטוסופט — פרסור אוטומטי ללא שרת</p>
 
                 <div style={{ marginBottom: '16px' }}>
                   <label style={S.label}>תאריך לשמירה</label>
@@ -782,7 +782,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                   <div style={{ fontSize: '15px', fontWeight: '700', color: '#374151', marginBottom: '4px' }}>
                     {uploadStatus === 'parsing' ? 'מעבד קובץ...' : uploadStatus === 'confirm' ? 'קובץ נקלט בהצלחה' : 'גרור PDF לכאן או לחץ להעלאה'}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>דוח נוכחות מרוכז מ-CashOnTab</div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>דוח נוכחות מפורט מ-CashOnTab</div>
                 </label>
 
                 {/* סטטוס */}
