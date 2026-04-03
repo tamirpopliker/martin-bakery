@@ -176,15 +176,40 @@ export async function parseTimeWatchPDF(file: File): Promise<TimeWatchRow[]> {
       if (!name) continue
 
       // ── Extract hours by column position ──
-      // Find the number item closest to each header X position
+      // Only consider numbers that are reasonable hours (0-24)
       const numItems = line.filter(it => {
-        const clean = it.text.replace(/[(),]/g, '')
-        return /^\d+\.?\d*$/.test(clean)
+        if (it.text.includes(':')) return false // times like 06:32
+        const clean = it.text.replace(/[(),\-]/g, '')
+        if (!/^\d+\.?\d*$/.test(clean)) return false
+        const v = parseFloat(clean)
+        return v >= 0 && v <= 24
       })
 
-      const h100 = findClosestNum(numItems, h100X, 25)
-      const h125 = h125X >= 0 ? findClosestNum(numItems, h125X, 25) : 0
-      const h150 = h150X >= 0 ? findClosestNum(numItems, h150X, 25) : 0
+      // Debug: log first data row numbers with X positions
+      if (rows.length === 0) {
+        console.log('[parseTimeWatch] First row nums:', numItems.map(it => `${it.text}(x=${it.x})`).join(', '))
+      }
+
+      // Exclusive matching: each item can only match ONE column (closest)
+      // Assign each numItem to its closest column, preventing double assignments
+      let h100 = 0, h125 = 0, h150 = 0
+      const usedItems = new Set<TextItem>()
+
+      // Match h150 first (leftmost column)
+      if (h150X >= 0) {
+        const best = findClosestUnused(numItems, h150X, 20, usedItems)
+        if (best) { h150 = parseFloat(best.text.replace(/[(),]/g, '')) || 0; usedItems.add(best) }
+      }
+      // Match h125 next
+      if (h125X >= 0) {
+        const best = findClosestUnused(numItems, h125X, 20, usedItems)
+        if (best) { h125 = parseFloat(best.text.replace(/[(),]/g, '')) || 0; usedItems.add(best) }
+      }
+      // Match h100 last (rightmost of the three)
+      if (h100X >= 0) {
+        const best = findClosestUnused(numItems, h100X, 30, usedItems)
+        if (best) { h100 = parseFloat(best.text.replace(/[(),]/g, '')) || 0; usedItems.add(best) }
+      }
 
       if (h100 === 0 && h125 === 0 && h150 === 0) continue
 
@@ -202,22 +227,21 @@ export async function parseTimeWatchPDF(file: File): Promise<TimeWatchRow[]> {
   return rows
 }
 
-function findClosestNum(items: TextItem[], targetX: number, maxDist: number): number {
+function findClosestUnused(items: TextItem[], targetX: number, maxDist: number, used: Set<TextItem>): TextItem | null {
   let best: TextItem | null = null
   let bestDist = maxDist + 1
   for (const it of items) {
+    if (used.has(it)) continue
     const dist = Math.abs(it.x - targetX)
     if (dist < bestDist) {
       const val = parseFloat(it.text.replace(/[(),]/g, ''))
-      // Only consider reasonable hour values (0-24)
       if (!isNaN(val) && val >= 0 && val <= 24) {
         bestDist = dist
         best = it
       }
     }
   }
-  if (!best) return 0
-  return parseFloat(best.text.replace(/[(),]/g, '')) || 0
+  return best
 }
 
 /**
