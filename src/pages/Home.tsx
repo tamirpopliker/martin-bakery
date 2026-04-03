@@ -6,6 +6,8 @@ import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import PeriodPicker from '../components/PeriodPicker'
 import InstallPWA from '../components/InstallPWA'
 import DailyProduction from './DailyProduction'
@@ -31,7 +33,7 @@ import {
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
   AlertTriangle, ClipboardList, Truck, UserCog, Activity,
   Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
-  LayoutDashboard
+  LayoutDashboard, X
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
@@ -58,7 +60,7 @@ const PANEL_MANAGE = [
 
 const fmtK = (n: number) => n === 0 ? '—' : '₪' + Math.round(n).toLocaleString()
 
-interface BranchKpi { id: number; name: string; color: string; revenue: number; laborPct: number }
+interface BranchKpi { id: number; name: string; color: string; revenue: number; laborCost: number; laborPct: number }
 
 // ─── Animation Variants ──────────────────────────────────────────────────────
 const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }
@@ -106,6 +108,11 @@ export default function Home() {
   const [prevAvgLaborPct, setPrevAvgLaborPct] = useState(0)
   const [operatingProfit, setOperatingProfit] = useState(0)
   const [prevOperatingProfit, setPrevOperatingProfit] = useState(0)
+  const [totalLabor, setTotalLabor] = useState(0)
+  const [prevTotalLabor, setPrevTotalLabor] = useState(0)
+  const [factoryLabor, setFactoryLabor] = useState(0)
+  const [revenueSheetOpen, setRevenueSheetOpen] = useState(false)
+  const [laborSheetOpen, setLaborSheetOpen] = useState(false)
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -123,6 +130,7 @@ export default function Home() {
       const fLabor = (laborRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
       const fSupp  = (suppliersRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
       setFactoryRevenue(fSales)
+      setFactoryLabor(fLabor)
 
       // Branch data
       const bKpi: BranchKpi[] = []
@@ -142,13 +150,14 @@ export default function Home() {
         totalBranchRev += rev
         totalBranchLab += lab
         totalBranchExp += exp
-        bKpi.push({ id: br.id, name: br.name, color: br.color, revenue: rev, laborPct: labPct })
+        bKpi.push({ id: br.id, name: br.name, color: br.color, revenue: rev, laborCost: lab, laborPct: labPct })
       }
 
       setBranchKpi(bKpi)
       setTotalBranchRevenue(totalBranchRev)
       const avgPct = totalBranchRev > 0 ? (totalBranchLab / totalBranchRev) * 100 : 0
       setAvgLaborPct(avgPct)
+      setTotalLabor(fLabor + totalBranchLab)
       setAlerts(alertCount)
 
       // Previous period (comparison)
@@ -179,6 +188,7 @@ export default function Home() {
       setPrevBranchRevenue(pTotalBranchRev)
       const pAvgPct = pTotalBranchRev > 0 ? (pTotalBranchLab / pTotalBranchRev) * 100 : 0
       setPrevAvgLaborPct(pAvgPct)
+      setPrevTotalLabor(pFLabor + pTotalBranchLab)
 
       // Operating profit: revenue - suppliers - labor - waste - fixedCosts - mgmt
       const monthKey = period.monthKey || from.slice(0, 7)
@@ -386,9 +396,9 @@ export default function Home() {
         <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.1 }}>
           <Card className="mb-5 py-0">
             <CardContent className="kpi-grid flex items-center gap-0 flex-wrap py-3.5 px-6">
-              {/* הכנסות */}
+              {/* הכנסות — clickable */}
               {(() => { const grandRevenue = factoryRevenue + totalBranchRevenue; return (
-              <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 pe-4 border-e border-slate-200">
+              <button onClick={() => setRevenueSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 pe-4 border-e border-slate-200 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
                 <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#10B98115' }}>
                   <RevenueIcon size={16} color="#10B981" />
                 </div>
@@ -399,7 +409,7 @@ export default function Home() {
                     <DiffBadge curr={factoryRevenue + totalBranchRevenue} prev={prevFactoryRevenue + prevBranchRevenue} />
                   </div>
                 </div>
-              </div>
+              </button>
               )})()}
               {/* רווח תפעולי */}
               <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200">
@@ -414,20 +424,28 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              {/* % לייבור */}
-              <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200">
+              {/* % לייבור — clickable */}
+              {(() => {
+                const grandRevenue = factoryRevenue + totalBranchRevenue
+                const grandLaborPct = grandRevenue > 0 ? (totalLabor / grandRevenue) * 100 : 0
+                const prevGrandRevenue = prevFactoryRevenue + prevBranchRevenue
+                const prevGrandLaborPct = prevGrandRevenue > 0 ? (prevTotalLabor / prevGrandRevenue) * 100 : 0
+                return (
+              <button onClick={() => setLaborSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
                 <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#3B82F615' }}>
                   <LaborIcon size={16} color="#3B82F6" />
                 </div>
                 <div>
                   <div className="text-[11px] text-slate-400 font-semibold mb-0.5">לייבור ממוצע</div>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-lg font-extrabold text-slate-900">{avgLaborPct.toFixed(1)}%</span>
-                    <span className={`text-[13px] font-bold ${avgLaborPct <= 28 ? 'text-emerald-400' : 'text-rose-400'}`}>{avgLaborPct <= 28 ? '✓' : '✗'}</span>
-                    <DiffBadge curr={avgLaborPct} prev={prevAvgLaborPct} inverse />
+                    <span className="text-lg font-extrabold text-slate-900">{grandLaborPct.toFixed(1)}%</span>
+                    <span className={`text-[13px] font-bold ${grandLaborPct <= 28 ? 'text-emerald-400' : 'text-rose-400'}`}>{grandLaborPct <= 28 ? '✓' : '✗'}</span>
+                    <DiffBadge curr={grandLaborPct} prev={prevGrandLaborPct} inverse />
                   </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">{fmtK(totalLabor)}</div>
                 </div>
-              </div>
+              </button>
+              )})()}
               {/* התראות */}
               <div className="flex-1 min-w-[100px] flex items-center gap-2.5 py-1 ps-4">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: alerts > 0 ? '#fb718515' : '#10B98115' }}>
@@ -770,6 +788,93 @@ export default function Home() {
           <span>יציאה</span>
         </button>
       </nav>
+
+      {/* ─── Revenue Drill-Down Sheet ─────────────────────────────────────── */}
+      <Sheet open={revenueSheetOpen} onOpenChange={setRevenueSheetOpen}>
+        <SheetContent className="w-[380px] max-w-[90vw]">
+          <SheetHeader className="pb-3">
+            <SheetTitle className="text-base font-bold text-slate-900">פירוט הכנסות — {period.label}</SheetTitle>
+          </SheetHeader>
+          {(() => {
+            const grandRevenue = factoryRevenue + totalBranchRevenue
+            const rows = [
+              ...branchKpi.map(br => ({ name: br.name, revenue: br.revenue, pct: grandRevenue > 0 ? (br.revenue / grandRevenue) * 100 : 0 })),
+              { name: 'מפעל (חיצוני)', revenue: factoryRevenue, pct: grandRevenue > 0 ? (factoryRevenue / grandRevenue) * 100 : 0 },
+            ]
+            return (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">גוף</TableHead>
+                    <TableHead className="text-center">הכנסות</TableHead>
+                    <TableHead className="text-center">% מסה"כ</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map(r => (
+                    <TableRow key={r.name}>
+                      <TableCell className="font-medium text-right">{r.name}</TableCell>
+                      <TableCell className="text-center">{fmtK(r.revenue)}</TableCell>
+                      <TableCell className="text-center">{r.pct.toFixed(1)}%</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-slate-50 font-bold">
+                    <TableCell className="font-bold text-right">סה"כ</TableCell>
+                    <TableCell className="text-center font-bold">{fmtK(grandRevenue)}</TableCell>
+                    <TableCell className="text-center font-bold">100%</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            )
+          })()}
+        </SheetContent>
+      </Sheet>
+
+      {/* ─── Labor Drill-Down Sheet ───────────────────────────────────────── */}
+      <Sheet open={laborSheetOpen} onOpenChange={setLaborSheetOpen}>
+        <SheetContent className="w-[380px] max-w-[90vw]">
+          <SheetHeader className="pb-3">
+            <SheetTitle className="text-base font-bold text-slate-900">פירוט לייבור — {period.label}</SheetTitle>
+          </SheetHeader>
+          {(() => {
+            const grandRevenue = factoryRevenue + totalBranchRevenue
+            const rows = [
+              ...branchKpi.map(br => ({ name: br.name, labor: br.laborCost, pct: br.laborPct })),
+              { name: 'מפעל', labor: factoryLabor, pct: factoryRevenue > 0 ? (factoryLabor / factoryRevenue) * 100 : 0 },
+            ]
+            const totalLaborPct = grandRevenue > 0 ? (totalLabor / grandRevenue) * 100 : 0
+            return (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">גוף</TableHead>
+                    <TableHead className="text-center">עלות מעסיק</TableHead>
+                    <TableHead className="text-center">% מהכנסותיו</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map(r => (
+                    <TableRow key={r.name}>
+                      <TableCell className="font-medium text-right">{r.name}</TableCell>
+                      <TableCell className="text-center">{fmtK(r.labor)}</TableCell>
+                      <TableCell className="text-center">
+                        <span className={r.pct <= 28 ? 'text-emerald-500' : 'text-rose-500'}>{r.pct.toFixed(1)}%</span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-slate-50 font-bold">
+                    <TableCell className="font-bold text-right">סה"כ</TableCell>
+                    <TableCell className="text-center font-bold">{fmtK(totalLabor)}</TableCell>
+                    <TableCell className="text-center font-bold">
+                      <span className={totalLaborPct <= 28 ? 'text-emerald-500' : 'text-rose-500'}>{totalLaborPct.toFixed(1)}%</span>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            )
+          })()}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
