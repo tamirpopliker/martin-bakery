@@ -181,9 +181,16 @@ export async function parseTimeWatchPDF(file: File): Promise<TimeWatchRow[]> {
             gaps.push(hebrewChars[i - 1].x - hebrewChars[i].x)
           }
           // Word boundary = gap significantly larger than typical char spacing
-          // Typical char gap: ~4-6px, word gap: ~10-20px
-          const medianGap = gaps.length > 0 ? gaps.sort((a, b) => a - b)[Math.floor(gaps.length / 2)] : 6
-          const wordBreakThreshold = Math.max(medianGap * 1.8, 9)
+          // Typical char gap: ~4-5px, word gap: ~7-10px
+          const sortedGaps = [...gaps].sort((a, b) => a - b)
+          const medianGap = sortedGaps.length > 0 ? sortedGaps[Math.floor(sortedGaps.length / 2)] : 5
+          // Use 1.4x median with min 7px — catches word gaps of ~7px when char gaps are ~5px
+          const wordBreakThreshold = Math.max(medianGap * 1.4, 7)
+
+          // Debug: log gaps for first Hebrew name
+          if (rows.length === 0) {
+            console.log(`[parseTimeWatch] Hebrew name gaps: median=${medianGap.toFixed(1)}, threshold=${wordBreakThreshold.toFixed(1)}, gaps=[${sortedGaps.map(g => g.toFixed(1)).join(',')}]`)
+          }
 
           const words: string[] = []
           let currentWord = hebrewChars[0].text
