@@ -82,8 +82,8 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   const [kpiTargets, setKpiTargets] = useState<Record<number, { labor_pct: number; waste_pct: number; revenue_target: number; basket_target: number; transaction_target: number }>>({})
 
   const brOH = (br: BranchData) => br.totalRevenue * overheadPct / 100
-  const brGross = (br: BranchData) => br.totalRevenue - br.totalExpenses - br.laborEmployer - br.mgmtCosts
-  const brOP = (br: BranchData) => brGross(br) - br.fixedCosts - br.wasteTotal - brOH(br)
+  const brGross = (br: BranchData) => br.totalRevenue - br.totalExpenses - br.laborEmployer - br.mgmtCosts - br.wasteTotal
+  const brOP = (br: BranchData) => brGross(br) - br.fixedCosts - brOH(br)
 
   async function fetchBranchData(branchId: number, name: string, color: string, dateFrom: string, dateTo: string, monthKey: string): Promise<BranchData> {
     const entityType = `branch_${branchId}`
@@ -458,6 +458,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                           { label: 'הוצאות', key: 'totalExpenses', color: '#fb7185' },
                           { label: 'לייבור', key: 'laborEmployer', color: '#fbbf24' },
                           { label: 'הנהלה וכלליות', key: 'mgmtCosts', color: '#64748b' },
+                          { label: 'פחת', key: 'wasteTotal', color: '#fb7185' },
                         ]
                         const visibleCostRows = presentationMode ? costRows.filter(r => !HIDDEN_IN_PRESENTATION.has(r.key)) : costRows
                         const rows: JSX.Element[] = []
@@ -519,10 +520,28 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                           </TableRow>
                         )
 
-                        // Operating cost rows: fixedCosts, waste, overhead
+                        // % Gross profit row
+                        rows.push(
+                          <TableRow key="kpi-gross-pct" className="bg-slate-50">
+                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% רווח גולמי</TableCell>
+                            {branches.map(br => {
+                              const gp = brGross(br)
+                              const gpPct = br.totalRevenue > 0 ? (gp / br.totalRevenue * 100) : 0
+                              return (
+                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: gpPct >= 0 ? '#34d399' : '#fb7185' }}>
+                                  {br.totalRevenue > 0 ? gpPct.toFixed(1) + '%' : '\u2014'}
+                                </TableCell>
+                              )
+                            })}
+                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.grossProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                              {totals.revenue > 0 ? (totals.grossProfit / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
+                            </TableCell>
+                          </TableRow>
+                        )
+
+                        // Operating cost rows: fixedCosts, overhead
                         const opCostRows: { label: string; key: keyof BranchData; color: string }[] = [
                           { label: 'עלויות קבועות', key: 'fixedCosts', color: '#64748b' },
-                          { label: 'פחת', key: 'wasteTotal', color: '#fb7185' },
                         ]
                         opCostRows.forEach((row, ri) => {
                           const totalVal = branches.reduce((s, b) => s + Number(b[row.key]), 0)
