@@ -165,10 +165,11 @@ export default function FactorySettings({ onBack }: Props) {
   async function saveKpi() {
     for (const dept of DEPTS) {
       const target = kpiTargets[dept.key]
-      if (target.id) {
-        await supabase.from('kpi_targets').update(target).eq('id', target.id)
+      const { id, department, ...fields } = target as KpiTarget & { id?: number }
+      if (id) {
+        await supabase.from('kpi_targets').update(fields).eq('id', id)
       } else {
-        const { data } = await supabase.from('kpi_targets').insert({ ...target }).select().single()
+        const { data } = await supabase.from('kpi_targets').insert({ department: dept.key, ...fields }).select().single()
         if (data) setKpiTargets(prev => ({ ...prev, [dept.key]: data }))
       }
     }
