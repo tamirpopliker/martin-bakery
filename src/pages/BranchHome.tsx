@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ArrowRight, ShoppingBag, Receipt, Users, Trash2, Wrench, BarChart3, Settings, Building2, TrendingUp, Upload, Package } from 'lucide-react'
+import { ArrowRight, ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import BranchRevenue from './BranchRevenue'
 import BranchExpenses from './BranchExpenses'
@@ -13,6 +13,7 @@ import BranchCreditCustomers from './BranchCreditCustomers'
 import BranchSuppliers from './BranchSuppliers'
 import BranchOrders from './BranchOrders'
 import BranchEmployees from './BranchEmployees'
+import BranchDashboard from './BranchDashboard'
 import DataImport from './DataImport'
 
 // ─── אנימציות ─────────────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ interface Props {
 }
 
 type BranchPage =
+  | 'dashboard'
   | 'revenue'
   | 'expenses'
   | 'labor'
@@ -55,6 +57,7 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
+  { page: 'dashboard', label: 'דשבורד סניף',   subtitle: 'KPI · הכנסות · הוצאות · גרפים', Icon: BarChart2, ready: true, cardBg: '#eff6ff', cardBorder: '#93c5fd' },
   { page: 'revenue',   label: 'הכנסות',        subtitle: 'קופה · אתר · הקפה',        Icon: ShoppingBag, ready: true, cardBg: '#f0fdf4', cardBorder: '#bbf7d0' },
   { page: 'expenses',  label: 'הוצאות',         subtitle: 'ספקים · תיקונים · תשתיות', Icon: Receipt,     ready: true, cardBg: '#fef2f2', cardBorder: '#fecaca' },
   { page: 'labor',     label: 'לייבור',          subtitle: 'שעות · עלות מעסיק',         Icon: Users,       ready: true, cardBg: '#fffbeb', cardBorder: '#fde68a' },
@@ -88,6 +91,9 @@ export default function BranchHome({ branch, onBack }: Props) {
   }, [branch.id])
 
   // ─── ניתוב פנימי ──────────────────────────────────────────────────────────
+  if (page === 'dashboard') return (
+    <BranchDashboard branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
+  )
   if (page === 'revenue') return (
     <BranchRevenue branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
