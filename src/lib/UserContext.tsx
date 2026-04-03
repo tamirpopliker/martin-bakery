@@ -92,9 +92,14 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
     if (dept !== null || pageKey === 'factory_dashboard' || pageKey === 'factory_b2b' || pageKey === 'labor' || pageKey === 'suppliers') {
       if (user.role === 'branch') return false
 
-      // Department manager: can access all factory pages EXCEPT settings
-      // (settings blocking is handled above)
-      if (isDeptManager) return true
+      // Department manager: can access all factory pages EXCEPT settings and the OTHER main dept
+      // creams manager can't see dough, dough manager can't see creams
+      // packaging & cleaning are shared
+      if (isDeptManager) {
+        if (dept === 'creams' && user.managed_department === 'dough') return false
+        if (dept === 'dough' && user.managed_department === 'creams') return false
+        return true
+      }
 
       // Regular factory user
       if (dept && user.excluded_departments.includes(dept)) return false
