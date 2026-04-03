@@ -8,7 +8,7 @@ import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, TrendingUp, TrendingDown } from 'lucide-react'
+import { ArrowRight, TrendingUp, TrendingDown, Presentation, EyeOff } from 'lucide-react'
 import { ProfitIcon } from '@/components/icons'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts'
 
@@ -67,6 +67,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   const { period, setPeriod, from, to, comparisonPeriod } = usePeriod()
   const { branches: BRANCHES } = useBranches()
   const [loading, setLoading] = useState(true)
+  const [presentationMode, setPresentationMode] = useState(true)
   const [branches, setBranches] = useState<BranchData[]>([])
   const [prevBranches, setPrevBranches] = useState<BranchData[]>([])
   const [overheadPct, setOverheadPct] = useState(() => {
@@ -221,8 +222,17 @@ export default function BranchManagerDashboard({ onBack }: Props) {
           <h1 className="m-0 text-[22px] font-extrabold text-slate-900">דשבורד מנהל סניפים</h1>
           <p className="m-0 text-[13px] text-slate-400">השוואת ביצועים &middot; P&amp;L &middot; KPI</p>
         </div>
-        <div className="mr-auto">
+        <div className="mr-auto flex items-center gap-3">
           <PeriodPicker period={period} onChange={setPeriod} />
+          <Button
+            variant={presentationMode ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setPresentationMode(v => !v)}
+            className={`rounded-xl gap-2 px-4 text-[13px] font-bold ${presentationMode ? 'bg-indigo-500 hover:bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-900'}`}
+          >
+            {presentationMode ? <EyeOff size={15} /> : <Presentation size={15} />}
+            {presentationMode ? 'יציאה ממצב ישיבה' : 'מצב ישיבה'}
+          </Button>
         </div>
       </div>
 
@@ -398,6 +408,14 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {/* Presentation mode banner */}
+                  {presentationMode && (
+                    <motion.div variants={fadeIn} initial="hidden" animate="visible"
+                      className="rounded-lg px-4 py-2 mb-4 text-center text-[13px] font-semibold"
+                      style={{ background: '#EEEDFE', color: '#3C3489' }}>
+                      מצב ישיבה פעיל — נתוני שכר מוסתרים
+                    </motion.div>
+                  )}
                   <Table>
                     <TableHeader>
                       <TableRow className="border-b-2 border-slate-200">
@@ -411,36 +429,58 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {[
-                        { label: 'הכנסות', key: 'totalRevenue' as const, color: '#34d399' },
-                        { label: 'הוצאות', key: 'totalExpenses' as const, color: '#fb7185' },
-                        { label: 'לייבור', key: 'laborEmployer' as const, color: '#fbbf24' },
-                        { label: 'פחת', key: 'wasteTotal' as const, color: '#fb7185' },
-                        { label: 'עלויות קבועות', key: 'fixedCosts' as const, color: '#64748b' },
-                        { label: 'הנהלה וכלליות', key: 'mgmtCosts' as const, color: '#64748b' },
-                        { label: 'רווח גולמי', key: 'grossProfit' as const, color: '#34d399' },
-                      ].map((row, ri) => {
-                        const isBold = row.key === 'grossProfit' || row.key === 'totalRevenue'
-                        const totalVal = branches.reduce((s, b) => s + b[row.key], 0)
-                        return (
-                          <TableRow key={row.key} className={isBold ? 'bg-slate-50' : ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                            <TableCell className={`px-3.5 py-2.5 text-slate-700 ${isBold ? 'font-bold' : 'font-medium'}`}>{row.label}</TableCell>
-                            {branches.map(br => {
-                              const val = br[row.key]
-                              const isProfit = row.key === 'grossProfit'
-                              const c = isProfit ? (val >= 0 ? '#34d399' : '#fb7185') : row.color
-                              return (
-                                <TableCell key={br.id} className={`px-3.5 py-2.5 text-center ${isBold ? 'font-bold' : 'font-medium'}`} style={{ color: val === 0 ? '#94a3b8' : c }}>
-                                  {val === 0 ? '\u2014' : fmtM(val)}
-                                </TableCell>
-                              )
-                            })}
-                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: row.key === 'grossProfit' ? (totalVal >= 0 ? '#34d399' : '#fb7185') : '#0f172a' }}>
-                              {totalVal === 0 ? '\u2014' : fmtM(totalVal)}
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
+                      {(() => {
+                        const HIDDEN_IN_PRESENTATION = new Set(['laborEmployer', 'mgmtCosts', 'totalExpenses'])
+                        const allRows = [
+                          { label: 'הכנסות', key: 'totalRevenue' as const, color: '#34d399' },
+                          { label: 'הוצאות', key: 'totalExpenses' as const, color: '#fb7185' },
+                          { label: 'לייבור', key: 'laborEmployer' as const, color: '#fbbf24' },
+                          { label: 'פחת', key: 'wasteTotal' as const, color: '#fb7185' },
+                          { label: 'עלויות קבועות', key: 'fixedCosts' as const, color: '#64748b' },
+                          { label: 'הנהלה וכלליות', key: 'mgmtCosts' as const, color: '#64748b' },
+                          { label: 'רווח גולמי', key: 'grossProfit' as const, color: '#34d399' },
+                        ]
+                        const visibleRows = presentationMode ? allRows.filter(r => !HIDDEN_IN_PRESENTATION.has(r.key)) : allRows
+                        return visibleRows.map((row, ri) => {
+                          const isBold = row.key === 'grossProfit' || row.key === 'totalRevenue'
+                          const totalVal = branches.reduce((s, b) => s + b[row.key], 0)
+                          return (
+                            <TableRow key={row.key} className={isBold ? 'bg-slate-50' : ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                              <TableCell className={`px-3.5 py-2.5 text-slate-700 ${isBold ? 'font-bold' : 'font-medium'}`}>{row.label}</TableCell>
+                              {branches.map(br => {
+                                const val = br[row.key]
+                                const isProfit = row.key === 'grossProfit'
+                                const c = isProfit ? (val >= 0 ? '#34d399' : '#fb7185') : row.color
+                                return (
+                                  <TableCell key={br.id} className={`px-3.5 py-2.5 text-center ${isBold ? 'font-bold' : 'font-medium'}`} style={{ color: val === 0 ? '#94a3b8' : c }}>
+                                    {val === 0 ? '\u2014' : fmtM(val)}
+                                  </TableCell>
+                                )
+                              })}
+                              <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: row.key === 'grossProfit' ? (totalVal >= 0 ? '#34d399' : '#fb7185') : '#0f172a' }}>
+                                {totalVal === 0 ? '\u2014' : fmtM(totalVal)}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })
+                      })()}
+                      {/* Presentation mode: merged labor % row */}
+                      {presentationMode && (
+                        <TableRow className="bg-indigo-50/50">
+                          <TableCell className="px-3.5 py-2.5 font-bold" style={{ color: '#3C3489' }}>עלויות עבודה %</TableCell>
+                          {branches.map(br => {
+                            const laborExpPct = br.totalRevenue > 0 ? ((br.laborEmployer + br.totalExpenses) / br.totalRevenue * 100) : 0
+                            return (
+                              <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: '#534AB7' }}>
+                                {br.totalRevenue > 0 ? laborExpPct.toFixed(1) + '%' : '\u2014'}
+                              </TableCell>
+                            )
+                          })}
+                          <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: '#534AB7' }}>
+                            {totals.revenue > 0 ? ((totals.labor + totals.expenses) / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
+                          </TableCell>
+                        </TableRow>
+                      )}
                       {/* Overhead row */}
                       {overheadPct > 0 && (
                         <TableRow className="bg-slate-50/50">
