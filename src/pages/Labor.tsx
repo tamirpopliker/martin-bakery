@@ -400,7 +400,7 @@ export default function Labor({ onBack }: Props) {
                       style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px' }}>
                       <HelpCircle size={18} color="#818cf8" />
                     </button>
-                    <div style={{ display: 'none', position: 'absolute', top: '28px', right: 0, background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '20px', width: '320px', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', zIndex: 100, fontSize: '13px', color: '#374151', lineHeight: '1.7' }}>
+                    <div style={{ display: 'none', position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '24px', width: '360px', maxWidth: '90vw', boxShadow: '0 12px 40px rgba(0,0,0,0.15)', zIndex: 1000, fontSize: '13px', color: '#374151', lineHeight: '1.8' }}>
                       <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '10px', color: '#0f172a' }}>איך להוריד דוח מ-TimeWatch?</div>
                       <ol style={{ margin: 0, paddingRight: '18px' }}>
                         <li>היכנס ל-<strong>TimeWatch</strong> של המפעל</li>
