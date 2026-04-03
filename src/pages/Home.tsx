@@ -190,48 +190,42 @@ export default function Home() {
       setPrevAvgLaborPct(pAvgPct)
       setPrevTotalLabor(pFLabor + pTotalBranchLab)
 
-      // Operating profit: revenue - suppliers - labor - waste - fixedCosts - mgmt
+      // Operating profit: revenue - suppliers - labor - waste - fixedCosts
       const monthKey = period.monthKey || from.slice(0, 7)
-      const [wasteRes, fcFactory, mgmtRes] = await Promise.all([
-        supabase.from('factory_waste').select('total_value').gte('date', from).lt('date', to),
+      const [wasteRes, fcFactory] = await Promise.all([
+        supabase.from('factory_waste').select('amount').gte('date', from).lt('date', to),
         getFixedCostTotal('factory', monthKey),
-        supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').eq('department', 'management').gte('date', from).lt('date', to),
       ])
-      const fWaste = (wasteRes.data || []).reduce((s: any, r: any) => s + Number(r.total_value || 0), 0)
-      const fMgmt = (mgmtRes.data || []).reduce((s: any, r: any) => s + Number(r.employer_cost || 0), 0)
+      const fWaste = (wasteRes.data || []).reduce((s: any, r: any) => s + Number(r.amount || 0), 0)
       const fGross = fSales - fSupp - fLabor - fWaste
       setFactoryGross(fGross)
-      const fOP = fGross - fcFactory - fMgmt
+      const fOP = fGross - fcFactory
 
       // Branch operating profit
-      let totalBranchFC = 0, totalBranchWaste = 0, totalBranchMgmt = 0
+      let totalBranchFC = 0, totalBranchWaste = 0
       for (const br of BRANCHES) {
-        const [brFc, brWaste, brMgmt] = await Promise.all([
+        const [brFc, brWaste] = await Promise.all([
           getFixedCostTotal(`branch_${br.id}`, monthKey),
           supabase.from('branch_waste').select('amount').eq('branch_id', br.id).gte('date', from).lt('date', to),
-          supabase.from('branch_expenses').select('amount').eq('branch_id', br.id).eq('category', 'management').gte('date', from).lt('date', to),
         ])
         totalBranchFC += brFc
         totalBranchWaste += (brWaste.data || []).reduce((s: any, r: any) => s + Number(r.amount || 0), 0)
-        totalBranchMgmt += (brMgmt.data || []).reduce((s: any, r: any) => s + Number(r.amount || 0), 0)
       }
       const bGross = totalBranchRev - totalBranchExp - totalBranchLab - totalBranchWaste
       setTotalBranchGross(bGross)
-      const bOP = bGross - totalBranchFC - totalBranchMgmt
+      const bOP = bGross - totalBranchFC
       setOperatingProfit(fOP + bOP)
 
-      // Previous period operating profit (simplified)
+      // Previous period operating profit
       const pMonthKey = comparisonPeriod.from.slice(0, 7)
-      const [pWasteRes, pFcFactory, pMgmtRes] = await Promise.all([
-        supabase.from('factory_waste').select('total_value').gte('date', pFrom).lt('date', pTo),
+      const [pWasteRes, pFcFactory] = await Promise.all([
+        supabase.from('factory_waste').select('amount').gte('date', pFrom).lt('date', pTo),
         getFixedCostTotal('factory', pMonthKey),
-        supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').eq('department', 'management').gte('date', pFrom).lt('date', pTo),
       ])
-      const pFWaste = (pWasteRes.data || []).reduce((s: any, r: any) => s + Number(r.total_value || 0), 0)
-      const pFMgmt = (pMgmtRes.data || []).reduce((s: any, r: any) => s + Number(r.employer_cost || 0), 0)
+      const pFWaste = (pWasteRes.data || []).reduce((s: any, r: any) => s + Number(r.amount || 0), 0)
       const pFGross = pFSales - pFSupp - pFLabor - pFWaste
       setPrevFactoryGross(pFGross)
-      const pFOP = pFGross - pFcFactory - pFMgmt
+      const pFOP = pFGross - pFcFactory
       const pBGross = pTotalBranchRev - pTotalBranchExp - pTotalBranchLab
       setPrevBranchGross(pBGross)
       setPrevOperatingProfit(pFOP + pBGross)
