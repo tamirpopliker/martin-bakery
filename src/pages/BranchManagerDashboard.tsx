@@ -75,9 +75,11 @@ export default function BranchManagerDashboard({ onBack }: Props) {
     return saved ? Number(saved) : 5
   })
   const [chartData, setChartData] = useState<any[]>([])
+  const [kpiTargets, setKpiTargets] = useState<Record<number, { labor_pct: number; waste_pct: number; revenue_target: number; basket_target: number; transaction_target: number }>>({})
 
   const brOH = (br: BranchData) => br.totalRevenue * overheadPct / 100
-  const brOP = (br: BranchData) => br.operatingProfit - brOH(br)
+  const brGross = (br: BranchData) => br.totalRevenue - br.totalExpenses - br.laborEmployer - br.mgmtCosts
+  const brOP = (br: BranchData) => brGross(br) - br.fixedCosts - br.wasteTotal - brOH(br)
 
   async function fetchBranchData(branchId: number, name: string, color: string, dateFrom: string, dateTo: string, monthKey: string): Promise<BranchData> {
     const entityType = `branch_${branchId}`
@@ -144,6 +146,12 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       setBranches(current)
       setPrevBranches(previous)
 
+      // Fetch KPI targets for all branches
+      const { data: kpiData } = await supabase.from('branch_kpi_targets').select('branch_id, labor_pct, waste_pct, revenue_target, basket_target, transaction_target')
+      const kpiMap: typeof kpiTargets = {}
+      ;(kpiData || []).forEach((k: any) => { kpiMap[k.branch_id] = k })
+      setKpiTargets(kpiMap)
+
       // Fetch 6-month revenue data for chart
       const now = new Date(from)
       const months: { key: string; label: string; from: string; to: string }[] = []
@@ -192,16 +200,17 @@ export default function BranchManagerDashboard({ onBack }: Props) {
     fixedCosts: branches.reduce((s, b) => s + b.fixedCosts, 0),
     mgmtCosts: branches.reduce((s, b) => s + b.mgmtCosts, 0),
     overhead: branches.reduce((s, b) => s + brOH(b), 0),
-    grossProfit: branches.reduce((s, b) => s + b.grossProfit, 0),
+    grossProfit: branches.reduce((s, b) => s + brGross(b), 0),
     operatingProfit: branches.reduce((s, b) => s + brOP(b), 0),
   }
   const prevTotals = {
     revenue: prevBranches.reduce((s, b) => s + b.totalRevenue, 0),
-    grossProfit: prevBranches.reduce((s, b) => s + b.grossProfit, 0),
+    grossProfit: prevBranches.reduce((s, b) => s + brGross(b), 0),
     operatingProfit: prevBranches.reduce((s, b) => s + brOP(b), 0),
   }
   const totalLaborPct = totals.revenue > 0 ? (totals.labor / totals.revenue) * 100 : 0
   const totalWastePct = totals.revenue > 0 ? (totals.waste / totals.revenue) * 100 : 0
+  const getTarget = (brId: number, key: string) => (kpiTargets[brId] as any)?.[key] || (key === 'labor_pct' ? 28 : key === 'waste_pct' ? 3 : 0)
 
   // Per-branch max for progress bars
   const maxRevenue = useMemo(() => Math.max(...branches.map(b => b.totalRevenue), 1), [branches])
@@ -431,121 +440,187 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                     <TableBody>
                       {(() => {
                         const HIDDEN_IN_PRESENTATION = new Set(['laborEmployer', 'mgmtCosts', 'totalExpenses'])
-                        const allRows = [
-                          { label: 'הכנסות', key: 'totalRevenue' as const, color: '#34d399' },
-                          { label: 'הוצאות', key: 'totalExpenses' as const, color: '#fb7185' },
-                          { label: 'לייבור', key: 'laborEmployer' as const, color: '#fbbf24' },
-                          { label: 'פחת', key: 'wasteTotal' as const, color: '#fb7185' },
-                          { label: 'עלויות קבועות', key: 'fixedCosts' as const, color: '#64748b' },
-                          { label: 'הנהלה וכלליות', key: 'mgmtCosts' as const, color: '#64748b' },
-                          { label: 'רווח גולמי', key: 'grossProfit' as const, color: '#34d399' },
+                        // Correct order: revenue, expenses, labor, mgmt → gross profit, then fixedCosts, waste, overhead → operating
+                        const costRows: { label: string; key: keyof BranchData; color: string }[] = [
+                          { label: 'הכנסות', key: 'totalRevenue', color: '#34d399' },
+                          { label: 'הוצאות', key: 'totalExpenses', color: '#fb7185' },
+                          { label: 'לייבור', key: 'laborEmployer', color: '#fbbf24' },
+                          { label: 'הנהלה וכלליות', key: 'mgmtCosts', color: '#64748b' },
                         ]
-                        const visibleRows = presentationMode ? allRows.filter(r => !HIDDEN_IN_PRESENTATION.has(r.key)) : allRows
-                        return visibleRows.map((row, ri) => {
-                          const isBold = row.key === 'grossProfit' || row.key === 'totalRevenue'
+                        const visibleCostRows = presentationMode ? costRows.filter(r => !HIDDEN_IN_PRESENTATION.has(r.key)) : costRows
+                        const rows: JSX.Element[] = []
+
+                        // Cost rows before gross profit
+                        visibleCostRows.forEach((row, ri) => {
+                          const isBold = row.key === 'totalRevenue'
                           const totalVal = branches.reduce((s, b) => s + b[row.key], 0)
-                          return (
+                          rows.push(
                             <TableRow key={row.key} className={isBold ? 'bg-slate-50' : ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
                               <TableCell className={`px-3.5 py-2.5 text-slate-700 ${isBold ? 'font-bold' : 'font-medium'}`}>{row.label}</TableCell>
-                              {branches.map(br => {
-                                const val = br[row.key]
-                                const isProfit = row.key === 'grossProfit'
-                                const c = isProfit ? (val >= 0 ? '#34d399' : '#fb7185') : row.color
-                                return (
-                                  <TableCell key={br.id} className={`px-3.5 py-2.5 text-center ${isBold ? 'font-bold' : 'font-medium'}`} style={{ color: val === 0 ? '#94a3b8' : c }}>
-                                    {val === 0 ? '\u2014' : fmtM(val)}
-                                  </TableCell>
-                                )
-                              })}
-                              <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: row.key === 'grossProfit' ? (totalVal >= 0 ? '#34d399' : '#fb7185') : '#0f172a' }}>
+                              {branches.map(br => (
+                                <TableCell key={br.id} className={`px-3.5 py-2.5 text-center ${isBold ? 'font-bold' : 'font-medium'}`} style={{ color: br[row.key] === 0 ? '#94a3b8' : row.color }}>
+                                  {br[row.key] === 0 ? '\u2014' : fmtM(Number(br[row.key]))}
+                                </TableCell>
+                              ))}
+                              <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
                                 {totalVal === 0 ? '\u2014' : fmtM(totalVal)}
                               </TableCell>
                             </TableRow>
                           )
                         })
-                      })()}
-                      {/* Presentation mode: merged labor % row */}
-                      {presentationMode && (
-                        <TableRow className="bg-indigo-50/50">
-                          <TableCell className="px-3.5 py-2.5 font-bold" style={{ color: '#3C3489' }}>עלויות עבודה %</TableCell>
-                          {branches.map(br => {
-                            const laborExpPct = br.totalRevenue > 0 ? ((br.laborEmployer + br.totalExpenses) / br.totalRevenue * 100) : 0
-                            return (
-                              <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: '#534AB7' }}>
-                                {br.totalRevenue > 0 ? laborExpPct.toFixed(1) + '%' : '\u2014'}
+
+                        // Presentation mode: merged labor % row
+                        if (presentationMode) {
+                          rows.push(
+                            <TableRow key="labor-exp-pct" className="bg-indigo-50/50">
+                              <TableCell className="px-3.5 py-2.5 font-bold" style={{ color: '#3C3489' }}>עלויות עבודה %</TableCell>
+                              {branches.map(br => {
+                                const pct = br.totalRevenue > 0 ? ((br.laborEmployer + br.totalExpenses + br.mgmtCosts) / br.totalRevenue * 100) : 0
+                                return (
+                                  <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: '#534AB7' }}>
+                                    {br.totalRevenue > 0 ? pct.toFixed(1) + '%' : '\u2014'}
+                                  </TableCell>
+                                )
+                              })}
+                              <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: '#534AB7' }}>
+                                {totals.revenue > 0 ? ((totals.labor + totals.expenses + totals.mgmtCosts) / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
                               </TableCell>
-                            )
-                          })}
-                          <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: '#534AB7' }}>
-                            {totals.revenue > 0 ? ((totals.labor + totals.expenses) / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                      {/* Overhead row */}
-                      {overheadPct > 0 && (
-                        <TableRow className="bg-slate-50/50">
-                          <TableCell className="px-3.5 py-2.5 font-medium text-slate-700">העמסת מטה {overheadPct}%</TableCell>
-                          {branches.map(br => (
-                            <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-medium text-slate-500">
-                              {fmtM(brOH(br))}
-                            </TableCell>
-                          ))}
-                          <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
-                            {fmtM(totals.overhead)}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                      <TableRow className="bg-slate-50">
-                        <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">רווח תפעולי</TableCell>
-                        {branches.map(br => {
-                          const op = brOP(br)
-                          return (
-                            <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: op >= 0 ? '#34d399' : '#fb7185' }}>
-                              {op === 0 ? '\u2014' : fmtM(op)}
-                            </TableCell>
+                            </TableRow>
                           )
-                        })}
-                        <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.operatingProfit >= 0 ? '#34d399' : '#fb7185' }}>
-                          {totals.operatingProfit === 0 ? '\u2014' : fmtM(totals.operatingProfit)}
-                        </TableCell>
-                      </TableRow>
-                      {/* KPI rows */}
-                      <TableRow className="border-t-2 border-slate-200 bg-slate-50">
-                        <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% לייבור</TableCell>
-                        {branches.map(br => (
-                          <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: br.laborPct <= 28 ? '#34d399' : '#fb7185' }}>
-                            {br.totalRevenue > 0 ? br.laborPct.toFixed(1) + '%' : '\u2014'}
-                          </TableCell>
-                        ))}
-                        <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totalLaborPct <= 28 ? '#34d399' : '#fb7185' }}>
-                          {totalLaborPct.toFixed(1)}%
-                        </TableCell>
-                      </TableRow>
-                      <TableRow className="bg-slate-50">
-                        <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% פחת</TableCell>
-                        {branches.map(br => (
-                          <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: br.wastePct <= 4 ? '#34d399' : '#fb7185' }}>
-                            {br.totalRevenue > 0 ? br.wastePct.toFixed(1) + '%' : '\u2014'}
-                          </TableCell>
-                        ))}
-                        <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totalWastePct <= 4 ? '#34d399' : '#fb7185' }}>
-                          {totalWastePct.toFixed(1)}%
-                        </TableCell>
-                      </TableRow>
-                      <TableRow className="bg-slate-50">
-                        <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% רווח תפעולי</TableCell>
-                        {branches.map(br => {
-                          const opPct = br.totalRevenue > 0 ? (brOP(br) / br.totalRevenue * 100) : 0
-                          return (
-                            <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: opPct >= 0 ? '#34d399' : '#fb7185' }}>
-                              {br.totalRevenue > 0 ? opPct.toFixed(1) + '%' : '\u2014'}
+                        }
+
+                        // Gross profit row
+                        rows.push(
+                          <TableRow key="grossProfit" className="bg-slate-50 border-t border-slate-200">
+                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">רווח גולמי</TableCell>
+                            {branches.map(br => {
+                              const gp = brGross(br)
+                              return (
+                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: gp >= 0 ? '#34d399' : '#fb7185' }}>
+                                  {fmtM(gp)}
+                                </TableCell>
+                              )
+                            })}
+                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.grossProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                              {fmtM(totals.grossProfit)}
                             </TableCell>
+                          </TableRow>
+                        )
+
+                        // Operating cost rows: fixedCosts, waste, overhead
+                        const opCostRows: { label: string; key: keyof BranchData; color: string }[] = [
+                          { label: 'עלויות קבועות', key: 'fixedCosts', color: '#64748b' },
+                          { label: 'פחת', key: 'wasteTotal', color: '#fb7185' },
+                        ]
+                        opCostRows.forEach((row, ri) => {
+                          const totalVal = branches.reduce((s, b) => s + Number(b[row.key]), 0)
+                          rows.push(
+                            <TableRow key={row.key} className={ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                              <TableCell className="px-3.5 py-2.5 font-medium text-slate-700">{row.label}</TableCell>
+                              {branches.map(br => (
+                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-medium" style={{ color: Number(br[row.key]) === 0 ? '#94a3b8' : row.color }}>
+                                  {Number(br[row.key]) === 0 ? '\u2014' : fmtM(Number(br[row.key]))}
+                                </TableCell>
+                              ))}
+                              <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
+                                {totalVal === 0 ? '\u2014' : fmtM(totalVal)}
+                              </TableCell>
+                            </TableRow>
                           )
-                        })}
-                        <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.revenue > 0 ? ((totals.operatingProfit / totals.revenue * 100) >= 0 ? '#34d399' : '#fb7185') : '#94a3b8' }}>
-                          {totals.revenue > 0 ? (totals.operatingProfit / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
-                        </TableCell>
-                      </TableRow>
+                        })
+
+                        // Overhead row
+                        if (overheadPct > 0) {
+                          rows.push(
+                            <TableRow key="overhead" className="bg-slate-50/50">
+                              <TableCell className="px-3.5 py-2.5 font-medium text-slate-700">העמסת מטה {overheadPct}%</TableCell>
+                              {branches.map(br => (
+                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-medium text-slate-500">
+                                  {fmtM(brOH(br))}
+                                </TableCell>
+                              ))}
+                              <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
+                                {fmtM(totals.overhead)}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        }
+
+                        // Operating profit row
+                        rows.push(
+                          <TableRow key="operatingProfit" className="bg-slate-50 border-t border-slate-200">
+                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">רווח תפעולי</TableCell>
+                            {branches.map(br => {
+                              const op = brOP(br)
+                              return (
+                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: op >= 0 ? '#34d399' : '#fb7185' }}>
+                                  {fmtM(op)}
+                                </TableCell>
+                              )
+                            })}
+                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.operatingProfit >= 0 ? '#34d399' : '#fb7185' }}>
+                              {fmtM(totals.operatingProfit)}
+                            </TableCell>
+                          </TableRow>
+                        )
+
+                        // KPI % rows with targets
+                        const avgLaborTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'labor_pct'), 0) / branches.length : 28
+                        const avgWasteTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'waste_pct'), 0) / branches.length : 3
+
+                        rows.push(
+                          <TableRow key="kpi-labor" className="border-t-2 border-slate-200 bg-slate-50">
+                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% לייבור</TableCell>
+                            {branches.map(br => {
+                              const target = getTarget(br.id, 'labor_pct')
+                              return (
+                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: br.laborPct <= target ? '#34d399' : '#fb7185' }}>
+                                  {br.totalRevenue > 0 ? <>{br.laborPct.toFixed(1)}% <span className="text-[10px] text-slate-400 font-normal">(יעד {target}%)</span></> : '\u2014'}
+                                </TableCell>
+                              )
+                            })}
+                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totalLaborPct <= avgLaborTarget ? '#34d399' : '#fb7185' }}>
+                              {totalLaborPct.toFixed(1)}%
+                            </TableCell>
+                          </TableRow>
+                        )
+
+                        rows.push(
+                          <TableRow key="kpi-waste" className="bg-slate-50">
+                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% פחת</TableCell>
+                            {branches.map(br => {
+                              const target = getTarget(br.id, 'waste_pct')
+                              return (
+                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: br.wastePct <= target ? '#34d399' : '#fb7185' }}>
+                                  {br.totalRevenue > 0 ? <>{br.wastePct.toFixed(1)}% <span className="text-[10px] text-slate-400 font-normal">(יעד {target}%)</span></> : '\u2014'}
+                                </TableCell>
+                              )
+                            })}
+                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totalWastePct <= avgWasteTarget ? '#34d399' : '#fb7185' }}>
+                              {totalWastePct.toFixed(1)}%
+                            </TableCell>
+                          </TableRow>
+                        )
+
+                        rows.push(
+                          <TableRow key="kpi-op-pct" className="bg-slate-50">
+                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% רווח תפעולי</TableCell>
+                            {branches.map(br => {
+                              const opPct = br.totalRevenue > 0 ? (brOP(br) / br.totalRevenue * 100) : 0
+                              return (
+                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: opPct >= 0 ? '#34d399' : '#fb7185' }}>
+                                  {br.totalRevenue > 0 ? opPct.toFixed(1) + '%' : '\u2014'}
+                                </TableCell>
+                              )
+                            })}
+                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.revenue > 0 ? ((totals.operatingProfit / totals.revenue * 100) >= 0 ? '#34d399' : '#fb7185') : '#94a3b8' }}>
+                              {totals.revenue > 0 ? (totals.operatingProfit / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
+                            </TableCell>
+                          </TableRow>
+                        )
+
+                        return rows
+                      })()}
                     </TableBody>
                   </Table>
                 </CardContent>
