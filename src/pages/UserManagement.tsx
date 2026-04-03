@@ -16,6 +16,7 @@ interface AppUser {
   excluded_departments: string[]
   can_settings: boolean
   auth_uid: string | null
+  managed_department: string | null
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -48,7 +49,7 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editData, setEditData] = useState<Partial<AppUser>>({})
   const [addMode, setAddMode] = useState(false)
-  const [newUser, setNewUser] = useState({ email: '', name: '', role: 'branch' as string, branch_id: 1, excluded_departments: [] as string[], can_settings: false })
+  const [newUser, setNewUser] = useState({ email: '', name: '', role: 'branch' as string, branch_id: 1, excluded_departments: [] as string[], can_settings: false, managed_department: null as string | null })
   const [saving, setSaving] = useState(false)
   // ─── Branch management state ──────────────────────────────────────────────
   const [tab, setTab] = useState<'users' | 'branches'>('users')
@@ -68,8 +69,8 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
     setSaving(true)
     const update: any = { ...editData }
     if (update.role !== 'branch') update.branch_id = null
-    if (update.role !== 'factory') update.excluded_departments = []
-    if (update.role === 'admin') { update.can_settings = true; update.branch_id = null; update.excluded_departments = [] }
+    if (update.role !== 'factory') { update.excluded_departments = []; update.managed_department = null }
+    if (update.role === 'admin') { update.can_settings = true; update.branch_id = null; update.excluded_departments = []; update.managed_department = null }
     await supabase.from('app_users').update(update).eq('id', id)
     setEditingId(null)
     setSaving(false)
@@ -80,11 +81,11 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
     setSaving(true)
     const insert: any = { ...newUser, email: newUser.email.toLowerCase() }
     if (insert.role !== 'branch') insert.branch_id = null
-    if (insert.role !== 'factory') insert.excluded_departments = []
-    if (insert.role === 'admin') { insert.can_settings = true; insert.branch_id = null; insert.excluded_departments = [] }
+    if (insert.role !== 'factory') { insert.excluded_departments = []; insert.managed_department = null }
+    if (insert.role === 'admin') { insert.can_settings = true; insert.branch_id = null; insert.excluded_departments = []; insert.managed_department = null }
     await supabase.from('app_users').insert(insert)
     setAddMode(false)
-    setNewUser({ email: '', name: '', role: 'branch', branch_id: 1, excluded_departments: [], can_settings: false })
+    setNewUser({ email: '', name: '', role: 'branch', branch_id: 1, excluded_departments: [], can_settings: false, managed_department: null })
     setSaving(false)
     loadUsers()
   }
@@ -104,6 +105,7 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
       branch_id: user.branch_id,
       excluded_departments: [...user.excluded_departments],
       can_settings: user.can_settings,
+      managed_department: user.managed_department,
     })
   }
 
@@ -223,24 +225,39 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
                 </div>
               )}
               {newUser.role === 'factory' && (
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>מחלקות חסומות</label>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {ALL_DEPTS.map(d => (
-                      <button key={d} onClick={() => toggleExcludedDept(d, 'new')}
-                        style={{
-                          padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
-                          border: '1px solid',
-                          background: newUser.excluded_departments.includes(d) ? '#fff1f2' : '#f0fdf4',
-                          borderColor: newUser.excluded_departments.includes(d) ? '#fca5a5' : '#86efac',
-                          color: newUser.excluded_departments.includes(d) ? '#fb7185' : '#34d399',
-                        }}
-                      >
-                        {DEPT_LABELS[d]} {newUser.excluded_departments.includes(d) ? '✗' : '✓'}
-                      </button>
-                    ))}
+                <>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>מנהל מחלקה</label>
+                    <select value={newUser.managed_department || ''} onChange={e => setNewUser({ ...newUser, managed_department: e.target.value || null })}
+                      style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', boxSizing: 'border-box' }}>
+                      <option value="">אין — גישה לכל המחלקות</option>
+                      {ALL_DEPTS.map(d => <option key={d} value={d}>{DEPT_LABELS[d]}</option>)}
+                    </select>
+                    {newUser.managed_department && (
+                      <p style={{ fontSize: '11px', color: '#f59e0b', margin: '4px 0 0' }}>⚠️ מנהל מחלקה לא יכול לגשת להגדרות המפעל</p>
+                    )}
                   </div>
-                </div>
+                  {!newUser.managed_department && (
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>מחלקות חסומות</label>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {ALL_DEPTS.map(d => (
+                          <button key={d} onClick={() => toggleExcludedDept(d, 'new')}
+                            style={{
+                              padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                              border: '1px solid',
+                              background: newUser.excluded_departments.includes(d) ? '#fff1f2' : '#f0fdf4',
+                              borderColor: newUser.excluded_departments.includes(d) ? '#fca5a5' : '#86efac',
+                              color: newUser.excluded_departments.includes(d) ? '#fb7185' : '#34d399',
+                            }}
+                          >
+                            {DEPT_LABELS[d]} {newUser.excluded_departments.includes(d) ? '✗' : '✓'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
               {newUser.role !== 'admin' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '20px' }}>
@@ -277,7 +294,7 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
             <span>אימייל</span>
             <span>תפקיד</span>
             <span>ישות</span>
-            <span>מחלקות חסומות</span>
+            <span>מחלקה</span>
             <span>הגדרות</span>
             <span>פעולות</span>
           </div>
@@ -311,20 +328,16 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
                     {editData.role === 'factory' && <span style={{ fontSize: '11px', color: '#94a3b8' }}>כל המפעל</span>}
                     {editData.role === 'admin' && <span style={{ fontSize: '11px', color: '#94a3b8' }}>הכל</span>}
                   </div>
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                    {editData.role === 'factory' ? ALL_DEPTS.map(d => (
-                      <button key={d} onClick={() => toggleExcludedDept(d, 'edit')}
-                        style={{
-                          padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '600', cursor: 'pointer',
-                          border: '1px solid',
-                          background: (editData.excluded_departments || []).includes(d) ? '#fff1f2' : '#f0fdf4',
-                          borderColor: (editData.excluded_departments || []).includes(d) ? '#fca5a5' : '#86efac',
-                          color: (editData.excluded_departments || []).includes(d) ? '#fb7185' : '#34d399',
-                        }}
-                      >
-                        {DEPT_LABELS[d]}
-                      </button>
-                    )) : <span style={{ fontSize: '11px', color: '#94a3b8' }}>—</span>}
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    {editData.role === 'factory' ? (
+                      <>
+                        <select value={editData.managed_department || ''} onChange={e => setEditData({ ...editData, managed_department: e.target.value || null })}
+                          style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '2px 6px', fontSize: '10px' }}>
+                          <option value="">כל המחלקות</option>
+                          {ALL_DEPTS.map(d => <option key={d} value={d}>{DEPT_LABELS[d]}</option>)}
+                        </select>
+                      </>
+                    ) : <span style={{ fontSize: '11px', color: '#94a3b8' }}>—</span>}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {editData.role !== 'admin' ? (
@@ -362,10 +375,13 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
                   <span style={{ color: '#374151' }}>
                     {user.role === 'admin' ? 'הכל' :
                      user.role === 'branch' && user.branch_id ? getBranchName(user.branch_id) :
+                     user.managed_department ? `מנהל ${DEPT_LABELS[user.managed_department]}` :
                      'כל המפעל'}
                   </span>
                   <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                    {user.role === 'factory' && user.excluded_departments.length > 0
+                    {user.role === 'factory' && user.managed_department
+                      ? <span style={{ color: '#f59e0b', fontWeight: '600' }}>מנהל מחלקה</span>
+                      : user.role === 'factory' && user.excluded_departments.length > 0
                       ? user.excluded_departments.map(d => DEPT_LABELS[d]).join(', ')
                       : '—'}
                   </span>

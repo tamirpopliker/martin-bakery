@@ -12,6 +12,7 @@ export interface AppUser {
   excluded_departments: string[]
   can_settings: boolean
   auth_uid: string | null
+  managed_department: string | null // 'creams' | 'dough' | 'packaging' | 'cleaning' | null
 }
 
 interface UserContextValue {
@@ -70,13 +71,16 @@ function getBranchFromPage(pageKey: string): number | null {
 }
 
 function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
+  const isDeptManager = user.role === 'factory' && !!user.managed_department
+
   return (pageKey: string) => {
     // Admin can access everything
     if (user.role === 'admin') return true
 
-    // Settings pages
+    // Settings pages — department managers cannot access settings at all
     if (pageKey === 'settings' || pageKey === 'data_import' || pageKey === 'user_management') {
-      if (pageKey === 'user_management') return user.role === 'admin'
+      if (pageKey === 'user_management') return false // admin only
+      if (isDeptManager) return false // dept manager blocked from settings
       return user.can_settings
     }
 
@@ -87,7 +91,15 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
     const dept = getDeptFromPage(pageKey)
     if (dept !== null || pageKey === 'factory_dashboard' || pageKey === 'factory_b2b' || pageKey === 'labor' || pageKey === 'suppliers') {
       if (user.role === 'branch') return false
-      // Factory user
+
+      // Department manager: can only access their own department
+      if (isDeptManager) {
+        if (dept && dept !== user.managed_department) return false
+        // Allow factory_dashboard, labor, suppliers for dept managers
+        return true
+      }
+
+      // Regular factory user
       if (dept && user.excluded_departments.includes(dept)) return false
       return true
     }
@@ -149,6 +161,7 @@ export function UserProvider({ session, children }: { session: Session; children
       setAppUser({
         ...data,
         excluded_departments: data.excluded_departments || [],
+        managed_department: data.managed_department || null,
       })
       setLoading(false)
     }
