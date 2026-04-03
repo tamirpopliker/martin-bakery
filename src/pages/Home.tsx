@@ -432,11 +432,13 @@ export default function Home() {
                 <div>
                   <div className="text-[11px] text-slate-400 font-semibold mb-0.5">לייבור ממוצע</div>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-lg font-extrabold text-slate-900">{grandLaborPct.toFixed(1)}%</span>
-                    <span className={`text-[13px] font-bold ${grandLaborPct <= 28 ? 'text-emerald-400' : 'text-rose-400'}`}>{grandLaborPct <= 28 ? '✓' : '✗'}</span>
+                    <span className="text-lg font-extrabold text-slate-900">{fmtK(totalLabor)}</span>
                     <DiffBadge curr={grandLaborPct} prev={prevGrandLaborPct} inverse />
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">{fmtK(totalLabor)}</div>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className="text-[11px] font-bold text-slate-500">{grandLaborPct.toFixed(1)}%</span>
+                    <span className={`text-[11px] font-bold ${grandLaborPct <= 28 ? 'text-emerald-400' : 'text-rose-400'}`}>{grandLaborPct <= 28 ? '✓' : '✗'}</span>
+                  </div>
                 </div>
               </button>
               )})()}
