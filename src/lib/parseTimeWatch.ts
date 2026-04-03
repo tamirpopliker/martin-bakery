@@ -203,7 +203,7 @@ export async function parseTimeWatchPDF(file: File): Promise<TimeWatchRow[]> {
 
           // Debug: log gaps for first Hebrew name
           if (rows.length === 0) {
-            console.log(`[parseTimeWatch] Hebrew name gaps: median=${medianGap.toFixed(1)}, threshold=${wordBreakThreshold.toFixed(1)}, gaps=[${sortedGaps.map(g => g.toFixed(1)).join(',')}]`)
+            console.log(`[parseTimeWatch] Hebrew name gaps: threshold=${wordBreakThreshold.toFixed(1)}, gaps=[${sortedGaps.map(g => g.toFixed(1)).join(',')}]`)
           }
 
           const words: string[] = []
