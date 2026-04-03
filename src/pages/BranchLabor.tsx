@@ -271,25 +271,24 @@ function parseDetailedFormat(pages: PdfItem[][]): { rows: ParsedRow[]; rawLines:
       const key = `${name}|${dateStr}`
       if (seenKeys.has(key)) continue
 
-      // Extract numbers from line (excluding date-like tokens)
-      const nums = texts
-        .filter(t => !/^\d{2}\/\d{2}\/\d{4}$/.test(t) && !/^\d{2}:\d{2}$/.test(t))
-        .map(t => t.replace(/,/g, ''))
-        .filter(t => /^\d+(\.\d+)?$/.test(t))
-        .map(parseFloat)
+      // Extract number items with their X position (excluding dates and times)
+      const numItems = row
+        .filter(it => !/^\d{2}\/\d{2}\/\d{4}$/.test(it.text) && !/^\d{2}:\d{2}$/.test(it.text))
+        .filter(it => /^[\d,.]+$/.test(it.text.replace(/,/g, '')))
+        .map(it => ({ val: parseFloat(it.text.replace(/,/g, '')), x: it.x }))
+        .filter(it => !isNaN(it.val) && it.val <= 24) // Max 24 hours/day — filters out employee codes
 
-      // We need at least: totalHours, hours100, hours125, hours150, anomalies
-      // The detailed PDF row has: totalHours, hours100, hours125, hours150, 0.00 (anomalies)
-      // Numbers are ordered left-to-right: anomalies(0), hours150, hours125, hours100, totalHours, ...
-      // But sorted by X ascending (left first)
-      if (nums.length < 3) continue
+      // CashOnTab detailed PDF columns from RIGHT to LEFT (descending X):
+      // סה"כ שעות | 100% | 125% | 150% | חריגות
+      // Sort by X descending (right first = totalHours first)
+      numItems.sort((a, b) => b.x - a.x)
 
-      // The largest number is totalHours, second is hours_100
-      const sorted = [...nums].sort((a, b) => b - a)
-      const totalH = sorted[0]
-      const h100 = sorted[1] || 0
-      const h125 = sorted.length >= 3 ? sorted[2] : 0
-      const h150 = sorted.length >= 4 ? sorted[3] : 0
+      if (numItems.length < 2) continue
+
+      const totalH = numItems[0]?.val || 0
+      const h100 = numItems[1]?.val || 0
+      const h125 = numItems[2]?.val || 0
+      const h150 = numItems[3]?.val || 0
 
       if (totalH <= 0) continue
 
@@ -372,7 +371,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
   async function fetchDailyReport() {
     setDailyLoading(true)
-    const { data } = await supabase.from('branch_labor').select('date, hours, gross_salary, employer_cost')
+    const { data } = await supabase.from('branch_labor').select('date, hours, gross_salary, employer_cost, notes')
       .eq('branch_id', branchId)
       .gte('date', from).lt('date', to)
       .order('date')
@@ -381,8 +380,14 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       for (const r of data) {
         if (!byDate[r.date]) byDate[r.date] = { date: r.date, employees: 0, hours100: 0, hours125: 0, hours150: 0, gross: 0, employer: 0 }
         byDate[r.date].employees++
-        byDate[r.date].hours100 += Number(r.hours || 0) // total hours as proxy
-        byDate[r.date].hours150 += Number(r.hours_150 || 0)
+        // Parse hours breakdown from notes field: "100%: 8.5ש׳ | 125%: 1.5ש׳"
+        const notes = r.notes || ''
+        const m100 = notes.match(/100%:\s*([\d.]+)/)
+        const m125 = notes.match(/125%:\s*([\d.]+)/)
+        const m150 = notes.match(/150%:\s*([\d.]+)/)
+        byDate[r.date].hours100 += m100 ? parseFloat(m100[1]) : Number(r.hours || 0)
+        byDate[r.date].hours125 += m125 ? parseFloat(m125[1]) : 0
+        byDate[r.date].hours150 += m150 ? parseFloat(m150[1]) : 0
         byDate[r.date].gross += Number(r.gross_salary || 0)
         byDate[r.date].employer += Number(r.employer_cost || 0)
       }
