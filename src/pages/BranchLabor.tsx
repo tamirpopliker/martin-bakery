@@ -592,10 +592,11 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       }
 
       // Auto-save new employees to branch_employees
-      const uniqueEmps = new Map<string, { rate: number; bonus: number }>()
+      // Save ALL unique employees (even with rate=0) so they appear in the employees page
+      const uniqueEmps = new Map<string, number>()
       for (const r of toSave) {
-        if (r.hourly_rate > 0 && !uniqueEmps.has(r.name)) {
-          uniqueEmps.set(r.name, { rate: r.hourly_rate, bonus: r.retention_bonus || 0 })
+        if (!uniqueEmps.has(r.name)) {
+          uniqueEmps.set(r.name, r.hourly_rate || 0)
         }
       }
       let newEmps = 0
@@ -603,16 +604,19 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
         .select('name').eq('branch_id', branchId)
       const existingNames = (existingEmps || []).map((e: any) => e.name.toLowerCase())
       const newEmpPayloads: any[] = []
-      for (const [name, { rate, bonus }] of uniqueEmps) {
+      for (const [name, rate] of uniqueEmps) {
         if (!existingNames.some((n: string) => name.toLowerCase().includes(n) || n.includes(name.toLowerCase()))) {
-          const empPayload: Record<string, any> = { branch_id: branchId, name, hourly_rate: rate, active: true }
-          if (bonus > 0) empPayload.retention_bonus = bonus
-          newEmpPayloads.push(empPayload)
+          // Don't include retention_bonus — it has DEFAULT 0 and may cause 400 if column not cached
+          newEmpPayloads.push({ branch_id: branchId, name, hourly_rate: rate, active: true })
         }
       }
       if (newEmpPayloads.length > 0) {
-        await supabase.from('branch_employees').insert(newEmpPayloads)
-        newEmps = newEmpPayloads.length
+        const { error: empErr } = await supabase.from('branch_employees').insert(newEmpPayloads)
+        if (empErr) {
+          console.error('branch_employees insert error:', empErr)
+        } else {
+          newEmps = newEmpPayloads.length
+        }
       }
 
       setParsedRows([]); setUploadStatus('done')
