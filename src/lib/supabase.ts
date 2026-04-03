@@ -246,7 +246,7 @@ export async function getWorkingDays(month: string): Promise<number> {
 
 /**
  * Get fixed costs for a given entity and month.
- * If no data exists for the requested month, falls back to the latest previous month that has data.
+ * If no data exists for the requested month, falls back to the closest month that has data (before or after).
  */
 export async function getFixedCostsForMonth(entityType: string, month: string): Promise<{ name: string; amount: number }[]> {
   const { data } = await supabase
@@ -256,19 +256,44 @@ export async function getFixedCostsForMonth(entityType: string, month: string): 
     .eq('month', month)
   if (data && data.length > 0) return data
 
-  // Fallback: get the latest month that has data before the requested month
-  const { data: fallback } = await supabase
+  // Fallback: find the closest month with data (try before first, then after)
+  const { data: before } = await supabase
     .from('fixed_costs')
-    .select('name, amount, month')
+    .select('month')
     .eq('entity_type', entityType)
     .lt('month', month)
     .order('month', { ascending: false })
-    .limit(20)
-  if (!fallback || fallback.length === 0) return []
+    .limit(1)
 
-  // Return all rows from the latest month found
-  const latestMonth = fallback[0].month
-  return fallback.filter((r: any) => r.month === latestMonth)
+  const { data: after } = await supabase
+    .from('fixed_costs')
+    .select('month')
+    .eq('entity_type', entityType)
+    .gt('month', month)
+    .order('month', { ascending: true })
+    .limit(1)
+
+  // Pick the closest month
+  const beforeMonth = before?.[0]?.month
+  const afterMonth = after?.[0]?.month
+  let closestMonth: string | null = null
+  if (beforeMonth && afterMonth) {
+    // Both exist — pick whichever is closer
+    const diffBefore = Math.abs(new Date(month + '-01').getTime() - new Date(beforeMonth + '-01').getTime())
+    const diffAfter = Math.abs(new Date(afterMonth + '-01').getTime() - new Date(month + '-01').getTime())
+    closestMonth = diffBefore <= diffAfter ? beforeMonth : afterMonth
+  } else {
+    closestMonth = beforeMonth || afterMonth || null
+  }
+
+  if (!closestMonth) return []
+
+  const { data: fallback } = await supabase
+    .from('fixed_costs')
+    .select('name, amount')
+    .eq('entity_type', entityType)
+    .eq('month', closestMonth)
+  return fallback || []
 }
 
 /**
@@ -284,12 +309,17 @@ export async function getFixedCostTotal(entityType: string, month: string): Prom
  */
 export function fillFixedCostsMap(fcByMonth: Record<string, number>, months: string[]): Record<string, number> {
   const filled: Record<string, number> = { ...fcByMonth }
+  // Find any known value to use as default for months without data
+  const knownValues = Object.values(fcByMonth).filter(v => v > 0)
+  const defaultVal = knownValues.length > 0 ? knownValues[0] : 0
+
+  // Forward pass: carry known values forward, use defaultVal for leading empty months
   let lastKnown = 0
   for (const m of months) {
     if (filled[m] !== undefined && filled[m] > 0) {
       lastKnown = filled[m]
     } else {
-      filled[m] = lastKnown
+      filled[m] = lastKnown || defaultVal
     }
   }
   return filled
