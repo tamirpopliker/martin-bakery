@@ -280,56 +280,58 @@ function parseDetailedFormat(pages: PdfItem[][]): { rows: ParsedRow[]; rawLines:
 
       if (nums.length < 3) continue
 
-      // Strategy: use MATHEMATICAL RELATIONSHIP instead of X positions
-      // In CashOnTab: סה"כ שעות = רגילות(100%) + רמה1(125%) + רמה2(150%)
-      // סה"כ שעות is the largest value ≤ 24
       // Filter to hour-range values only (0–24)
       const hourNums = nums.filter(v => v >= 0 && v <= 24)
       if (hourNums.length < 2) continue
 
-      // סה"כ שעות = largest hour value
-      const totalH = Math.max(...hourNums)
-      if (totalH <= 0) continue
+      // Strategy: find סה"כ שעות as the number that equals the sum of other numbers in the row
+      // This is the ONLY reliable way because קופה (0-999) and סוג דיווח (0-10)
+      // can overlap with valid hour values
+      //
+      // For each candidate totalH (sorted descending), check if remaining numbers
+      // contain a subset that sums to totalH. The first match wins.
+      const candidates = [...new Set(hourNums)].filter(v => v > 0).sort((a, b) => b - a)
 
-      // Remove totalH from candidates, then find 100%, 125%, 150%
-      // They should sum to approximately totalH
-      const remaining = [...hourNums]
-      const totalIdx = remaining.indexOf(totalH)
-      if (totalIdx >= 0) remaining.splice(totalIdx, 1)
-
-      // Sort remaining descending — largest is רגילות(100%), then רמה1(125%), then רמה2(150%)
-      remaining.sort((a, b) => b - a)
-
-      // Try to find the best combination of 3 values that sum to ~totalH
-      // This filters out non-hour numbers like סוג דיווח (4, 9, 10) and קופה (999)
-      let finalH100 = 0, finalH125 = 0, finalH150 = 0
+      let totalH = 0, finalH100 = 0, finalH125 = 0, finalH150 = 0
       let found = false
 
-      // Try all combinations of up to 3 remaining values
-      for (let i = 0; i < remaining.length && !found; i++) {
-        for (let j = i + 1; j < remaining.length && !found; j++) {
-          // Try 2 values
-          if (Math.abs(remaining[i] + remaining[j] - totalH) < 0.1) {
-            finalH100 = remaining[i]; finalH125 = remaining[j]; finalH150 = 0
+      for (const candidateTotal of candidates) {
+        if (found) break
+        // Build remaining list (remove one instance of candidateTotal)
+        const rest = [...hourNums]
+        const idx = rest.indexOf(candidateTotal)
+        if (idx >= 0) rest.splice(idx, 1)
+        rest.sort((a, b) => b - a)
+
+        // Try combinations of 1, 2, or 3 values from rest that sum to candidateTotal
+        for (let i = 0; i < rest.length && !found; i++) {
+          // Single value match
+          if (Math.abs(rest[i] - candidateTotal) < 0.1) {
+            totalH = candidateTotal; finalH100 = rest[i]
             found = true; break
           }
-          for (let k = j + 1; k < remaining.length && !found; k++) {
-            // Try 3 values
-            if (Math.abs(remaining[i] + remaining[j] + remaining[k] - totalH) < 0.1) {
-              finalH100 = remaining[i]; finalH125 = remaining[j]; finalH150 = remaining[k]
+          for (let j = i + 1; j < rest.length && !found; j++) {
+            // Two values
+            if (Math.abs(rest[i] + rest[j] - candidateTotal) < 0.1) {
+              totalH = candidateTotal; finalH100 = rest[i]; finalH125 = rest[j]
               found = true; break
+            }
+            for (let k = j + 1; k < rest.length && !found; k++) {
+              // Three values
+              if (Math.abs(rest[i] + rest[j] + rest[k] - candidateTotal) < 0.1) {
+                totalH = candidateTotal; finalH100 = rest[i]; finalH125 = rest[j]; finalH150 = rest[k]
+                found = true; break
+              }
             }
           }
         }
-        // Try single value (all hours at 100%)
-        if (!found && Math.abs(remaining[i] - totalH) < 0.1) {
-          finalH100 = remaining[i]; found = true
-        }
       }
 
-      // Fallback: if no combination found, put all in 100%
+      // Fallback: largest value as totalH, all in 100%
       if (!found) {
-        finalH100 = totalH; finalH125 = 0; finalH150 = 0
+        totalH = Math.max(...hourNums.filter(v => v > 0))
+        if (totalH <= 0) continue
+        finalH100 = totalH
       }
 
       seenKeys.add(key)
