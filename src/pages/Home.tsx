@@ -6,7 +6,7 @@ import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import PeriodPicker from '../components/PeriodPicker'
 import InstallPWA from '../components/InstallPWA'
@@ -791,10 +791,12 @@ export default function Home() {
 
       {/* ─── Revenue Drill-Down Sheet ─────────────────────────────────────── */}
       <Sheet open={revenueSheetOpen} onOpenChange={setRevenueSheetOpen}>
-        <SheetContent className="w-[380px] max-w-[90vw]">
-          <SheetHeader className="pb-3">
-            <SheetTitle className="text-base font-bold text-slate-900">פירוט הכנסות — {period.label}</SheetTitle>
-          </SheetHeader>
+        <SheetPortal>
+          <SheetBackdrop />
+          <SheetContent>
+            <SheetHeader className="pb-3">
+              <SheetTitle className="text-base font-bold text-slate-900">פירוט הכנסות — {period.label}</SheetTitle>
+            </SheetHeader>
           {(() => {
             const grandRevenue = factoryRevenue + totalBranchRevenue
             const rows = [
@@ -827,15 +829,18 @@ export default function Home() {
               </Table>
             )
           })()}
-        </SheetContent>
+          </SheetContent>
+        </SheetPortal>
       </Sheet>
 
       {/* ─── Labor Drill-Down Sheet ───────────────────────────────────────── */}
       <Sheet open={laborSheetOpen} onOpenChange={setLaborSheetOpen}>
-        <SheetContent className="w-[380px] max-w-[90vw]">
-          <SheetHeader className="pb-3">
-            <SheetTitle className="text-base font-bold text-slate-900">פירוט לייבור — {period.label}</SheetTitle>
-          </SheetHeader>
+        <SheetPortal>
+          <SheetBackdrop />
+          <SheetContent>
+            <SheetHeader className="pb-3">
+              <SheetTitle className="text-base font-bold text-slate-900">פירוט לייבור — {period.label}</SheetTitle>
+            </SheetHeader>
           {(() => {
             const grandRevenue = factoryRevenue + totalBranchRevenue
             const rows = [
@@ -873,7 +878,8 @@ export default function Home() {
               </Table>
             )
           })()}
-        </SheetContent>
+          </SheetContent>
+        </SheetPortal>
       </Sheet>
     </div>
   )
