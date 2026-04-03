@@ -1,20 +1,18 @@
 /**
- * parseWorkingHoursPDF — חילוץ סיכומי עובדים מדו"ח נוכחות מפורט של CashOnTab
+ * parseWorkingHoursPDF — חילוץ שורות יומיות מדו"ח נוכחות מפורט של CashOnTab
  *
- * אסטרטגיה: במקום לפענח כל שורה יומית (בעייתי בגלל RTL ועמודות קופה/סוג דיווח),
- * מחלצים מבלוק "סיכום לעובד" בלבד — שם יש שורה אחת ברורה של סה"כ שעות.
+ * אסטרטגיה: שימוש בעמודות X של שורת הכותרת (header) כדי למפות כל תא לעמודה הנכונה.
+ * כותרות ידועות: תאריך | יום | כניסה | יציאה | סוג דיווח | קופה | סניף | סה"כ שעות | רגילות | רמה 1 | רמה 2 | חריגות
  *
- * מבנה הדו"ח:
- *   - כל עובד תופס דף/ים עם כותרת "שם עובד: ..."
- *   - בסוף כל עובד יש בלוק "סיכום לעובד"
- *   - בבלוק הסיכום יש 3 שורות: א-ה, שישי, שבת + שורת סה"כ
- *   - שורת סה"כ מכילה: סה"כ_שעות | רגילות | רמה1 | רמה2 | חריגות
+ * כל עובד מזוהה לפי "שם עובד:" בראש הדף.
+ * שורות יומיות מזוהות לפי תאריך DD/MM/YYYY.
+ * התוצאה: שורה אחת לכל יום לכל עובד.
  */
 
 export interface ParsedEmployee {
   name: string
-  date: string          // תאריך סיום (date_to) — YYYY-MM-DD
-  total_hours: number   // סה"כ שעות
+  date: string          // YYYY-MM-DD
+  total_hours: number
   hours_100: number     // רגילות
   hours_125: number     // רמה 1
   hours_150: number     // רמה 2
@@ -39,18 +37,15 @@ function loadPdfJs(): Promise<any> {
   })
 }
 
-// ─── חילוץ טקסט גולמי מכל דף ─────────────────────────────────────────────────
-async function extractTextPerPage(file: File): Promise<string[]> {
+// ─── חילוץ items עם x,y מכל דף ─────────────────────────────────────────────
+async function extractItemsPerPage(file: File): Promise<PdfItem[][]> {
   const lib = await loadPdfJs()
   const buf = await file.arrayBuffer()
   const pdf = await lib.getDocument({ data: new Uint8Array(buf) }).promise
-  const pages: string[] = []
-
+  const pages: PdfItem[][] = []
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p)
     const content = await page.getTextContent()
-
-    // Group items by Y coordinate, then sort each group by X (right-to-left for Hebrew)
     const items: PdfItem[] = []
     for (const item of content.items as any[]) {
       if (item.str?.trim()) {
@@ -61,35 +56,51 @@ async function extractTextPerPage(file: File): Promise<string[]> {
         })
       }
     }
-
-    // Group by Y (tolerance 4px)
-    const yGroups = new Map<number, PdfItem[]>()
-    for (const item of items) {
-      let matched = false
-      for (const [key] of yGroups) {
-        if (Math.abs(key - item.y) <= 4) {
-          yGroups.get(key)!.push(item)
-          matched = true
-          break
-        }
-      }
-      if (!matched) yGroups.set(item.y, [item])
-    }
-
-    // Sort lines top-to-bottom (higher Y = higher on page in PDF coords → sort descending)
-    const sortedYKeys = [...yGroups.keys()].sort((a, b) => b - a)
-    const lineTexts: string[] = []
-    for (const y of sortedYKeys) {
-      const row = yGroups.get(y)!
-      // Sort items within line right-to-left (higher X first) for Hebrew
-      row.sort((a, b) => b.x - a.x)
-      lineTexts.push(row.map(it => it.text).join(' '))
-    }
-
-    pages.push(lineTexts.join('\n'))
+    pages.push(items)
   }
-
   return pages
+}
+
+// ─── קיבוץ items לשורות לפי Y ────────────────────────────────────────────────
+function groupByY(items: PdfItem[], tolerance = 4): Map<number, PdfItem[]> {
+  const groups = new Map<number, PdfItem[]>()
+  for (const item of items) {
+    let matched = false
+    for (const [key] of groups) {
+      if (Math.abs(key - item.y) <= tolerance) {
+        groups.get(key)!.push(item)
+        matched = true
+        break
+      }
+    }
+    if (!matched) groups.set(item.y, [item])
+  }
+  for (const [, row] of groups) row.sort((a, b) => a.x - b.x)
+  return groups
+}
+
+// ─── מציאת עמודה הכי קרובה ────────────────────────────────────────────────────
+function findClosestColumn(x: number, columnXs: Map<string, number>): string | null {
+  let best = '', bestDist = Infinity
+  for (const [name, cx] of columnXs) {
+    const dist = Math.abs(x - cx)
+    if (dist < bestDist) { bestDist = dist; best = name }
+  }
+  return bestDist < 40 ? best : null
+}
+
+// ─── Header column keywords ────────────────────────────────────────────────────
+// The PDF header row contains these labels (some may be split across items)
+const HEADER_KEYWORDS: Record<string, string[]> = {
+  'total_hours': ['סה"כ שעות', 'שעות כ"סה'],
+  'regular':     ['רגילות'],
+  'level1':      ['רמה 1', '1 רמה', 'רמה'],
+  'level2':      ['רמה 2', '2 רמה'],
+  'exceptions':  ['חריגות'],
+  'register':    ['קופה'],
+  'report_type': ['סוג', 'דיווח'],
+  'branch':      ['סניף'],
+  'date':        ['תאריך'],
 }
 
 // ─── פרסור ראשי ─────────────────────────────────────────────────────────────
@@ -97,152 +108,171 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
   employees: ParsedEmployee[]
   rawPages: string[]
 }> {
-  const rawPages = await extractTextPerPage(file)
-
-  // Debug: dump raw text per page
-  rawPages.forEach((text, i) => {
-    console.log(`[parseWorkingHours] ── PAGE ${i + 1} ──`)
-    console.log(text)
-  })
-
-  // Join all pages into one long text
-  const allText = rawPages.join('\n')
-
-  // ── שלב 1: חלץ טווח תאריכים ──
-  // "עד תאריך DD/MM/YY" or "עד תאריך DD/MM/YYYY"
-  let dateTo = ''
-  const dateToMatch = allText.match(/עד תאריך\s+(\d{2})\/(\d{2})\/(\d{2,4})/)
-  if (dateToMatch) {
-    const dd = dateToMatch[1]
-    const mm = dateToMatch[2]
-    let yyyy = dateToMatch[3]
-    if (yyyy.length === 2) yyyy = '20' + yyyy
-    dateTo = `${yyyy}-${mm}-${dd}`
-  }
-
-  if (!dateTo) {
-    console.warn('[parseWorkingHours] Could not find עד תאריך')
-  }
-
-  // ── שלב 2: מצא כל בלוק עובד ──
-  // Split by "שם עובד:" — each block is one employee
-  // But we need to handle the case where "שם עובד:" appears within a line
+  const allPages = await extractItemsPerPage(file)
+  const rawPages: string[] = []
   const employees: ParsedEmployee[] = []
+  const seenKeys = new Set<string>()
 
-  // Find all employee blocks using "סיכום לעובד" and the preceding "שם עובד:"
-  // Strategy: find all "שם עובד:" positions and pair with the next "סיכום לעובד"
-  const lines = allText.split('\n')
+  for (let pageIdx = 0; pageIdx < allPages.length; pageIdx++) {
+    const pageItems = allPages[pageIdx]
+    const groups = groupByY(pageItems)
+    const yKeys = [...groups.keys()].sort((a, b) => b - a) // high Y = top of page
 
-  let currentName = ''
+    // Build raw text for debug
+    const pageLines: string[] = []
+    for (const y of yKeys) {
+      const row = groups.get(y)!
+      pageLines.push(row.map(it => it.text).join(' | '))
+    }
+    const rawText = pageLines.join('\n')
+    rawPages.push(rawText)
+    console.log(`[parseWorkingHours] ── PAGE ${pageIdx + 1} ──\n${rawText}`)
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+    // ── שלב 1: מצא שם עובד ──
+    const fullText = pageItems.map(it => it.text).join(' ')
+    const nameMatch = fullText.match(/שם עובד[:\s]+([^\n]+?)(?:\s+קוד|\s+מחסנים|\s+תאריך)/)
+    if (!nameMatch) continue
+    const name = nameMatch[1].trim().replace(/\s+/g, ' ')
+    if (!name) continue
 
-    // ── זיהוי שם עובד ──
-    const nameMatch = line.match(/שם עובד[:\s]+([^\n]+?)(?:\s+קוד|\s*$)/)
-    if (nameMatch) {
-      const rawName = nameMatch[1].trim().replace(/\s+/g, ' ')
-      if (rawName) currentName = rawName
+    // ── שלב 2: מצא שורת header ──
+    // Look for the line that contains "סה"כ שעות" AND "רגילות" (or nearby)
+    let headerY = -1
+    const columnXs = new Map<string, number>()
+
+    for (const y of yKeys) {
+      const row = groups.get(y)!
+      const lineText = row.map(it => it.text).join(' ')
+
+      // Header line should contain multiple column names
+      const hasTotal = lineText.includes('סה"כ שעות') || lineText.includes('שעות כ"סה')
+      const hasRegular = lineText.includes('רגילות')
+
+      if (hasTotal && hasRegular) {
+        headerY = y
+
+        // Map each header label to its X position
+        // First, try to find multi-word headers by joining adjacent items
+        for (let i = 0; i < row.length; i++) {
+          const item = row[i]
+          const text = item.text
+
+          // Check single-item matches
+          if (text === 'רגילות') columnXs.set('regular', item.x)
+          if (text === 'חריגות') columnXs.set('exceptions', item.x)
+          if (text === 'קופה') columnXs.set('register', item.x)
+          if (text === 'סניף') columnXs.set('branch', item.x)
+          if (text === 'תאריך') columnXs.set('date', item.x)
+
+          // Multi-word: "סה"כ שעות" might be one item or two
+          if (text.includes('סה"כ שעות') || text.includes('שעות כ"סה')) {
+            columnXs.set('total_hours', item.x)
+          }
+          if (text === 'סה"כ' && i + 1 < row.length && row[i + 1].text === 'שעות') {
+            columnXs.set('total_hours', item.x)
+          }
+          if (text === 'שעות' && i > 0 && row[i - 1].text === 'סה"כ') {
+            columnXs.set('total_hours', row[i - 1].x)
+          }
+
+          // "רמה 1" / "רמה 2" might be split
+          if (text === 'רמה') {
+            // Look at next item for the number
+            if (i + 1 < row.length) {
+              const next = row[i + 1].text
+              if (next === '1') columnXs.set('level1', item.x)
+              else if (next === '2') columnXs.set('level2', item.x)
+            }
+          }
+          // Or combined
+          if (text === 'רמה 1' || text === '1 רמה') columnXs.set('level1', item.x)
+          if (text === 'רמה 2' || text === '2 רמה') columnXs.set('level2', item.x)
+
+          // "סוג דיווח" might be split
+          if (text.includes('סוג') && text.includes('דיווח')) columnXs.set('report_type', item.x)
+          if (text === 'סוג') columnXs.set('report_type', item.x)
+        }
+
+        // Also check for "סה"כ שעות" split across "סה"כ שעות\nרגילות"
+        // Some PDFs have multi-line headers
+
+        console.log(`[parseWorkingHours] Header found at Y=${headerY}, columns:`, Object.fromEntries(columnXs))
+        break
+      }
     }
 
-    // ── חיפוש שורת סה"כ שעות בסיכום ──
-    // The last row in the summary section contains the totals
-    // It looks like: "4.97 19.51 112.70 137.18" (or with "סה"כ שעות" prefix)
-    // We detect this by looking for the "סיכום לעובד" marker
-    if (line.includes('סיכום לעובד') || line.includes('סיכום')) {
-      if (!currentName) continue
+    if (headerY === -1 || !columnXs.has('total_hours')) {
+      console.warn(`[parseWorkingHours] No header found on page ${pageIdx + 1} for ${name}`)
+      continue
+    }
 
-      // Scan forward to find the total line
-      // The summary block has:
-      //   "סה"כ ימי נוכחות א-ה" → row with weekday totals
-      //   "סה"כ ימי נוכחות שישי" → row with Friday totals
-      //   "סה"כ ימי נוכחות שבת"
-      //   "סה"כ ימים עם דיווח חסר"
-      //   Then: the TOTALS row (last row with numbers before next employee)
-      //   Format: סה"כ_שעות רגילות רמה1 רמה2 חריגות
+    // ── שלב 3: חלץ שורות יומיות ──
+    // Lines BELOW the header (lower Y) that contain a date DD/MM/YYYY
+    for (const y of yKeys) {
+      if (y >= headerY) continue // skip header and above
 
-      // Look at lines after "סיכום לעובד" to find "סה"כ שעות" or the last numeric line
-      let totalHours = 0, h100 = 0, h125 = 0, h150 = 0
-      let foundTotals = false
+      const row = groups.get(y)!
+      const texts = row.map(it => it.text)
+      const lineText = texts.join(' ')
 
-      for (let j = i + 1; j < Math.min(i + 20, lines.length); j++) {
-        const sumLine = lines[j]
+      // Skip summary lines
+      if (lineText.includes('סיכום') || lineText.includes('CashOnTab') || lineText.includes('עמוד')) continue
 
-        // Stop if we hit next employee or next page marker
-        if (sumLine.includes('שם עובד:') || sumLine.includes('דו"ח נוכחות') || sumLine.includes('CashOnTab')) break
+      // Look for date DD/MM/YYYY
+      const dateItem = row.find(it => /^\d{2}\/\d{2}\/\d{4}$/.test(it.text))
+      if (!dateItem) continue
 
-        // Look for "סה"כ שעות" line or the final totals line
-        // The totals line has the overall sums — it's the one with the largest numbers
-        // It typically follows after "סה"כ ימי נוכחות שבת" and "סה"כ ימים עם דיווח חסר"
-        if (sumLine.includes('סה"כ שעות') || sumLine.includes('שעות כ"סה')) {
-          // Extract all numbers from this line
-          const nums = extractNumbers(sumLine)
-          console.log(`[parseWorkingHours] ${currentName} סה"כ שעות line: "${sumLine}" → nums: [${nums}]`)
-          if (nums.length >= 2) {
-            // Numbers in RTL line (right-to-left): סה"כ, רגילות, רמה1, רמה2, חריגות
-            // The largest number is סה"כ שעות
-            const sorted = [...nums].sort((a, b) => b - a)
-            totalHours = sorted[0]
+      // Parse date
+      const [dd, mm, yyyy] = dateItem.text.split('/')
+      const dateStr = `${yyyy}-${mm}-${dd}`
 
-            // Find the combination that sums to totalHours
-            const rest = nums.filter((_, idx) => nums[idx] !== totalHours || idx !== nums.indexOf(sorted[0]))
-            // Actually simpler: the sum of רגילות + רמה1 + רמה2 + חריגות = סה"כ
-            // So remove סה"כ and take the rest sorted descending
-            const components = [...rest].sort((a, b) => b - a)
-            h100 = components[0] || 0
-            h125 = components[1] || 0
-            h150 = components[2] || 0
+      // Skip rows with 0 total hours (non-work days that appear in PDF)
+      // Map each number item to its closest column
+      const cellMap = new Map<string, number>()
 
-            foundTotals = true
-            break
-          }
-        }
+      for (const item of row) {
+        // Skip non-numeric items (dates, times, Hebrew text)
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(item.text)) continue
+        if (/^\d{2}:\d{2}$/.test(item.text)) continue
+        if (/[\u05D0-\u05EA]/.test(item.text)) continue
 
-        // Also look for a line that just has numbers (the totals row at the very end)
-        // This is the line right before a blank line or next section
-        const nums = extractNumbers(sumLine)
-        if (nums.length >= 4) {
-          // Could be the totals row: totalH, regular, level1, level2, exceptions
-          const sorted = [...nums].sort((a, b) => b - a)
-          // Only accept if largest is > 10 (likely total hours for a month)
-          if (sorted[0] > 10) {
-            totalHours = sorted[0]
-            const rest = [...nums]
-            const maxIdx = rest.indexOf(totalHours)
-            rest.splice(maxIdx, 1)
-            const components = rest.sort((a, b) => b - a)
-            h100 = components[0] || 0
-            h125 = components[1] || 0
-            h150 = components[2] || 0
-            foundTotals = true
-            // Don't break — keep scanning for a more specific "סה"כ שעות" line
-          }
+        const val = parseFloat(item.text.replace(/,/g, ''))
+        if (isNaN(val)) continue
+
+        // Find closest column header
+        const col = findClosestColumn(item.x, columnXs)
+        if (col) {
+          cellMap.set(col, val)
         }
       }
 
-      if (foundTotals && totalHours > 0) {
-        console.log(`[parseWorkingHours] ✅ ${currentName}: total=${totalHours}, h100=${h100}, h125=${h125}, h150=${h150}`)
-        employees.push({
-          name: currentName,
-          date: dateTo,
-          total_hours: totalHours,
-          hours_100: h100,
-          hours_125: h125,
-          hours_150: h150,
-        })
-      } else {
-        console.warn(`[parseWorkingHours] ⚠️ ${currentName}: no totals found after סיכום`)
-      }
+      const totalH = cellMap.get('total_hours') || 0
+      if (totalH <= 0) continue
+
+      const h100 = cellMap.get('regular') || 0
+      const h125 = cellMap.get('level1') || 0
+      const h150 = cellMap.get('level2') || 0
+
+      const key = `${name}|${dateStr}`
+      if (seenKeys.has(key)) continue
+      seenKeys.add(key)
+
+      console.log(`[parseWorkingHours] ${name} ${dateStr}: total=${totalH}, h100=${h100}, h125=${h125}, h150=${h150}`)
+
+      employees.push({
+        name,
+        date: dateStr,
+        total_hours: totalH,
+        hours_100: h100,
+        hours_125: h125,
+        hours_150: h150,
+      })
     }
   }
 
-  return { employees, rawPages }
-}
+  // Sort by name, then date
+  employees.sort((a, b) => a.name.localeCompare(b.name) || a.date.localeCompare(b.date))
 
-// ─── חילוץ מספרים מטקסט ─────────────────────────────────────────────────────
-function extractNumbers(text: string): number[] {
-  // Match numbers like 137.18, 96.70, 4.97, 0 etc.
-  const matches = text.match(/\d+(?:\.\d+)?/g)
-  if (!matches) return []
-  return matches.map(s => parseFloat(s)).filter(v => !isNaN(v))
+  console.log(`[parseWorkingHours] Total: ${employees.length} daily rows for ${new Set(employees.map(e => e.name)).size} employees`)
+  return { employees, rawPages }
 }

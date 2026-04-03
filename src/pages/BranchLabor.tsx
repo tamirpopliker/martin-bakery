@@ -517,7 +517,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       setUploadStatus('confirm')
       const uniqueNames = new Set(rows.map(r => r.name)).size
       setUploadMsg(isDetailed
-        ? `זוהו ${uniqueNames} עובדים מסיכום (הזן תעריף שעתי לחישוב שכר)`
+        ? `זוהו ${uniqueNames} עובדים · ${rows.length} שורות יומיות (הזן תעריף שעתי לחישוב שכר)`
         : `זוהו ${rows.length} עובדים — בדוק ואשר`)
     } catch (err: any) {
       setUploadStatus('error')
