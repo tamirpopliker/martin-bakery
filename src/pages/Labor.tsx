@@ -331,8 +331,17 @@ export default function Labor({ onBack }: Props) {
     }
     setSaving(false)
     setSaved(true)
-    setRows([])
+    setDuplicateDates([])
+    setReplaceMode(false)
+    // Keep rows to show count in success message, clear after 3s
+    const count = inserts.length
+    const dateCount = new Set(inserts.map(r => r.date)).size
+    setTimeout(() => { setRows([]); setSaved(false) }, 5000)
+    // Store for display
+    setSavedInfo({ count, dateCount })
   }
+
+  const [savedInfo, setSavedInfo] = useState<{ count: number; dateCount: number } | null>(null)
 
   async function handleAddEmployee() {
     if (!addForm.name) return
@@ -586,15 +595,30 @@ export default function Labor({ onBack }: Props) {
                   </div>
                 )}
 
-                {!showDuplicateWarning && (
+                {saved && savedInfo && (
+                  <div style={{ background: '#d1fae5', border: '1.5px solid #6ee7b7', borderRadius: '14px', padding: '20px 24px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
+                    <div style={{ fontWeight: '800', fontSize: '18px', color: '#065f46', marginBottom: '4px' }}>
+                      נשמרו {savedInfo.count} רשומות בהצלחה
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#047857' }}>
+                      {savedInfo.dateCount} {savedInfo.dateCount === 1 ? 'יום' : 'ימים'} · {new Set(rows.map(r => r.name)).size || savedInfo.count} עובדים
+                    </div>
+                    <button onClick={() => setTab('history')} style={{ marginTop: '12px', background: '#059669', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 20px', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+                      צפה בהיסטוריה
+                    </button>
+                  </div>
+                )}
+
+                {!showDuplicateWarning && !saved && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ background: '#0f172a', color: 'white', borderRadius: '12px', padding: '12px 24px', fontWeight: '800', fontSize: '18px' }}>
                       סה"כ עלות מעביד: ₪{totalCost.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                       {isMonthly && <span style={{ fontSize: '13px', fontWeight: '500', marginRight: '12px', opacity: 0.7 }}>{knownRows.length} רשומות</span>}
                     </div>
-                    <button onClick={handleSave} disabled={saving || saved || knownRows.length === 0}
-                      style={{ background: saved ? '#34d399' : saving || knownRows.length === 0 ? '#e2e8f0' : replaceMode ? '#dc2626' : '#818cf8', color: saved || knownRows.length > 0 ? 'white' : '#94a3b8', border: 'none', borderRadius: '12px', padding: '12px 32px', fontWeight: '700', fontSize: '16px', cursor: knownRows.length > 0 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {saved ? <><Check size={18} />נשמר!</> : saving ? 'שומר...' : replaceMode ? <><Save size={18} />מחק והחלף</> : <><Save size={18} />אשר ושמור</>}
+                    <button onClick={handleSave} disabled={saving || knownRows.length === 0}
+                      style={{ background: saving || knownRows.length === 0 ? '#e2e8f0' : replaceMode ? '#dc2626' : '#818cf8', color: knownRows.length > 0 ? 'white' : '#94a3b8', border: 'none', borderRadius: '12px', padding: '12px 32px', fontWeight: '700', fontSize: '16px', cursor: knownRows.length > 0 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {saving ? 'שומר...' : replaceMode ? <><Save size={18} />מחק והחלף</> : <><Save size={18} />אשר ושמור</>}
                     </button>
                   </div>
                 )}
