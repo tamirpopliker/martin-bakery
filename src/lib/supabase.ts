@@ -125,10 +125,11 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
   const branchWasteByM = groupByMonth(branchWasteRes.data, 'amount')
 
   // Costs for operating profit
-  const fixedCostsByM: Record<string, number> = {}
+  const rawFixedCostsByM: Record<string, number> = {}
   ;(fixedCostsRes.data || []).forEach((r: any) => {
-    if (r.month) fixedCostsByM[r.month] = (fixedCostsByM[r.month] || 0) + Number(r.amount || 0)
+    if (r.month) rawFixedCostsByM[r.month] = (rawFixedCostsByM[r.month] || 0) + Number(r.amount || 0)
   })
+  const fixedCostsByM = fillFixedCostsMap(rawFixedCostsByM, months)
   const repairsByM = groupByMonth(factoryRepairsRes.data, 'amount')
   const branchExpByM = groupByMonth(branchExpensesRes.data, 'amount')
 
@@ -166,8 +167,9 @@ export async function fetchBranchTrends(branchId: number, refMonth: string): Pro
   const labByM = grp(labRes.data, 'employer_cost')
   const expByM = grp(expRes.data, 'amount')
   const wasteByM = grp(wasteRes.data, 'amount')
-  const fcByM: Record<string, number> = {}
-  ;(fcRes.data || []).forEach((r: any) => { if (r.month) fcByM[r.month] = (fcByM[r.month] || 0) + Number(r.amount || 0) })
+  const rawFcByM: Record<string, number> = {}
+  ;(fcRes.data || []).forEach((r: any) => { if (r.month) rawFcByM[r.month] = (rawFcByM[r.month] || 0) + Number(r.amount || 0) })
+  const fcByM = fillFixedCostsMap(rawFcByM, months)
 
   return months.map(m => {
     const revenue = revByM[m] || 0
@@ -207,8 +209,9 @@ export async function fetchFactoryTrends(refMonth: string): Promise<MonthTrend[]
   const labByM = grp(labRes.data, 'employer_cost')
   const wasteByM = grp(wasteRes.data, 'amount')
   const repByM = grp(repairsRes.data, 'amount')
-  const fcByM: Record<string, number> = {}
-  ;(fcRes.data || []).forEach((r: any) => { if (r.month) fcByM[r.month] = (fcByM[r.month] || 0) + Number(r.amount || 0) })
+  const rawFcByM: Record<string, number> = {}
+  ;(fcRes.data || []).forEach((r: any) => { if (r.month) rawFcByM[r.month] = (rawFcByM[r.month] || 0) + Number(r.amount || 0) })
+  const fcByM = fillFixedCostsMap(rawFcByM, months)
 
   return months.map(m => {
     const revenue = (salesByM[m] || 0) + (b2bByM[m] || 0)
@@ -239,6 +242,57 @@ export async function getWorkingDays(month: string): Promise<number> {
     .eq('month', month)
     .maybeSingle()
   return data?.amount || 26
+}
+
+/**
+ * Get fixed costs for a given entity and month.
+ * If no data exists for the requested month, falls back to the latest previous month that has data.
+ */
+export async function getFixedCostsForMonth(entityType: string, month: string): Promise<{ name: string; amount: number }[]> {
+  const { data } = await supabase
+    .from('fixed_costs')
+    .select('name, amount')
+    .eq('entity_type', entityType)
+    .eq('month', month)
+  if (data && data.length > 0) return data
+
+  // Fallback: get the latest month that has data before the requested month
+  const { data: fallback } = await supabase
+    .from('fixed_costs')
+    .select('name, amount, month')
+    .eq('entity_type', entityType)
+    .lt('month', month)
+    .order('month', { ascending: false })
+    .limit(20)
+  if (!fallback || fallback.length === 0) return []
+
+  // Return all rows from the latest month found
+  const latestMonth = fallback[0].month
+  return fallback.filter((r: any) => r.month === latestMonth)
+}
+
+/**
+ * Get total fixed costs amount for a given entity and month (with fallback).
+ */
+export async function getFixedCostTotal(entityType: string, month: string): Promise<number> {
+  const costs = await getFixedCostsForMonth(entityType, month)
+  return costs.reduce((s, c) => s + Number(c.amount || 0), 0)
+}
+
+/**
+ * Fill fixed costs map for trend data: for months with no data, use the latest previous month's data.
+ */
+export function fillFixedCostsMap(fcByMonth: Record<string, number>, months: string[]): Record<string, number> {
+  const filled: Record<string, number> = { ...fcByMonth }
+  let lastKnown = 0
+  for (const m of months) {
+    if (filled[m] !== undefined && filled[m] > 0) {
+      lastKnown = filled[m]
+    } else {
+      filled[m] = lastKnown
+    }
+  }
+  return filled
 }
 
 /** Count working days in a date range, excluding Saturdays (day===6) */

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept, fetchFactoryTrends } from '../lib/supabase'
+import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept, fetchFactoryTrends, getFixedCostTotal } from '../lib/supabase'
 import type { GlobalEmployee, MonthTrend } from '../lib/supabase'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { ArrowRight, TrendingUp, TrendingDown, Factory } from 'lucide-react'
@@ -127,9 +127,7 @@ export default function FactoryDashboard({ onBack }: Props) {
       supabase.from('factory_waste').select('department, amount').gte('date', from).lt('date', to),
       supabase.from('factory_repairs').select('department, amount').gte('date', from).lt('date', to),
       supabase.from('labor').select('entity_id, employee_name, hours_100, hours_125, hours_150, gross_salary, employer_cost').eq('entity_type', 'factory').gte('date', from).lt('date', to),
-      monthKey
-        ? supabase.from('fixed_costs').select('amount').eq('entity_type', 'factory').eq('month', monthKey)
-        : supabase.from('fixed_costs').select('amount').eq('entity_type', 'factory').in('month', getMonthsInRange(from, to)),
+      getFixedCostTotal('factory', monthKey || from.slice(0, 7)),
       supabase.from('kpi_targets').select('*'),
       supabase.from('supplier_invoices').select('supplier_id, amount').gte('date', from).lt('date', to),
       supabase.from('suppliers').select('id, name'),
@@ -208,9 +206,8 @@ export default function FactoryDashboard({ onBack }: Props) {
     })
     setLaborDept(lDept)
 
-    // Fixed costs
-    const fData = fixedRes.data || []
-    setFixedCosts(fData.reduce((s: number, r: any) => s + Number(r.amount), 0))
+    // Fixed costs (fixedRes is already a number from getFixedCostTotal)
+    setFixedCosts(fixedRes)
 
     // KPI targets
     const kData = kpiRes.data || []
