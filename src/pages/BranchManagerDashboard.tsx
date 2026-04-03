@@ -45,7 +45,7 @@ interface BranchData {
   operatingPct: number
 }
 
-function fmtM(n: number) { return '\u20AA' + Math.round(n).toLocaleString() }
+function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString() }
 
 function DiffBadge({ current, previous, inverse }: { current: number; previous: number; inverse?: boolean }) {
   if (previous === 0 && current === 0) return null
@@ -238,7 +238,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
               <CardContent className="p-4">
                 <div className="text-[11px] font-semibold text-slate-400 mb-1">סה"כ הכנסות</div>
                 <div className="text-[22px] font-medium" style={{ color: '#378ADD' }}>
-                  <CountUp end={Math.round(totals.revenue)} duration={1.5} separator="," prefix="\u20AA" />
+                  <CountUp end={Math.round(totals.revenue)} duration={1.5} separator="," prefix="₪" />
                 </div>
                 <DiffBadge current={totals.revenue} previous={prevTotals.revenue} />
               </CardContent>
@@ -249,7 +249,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
               <CardContent className="p-4">
                 <div className="text-[11px] font-semibold text-slate-400 mb-1">סה"כ רווח גולמי</div>
                 <div className="text-[22px] font-medium" style={{ color: totals.grossProfit >= 0 ? '#639922' : '#E24B4A' }}>
-                  <CountUp end={Math.round(totals.grossProfit)} duration={1.5} separator="," prefix="\u20AA" />
+                  <CountUp end={Math.round(totals.grossProfit)} duration={1.5} separator="," prefix="₪" />
                 </div>
                 <DiffBadge current={totals.grossProfit} previous={prevTotals.grossProfit} />
               </CardContent>
@@ -260,7 +260,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
               <CardContent className="p-4">
                 <div className="text-[11px] font-semibold text-slate-400 mb-1">סה"כ רווח תפעולי</div>
                 <div className="text-[22px] font-medium" style={{ color: totals.operatingProfit >= 0 ? '#639922' : '#E24B4A' }}>
-                  <CountUp end={Math.round(totals.operatingProfit)} duration={1.5} separator="," prefix="\u20AA" />
+                  <CountUp end={Math.round(totals.operatingProfit)} duration={1.5} separator="," prefix="₪" />
                 </div>
                 <DiffBadge current={totals.operatingProfit} previous={prevTotals.operatingProfit} />
               </CardContent>
