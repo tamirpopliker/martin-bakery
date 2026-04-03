@@ -76,6 +76,7 @@ const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, tra
 export default function Labor({ onBack }: Props) {
   const [tab, setTab] = useState<'upload' | 'employees'>('upload')
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]) // includes inactive, for PDF matching
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [saving, setSaving] = useState(false)
@@ -89,8 +90,11 @@ export default function Labor({ onBack }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function fetchEmployees() {
-    const { data } = await supabase.from('employees').select('*').eq('active', true).order('name')
-    if (data) setEmployees(data)
+    const { data } = await supabase.from('employees').select('*').order('name')
+    if (data) {
+      setAllEmployees(data)
+      setEmployees(data.filter(e => e.active))
+    }
   }
 
   useEffect(() => { fetchEmployees() }, [])
@@ -104,12 +108,13 @@ export default function Labor({ onBack }: Props) {
       for (const tw of twRows) {
         if (tw.date) seenDates.add(tw.date)
         // זיהוי: מספר עובד → שם מדויק → שם ללא רווחים → שם חלקי
+        // Search ALL employees (including inactive) for matching
         const normalize = (s: string) => s.replace(/[\s'"׳`']/g, '').toLowerCase()
         const twNorm = normalize(tw.name)
-        const emp = (tw.employee_number && employees.find(e => e.employee_number === tw.employee_number))
-          || employees.find(e => e.name.trim().toLowerCase() === tw.name.trim().toLowerCase())
-          || employees.find(e => normalize(e.name) === twNorm)
-          || employees.find(e => twNorm.includes(normalize(e.name)) || normalize(e.name).includes(twNorm))
+        const emp = (tw.employee_number && allEmployees.find(e => e.employee_number === tw.employee_number))
+          || allEmployees.find(e => e.name.trim().toLowerCase() === tw.name.trim().toLowerCase())
+          || allEmployees.find(e => normalize(e.name) === twNorm)
+          || allEmployees.find(e => twNorm.includes(normalize(e.name)) || normalize(e.name).includes(twNorm))
           || undefined
         newRows.push({
           id: Math.random().toString(36).slice(2),
