@@ -103,10 +103,13 @@ export default function Labor({ onBack }: Props) {
 
       for (const tw of twRows) {
         if (tw.date) seenDates.add(tw.date)
-        // זיהוי: קודם לפי מספר עובד, fallback לפי שם
+        // זיהוי: מספר עובד → שם מדויק → שם ללא רווחים → שם חלקי
+        const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase()
+        const twNorm = normalize(tw.name)
         const emp = (tw.employee_number && employees.find(e => e.employee_number === tw.employee_number))
           || employees.find(e => e.name.trim().toLowerCase() === tw.name.trim().toLowerCase())
-          || employees.find(e => tw.name.includes(e.name) || e.name.includes(tw.name))
+          || employees.find(e => normalize(e.name) === twNorm)
+          || employees.find(e => twNorm.includes(normalize(e.name)) || normalize(e.name).includes(twNorm))
           || undefined
         newRows.push({
           id: Math.random().toString(36).slice(2),
