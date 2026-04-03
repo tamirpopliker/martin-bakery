@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, getLast6Months, monthEnd, fetchSixMonthTrends, MonthTrend } from '../lib/supabase'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
+import { supabase, monthEnd, getFixedCostTotal } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
@@ -105,7 +104,8 @@ export default function Home() {
   const [prevBranchRevenue, setPrevBranchRevenue] = useState(0)
   const [prevBranchGross, setPrevBranchGross] = useState(0)
   const [prevAvgLaborPct, setPrevAvgLaborPct] = useState(0)
-  const [trendData, setTrendData] = useState<MonthTrend[]>([])
+  const [operatingProfit, setOperatingProfit] = useState(0)
+  const [prevOperatingProfit, setPrevOperatingProfit] = useState(0)
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -123,7 +123,6 @@ export default function Home() {
       const fLabor = (laborRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
       const fSupp  = (suppliersRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
       setFactoryRevenue(fSales)
-      setFactoryGross(fSales - fLabor - fSupp)
 
       // Branch data
       const bKpi: BranchKpi[] = []
@@ -148,7 +147,6 @@ export default function Home() {
 
       setBranchKpi(bKpi)
       setTotalBranchRevenue(totalBranchRev)
-      setTotalBranchGross(totalBranchRev - totalBranchLab - totalBranchExp)
       const avgPct = totalBranchRev > 0 ? (totalBranchLab / totalBranchRev) * 100 : 0
       setAvgLaborPct(avgPct)
       setAlerts(alertCount)
@@ -166,7 +164,6 @@ export default function Home() {
       const pFLabor = (pLabor.data || []).reduce((s: any, r: any) => s + Number(r.employer_cost), 0)
       const pFSupp = (pSupp.data || []).reduce((s: any, r: any) => s + Number(r.amount), 0)
       setPrevFactoryRevenue(pFSales)
-      setPrevFactoryGross(pFSales - pFLabor - pFSupp)
 
       let pTotalBranchRev = 0, pTotalBranchLab = 0, pTotalBranchExp = 0
       for (const br of BRANCHES) {
@@ -180,14 +177,54 @@ export default function Home() {
         pTotalBranchExp += (pExpRes.data || []).reduce((s: any, r: any) => s + Number(r.amount), 0)
       }
       setPrevBranchRevenue(pTotalBranchRev)
-      setPrevBranchGross(pTotalBranchRev - pTotalBranchLab - pTotalBranchExp)
       const pAvgPct = pTotalBranchRev > 0 ? (pTotalBranchLab / pTotalBranchRev) * 100 : 0
       setPrevAvgLaborPct(pAvgPct)
 
-      // 6-month trend
-      const refMonth = period.monthKey || period.from.slice(0, 7)
-      const trends = await fetchSixMonthTrends(refMonth)
-      setTrendData(trends)
+      // Operating profit: revenue - suppliers - labor - waste - fixedCosts - mgmt
+      const monthKey = period.monthKey || from.slice(0, 7)
+      const [wasteRes, fcFactory, mgmtRes] = await Promise.all([
+        supabase.from('factory_waste').select('total_value').gte('date', from).lt('date', to),
+        getFixedCostTotal('factory', monthKey),
+        supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').eq('department', 'management').gte('date', from).lt('date', to),
+      ])
+      const fWaste = (wasteRes.data || []).reduce((s: any, r: any) => s + Number(r.total_value || 0), 0)
+      const fMgmt = (mgmtRes.data || []).reduce((s: any, r: any) => s + Number(r.employer_cost || 0), 0)
+      const fGross = fSales - fSupp - fLabor - fWaste
+      setFactoryGross(fGross)
+      const fOP = fGross - fcFactory - fMgmt
+
+      // Branch operating profit
+      let totalBranchFC = 0, totalBranchWaste = 0, totalBranchMgmt = 0
+      for (const br of BRANCHES) {
+        const [brFc, brWaste, brMgmt] = await Promise.all([
+          getFixedCostTotal(`branch_${br.id}`, monthKey),
+          supabase.from('branch_waste').select('amount').eq('branch_id', br.id).gte('date', from).lt('date', to),
+          supabase.from('branch_expenses').select('amount').eq('branch_id', br.id).eq('category', 'management').gte('date', from).lt('date', to),
+        ])
+        totalBranchFC += brFc
+        totalBranchWaste += (brWaste.data || []).reduce((s: any, r: any) => s + Number(r.amount || 0), 0)
+        totalBranchMgmt += (brMgmt.data || []).reduce((s: any, r: any) => s + Number(r.amount || 0), 0)
+      }
+      const bGross = totalBranchRev - totalBranchExp - totalBranchLab - totalBranchWaste
+      setTotalBranchGross(bGross)
+      const bOP = bGross - totalBranchFC - totalBranchMgmt
+      setOperatingProfit(fOP + bOP)
+
+      // Previous period operating profit (simplified)
+      const pMonthKey = comparisonPeriod.from.slice(0, 7)
+      const [pWasteRes, pFcFactory, pMgmtRes] = await Promise.all([
+        supabase.from('factory_waste').select('total_value').gte('date', pFrom).lt('date', pTo),
+        getFixedCostTotal('factory', pMonthKey),
+        supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').eq('department', 'management').gte('date', pFrom).lt('date', pTo),
+      ])
+      const pFWaste = (pWasteRes.data || []).reduce((s: any, r: any) => s + Number(r.total_value || 0), 0)
+      const pFMgmt = (pMgmtRes.data || []).reduce((s: any, r: any) => s + Number(r.employer_cost || 0), 0)
+      const pFGross = pFSales - pFSupp - pFLabor - pFWaste
+      setPrevFactoryGross(pFGross)
+      const pFOP = pFGross - pFcFactory - pFMgmt
+      const pBGross = pTotalBranchRev - pTotalBranchExp - pTotalBranchLab
+      setPrevBranchGross(pBGross)
+      setPrevOperatingProfit(pFOP + pBGross)
     }
     loadKpi()
   }, [from, to])
@@ -364,21 +401,19 @@ export default function Home() {
                 </div>
               </div>
               )})()}
-              {/* רווח גולמי */}
-              {(() => { const grandGross = factoryGross + totalBranchGross; return (
+              {/* רווח תפעולי */}
               <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#7C3AED15' }}>
                   <ProfitIcon size={16} color="#7C3AED" />
                 </div>
                 <div>
-                  <div className="text-[11px] text-slate-400 font-semibold mb-0.5">רווח גולמי</div>
+                  <div className="text-[11px] text-slate-400 font-semibold mb-0.5">רווח תפעולי</div>
                   <div className="flex items-baseline gap-1.5">
-                    <span className={`text-lg font-extrabold ${grandGross >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{fmtK(grandGross)}</span>
-                    <DiffBadge curr={factoryGross + totalBranchGross} prev={prevFactoryGross + prevBranchGross} />
+                    <span className={`text-lg font-extrabold ${operatingProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{fmtK(operatingProfit)}</span>
+                    <DiffBadge curr={operatingProfit} prev={prevOperatingProfit} />
                   </div>
                 </div>
               </div>
-              )})()}
               {/* % לייבור */}
               <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#3B82F615' }}>
@@ -707,35 +742,6 @@ export default function Home() {
           </motion.div>
         )}
 
-        {/* ─── מגמות 6 חודשים ─── */}
-        {trendData.length > 0 && trendData.some(d => d.revenue > 0) && (
-          <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.3 }} className="mb-5">
-            <Card className="py-0">
-              <CardContent className="chart-container py-4 px-5">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[13px] font-bold text-slate-400 flex items-center gap-1.5 uppercase tracking-wider">מגמות 6 חודשים</span>
-                </div>
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={trendData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => v === 0 ? '0' : `${(v / 1000).toFixed(0)}K`} width={45} />
-                    <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
-                    <Tooltip
-                      formatter={(value: number, name: string) => [`₪${Math.round(value).toLocaleString()}`, name]}
-                      contentStyle={{ borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '12px', direction: 'rtl' }}
-                      labelStyle={{ fontWeight: 700, marginBottom: 4 }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-                    <Line type="monotone" dataKey="revenue" name="הכנסות כוללות" stroke="#378ADD" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                    <Line type="monotone" dataKey="grossProfit" name="רווח גולמי" stroke="#639922" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                    <Line type="monotone" dataKey="operatingProfit" name="רווח תפעולי" stroke="#534AB7" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
 
       </div>
 
