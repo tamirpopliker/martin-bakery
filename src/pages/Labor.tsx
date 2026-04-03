@@ -79,12 +79,14 @@ export default function Labor({ onBack }: Props) {
   const { appUser } = useAppUser()
   const isDeptManager = appUser?.role === 'factory' && !!appUser?.managed_department
 
-  // Department managers can't see salary of other dept managers
-  // Hide salary for employees whose department matches the OTHER manager's department
+  // Department managers can't see salary of the OTHER department's manager
+  // תמיר (בצקים) לא רואה שכר של נאור (קרמים) — והפוך
   function shouldHideSalary(emp: Employee | undefined): boolean {
     if (!isDeptManager || !emp) return false
-    // Hide global employees that manage the other main department
-    if (emp.wage_type === 'global') return true
+    // Only hide the OTHER main department's manager (global employee in the opposing dept)
+    const myDept = appUser?.managed_department
+    if (myDept === 'creams' && emp.wage_type === 'global' && emp.department === 'dough') return true
+    if (myDept === 'dough' && emp.wage_type === 'global' && emp.department === 'creams') return true
     return false
   }
 
@@ -637,7 +639,7 @@ export default function Labor({ onBack }: Props) {
                                     <span style={{ color: r.hours_125 > 0 ? '#f59e0b' : '#d1d5db', fontWeight: r.hours_125 > 0 ? '600' : '400' }}>{r.hours_125 || '—'}</span>
                                     <span style={{ color: r.hours_150 > 0 ? '#fb7185' : '#d1d5db', fontWeight: r.hours_150 > 0 ? '600' : '400' }}>{r.hours_150 || '—'}</span>
                                     <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '12px' }}>
-                                      {isDeptManager && allEmployees.find(e => e.name === r.employee_name)?.wage_type === 'global' ? '—' : `₪${Math.round(r.employer_cost || 0).toLocaleString()}`}
+                                      {shouldHideSalary(allEmployees.find(e => e.name === r.employee_name)) ? '—' : `₪${Math.round(r.employer_cost || 0).toLocaleString()}`}
                                     </span>
                                     <div style={{ display: 'flex', gap: '2px' }}>
                                       <button onClick={() => { setEditHistId(r.id); setEditHistData({ ...r }) }}
