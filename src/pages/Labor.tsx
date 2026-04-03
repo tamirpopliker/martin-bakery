@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { supabase, monthEnd, getWorkingDays } from '../lib/supabase'
 import { parseTimeWatchPDF, type TimeWatchRow } from '../lib/parseTimeWatch'
-import { ArrowRight, Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save, Calendar, FileText, ChevronDown, ChevronUp, Clock } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save, Calendar, FileText, ChevronDown, ChevronUp, Clock, HelpCircle } from 'lucide-react'
 import { LaborIcon } from '@/components/icons'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -374,22 +374,36 @@ export default function Labor({ onBack }: Props) {
           <>
             <Card className="shadow-sm" style={{ marginBottom: '24px' }}>
               <CardContent className="p-6">
-                <h2 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: '700', color: '#374151' }}>העלאת קובץ נוכחות</h2>
-                <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#94a3b8' }}>PDF דוח נוכחות מ-TimeWatch — פרסור אוטומטי ללא שרת</p>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                  {!isMonthly && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>תאריך</label>
-                      <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                        style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }} />
-                    </div>
-                  )}
-                  <div>
-                    <input type="file" accept=".pdf,.csv" ref={fileRef} onChange={handleFile} style={{ display: 'none' }} />
-                    <button onClick={() => fileRef.current?.click()} style={{ background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Upload size={18} />בחר קובץ PDF
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                  <h2 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#374151' }}>העלאת קובץ נוכחות</h2>
+                  <div style={{ position: 'relative' }} className="help-popover-wrapper">
+                    <button onClick={(e) => { const el = (e.currentTarget.nextElementSibling as HTMLElement); el.style.display = el.style.display === 'block' ? 'none' : 'block' }}
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px' }}>
+                      <HelpCircle size={18} color="#818cf8" />
                     </button>
+                    <div style={{ display: 'none', position: 'absolute', top: '28px', right: 0, background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '20px', width: '320px', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', zIndex: 100, fontSize: '13px', color: '#374151', lineHeight: '1.7' }}>
+                      <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '10px', color: '#0f172a' }}>איך להוריד דוח מ-TimeWatch?</div>
+                      <ol style={{ margin: 0, paddingRight: '18px' }}>
+                        <li>היכנס ל-<strong>TimeWatch</strong> של המפעל</li>
+                        <li>לחץ על <strong>"דוחות"</strong> בתפריט העליון</li>
+                        <li>בחר <strong>"דוח נוכחות יומית / חודשית"</strong></li>
+                        <li>הגדר: תצוגה → <strong>"כל העובדים ברצף"</strong></li>
+                        <li>סמן <strong>"הצג בפורמט עשרוני"</strong></li>
+                        <li>בחר טווח תאריכים ולחץ <strong>"הצג"</strong></li>
+                        <li>לחץ על כפתור <strong>PDF</strong> להורדה</li>
+                      </ol>
+                      <div style={{ marginTop: '10px', fontSize: '11px', color: '#94a3b8' }}>
+                        הקובץ מכיל שעות רגילות + שעות נוספות לכל עובד לכל יום.
+                      </div>
+                    </div>
                   </div>
+                </div>
+                <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#94a3b8' }}>PDF דוח נוכחות מ-TimeWatch — פרסור אוטומטי ללא שרת</p>
+                <div>
+                  <input type="file" accept=".pdf,.csv" ref={fileRef} onChange={handleFile} style={{ display: 'none' }} />
+                  <button onClick={() => fileRef.current?.click()} style={{ background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Upload size={18} />בחר קובץ PDF
+                  </button>
                 </div>
               </CardContent>
             </Card>
