@@ -278,42 +278,35 @@ function parseDetailedFormat(pages: PdfItem[][]): { rows: ParsedRow[]; rawLines:
         .map(it => ({ val: parseFloat(it.text.replace(/,/g, '')), x: it.x }))
         .filter(it => !isNaN(it.val))
 
-      // Sort by X descending (rightmost first — RTL layout)
-      allNumItems.sort((a, b) => b.x - a.x)
+      // CashOnTab detailed PDF layout (RTL document):
+      // Visual left-to-right: חריגות | רמה2(150%) | רמה1(125%) | רגילות(100%) | סה"כ שעות | סניף | קופה | סוג דיווח | יציאה | כניסה | יום | תאריך
+      // PDF X coordinates: lower X = visual LEFT = hour columns, higher X = visual RIGHT = date/code columns
+      // Sort by X ascending (leftmost first)
+      allNumItems.sort((a, b) => a.x - b.x)
 
-      // CashOnTab detailed PDF daily row (RTL, right to left):
-      // Rightmost numbers: סה"כ שעות | שעות 100% | שעות 125% | שעות 150% | חריגות
-      // Then further left: employee code, other data
-      // Strategy: find totalHours as the largest value ≤ 24, then use positions after it
+      if (allNumItems.length < 3) continue
 
-      // Filter to only reasonable hour values (≤ 24)
-      const hourItems = allNumItems.filter(it => it.val <= 24)
-      if (hourItems.length < 2) continue
+      // The hour columns are the leftmost numbers (lowest X values)
+      // Find סה"כ שעות: largest value ≤ 24 among first ~6 leftmost items
+      const leftItems = allNumItems.slice(0, Math.min(7, allNumItems.length))
+      const hourCandidates = leftItems.filter(it => it.val > 0 && it.val <= 24)
+      if (hourCandidates.length < 1) continue
 
-      // The first item (rightmost, highest X) should be totalHours
-      const totalH = hourItems[0]?.val || 0
+      // סה"כ שעות is the RIGHTMOST among the hour columns (highest X among left items with val ≤ 24)
+      // because it sits between the breakdown columns and the non-hour columns
+      hourCandidates.sort((a, b) => b.x - a.x)
+      const totalHItem = hourCandidates[0]
+      const totalH = totalHItem.val
       if (totalH <= 0) continue
 
-      // Next items are 100%, 125%, 150% — but we need to validate:
-      // h100 + h125 + h150 should approximately equal totalH
-      // If hourItems[1] ≈ totalH (duplicate), skip it
-      let idx = 1
-      // Skip duplicates of totalH (same value, close X position)
-      if (hourItems[idx] && Math.abs(hourItems[idx].val - totalH) < 0.01) idx++
+      // Find position of totalH in the X-sorted leftItems
+      const totalIdx = leftItems.indexOf(totalHItem)
 
-      const h100 = hourItems[idx]?.val || 0
-      const h125 = hourItems[idx + 1]?.val || 0
-      const h150 = hourItems[idx + 2]?.val || 0
-
-      // Validate: if h100+h125+h150 > totalH * 1.1, the parsing is likely wrong
-      // Fall back to putting all hours in 100%
-      let finalH100 = h100, finalH125 = h125, finalH150 = h150
-      if (h100 + h125 + h150 > totalH * 1.1) {
-        // Likely wrong column assignment — put all in 100%
-        finalH100 = totalH
-        finalH125 = 0
-        finalH150 = 0
-      }
+      // Columns to the LEFT of סה"כ שעות (lower X) are: רגילות(100%), רמה1(125%), רמה2(150%), חריגות
+      // Reading leftward from totalH: idx-1 = רגילות, idx-2 = רמה1, idx-3 = רמה2
+      const finalH100 = totalIdx >= 1 ? (leftItems[totalIdx - 1]?.val || 0) : totalH
+      const finalH125 = totalIdx >= 2 ? (leftItems[totalIdx - 2]?.val || 0) : 0
+      const finalH150 = totalIdx >= 3 ? (leftItems[totalIdx - 3]?.val || 0) : 0
 
       seenKeys.add(key)
       rows.push({
