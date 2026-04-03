@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { ArrowRight, Plus, Pencil, Trash2, CheckCircle, AlertTriangle, FileText, Eye, HelpCircle, BarChart3 } from 'lucide-react'
 import { LaborIcon } from '@/components/icons'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts'
+import { parseWorkingHoursPDF } from '../lib/parseWorkingHours'
 
 interface Props {
   branchId: number
@@ -458,16 +459,34 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
     try {
       const items = await extractPdfItems(file)
 
-      // Try מרוכז format first, then מפורט (per-page)
+      // Try מרוכז format first
       let { rows, rawLines: lines } = parseCashOnTab(items)
       let isDetailed = false
 
+      // If מרוכז didn't find anything, try מפורט (summary-based)
       if (rows.length === 0) {
-        const pages = await extractPdfItemsPerPage(file)
-        const detailed = parseDetailedFormat(pages)
-        rows = detailed.rows
-        lines = detailed.rawLines
-        isDetailed = rows.length > 0
+        const { employees, rawPages } = await parseWorkingHoursPDF(file)
+        lines = rawPages
+
+        if (employees.length > 0) {
+          isDetailed = true
+          rows = employees.map(emp => ({
+            name: emp.name,
+            date: emp.date,
+            hours_100: emp.hours_100,
+            cost_100: 0,
+            hours_125: emp.hours_125,
+            cost_125: 0,
+            hours_150: emp.hours_150,
+            cost_150: 0,
+            total_hours: emp.total_hours,
+            gross_salary: 0,
+            employer_cost: 0,
+            hourly_rate: 0,
+            retention_bonus: 0,
+            selected: true,
+          }))
+        }
       }
 
       setRawLines(lines)
@@ -498,7 +517,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       setUploadStatus('confirm')
       const uniqueNames = new Set(rows.map(r => r.name)).size
       setUploadMsg(isDetailed
-        ? `זוהו ${uniqueNames} עובדים · ${rows.length} שורות יומיות (ללא שכר — הזן תעריף)`
+        ? `זוהו ${uniqueNames} עובדים מסיכום (הזן תעריף שעתי לחישוב שכר)`
         : `זוהו ${rows.length} עובדים — בדוק ואשר`)
     } catch (err: any) {
       setUploadStatus('error')
