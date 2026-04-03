@@ -92,12 +92,9 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
     if (dept !== null || pageKey === 'factory_dashboard' || pageKey === 'factory_b2b' || pageKey === 'labor' || pageKey === 'suppliers') {
       if (user.role === 'branch') return false
 
-      // Department manager: can only access their own department
-      if (isDeptManager) {
-        if (dept && dept !== user.managed_department) return false
-        // Allow factory_dashboard, labor, suppliers for dept managers
-        return true
-      }
+      // Department manager: can access all factory pages EXCEPT settings
+      // (settings blocking is handled above)
+      if (isDeptManager) return true
 
       // Regular factory user
       if (dept && user.excluded_departments.includes(dept)) return false
