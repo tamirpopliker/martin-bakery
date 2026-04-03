@@ -90,27 +90,38 @@ export async function parseTimeWatchPDF(file: File): Promise<TimeWatchRow[]> {
 
   for (const { items } of allPages) {
     for (const it of items) {
-      // Look for "רגילות" or "רגילה" or variations
+      // Look for "רגילות" (may be split by pdfjs into individual chars)
       if (it.text.includes('רגיל')) {
         if (h100X < 0 || it.x < h100X) h100X = it.x
       }
-      // Look for "125" anywhere (header sub-row)
-      if (it.text.includes('125')) {
+      // Look for "125.00%" or "125%" in header
+      if (it.text.includes('125') && (it.text.includes('%') || it.text.length <= 7)) {
         if (h125X < 0) h125X = it.x
       }
-      // Look for "150" anywhere
-      if (it.text.includes('150')) {
+      // Look for "150.00%" or "150%" in header
+      if (it.text.includes('150') && (it.text.includes('%') || it.text.length <= 7)) {
         if (h150X < 0) h150X = it.x
       }
     }
-    if (h100X >= 0 && h125X >= 0) break
+    if (h125X >= 0) break // 125% is the most reliable marker
   }
 
-  console.log('[parseTimeWatch] Header columns:', { h100X, h125X, h150X })
+  // Hebrew header text is often split into individual characters by pdfjs,
+  // so "רגילות" may not be found. Infer h100X from column spacing.
+  // Layout (ascending X): ... | 150%(x=187) | 125%(x=209) | רגילות(x≈231) | תקן | עבודה | ...
+  if (h100X < 0 && h125X >= 0 && h150X >= 0) {
+    const spacing = h125X - h150X
+    h100X = h125X + spacing
+    console.log(`[parseTimeWatch] Inferred h100X=${h100X} from spacing=${spacing}`)
+  } else if (h100X < 0 && h125X >= 0) {
+    h100X = h125X + 22 // default spacing
+    console.log(`[parseTimeWatch] Inferred h100X=${h100X} with default spacing`)
+  }
 
-  // If we couldn't find header positions, try fallback
-  if (h100X < 0) {
-    console.warn('[parseTimeWatch] Could not find header columns, using text-based fallback')
+  console.log('[parseTimeWatch] Final header columns:', { h100X, h125X, h150X })
+
+  if (h100X < 0 && h125X < 0) {
+    console.warn('[parseTimeWatch] Could not find any header columns, using text-based fallback')
     return parseTimeWatchFallback(allPages)
   }
 
