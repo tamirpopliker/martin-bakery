@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept } from '../lib/supabase'
-import { ArrowRight, TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck } from 'lucide-react'
+import { ArrowRight, TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck, Building2, Layers } from 'lucide-react'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon, TrophyIcon } from '@/components/icons'
 import { BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { usePeriod } from '../lib/PeriodContext'
@@ -111,6 +111,13 @@ export default function CEODashboard({ onBack }: Props) {
   const [factoryB2b, setFactoryB2b] = useState(0)
   const [branchSuppliers, setBranchSuppliers] = useState(0)
 
+  // View toggle: consolidated vs segment
+  const [viewMode, setViewMode] = useState<'consolidated' | 'segment'>('consolidated')
+
+  // Internal (intercompany) sales — factory to branches
+  const [factoryInternalSales, setFactoryInternalSales] = useState(0)
+  const [branchInternalExpenses, setBranchInternalExpenses] = useState(0)
+
   // Sheet (drawer) state
   const [sheetType, setSheetType] = useState<KpiSheetType | null>(null)
   const sheetOpen = sheetType !== null
@@ -156,6 +163,15 @@ export default function CEODashboard({ onBack }: Props) {
     setFactoryRepairs(fRepairsTotal)
     setFactoryFixed(fFixedTotal)
     setFactoryB2b(fSalesB2bTotal)
+
+    // Fetch internal factory sales (factory → branches)
+    const [fInternalSalesFs, fInternalSalesB2b] = await Promise.all([
+      supabase.from('factory_sales').select('amount').eq('is_internal', true).gte('date', from).lt('date', to),
+      supabase.from('factory_b2b_sales').select('amount').eq('is_internal', true).gte('date', from).lt('date', to),
+    ])
+    const fInternalTotal = (fInternalSalesFs.data || []).reduce((s, r) => s + Number(r.amount), 0)
+                         + (fInternalSalesB2b.data || []).reduce((s, r) => s + Number(r.amount), 0)
+    setFactoryInternalSales(fInternalTotal)
 
     const branchResults: BranchData[] = []
     let totalExpByType: Record<string, number> = {}
@@ -205,6 +221,15 @@ export default function CEODashboard({ onBack }: Props) {
 
       branchResults.push({ ...br, revenue, expenses, labor, waste, fixedCosts, grossProfit, operatingProfit, revCashier: brCashier, revCredit: brCredit, revWebsite: brWebsite })
     }
+
+    // Track branch internal expenses (purchases from factory)
+    let totalBranchInternal = 0
+    for (const br of BRANCHES) {
+      const { data: intExp } = await supabase.from('branch_expenses').select('amount')
+        .eq('branch_id', br.id).eq('from_factory', true).gte('date', from).lt('date', to)
+      totalBranchInternal += intExp ? intExp.reduce((s, r) => s + Number(r.amount), 0) : 0
+    }
+    setBranchInternalExpenses(totalBranchInternal)
 
     setBranches(branchResults)
     setRevCashier(totalCashier)
@@ -304,6 +329,17 @@ export default function CEODashboard({ onBack }: Props) {
   const grandGross     = totalGross + factoryGrossProfit
   const grandOperating = totalOperating + factoryOperatingProfit
   const grandLaborPct  = grandRevenue > 0 ? (grandLabor / grandRevenue) * 100 : 0
+
+  // ─── Consolidated view (intercompany eliminated) ──────────────────────────
+  const factoryAllSales = factorySales + factoryInternalSales  // total factory including internal
+  const consRevenue     = totalRevenue + factorySales  // branches + factory external only
+  const consLabor       = grandLabor
+  const consSuppliers   = factorySuppliers  // only actual raw materials
+  const consWaste       = totalWaste + factoryWaste
+  const consFixed       = totalFixed + factoryFixed
+  const consRepairs     = factoryRepairs + totalExpenses - branchInternalExpenses  // branch expenses minus internal
+  const consGross       = consRevenue - consSuppliers - consLabor
+  const consOperating   = consGross - consWaste - consFixed
 
   const barData = [
     ...branches.map(b => ({
@@ -684,7 +720,23 @@ export default function CEODashboard({ onBack }: Props) {
           <h1 className="text-xl font-extrabold text-slate-900 m-0">דשבורד מנכ"ל</h1>
           <p className="text-[13px] text-slate-400 m-0">מבט רשתי · מפעל + סניפים · {period.label}</p>
         </div>
-        <div className="mr-auto">
+        <div className="mr-auto flex items-center gap-3">
+          <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+            <button
+              onClick={() => setViewMode('consolidated')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all ${viewMode === 'consolidated' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <Layers size={14} />
+              מאוחד
+            </button>
+            <button
+              onClick={() => setViewMode('segment')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all ${viewMode === 'segment' ? 'bg-blue-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <Building2 size={14} />
+              מרכזי רווח
+            </button>
+          </div>
           <PeriodPicker period={period} onChange={setPeriod} />
         </div>
       </div>
@@ -695,16 +747,35 @@ export default function CEODashboard({ onBack }: Props) {
           <div className="text-center py-16 text-slate-400">טוען נתונים...</div>
         ) : (
           <>
+            {/* ─── View Mode Banner ─── */}
+            <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-3">
+              {viewMode === 'consolidated' ? (
+                <div className="rounded-lg px-4 py-2 text-center text-[13px] font-semibold" style={{ background: '#E8FDF5', color: '#065F46' }}>
+                  תצוגה מאוחדת — עסקאות פנימיות מבוטלות
+                </div>
+              ) : (
+                <div className="rounded-lg px-4 py-2 text-center text-[13px] font-semibold" style={{ background: '#EEF2FF', color: '#3730A3' }}>
+                  תצוגת מרכזי רווח — כולל מחירי העברה פנימיים
+                </div>
+              )}
+            </motion.div>
+
             {/* ═══ ROW 1: 4 Golden KPIs ═══ */}
+            {(() => {
+              const kpiRev = viewMode === 'consolidated' ? consRevenue : grandRevenue + factoryInternalSales
+              const kpiGross = viewMode === 'consolidated' ? consGross : grandGross
+              const kpiOp = viewMode === 'consolidated' ? consOperating : grandOperating
+              const kpiLaborPct = kpiRev > 0 ? (grandLabor / kpiRev) * 100 : 0
+              return (
             <motion.div className="grid grid-cols-4 gap-2.5 mb-2.5" variants={staggerContainer} initial="hidden" animate="visible">
               <motion.div variants={fadeUp}>
                 <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('revenue_total')}>
                   <CardContent className="p-4">
-                    <span className="text-[11px] font-semibold text-slate-400">הכנסות כוללות</span>
+                    <span className="text-[11px] font-semibold text-slate-400">{viewMode === 'consolidated' ? 'הכנסות אמיתיות' : 'הכנסות כוללות'}</span>
                     <div className="text-[22px] font-medium text-slate-900 mt-1">
-                      <CountUp end={Math.round(grandRevenue)} duration={1.5} separator="," prefix="₪" />
+                      <CountUp end={Math.round(kpiRev)} duration={1.5} separator="," prefix="₪" />
                     </div>
-                    <DiffBadge current={grandRevenue} previous={prevTotalRev} />
+                    <DiffBadge current={kpiRev} previous={prevTotalRev} />
                   </CardContent>
                 </Card>
               </motion.div>
@@ -712,10 +783,10 @@ export default function CEODashboard({ onBack }: Props) {
                 <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('gross_profit')}>
                   <CardContent className="p-4">
                     <span className="text-[11px] font-semibold text-slate-400">רווח גולמי</span>
-                    <div className="text-[22px] font-medium mt-1" style={{ color: grandGross >= 0 ? '#639922' : '#E24B4A' }}>
-                      <CountUp end={Math.round(grandGross)} duration={1.5} separator="," prefix="₪" />
+                    <div className="text-[22px] font-medium mt-1" style={{ color: kpiGross >= 0 ? '#639922' : '#E24B4A' }}>
+                      <CountUp end={Math.round(kpiGross)} duration={1.5} separator="," prefix="₪" />
                     </div>
-                    <span className="text-[11px] text-slate-400">{grandRevenue > 0 ? ((grandGross / grandRevenue) * 100).toFixed(1) : '0.0'}% מהכנסות</span>
+                    <span className="text-[11px] text-slate-400">{kpiRev > 0 ? ((kpiGross / kpiRev) * 100).toFixed(1) : '0.0'}% מהכנסות</span>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -723,10 +794,10 @@ export default function CEODashboard({ onBack }: Props) {
                 <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('operating_profit')}>
                   <CardContent className="p-4">
                     <span className="text-[11px] font-semibold text-slate-400">רווח תפעולי</span>
-                    <div className="text-[22px] font-medium mt-1" style={{ color: grandOperating >= 0 ? '#639922' : '#E24B4A' }}>
-                      <CountUp end={Math.round(grandOperating)} duration={1.5} separator="," prefix="₪" />
+                    <div className="text-[22px] font-medium mt-1" style={{ color: kpiOp >= 0 ? '#639922' : '#E24B4A' }}>
+                      <CountUp end={Math.round(kpiOp)} duration={1.5} separator="," prefix="₪" />
                     </div>
-                    <span className="text-[11px] text-slate-400">{grandRevenue > 0 ? ((grandOperating / grandRevenue) * 100).toFixed(1) : '0.0'}% מהכנסות</span>
+                    <span className="text-[11px] text-slate-400">{kpiRev > 0 ? ((kpiOp / kpiRev) * 100).toFixed(1) : '0.0'}% מהכנסות</span>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -734,14 +805,110 @@ export default function CEODashboard({ onBack }: Props) {
                 <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('labor_pct_total')}>
                   <CardContent className="p-4">
                     <span className="text-[11px] font-semibold text-slate-400">% לייבור כולל</span>
-                    <div className="text-[22px] font-medium mt-1" style={{ color: grandLaborPct <= avgLaborTarget ? '#639922' : '#E24B4A' }}>
-                      <CountUp end={grandLaborPct} duration={1.5} separator="," suffix="%" decimals={1} />
+                    <div className="text-[22px] font-medium mt-1" style={{ color: kpiLaborPct <= avgLaborTarget ? '#639922' : '#E24B4A' }}>
+                      <CountUp end={kpiLaborPct} duration={1.5} separator="," suffix="%" decimals={1} />
                     </div>
                     <span className="text-[11px] text-slate-400">יעד {avgLaborTarget.toFixed(0)}%</span>
                   </CardContent>
                 </Card>
               </motion.div>
             </motion.div>
+              )})()}
+
+            {/* ═══ SEGMENT VIEW: P&L Table ═══ */}
+            {viewMode === 'segment' && (
+              <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5">
+                <Card className="shadow-sm">
+                  <CardContent className="p-4 overflow-x-auto">
+                    <span className="text-[13px] font-bold text-slate-700 block mb-3">טבלת רווח והפסד — לפי מרכז רווח</span>
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50">
+                          <TableHead className="text-xs font-bold text-slate-500 min-w-[120px]">מדד</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-500 text-center">מפעל</TableHead>
+                          {branches.map(br => (
+                            <TableHead key={br.id} className="text-xs font-bold text-slate-500 text-center">{br.name}</TableHead>
+                          ))}
+                          <TableHead className="text-xs font-bold text-slate-800 text-center bg-amber-50">סה"כ</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(() => {
+                          const fAllSales = factorySales + factoryInternalSales
+                          const segRows = [
+                            { label: 'הכנסות', factory: fAllSales, getBr: (br: BranchData) => br.revenue, bold: false, color: '' },
+                            { label: 'הוצאות / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => br.expenses, bold: false, color: '' },
+                            { label: 'לייבור', factory: factoryLabor, getBr: (br: BranchData) => br.labor, bold: false, color: '' },
+                            { label: 'רווח גולמי', factory: fAllSales - factorySuppliers - factoryLabor, getBr: (br: BranchData) => br.grossProfit, bold: true, color: 'profit' },
+                            { label: 'עלויות קבועות', factory: factoryFixed, getBr: (br: BranchData) => br.fixedCosts, bold: false, color: '' },
+                            { label: 'פחת', factory: factoryWaste, getBr: (br: BranchData) => br.waste, bold: false, color: '' },
+                            { label: 'רווח תפעולי', factory: fAllSales - factorySuppliers - factoryLabor - factoryFixed - factoryWaste - factoryRepairs, getBr: (br: BranchData) => br.operatingProfit, bold: true, color: 'profit' },
+                          ]
+                          return segRows.map(row => {
+                            const brVals = branches.map(br => row.getBr(br))
+                            const total = row.factory + brVals.reduce((s, v) => s + v, 0)
+                            return (
+                              <TableRow key={row.label} className={row.bold ? 'bg-slate-50' : ''}>
+                                <TableCell className={`text-[12px] ${row.bold ? 'font-bold text-slate-800' : 'text-slate-600'}`}>{row.label}</TableCell>
+                                <TableCell className={`text-[12px] text-center ${row.bold ? 'font-bold' : ''}`} style={{ color: row.color === 'profit' ? (row.factory >= 0 ? '#639922' : '#E24B4A') : '' }}>
+                                  {fmtN(row.factory)}
+                                </TableCell>
+                                {brVals.map((v, i) => (
+                                  <TableCell key={i} className={`text-[12px] text-center ${row.bold ? 'font-bold' : ''}`} style={{ color: row.color === 'profit' ? (v >= 0 ? '#639922' : '#E24B4A') : '' }}>
+                                    {fmtN(v)}
+                                  </TableCell>
+                                ))}
+                                <TableCell className={`text-[12px] text-center bg-amber-50 ${row.bold ? 'font-extrabold' : 'font-bold'}`} style={{ color: row.color === 'profit' ? (total >= 0 ? '#639922' : '#E24B4A') : '' }}>
+                                  {fmtN(total)}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })
+                        })()}
+                        {/* % rows */}
+                        {(() => {
+                          const fAllSales = factorySales + factoryInternalSales
+                          const fLabPct = fAllSales > 0 ? (factoryLabor / fAllSales * 100) : 0
+                          const fOpPct = fAllSales > 0 ? ((fAllSales - factorySuppliers - factoryLabor - factoryFixed - factoryWaste - factoryRepairs) / fAllSales * 100) : 0
+                          const totalRev = fAllSales + totalRevenue
+                          const totalLab = grandLabor
+                          const totalOp = grandOperating + (fAllSales - factorySales)  // add back internal for segment
+                          return (
+                            <>
+                              <TableRow>
+                                <TableCell className="text-[12px] font-semibold text-slate-600">% לייבור</TableCell>
+                                <TableCell className={`text-[12px] text-center font-semibold ${fLabPct <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>{fLabPct.toFixed(1)}%</TableCell>
+                                {branches.map(br => {
+                                  const pct = br.revenue > 0 ? (br.labor / br.revenue * 100) : 0
+                                  return <TableCell key={br.id} className={`text-[12px] text-center font-semibold ${pct <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>{pct.toFixed(1)}%</TableCell>
+                                })}
+                                <TableCell className={`text-[12px] text-center font-bold bg-amber-50 ${(totalRev > 0 ? totalLab / totalRev * 100 : 0) <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                  {totalRev > 0 ? (totalLab / totalRev * 100).toFixed(1) : '0.0'}%
+                                </TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell className="text-[12px] font-semibold text-slate-600">% רווח תפעולי</TableCell>
+                                <TableCell className={`text-[12px] text-center font-semibold ${fOpPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fOpPct.toFixed(1)}%</TableCell>
+                                {branches.map(br => {
+                                  const pct = br.revenue > 0 ? (br.operatingProfit / br.revenue * 100) : 0
+                                  return <TableCell key={br.id} className={`text-[12px] text-center font-semibold ${pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{pct.toFixed(1)}%</TableCell>
+                                })}
+                                <TableCell className={`text-[12px] text-center font-bold bg-amber-50 ${(totalRev > 0 ? totalOp / totalRev * 100 : 0) >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                  {totalRev > 0 ? (totalOp / totalRev * 100).toFixed(1) : '0.0'}%
+                                </TableCell>
+                              </TableRow>
+                            </>
+                          )
+                        })()}
+                      </TableBody>
+                    </Table>
+                    <p className="text-[11px] text-slate-400 mt-3 text-center">
+                      תצוגה זו כוללת עסקאות פנימיות בין המפעל לסניפים. לתמונה האמיתית של העסק עבור לתצוגה המאוחדת.
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
             {/* ═══ ROW 2: Revenue Breakdown | Expense Breakdown ═══ */}
             <motion.div className="grid grid-cols-2 gap-2.5 mb-2.5" variants={fadeIn} initial="hidden" animate="visible">
