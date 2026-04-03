@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, monthEnd } from '../lib/supabase'
+import { supabase, monthEnd, getWorkingDays } from '../lib/supabase'
 import { parseTimeWatchPDF, type TimeWatchRow } from '../lib/parseTimeWatch'
 import { ArrowRight, Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save, Calendar, FileText, ChevronDown, ChevronUp, Clock } from 'lucide-react'
 import { LaborIcon } from '@/components/icons'
@@ -53,11 +53,12 @@ const deptOptions = [
 
 const EMPLOYER_FACTOR = 1.3
 
-function calcWage(emp: Employee, h100: number, h125: number, h150: number): { gross: number; employerCost: number; total: number } {
+function calcWage(emp: Employee, h100: number, h125: number, h150: number, workingDays = 26): { gross: number; employerCost: number; total: number } {
   if (emp.wage_type === 'global') {
-    const gross = emp.global_daily_rate + (emp.bonus || 0)
-    const employerCost = emp.global_daily_rate * EMPLOYER_FACTOR + (emp.bonus || 0)
-    return { gross, employerCost, total: employerCost }
+    // Daily cost = monthly salary / working days in month
+    const dailyGross = (emp.global_daily_rate + (emp.bonus || 0)) / workingDays
+    const dailyEmployer = (emp.global_daily_rate * EMPLOYER_FACTOR + (emp.bonus || 0)) / workingDays
+    return { gross: dailyGross, employerCost: dailyEmployer, total: dailyEmployer }
   }
   // שעתי:
   // שכר גולמי = (100% × שכר) + (125% × שכר × 1.25) + (150% × שכר × 1.5) + (סה"כ שעות × בונוס)
@@ -84,6 +85,7 @@ export default function Labor({ onBack }: Props) {
   const [expandedDate, setExpandedDate] = useState<string | null>(null)
   const [editHistId, setEditHistId] = useState<number | null>(null)
   const [editHistData, setEditHistData] = useState<any>({})
+  const [workingDays, setWorkingDays] = useState(26)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [saving, setSaving] = useState(false)
@@ -105,6 +107,10 @@ export default function Labor({ onBack }: Props) {
   }
 
   useEffect(() => { fetchEmployees() }, [])
+  useEffect(() => {
+    const month = date.slice(0, 7)
+    getWorkingDays(month).then(setWorkingDays)
+  }, [date])
 
   async function fetchHistory() {
     setHistoryLoading(true)
@@ -276,8 +282,8 @@ export default function Labor({ onBack }: Props) {
       hours_125: r.hours_125,
       hours_150: r.hours_150,
       hourly_rate: r.employee!.hourly_rate,
-      gross_salary: calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150).gross,
-      employer_cost: calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150).total
+      gross_salary: calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150, workingDays).gross,
+      employer_cost: calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150, workingDays).total
     }))
     // insert בקבוצות של 100 כדי לא לעבור מגבלת API
     for (let i = 0; i < inserts.length; i += 100) {
@@ -317,7 +323,7 @@ export default function Labor({ onBack }: Props) {
 
   const knownRows = rows.filter(r => r.found && r.employee)
   const unknownRows = rows.filter(r => !r.found)
-  const totalCost = knownRows.reduce((s, r) => s + calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150).total, 0)
+  const totalCost = knownRows.reduce((s, r) => s + calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150, workingDays).total, 0)
 
   const inpStyle = { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '9px 12px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', textAlign: 'right' as const, width: '100%', boxSizing: 'border-box' as const }
 
@@ -461,7 +467,7 @@ export default function Labor({ onBack }: Props) {
                           <input type="number" value={row.hours_150} onChange={e => updateRow(row.id, 'hours_150', e.target.value)} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', width: '60px' }} />
                           <span style={{ fontSize: '12px', color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
                           <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>
-                            {row.employee ? '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150).total.toFixed(0) : '—'}
+                            {row.employee ? '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150, workingDays).total.toFixed(0) : '—'}
                           </span>
                           <button onClick={() => saveRowEdit(row.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 6px', cursor: 'pointer' }}>
                             <Check size={14} />
@@ -477,7 +483,7 @@ export default function Labor({ onBack }: Props) {
                           <span style={{ fontSize: '13px', color: row.hours_150 > 0 ? '#fb7185' : '#64748b', fontWeight: row.hours_150 > 0 ? '600' : '400' }}>{row.hours_150 || '—'}</span>
                           <span style={{ fontSize: '12px', color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
                           <span style={{ fontWeight: '700', color: row.found ? '#0f172a' : '#94a3b8', fontSize: '14px' }}>
-                            {row.found && row.employee ? '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150).total.toFixed(0) : '—'}
+                            {row.found && row.employee ? '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150, workingDays).total.toFixed(0) : '—'}
                           </span>
                           <button onClick={() => startEdit(row.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
                             <Pencil size={14} color="#94a3b8" />
