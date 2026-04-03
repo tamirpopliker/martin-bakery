@@ -134,9 +134,9 @@ export default function Labor({ onBack }: Props) {
       setIsMonthly(seenDates.size > 1)
       setReplaceMode(false)
       setSaved(false)
-    } catch (err) {
-      console.error('[Labor] PDF parse error:', err)
-      alert('שגיאה בקריאת קובץ PDF')
+    } catch (err: any) {
+      console.error('[Labor] PDF parse error:', err?.message || err, err?.stack)
+      alert('שגיאה בקריאת קובץ PDF: ' + (err?.message || 'unknown'))
     }
   }
 
