@@ -144,36 +144,73 @@ export async function parseTimeWatchPDF(file: File): Promise<TimeWatchRow[]> {
           fullText.includes('דוח נוכחות') || fullText.includes('תדפיס')) continue
 
       // ── Find employee name ──
-      // Sort by X desc (rightmost first = first visual column in RTL)
-      const byXDesc = [...line].sort((a, b) => b.x - a.x)
+      // pdfjs splits Hebrew text into individual characters, so we can't just
+      // look for a single text item with the full name.
+      // Strategy: find the date item's X, then collect all items to its RIGHT
+      // (higher X = name/number/ID area in RTL layout)
+      const dateItem = line.find(it => it.text.match(/\d{2}-\d{2}-\d{4}/))
+      if (!dateItem) continue
+      const dateX = dateItem.x
+
+      // Items to the RIGHT of date (higher X) = name area
+      // Add margin to skip day letter (א, ב, etc.) which is close to date
+      const nameAreaItems = line
+        .filter(it => it.x > dateX + 15)
+        .sort((a, b) => b.x - a.x) // rightmost first
+
       let name = ''
       let empNum = ''
 
-      // Name is the rightmost Hebrew/English text that's a real name
-      const skipWords = new Set(['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת',
-        'עבודה', 'ייצור', 'הפסקה', 'מחלה', 'חסרה', 'כניסה', 'יציאה', 'תשלום',
-        'בלי', 'ללא', 'מנוחה', 'חופש', 'חופשה', 'בתשלום', 'שבתון', 'יום', 'א', 'ב', 'ג', 'ד', 'ה', 'ו'])
+      // Check for complete English name first (foreign workers - rendered as one item)
+      const englishItem = nameAreaItems.find(it => /^[A-Z][A-Z\s]{3,}/.test(it.text))
+      if (englishItem) {
+        name = englishItem.text
+      }
 
-      for (const it of byXDesc) {
-        if (name && empNum) break
-        // Hebrew name
-        if (!name && /[\u0590-\u05FF]/.test(it.text) && it.text.length > 1 && !skipWords.has(it.text) &&
-            !it.text.match(/^\d/) && !it.text.includes('+')) {
-          name = it.text
-          continue
-        }
-        // English name (foreign workers)
-        if (!name && /^[A-Z][A-Z\s]{3,}/.test(it.text)) {
-          name = it.text
-          continue
-        }
-        // Employee number: 1-4 digit number, typically right after name
-        if (name && !empNum && /^\d{1,4}$/.test(it.text) && parseInt(it.text) < 9999) {
-          empNum = it.text
+      if (!name) {
+        // Reconstruct Hebrew name from individual character items
+        // Hebrew chars in the name area, sorted by X descending (RTL reading order)
+        const hebrewChars = nameAreaItems
+          .filter(it => /^[\u0590-\u05FF]$/.test(it.text) || (/[\u0590-\u05FF]/.test(it.text) && it.text.length > 1))
+          .sort((a, b) => b.x - a.x)
+
+        if (hebrewChars.length > 0) {
+          // Group adjacent chars (within 8px gap) into words
+          const words: string[] = []
+          let currentWord = hebrewChars[0].text
+          let lastX = hebrewChars[0].x
+
+          for (let i = 1; i < hebrewChars.length; i++) {
+            const gap = lastX - hebrewChars[i].x
+            if (gap > 12) {
+              // Large gap = word boundary
+              words.push(currentWord)
+              currentWord = hebrewChars[i].text
+            } else {
+              currentWord += hebrewChars[i].text
+            }
+            lastX = hebrewChars[i].x
+          }
+          words.push(currentWord)
+
+          // Filter out day names and keywords
+          const skipWords = new Set(['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת',
+            'עבודה', 'ייצור', 'הפסקה', 'מחלה', 'חסרה', 'כניסה', 'יציאה', 'תשלום',
+            'ללא', 'בתשלום', 'יום', 'בע', 'מ', 'א', 'ב', 'ג', 'ד', 'ה', 'ו'])
+          const nameWords = words.filter(w => w.length > 1 && !skipWords.has(w))
+          name = nameWords.join(' ')
         }
       }
 
-      if (!name) continue
+      // Find employee number: 2-4 digit number in the name area
+      for (const it of nameAreaItems) {
+        if (/^\d{2,4}$/.test(it.text) && parseInt(it.text) < 2000) {
+          empNum = it.text
+          break
+        }
+      }
+
+      if (!name || name.length < 2) continue
 
       // ── Extract hours by column position ──
       // Only consider numbers that are reasonable hours (0-24)
