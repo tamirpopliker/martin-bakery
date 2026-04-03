@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, fetchBranchTrends, MonthTrend } from '../lib/supabase'
+import { supabase, fetchBranchTrends, fetchBranchPL, BranchPLResult, MonthTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { ArrowRight, TrendingUp, TrendingDown, Minus, Info } from 'lucide-react'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon } from '@/components/icons'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,19 +25,9 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   const { period, setPeriod, from, to, monthKey, comparisonPeriod } = usePeriod()
   const [loading, setLoading] = useState(false)
 
-  // current month
-  const [revCashier, setRevCashier] = useState(0)
-  const [revWebsite, setRevWebsite] = useState(0)
-  const [revCredit, setRevCredit]   = useState(0)
-  const [expSuppliers, setExpSuppliers] = useState(0)
-  const [expRepairs, setExpRepairs]     = useState(0)
-  const [expInfra, setExpInfra]         = useState(0)
-  const [expDelivery, setExpDelivery]   = useState(0)
-  const [expOther, setExpOther]         = useState(0)
-  const [laborEmployer, setLaborEmployer] = useState(0)
-  const [wasteTotal, setWasteTotal]     = useState(0)
-  const [fixedCosts, setFixedCosts]     = useState(0)
-  const [mgmtCosts, setMgmtCosts]      = useState(0)
+  // P&L result from shared function
+  const [pl, setPl] = useState<BranchPLResult | null>(null)
+
   const [overheadPct, setOverheadPct] = useState(() => {
     const saved = localStorage.getItem('overhead_pct')
     return saved ? Number(saved) : 5
@@ -53,48 +43,12 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   const [prevProfit, setPrevProfit]     = useState(0)
   const [prevLabor, setPrevLabor]       = useState(0)
 
-  const entityType = `branch_${branchId}`
-
   async function fetchData() {
     setLoading(true)
 
-    // revenue by source
-    const { data: revData } = await supabase.from('branch_revenue').select('source, amount')
-      .eq('branch_id', branchId).gte('date', from).lt('date', to)
-    if (revData) {
-      setRevCashier(revData.filter(r => r.source === 'cashier').reduce((s, r) => s + Number(r.amount), 0))
-      setRevWebsite(revData.filter(r => r.source === 'website').reduce((s, r) => s + Number(r.amount), 0))
-      setRevCredit(revData.filter(r => r.source === 'credit').reduce((s, r) => s + Number(r.amount), 0))
-    }
-
-    // expenses by type
-    const { data: expData } = await supabase.from('branch_expenses').select('expense_type, amount')
-      .eq('branch_id', branchId).gte('date', from).lt('date', to)
-    if (expData) {
-      setExpSuppliers(expData.filter(r => r.expense_type === 'suppliers' || r.expense_type === 'supplier' || r.expense_type === 'inventory').reduce((s, r) => s + Number(r.amount), 0))
-      setExpRepairs(expData.filter(r => r.expense_type === 'repairs' || r.expense_type === 'repair').reduce((s, r) => s + Number(r.amount), 0))
-      setExpInfra(expData.filter(r => r.expense_type === 'infrastructure').reduce((s, r) => s + Number(r.amount), 0))
-      setExpDelivery(expData.filter(r => r.expense_type === 'deliveries' || r.expense_type === 'delivery').reduce((s, r) => s + Number(r.amount), 0))
-      setExpOther(expData.filter(r => r.expense_type === 'other').reduce((s, r) => s + Number(r.amount), 0))
-    }
-
-    // labor
-    const { data: laborData } = await supabase.from('branch_labor').select('employer_cost')
-      .eq('branch_id', branchId).gte('date', from).lt('date', to)
-    if (laborData) setLaborEmployer(laborData.reduce((s, r) => s + Number(r.employer_cost), 0))
-
-    // waste
-    const { data: wasteData } = await supabase.from('branch_waste').select('amount')
-      .eq('branch_id', branchId).gte('date', from).lt('date', to)
-    if (wasteData) setWasteTotal(wasteData.reduce((s, r) => s + Number(r.amount), 0))
-
-    // fixed costs + management
-    const { data: fcData } = await supabase.from('fixed_costs').select('amount, entity_id')
-      .eq('entity_type', entityType).eq('month', monthKey || from.slice(0, 7))
-    if (fcData) {
-      setFixedCosts(fcData.filter(r => r.entity_id !== 'mgmt').reduce((s, r) => s + Number(r.amount), 0))
-      setMgmtCosts(fcData.filter(r => r.entity_id === 'mgmt').reduce((s, r) => s + Number(r.amount), 0))
-    }
+    // P&L via shared function
+    const plResult = await fetchBranchPL(branchId, from, to, monthKey || from.slice(0, 7), overheadPct)
+    setPl(plResult)
 
     // KPI targets
     const { data: kpiData } = await supabase.from('branch_kpi_targets').select('*').eq('branch_id', branchId).maybeSingle()
@@ -106,6 +60,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
 
     // previous month (comparison period)
     const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
+    const entityType = `branch_${branchId}`
 
     const { data: prevRev } = await supabase.from('branch_revenue').select('amount')
       .eq('branch_id', branchId).gte('date', pFrom).lt('date', pTo)
@@ -143,16 +98,31 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
     fetchBranchTrends(branchId, monthKey || from.slice(0, 7)).then(setTrendData)
   }, [branchId, monthKey, from])
 
-  // calculations
-  const totalRevenue   = revCashier + revWebsite + revCredit
-  const totalExpenses  = expSuppliers + expRepairs + expInfra + expDelivery + expOther
-  const grossProfit    = totalRevenue - laborEmployer - totalExpenses
-  const overheadAmount = totalRevenue * overheadPct / 100
-  const operatingProfit = grossProfit - fixedCosts - mgmtCosts - wasteTotal - overheadAmount
-  const laborPct       = totalRevenue > 0 ? (laborEmployer / totalRevenue) * 100 : 0
-  const wastePct       = totalRevenue > 0 ? (wasteTotal / totalRevenue) * 100 : 0
-  const grossPct       = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0
-  const operatingPct   = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0
+  // derived values from PL result
+  const totalRevenue    = pl?.revenue ?? 0
+  const revCashier      = pl?.revCashier ?? 0
+  const revWebsite      = pl?.revWebsite ?? 0
+  const revCredit       = pl?.revCredit ?? 0
+  const expSuppliers    = pl?.expSuppliers ?? 0
+  const expRepairs      = pl?.expRepairs ?? 0
+  const expInfra        = pl?.expInfra ?? 0
+  const expDelivery     = pl?.expDelivery ?? 0
+  const expOther        = pl?.expOther ?? 0
+  const laborEmployer   = pl?.laborEmployer ?? 0
+  const wasteTotal      = pl?.wasteTotal ?? 0
+  const fixedCosts      = pl?.fixedCosts ?? 0
+  const mgmtCosts       = pl?.mgmtCosts ?? 0
+  const overheadAmount  = pl?.overheadAmount ?? 0
+  const controllableMargin = pl?.controllableMargin ?? 0
+  const operatingProfit = pl?.operatingProfit ?? 0
+
+  const totalExpenses   = expSuppliers + expRepairs + expInfra + expDelivery + expOther
+  const grossProfit     = totalRevenue - laborEmployer - totalExpenses
+  const laborPct        = totalRevenue > 0 ? (laborEmployer / totalRevenue) * 100 : 0
+  const wastePct        = totalRevenue > 0 ? (wasteTotal / totalRevenue) * 100 : 0
+  const grossPct        = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0
+  const operatingPct    = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0
+  const controllablePct = totalRevenue > 0 ? (controllableMargin / totalRevenue) * 100 : 0
 
   function DiffArrow({ current, previous }: { current: number; previous: number }) {
     if (previous === 0) return <Minus size={14} color="#94a3b8" />
@@ -335,16 +305,45 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                   <span style={{ fontSize: '13px', fontWeight: '700', color: grossProfit >= 0 ? '#34d399' : '#fb7185', textAlign: 'left' as const }}>{grossPct.toFixed(1)}%</span>
                 </div>
 
-                {/* עלויות קבועות + פחת */}
+                {/* ניכויים נוספים (waste + mgmt) */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '11px 18px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                   <span style={{ fontSize: '13px', fontWeight: '700', color: '#64748b' }}>ניכויים נוספים</span>
                   <span />
                   <span />
                 </div>
                 {[
-                  { label: 'עלויות קבועות', amount: fixedCosts },
                   { label: 'הנהלה וכלליות', amount: mgmtCosts },
                   { label: 'פחת', amount: wasteTotal },
+                ].map((l, i) => (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                    <span style={{ fontSize: '14px', color: '#374151' }}>{l.label}</span>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: l.amount > 0 ? '#64748b' : '#94a3b8', textAlign: 'left' as const }}>
+                      {l.amount > 0 ? fmtM(l.amount) : '—'}
+                    </span>
+                    <span style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'left' as const }}>{totalRevenue > 0 && l.amount > 0 ? (l.amount / totalRevenue * 100).toFixed(1) + '%' : '—'}</span>
+                  </div>
+                ))}
+
+                {/* רווח נשלט — controllable margin */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '14px 18px', background: controllableMargin >= 0 ? '#eff6ff' : '#fff1f2', borderTop: '2px solid #93c5fd', borderBottom: '2px solid #93c5fd' }}>
+                  <span style={{ fontSize: '15px', fontWeight: '800', color: controllableMargin >= 0 ? '#3b82f6' : '#fb7185', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    רווח נשלט
+                    <span title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן" style={{ cursor: 'help', display: 'inline-flex' }}>
+                      <Info size={14} color="#93c5fd" />
+                    </span>
+                  </span>
+                  <span style={{ fontSize: '18px', fontWeight: '800', color: controllableMargin >= 0 ? '#3b82f6' : '#fb7185', textAlign: 'left' as const }}>{fmtM(controllableMargin)}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: controllableMargin >= 0 ? '#3b82f6' : '#fb7185', textAlign: 'left' as const }}>{controllablePct.toFixed(1)}%</span>
+                </div>
+
+                {/* עלויות קבועות + מטה */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '11px 18px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: '#64748b' }}>עלויות קבועות</span>
+                  <span />
+                  <span />
+                </div>
+                {[
+                  { label: 'עלויות קבועות', amount: fixedCosts },
                 ].map((l, i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                     <span style={{ fontSize: '14px', color: '#374151' }}>{l.label}</span>
