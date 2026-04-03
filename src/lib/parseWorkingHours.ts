@@ -2,11 +2,12 @@
  * parseWorkingHoursPDF — חילוץ שורות יומיות מדו"ח נוכחות מפורט של CashOnTab
  *
  * אסטרטגיה: שימוש בעמודות X של שורת הכותרת (header) כדי למפות כל תא לעמודה הנכונה.
- * כותרות ידועות: תאריך | יום | כניסה | יציאה | סוג דיווח | קופה | סניף | סה"כ שעות | רגילות | רמה 1 | רמה 2 | חריגות
  *
- * כל עובד מזוהה לפי "שם עובד:" בראש הדף.
- * שורות יומיות מזוהות לפי תאריך DD/MM/YYYY.
- * התוצאה: שורה אחת לכל יום לכל עובד.
+ * הכותרת ב-PDF היא דו-שורתית:
+ *   שורה עליונה: סה"כ שעות | סה"כ שעות | סה"כ שעות | סה"כ שעות | סניף | קופה | סוג | ...
+ *   שורה תחתונה: חריגות | רמה 2 | רמה 1 | רגילות | (ריקה) | (ריקה) | דיווח | ...
+ *
+ * "רגילות", "רמה 1", "רמה 2", "חריגות" הן תת-כותרות — ה-X שלהן מציין את העמודה.
  */
 
 export interface ParsedEmployee {
@@ -80,27 +81,13 @@ function groupByY(items: PdfItem[], tolerance = 4): Map<number, PdfItem[]> {
 }
 
 // ─── מציאת עמודה הכי קרובה ────────────────────────────────────────────────────
-function findClosestColumn(x: number, columnXs: Map<string, number>): string | null {
+function findClosestColumn(x: number, columnXs: Map<string, number>, maxDist = 35): string | null {
   let best = '', bestDist = Infinity
   for (const [name, cx] of columnXs) {
     const dist = Math.abs(x - cx)
     if (dist < bestDist) { bestDist = dist; best = name }
   }
-  return bestDist < 40 ? best : null
-}
-
-// ─── Header column keywords ────────────────────────────────────────────────────
-// The PDF header row contains these labels (some may be split across items)
-const HEADER_KEYWORDS: Record<string, string[]> = {
-  'total_hours': ['סה"כ שעות', 'שעות כ"סה'],
-  'regular':     ['רגילות'],
-  'level1':      ['רמה 1', '1 רמה', 'רמה'],
-  'level2':      ['רמה 2', '2 רמה'],
-  'exceptions':  ['חריגות'],
-  'register':    ['קופה'],
-  'report_type': ['סוג', 'דיווח'],
-  'branch':      ['סניף'],
-  'date':        ['תאריך'],
+  return bestDist <= maxDist ? best : null
 }
 
 // ─── פרסור ראשי ─────────────────────────────────────────────────────────────
@@ -122,7 +109,7 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
     const pageLines: string[] = []
     for (const y of yKeys) {
       const row = groups.get(y)!
-      pageLines.push(row.map(it => it.text).join(' | '))
+      pageLines.push(`[Y=${y}] ${row.map(it => `${it.text}(${it.x})`).join(' | ')}`)
     }
     const rawText = pageLines.join('\n')
     rawPages.push(rawText)
@@ -135,88 +122,146 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
     const name = nameMatch[1].trim().replace(/\s+/g, ' ')
     if (!name) continue
 
-    // ── שלב 2: מצא שורת header ──
-    // Look for the line that contains "סה"כ שעות" AND "רגילות" (or nearby)
-    let headerY = -1
+    // ── שלב 2: מצא עמודות מתוך כל שורות הכותרת ──
+    // The header is 2 rows. We look for specific sub-header keywords
+    // across ALL lines in the top portion of the page (above data rows).
+    // Keywords: "רגילות", "רמה 1"/"רמה", "חריגות", "קופה", "סניף", "תאריך"
     const columnXs = new Map<string, number>()
+    let headerBottomY = -Infinity
 
+    // First pass: find "רגילות" — that's the clearest sub-header indicator
     for (const y of yKeys) {
       const row = groups.get(y)!
-      const lineText = row.map(it => it.text).join(' ')
-
-      // Header line should contain multiple column names
-      const hasTotal = lineText.includes('סה"כ שעות') || lineText.includes('שעות כ"סה')
-      const hasRegular = lineText.includes('רגילות')
-
-      if (hasTotal && hasRegular) {
-        headerY = y
-
-        // Map each header label to its X position
-        // First, try to find multi-word headers by joining adjacent items
-        for (let i = 0; i < row.length; i++) {
-          const item = row[i]
-          const text = item.text
-
-          // Check single-item matches
-          if (text === 'רגילות') columnXs.set('regular', item.x)
-          if (text === 'חריגות') columnXs.set('exceptions', item.x)
-          if (text === 'קופה') columnXs.set('register', item.x)
-          if (text === 'סניף') columnXs.set('branch', item.x)
-          if (text === 'תאריך') columnXs.set('date', item.x)
-
-          // Multi-word: "סה"כ שעות" might be one item or two
-          if (text.includes('סה"כ שעות') || text.includes('שעות כ"סה')) {
-            columnXs.set('total_hours', item.x)
-          }
-          if (text === 'סה"כ' && i + 1 < row.length && row[i + 1].text === 'שעות') {
-            columnXs.set('total_hours', item.x)
-          }
-          if (text === 'שעות' && i > 0 && row[i - 1].text === 'סה"כ') {
-            columnXs.set('total_hours', row[i - 1].x)
-          }
-
-          // "רמה 1" / "רמה 2" might be split
-          if (text === 'רמה') {
-            // Look at next item for the number
-            if (i + 1 < row.length) {
-              const next = row[i + 1].text
-              if (next === '1') columnXs.set('level1', item.x)
-              else if (next === '2') columnXs.set('level2', item.x)
-            }
-          }
-          // Or combined
-          if (text === 'רמה 1' || text === '1 רמה') columnXs.set('level1', item.x)
-          if (text === 'רמה 2' || text === '2 רמה') columnXs.set('level2', item.x)
-
-          // "סוג דיווח" might be split
-          if (text.includes('סוג') && text.includes('דיווח')) columnXs.set('report_type', item.x)
-          if (text === 'סוג') columnXs.set('report_type', item.x)
+      for (const item of row) {
+        if (item.text === 'רגילות') {
+          columnXs.set('regular', item.x)
+          if (y > headerBottomY) headerBottomY = y
         }
-
-        // Also check for "סה"כ שעות" split across "סה"כ שעות\nרגילות"
-        // Some PDFs have multi-line headers
-
-        console.log(`[parseWorkingHours] Header found at Y=${headerY}, columns:`, Object.fromEntries(columnXs))
-        break
+        if (item.text === 'חריגות') {
+          columnXs.set('exceptions', item.x)
+          if (y > headerBottomY) headerBottomY = y
+        }
       }
     }
 
-    if (headerY === -1 || !columnXs.has('total_hours')) {
-      console.warn(`[parseWorkingHours] No header found on page ${pageIdx + 1} for ${name}`)
+    if (!columnXs.has('regular')) {
+      // Try alternative: look for line containing both "רגילות" and "רמה"
+      for (const y of yKeys) {
+        const row = groups.get(y)!
+        const lineText = row.map(it => it.text).join(' ')
+        if (lineText.includes('רגילות') || lineText.includes('רמה')) {
+          for (const item of row) {
+            if (item.text === 'רגילות') columnXs.set('regular', item.x)
+            if (item.text === 'חריגות') columnXs.set('exceptions', item.x)
+          }
+          if (y > headerBottomY) headerBottomY = y
+          if (columnXs.has('regular')) break
+        }
+      }
+    }
+
+    if (!columnXs.has('regular')) {
+      console.warn(`[parseWorkingHours] Page ${pageIdx + 1}: no "רגילות" header found for ${name}`)
       continue
     }
 
-    // ── שלב 3: חלץ שורות יומיות ──
-    // Lines BELOW the header (lower Y) that contain a date DD/MM/YYYY
+    // Find "רמה" items on the same header line(s)
     for (const y of yKeys) {
-      if (y >= headerY) continue // skip header and above
+      if (Math.abs(y - headerBottomY) > 8) continue // Only look near the sub-header line
+      const row = groups.get(y)!
+      for (let i = 0; i < row.length; i++) {
+        const item = row[i]
+        // "רמה 1" or "רמה" followed by "1"
+        if (item.text === 'רמה 1' || item.text === '1 רמה') columnXs.set('level1', item.x)
+        if (item.text === 'רמה 2' || item.text === '2 רמה') columnXs.set('level2', item.x)
+        if (item.text === 'רמה' && i + 1 < row.length) {
+          const next = row[i + 1].text
+          if (next === '1') columnXs.set('level1', item.x)
+          else if (next === '2') columnXs.set('level2', item.x)
+        }
+      }
+    }
+
+    // Find "סה"כ שעות" on the header line above — this is the "total hours" column
+    // It's the "סה"כ שעות" that's directly above the data area (closest X to "רגילות" but slightly different)
+    // Actually, "סה"כ שעות" appears multiple times. The one for total hours has a unique X.
+    // Strategy: look at the header row ABOVE the sub-header, find the "סה"כ" or "סה"כ שעות"
+    // that is to the RIGHT of "רגילות" (higher X in the data = to the left visually in RTL,
+    // but in PDF coords, higher X = more right)
+
+    // Find the line with "סה"כ שעות" closest to (but above) the sub-header
+    for (const y of yKeys) {
+      if (y <= headerBottomY) continue // Must be above sub-header
+      if (y > headerBottomY + 30) continue // Not too far above
+      const row = groups.get(y)!
+      const lineText = row.map(it => it.text).join(' ')
+      if (!lineText.includes('סה"כ') && !lineText.includes('שעות')) continue
+
+      // Find all "סה"כ שעות" or "סה"כ" items
+      // The leftmost (lowest X) "סה"כ שעות" that isn't near רגילות/רמה1/רמה2 = the total column
+      for (const item of row) {
+        if (item.text.includes('סה"כ')) {
+          // Check if this X is NOT close to regular/level1/level2 (those have their own "סה"כ שעות" above them)
+          const regularX = columnXs.get('regular')!
+          const level1X = columnXs.get('level1')
+          const level2X = columnXs.get('level2')
+          const exceptX = columnXs.get('exceptions')
+
+          const isNearKnown = [regularX, level1X, level2X, exceptX]
+            .filter(x => x !== undefined)
+            .some(x => Math.abs(item.x - x!) < 30)
+
+          if (!isNearKnown) {
+            // This "סה"כ שעות" is the total hours column
+            if (!columnXs.has('total_hours')) {
+              columnXs.set('total_hours', item.x)
+            }
+          }
+        }
+      }
+      if (columnXs.has('total_hours')) break
+    }
+
+    // Also look for "קופה", "סניף", "תאריך" etc. on header lines
+    for (const y of yKeys) {
+      if (y < headerBottomY) continue
+      if (y > headerBottomY + 30) continue
+      const row = groups.get(y)!
+      for (const item of row) {
+        if (item.text === 'קופה') columnXs.set('register', item.x)
+        if (item.text === 'סניף') columnXs.set('branch', item.x)
+        if (item.text === 'תאריך') columnXs.set('date', item.x)
+        if (item.text === 'סוג' || item.text.includes('דיווח')) columnXs.set('report_type', item.x)
+      }
+    }
+
+    console.log(`[parseWorkingHours] Page ${pageIdx + 1} ${name} — columns:`,
+      Object.fromEntries(columnXs))
+
+    if (!columnXs.has('total_hours')) {
+      console.warn(`[parseWorkingHours] Page ${pageIdx + 1}: no "סה"כ שעות" column found for ${name}`)
+      // Fallback: the total_hours column is usually to the right of "regular" in X coords
+      // (In the PDF visual layout, total hours is to the LEFT of regular)
+      // So we estimate it
+      const regX = columnXs.get('regular')!
+      // In the data rows, total_hours should be at higher X than regular (further right in PDF coords)
+      // We'll use a column that's about 50px to the right of regular
+      columnXs.set('total_hours', regX + 50)
+      console.log(`[parseWorkingHours] Estimated total_hours X = ${regX + 50}`)
+    }
+
+    // ── שלב 3: חלץ שורות יומיות ──
+    // Lines BELOW the header that contain a date DD/MM/YYYY
+    for (const y of yKeys) {
+      if (y >= headerBottomY) continue // skip header and above
 
       const row = groups.get(y)!
       const texts = row.map(it => it.text)
       const lineText = texts.join(' ')
 
-      // Skip summary lines
-      if (lineText.includes('סיכום') || lineText.includes('CashOnTab') || lineText.includes('עמוד')) continue
+      // Skip summary/footer lines
+      if (lineText.includes('סיכום') || lineText.includes('CashOnTab') || lineText.includes('עמוד')
+        || lineText.includes('סה"כ ימי') || lineText.includes('סה"כ שעות')) continue
 
       // Look for date DD/MM/YYYY
       const dateItem = row.find(it => /^\d{2}\/\d{2}\/\d{4}$/.test(it.text))
@@ -226,12 +271,11 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
       const [dd, mm, yyyy] = dateItem.text.split('/')
       const dateStr = `${yyyy}-${mm}-${dd}`
 
-      // Skip rows with 0 total hours (non-work days that appear in PDF)
-      // Map each number item to its closest column
+      // Map each number to its closest column
       const cellMap = new Map<string, number>()
 
       for (const item of row) {
-        // Skip non-numeric items (dates, times, Hebrew text)
+        // Skip dates, times, Hebrew text
         if (/^\d{2}\/\d{2}\/\d{4}$/.test(item.text)) continue
         if (/^\d{2}:\d{2}$/.test(item.text)) continue
         if (/[\u05D0-\u05EA]/.test(item.text)) continue
@@ -239,9 +283,8 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
         const val = parseFloat(item.text.replace(/,/g, ''))
         if (isNaN(val)) continue
 
-        // Find closest column header
         const col = findClosestColumn(item.x, columnXs)
-        if (col) {
+        if (col && col !== 'register' && col !== 'branch' && col !== 'report_type' && col !== 'date') {
           cellMap.set(col, val)
         }
       }
@@ -256,8 +299,6 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
       const key = `${name}|${dateStr}`
       if (seenKeys.has(key)) continue
       seenKeys.add(key)
-
-      console.log(`[parseWorkingHours] ${name} ${dateStr}: total=${totalH}, h100=${h100}, h125=${h125}, h150=${h150}`)
 
       employees.push({
         name,
