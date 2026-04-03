@@ -116,11 +116,45 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
     console.log(`[parseWorkingHours] ── PAGE ${pageIdx + 1} ──\n${rawText}`)
 
     // ── שלב 1: מצא שם עובד ──
-    const fullText = pageItems.map(it => it.text).join(' ')
-    const nameMatch = fullText.match(/שם עובד[:\s]+([^\n]+?)(?:\s+קוד|\s+מחסנים|\s+תאריך)/)
-    if (!nameMatch) continue
-    const name = nameMatch[1].trim().replace(/\s+/g, ' ')
-    if (!name) continue
+    // Search through GROUPED lines (sorted by Y) — more reliable than raw fullText
+    // because fullText joins items in pdf.js stream order which may not be visual order
+    let name = ''
+    for (const y of yKeys) {
+      const row = groups.get(y)!
+      const lineText = row.map(it => it.text).join(' ')
+
+      // Try "שם עובד:" on this line
+      const m = lineText.match(/שם עובד[:\s]+(.+?)(?:\s+קוד|\s*$)/)
+      if (m) {
+        name = m[1].trim().replace(/\s+/g, ' ')
+        // Remove trailing numbers/codes
+        name = name.replace(/\s*\d+\s*$/, '').trim()
+        break
+      }
+
+      // Also try: find item containing "שם עובד" and take the next Hebrew items
+      const idx = row.findIndex(it => it.text.includes('שם עובד'))
+      if (idx >= 0) {
+        const item = row[idx]
+        // The name might be INSIDE this item: "שם עובד: אסף דוד"
+        const inlineMatch = item.text.match(/שם עובד[:\s]+(.+)/)
+        if (inlineMatch) {
+          name = inlineMatch[1].trim().replace(/\s+קוד.*/, '').replace(/\s+מחסנים.*/, '').trim()
+        }
+        // Or the name might be in adjacent items (sorted by X)
+        if (!name) {
+          const hebItems = row.slice(idx + 1).filter(it => /[\u05D0-\u05EA]/.test(it.text) && !it.text.includes('קוד') && !it.text.includes('מחסנים'))
+          if (hebItems.length) name = hebItems.map(it => it.text).join(' ')
+        }
+        if (name) break
+      }
+    }
+
+    if (!name) {
+      console.warn(`[parseWorkingHours] Page ${pageIdx + 1}: no employee name found`)
+      continue
+    }
+    console.log(`[parseWorkingHours] Page ${pageIdx + 1}: found employee "${name}"`)
 
     // ── שלב 2: מצא עמודות מתוך כל שורות הכותרת ──
     // The header is 2 rows. We look for specific sub-header keywords
@@ -129,34 +163,37 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
     const columnXs = new Map<string, number>()
     let headerBottomY = -Infinity
 
-    // First pass: find "רגילות" — that's the clearest sub-header indicator
+    // First pass: find the TABLE HEADER line with "רגילות"
+    // yKeys is sorted descending (highest Y = top of page first)
+    // We want the FIRST (topmost) occurrence — that's the table header, not the summary
     for (const y of yKeys) {
       const row = groups.get(y)!
-      for (const item of row) {
-        if (item.text === 'רגילות') {
-          columnXs.set('regular', item.x)
-          if (y > headerBottomY) headerBottomY = y
-        }
-        if (item.text === 'חריגות') {
-          columnXs.set('exceptions', item.x)
-          if (y > headerBottomY) headerBottomY = y
-        }
-      }
-    }
+      const lineText = row.map(it => it.text).join(' ')
 
-    if (!columnXs.has('regular')) {
-      // Try alternative: look for line containing both "רגילות" and "רמה"
-      for (const y of yKeys) {
-        const row = groups.get(y)!
-        const lineText = row.map(it => it.text).join(' ')
-        if (lineText.includes('רגילות') || lineText.includes('רמה')) {
-          for (const item of row) {
-            if (item.text === 'רגילות') columnXs.set('regular', item.x)
-            if (item.text === 'חריגות') columnXs.set('exceptions', item.x)
-          }
-          if (y > headerBottomY) headerBottomY = y
-          if (columnXs.has('regular')) break
+      // Skip lines that are part of summary section
+      if (lineText.includes('סיכום') || lineText.includes('כדר"מ')) continue
+
+      const hasRegular = row.some(it => it.text === 'רגילות')
+      const hasRama = row.some(it => it.text.includes('רמה'))
+
+      if (hasRegular && hasRama) {
+        // This is the sub-header row with "רגילות | רמה 1 | רמה 2 | חריגות"
+        for (const item of row) {
+          if (item.text === 'רגילות') columnXs.set('regular', item.x)
+          if (item.text === 'חריגות') columnXs.set('exceptions', item.x)
         }
+        headerBottomY = y
+        break // Take the FIRST (topmost) match
+      }
+
+      // Also check for "רגילות" alone (might be on its own line)
+      if (hasRegular) {
+        for (const item of row) {
+          if (item.text === 'רגילות') columnXs.set('regular', item.x)
+          if (item.text === 'חריגות') columnXs.set('exceptions', item.x)
+        }
+        headerBottomY = y
+        break
       }
     }
 
