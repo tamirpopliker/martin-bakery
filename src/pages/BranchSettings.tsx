@@ -74,7 +74,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
 
   // ─── שליפות ──────────────────────────────────────────────────────────────
   async function fetchKpi() {
-    const { data } = await supabase.from('branch_kpi_targets').select('*').eq('branch_id', branchId).single()
+    const { data } = await supabase.from('branch_kpi_targets').select('*').eq('branch_id', branchId).maybeSingle()
     if (data) setKpi(data)
   }
 
@@ -95,17 +95,27 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
 
   // ─── KPI save ─────────────────────────────────────────────────────────────
   async function saveKpi() {
-    if (kpi.id) {
-      await supabase.from('branch_kpi_targets').update({
-        labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct, revenue_target: kpi.revenue_target,
-        basket_target: kpi.basket_target, transaction_target: kpi.transaction_target
-      }).eq('id', kpi.id)
-    } else {
-      const { data } = await supabase.from('branch_kpi_targets').insert({
-        branch_id: branchId, labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct, revenue_target: kpi.revenue_target,
-        basket_target: kpi.basket_target, transaction_target: kpi.transaction_target
-      }).select().single()
-      if (data) setKpi(data)
+    const payload = {
+      branch_id: branchId, labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct,
+      revenue_target: kpi.revenue_target, basket_target: kpi.basket_target, transaction_target: kpi.transaction_target
+    }
+    const { data, error } = await supabase.from('branch_kpi_targets')
+      .upsert(payload, { onConflict: 'branch_id' })
+      .select().single()
+    if (error) {
+      console.error('saveKpi error:', error)
+      // Fallback: try update then insert
+      if (kpi.id) {
+        await supabase.from('branch_kpi_targets').update({
+          labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct, revenue_target: kpi.revenue_target,
+          basket_target: kpi.basket_target, transaction_target: kpi.transaction_target
+        }).eq('id', kpi.id)
+      } else {
+        const { data: ins } = await supabase.from('branch_kpi_targets').insert(payload).select().single()
+        if (ins) setKpi(ins)
+      }
+    } else if (data) {
+      setKpi(data)
     }
     setKpiSaved(true)
     setTimeout(() => setKpiSaved(false), 2000)
