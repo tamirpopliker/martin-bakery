@@ -88,7 +88,7 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
     supabase.from('supplier_invoices').select('date, amount').gte('date', tFrom).lt('date', tTo),
     supabase.from('labor').select('date, employer_cost').gte('date', tFrom).lt('date', tTo),
     supabase.from('branch_labor').select('date, employer_cost').gte('date', tFrom).lt('date', tTo),
-    supabase.from('fixed_costs').select('month, amount').in('month', months),
+    supabase.from('fixed_costs').select('month, amount, entity_type').neq('entity_type', 'working_days').in('month', months),
     supabase.from('factory_repairs').select('date, amount').gte('date', tFrom).lt('date', tTo),
     supabase.from('branch_expenses').select('date, amount').gte('date', tFrom).lt('date', tTo),
     supabase.from('factory_waste').select('date, amount').gte('date', tFrom).lt('date', tTo),
