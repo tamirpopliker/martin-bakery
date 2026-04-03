@@ -222,6 +222,75 @@ export async function fetchFactoryTrends(refMonth: string): Promise<MonthTrend[]
   })
 }
 
+// ─── מגמות סניף מפורטות ──────────────────────────────────────────────────
+
+export interface BranchRevenueTrend { month: string; label: string; cashier: number; website: number; credit: number; total: number }
+export interface BranchLaborTrend { month: string; label: string; laborCost: number; revenue: number; laborPct: number }
+export interface BranchExpensesTrend { month: string; label: string; supplier: number; repair: number; infrastructure: number; delivery: number; other: number; total: number }
+export interface BranchWasteTrend { month: string; label: string; finished: number; raw: number; packaging: number; total: number }
+
+export async function fetchBranchRevenueTrend(branchId: number, refMonth: string): Promise<BranchRevenueTrend[]> {
+  const months = getLast6Months(refMonth)
+  const tFrom = months[0] + '-01', tTo = monthEnd(months[5])
+  const { data } = await supabase.from('branch_revenue').select('date, amount, source').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo)
+  const byM: Record<string, { cashier: number; website: number; credit: number }> = {}
+  months.forEach(m => { byM[m] = { cashier: 0, website: 0, credit: 0 } })
+  ;(data || []).forEach((r: any) => {
+    const m = r.date?.slice(0, 7)
+    if (m && byM[m]) byM[m][r.source as 'cashier' | 'website' | 'credit'] += Number(r.amount || 0)
+  })
+  return months.map(m => ({ month: m, label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1], ...byM[m], total: byM[m].cashier + byM[m].website + byM[m].credit }))
+}
+
+export async function fetchBranchLaborTrend(branchId: number, refMonth: string): Promise<BranchLaborTrend[]> {
+  const months = getLast6Months(refMonth)
+  const tFrom = months[0] + '-01', tTo = monthEnd(months[5])
+  const [labRes, revRes] = await Promise.all([
+    supabase.from('branch_labor').select('date, employer_cost').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
+    supabase.from('branch_revenue').select('date, amount').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
+  ])
+  const grp = (data: any[] | null, field: string) => {
+    const map: Record<string, number> = {}
+    ;(data || []).forEach(r => { const m = r.date?.slice(0, 7); if (m) map[m] = (map[m] || 0) + Number(r[field] || 0) })
+    return map
+  }
+  const labByM = grp(labRes.data, 'employer_cost')
+  const revByM = grp(revRes.data, 'amount')
+  return months.map(m => {
+    const laborCost = labByM[m] || 0, revenue = revByM[m] || 0
+    return { month: m, label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1], laborCost, revenue, laborPct: revenue > 0 ? Math.round((laborCost / revenue) * 1000) / 10 : 0 }
+  })
+}
+
+export async function fetchBranchExpensesTrend(branchId: number, refMonth: string): Promise<BranchExpensesTrend[]> {
+  const months = getLast6Months(refMonth)
+  const tFrom = months[0] + '-01', tTo = monthEnd(months[5])
+  const { data } = await supabase.from('branch_expenses').select('date, amount, expense_type').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo)
+  const byM: Record<string, Record<string, number>> = {}
+  months.forEach(m => { byM[m] = { supplier: 0, repair: 0, infrastructure: 0, delivery: 0, other: 0 } })
+  ;(data || []).forEach((r: any) => {
+    const m = r.date?.slice(0, 7), t = r.expense_type || 'other'
+    if (m && byM[m]) byM[m][t === 'inventory' ? 'supplier' : t] = (byM[m][t === 'inventory' ? 'supplier' : t] || 0) + Number(r.amount || 0)
+  })
+  return months.map(m => {
+    const e = byM[m]
+    return { month: m, label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1], supplier: e.supplier, repair: e.repair, infrastructure: e.infrastructure, delivery: e.delivery, other: e.other, total: Object.values(e).reduce((s, v) => s + v, 0) }
+  })
+}
+
+export async function fetchBranchWasteTrend(branchId: number, refMonth: string): Promise<BranchWasteTrend[]> {
+  const months = getLast6Months(refMonth)
+  const tFrom = months[0] + '-01', tTo = monthEnd(months[5])
+  const { data } = await supabase.from('branch_waste').select('date, amount, category').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo)
+  const byM: Record<string, { finished: number; raw: number; packaging: number }> = {}
+  months.forEach(m => { byM[m] = { finished: 0, raw: 0, packaging: 0 } })
+  ;(data || []).forEach((r: any) => {
+    const m = r.date?.slice(0, 7), cat = r.category || 'finished'
+    if (m && byM[m] && cat in byM[m]) byM[m][cat as 'finished' | 'raw' | 'packaging'] += Number(r.amount || 0)
+  })
+  return months.map(m => ({ month: m, label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1], ...byM[m], total: byM[m].finished + byM[m].raw + byM[m].packaging }))
+}
+
 // ─── עובדים גלובליים ──────────────────────────────────────────────────────
 
 export interface GlobalEmployee {

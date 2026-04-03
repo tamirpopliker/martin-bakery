@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase } from '../lib/supabase'
+import { supabase, fetchBranchWasteTrend, BranchWasteTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { ArrowRight, Plus, Pencil, Trash2, Trash } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface Props {
   branchId: number
@@ -44,6 +45,7 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
   const [amount, setAmount]           = useState('')
   const [category, setCategory]       = useState<'finished' | 'raw' | 'packaging'>('finished')
   const [notes, setNotes]             = useState('')
+  const [trendData, setTrendData]     = useState<BranchWasteTrend[]>([])
 
   async function fetchEntries() {
     const { data } = await supabase
@@ -55,7 +57,10 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
     if (data) setEntries(data)
   }
 
-  useEffect(() => { fetchEntries() }, [from, to, branchId])
+  useEffect(() => {
+    fetchEntries()
+    fetchBranchWasteTrend(branchId, from.slice(0, 7)).then(setTrendData)
+  }, [from, to, branchId])
 
   async function addEntry() {
     if (!amount || !date) return
@@ -226,6 +231,30 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
           )}
         </CardContent></Card></div>
         </motion.div>
+
+        {/* מגמת 6 חודשים */}
+        {trendData.length > 0 && (
+          <motion.div variants={fadeIn} initial="hidden" animate="visible">
+          <Card className="shadow-sm mt-4">
+            <CardContent className="p-6">
+              <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>מגמת 6 חודשים — פחת</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={trendData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
+                  <Tooltip formatter={(value: number) => '₪' + Math.round(value).toLocaleString()} />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  <Line type="monotone" dataKey="finished" name="מוצר מוגמר" stroke="#fb7185" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="raw" name="חומרי גלם" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="packaging" name="אריזה" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="total" name="סה״כ" stroke="#e11d48" strokeWidth={2.5} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+          </motion.div>
+        )}
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { supabase } from '../lib/supabase'
+import { supabase, fetchBranchRevenueTrend, BranchRevenueTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent } from '@/components/ui/card'
@@ -9,6 +9,7 @@ import { ArrowRight, Plus, Pencil, Trash2, Search, X, ShoppingBag, CreditCard, M
 import { RevenueIcon } from '@/components/icons'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { parseCashOnTabPDF, CashOnTabRow } from '../lib/parseCashOnTab'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface Props {
   branchId: number
@@ -95,6 +96,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   const [pdfResult, setPdfResult]       = useState<{ imported: number; skipped: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [trendData, setTrendData] = useState<BranchRevenueTrend[]>([])
 
   async function handlePdfFile(file: File) {
     setPdfParsing(true)
@@ -182,6 +184,8 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
   useEffect(() => {
     fetchEntries(); fetchCreditCustomers()
+    const refMonth = from.slice(0, 7)
+    fetchBranchRevenueTrend(branchId, refMonth).then(setTrendData)
     setAmount(''); setTxCount(''); setCustomer(''); setDocNumber(''); setNotes(''); setSearchFilter('')
   }, [from, to, branchId, tab])
 
@@ -487,6 +491,30 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
             </CardContent>
           </Card>
           </div>
+          </motion.div>
+        )}
+
+        {/* מגמת 6 חודשים */}
+        {trendData.length > 0 && (
+          <motion.div variants={fadeIn} initial="hidden" animate="visible">
+          <Card className="shadow-sm mt-4">
+            <CardContent className="p-6">
+              <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>מגמת 6 חודשים — הכנסות</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={trendData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
+                  <Tooltip formatter={(value: number) => '₪' + Math.round(value).toLocaleString()} />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  <Line type="monotone" dataKey="cashier" name="קופה" stroke="#818cf8" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="website" name="אתר" stroke="#c084fc" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="credit" name="הקפה" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="total" name="סה״כ" stroke={branchColor} strokeWidth={2.5} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
           </motion.div>
         )}
 

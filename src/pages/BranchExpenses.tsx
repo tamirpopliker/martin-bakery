@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { supabase } from '../lib/supabase'
+import { supabase, fetchBranchExpensesTrend, BranchExpensesTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ArrowRight, Plus, Pencil, Trash2, Search, X } from 'lucide-react'
 import { FixedCostIcon } from '@/components/icons'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface Props {
   branchId: number
@@ -88,6 +89,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
   const [amount, setAmount]   = useState('')
   const [docNumber, setDocNumber] = useState('')
   const [notes, setNotes]     = useState('')
+  const [trendData, setTrendData] = useState<BranchExpensesTrend[]>([])
 
   async function fetchEntries() {
     const { data } = await supabase.from('branch_expenses').select('*')
@@ -102,7 +104,10 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
     if (data) setSuppliers(data)
   }
 
-  useEffect(() => { fetchEntries(); fetchSuppliers() }, [from, to, branchId])
+  useEffect(() => {
+    fetchEntries(); fetchSuppliers()
+    fetchBranchExpensesTrend(branchId, from.slice(0, 7)).then(setTrendData)
+  }, [from, to, branchId])
 
   const supplierNames = suppliers.map(s => s.name)
 
@@ -340,6 +345,31 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
         </Card>
         </div>
         </motion.div>
+
+        {/* מגמת 6 חודשים */}
+        {trendData.length > 0 && (
+          <motion.div variants={fadeIn} initial="hidden" animate="visible">
+          <Card className="shadow-sm mt-4">
+            <CardContent className="p-6">
+              <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>מגמת 6 חודשים — הוצאות</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={trendData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
+                  <Tooltip formatter={(value: number) => '₪' + Math.round(value).toLocaleString()} />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  <Line type="monotone" dataKey="supplier" name="ספקים" stroke="#818cf8" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="repair" name="תיקונים" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="infrastructure" name="תשתיות" stroke="#c084fc" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="delivery" name="משלוחים" stroke="#34d399" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="total" name="סה״כ" stroke="#fb7185" strokeWidth={2.5} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+          </motion.div>
+        )}
       </div>
     </div>
   )

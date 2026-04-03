@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase } from '../lib/supabase'
+import { supabase, fetchBranchLaborTrend, BranchLaborTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent } from '@/components/ui/card'
@@ -381,6 +381,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   const [dailyData, setDailyData] = useState<DailyRow[]>([])
   const [dailyLoading, setDailyLoading] = useState(false)
   const [laborTargetPct, setLaborTargetPct] = useState(28)
+  const [laborTrend, setLaborTrend] = useState<BranchLaborTrend[]>([])
 
   // העלאה
   const [parsedRows, setParsedRows]     = useState<ParsedRow[]>([])
@@ -418,7 +419,10 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
     if (data) setLaborTargetPct(Number(data.labor_pct) || 28)
   }
 
-  useEffect(() => { fetchEntries(); fetchRevenue(); fetchLaborTarget() }, [from, to, branchId])
+  useEffect(() => {
+    fetchEntries(); fetchRevenue(); fetchLaborTarget()
+    fetchBranchLaborTrend(branchId, from.slice(0, 7)).then(setLaborTrend)
+  }, [from, to, branchId])
 
   async function fetchDailyReport() {
     setDailyLoading(true)
@@ -1121,6 +1125,31 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                 </Card>
               </>
             )}
+          </motion.div>
+        )}
+
+        {/* מגמת 6 חודשים — לייבור */}
+        {laborTrend.length > 0 && (
+          <motion.div variants={fadeIn} initial="hidden" animate="visible">
+          <Card className="shadow-sm mt-4">
+            <CardContent className="p-6">
+              <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>מגמת 6 חודשים — לייבור</h3>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={laborTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                  <YAxis yAxisId="cost" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
+                  <YAxis yAxisId="pct" orientation="left" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => v + '%'} />
+                  <RTooltip formatter={(value: number, name: string) => name === '% לייבור' ? value + '%' : '₪' + Math.round(value).toLocaleString()} />
+                  <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  <ReferenceLine yAxisId="pct" y={laborTargetPct} stroke="#fb7185" strokeDasharray="5 5" label={{ value: `יעד ${laborTargetPct}%`, fill: '#fb7185', fontSize: 11 }} />
+                  <Line yAxisId="cost" type="monotone" dataKey="laborCost" name="עלות לייבור" stroke={branchColor} strokeWidth={2} dot={{ r: 3 }} />
+                  <Line yAxisId="cost" type="monotone" dataKey="revenue" name="הכנסות" stroke="#378ADD" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line yAxisId="pct" type="monotone" dataKey="laborPct" name="% לייבור" stroke="#f97316" strokeWidth={2.5} dot={{ r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
           </motion.div>
         )}
 
