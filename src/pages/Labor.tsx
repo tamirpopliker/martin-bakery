@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { supabase, monthEnd } from '../lib/supabase'
 import { parseTimeWatchPDF, type TimeWatchRow } from '../lib/parseTimeWatch'
-import { ArrowRight, Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save, Calendar, FileText } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save, Calendar, FileText, ChevronDown, ChevronUp, Clock } from 'lucide-react'
 import { LaborIcon } from '@/components/icons'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -74,9 +74,14 @@ const emptyForm: AddForm = { name: '', employee_number: '', department: 'creams'
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
 export default function Labor({ onBack }: Props) {
-  const [tab, setTab] = useState<'upload' | 'employees'>('upload')
+  const [tab, setTab] = useState<'upload' | 'employees' | 'history'>('upload')
   const [employees, setEmployees] = useState<Employee[]>([])
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]) // includes inactive, for PDF matching
+  // History state
+  const [historyData, setHistoryData] = useState<any[]>([])
+  const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [expandedDate, setExpandedDate] = useState<string | null>(null)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [saving, setSaving] = useState(false)
@@ -98,6 +103,24 @@ export default function Labor({ onBack }: Props) {
   }
 
   useEffect(() => { fetchEmployees() }, [])
+
+  async function fetchHistory() {
+    setHistoryLoading(true)
+    const from = historyMonth + '-01'
+    const toDate = new Date(parseInt(historyMonth.slice(0, 4)), parseInt(historyMonth.slice(5, 7)), 0)
+    const to = historyMonth + '-' + String(toDate.getDate()).padStart(2, '0')
+    const { data } = await supabase
+      .from('labor')
+      .select('*')
+      .eq('entity_type', 'factory')
+      .gte('date', from)
+      .lte('date', to)
+      .order('date', { ascending: false })
+    setHistoryData(data || [])
+    setHistoryLoading(false)
+  }
+
+  useEffect(() => { if (tab === 'history') fetchHistory() }, [tab, historyMonth])
 
   async function parsePDF(file: File) {
     try {
@@ -286,6 +309,9 @@ export default function Labor({ onBack }: Props) {
           <button onClick={() => setTab('upload')} style={{ background: tab === 'upload' ? '#818cf8' : '#f1f5f9', color: tab === 'upload' ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 20px', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
             העלאת קובץ
           </button>
+          <button onClick={() => setTab('history')} style={{ background: tab === 'history' ? '#818cf8' : '#f1f5f9', color: tab === 'history' ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 20px', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
+            היסטוריה
+          </button>
           <button onClick={() => setTab('employees')} style={{ background: tab === 'employees' ? '#818cf8' : '#f1f5f9', color: tab === 'employees' ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 20px', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
             עובדים ({employees.length})
           </button>
@@ -455,6 +481,86 @@ export default function Labor({ onBack }: Props) {
             )}
           </>
         )}
+
+        {/* ═══ HISTORY TAB ═══ */}
+        {tab === 'history' && (() => {
+          // Group history by date
+          const byDate = new Map<string, typeof historyData>()
+          for (const row of historyData) {
+            const d = row.date
+            if (!byDate.has(d)) byDate.set(d, [])
+            byDate.get(d)!.push(row)
+          }
+          const dates = [...byDate.keys()].sort((a, b) => b.localeCompare(a))
+          const totalCostAll = historyData.reduce((s: number, r: any) => s + (r.employer_cost || 0), 0)
+          const totalHoursAll = historyData.reduce((s: number, r: any) => s + (r.hours_100 || 0) + (r.hours_125 || 0) + (r.hours_150 || 0), 0)
+
+          return (
+            <>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <input type="month" value={historyMonth} onChange={e => setHistoryMonth(e.target.value)}
+                  style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '8px 14px', fontSize: '14px', fontFamily: 'inherit' }} />
+                <div style={{ marginRight: 'auto', display: 'flex', gap: '16px', fontSize: '13px', color: '#64748b' }}>
+                  <span>סה"כ: <strong style={{ color: '#818cf8' }}>₪{Math.round(totalCostAll).toLocaleString()}</strong></span>
+                  <span>שעות: <strong>{totalHoursAll.toFixed(1)}</strong></span>
+                  <span>ימים: <strong>{dates.length}</strong></span>
+                  <span>רשומות: <strong>{historyData.length}</strong></span>
+                </div>
+              </div>
+
+              {historyLoading ? (
+                <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>טוען...</div>
+              ) : dates.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>אין נתונים לחודש זה</div>
+              ) : (
+                <motion.div variants={fadeIn} initial="hidden" animate="visible">
+                  {dates.map(d => {
+                    const dayRows = byDate.get(d)!
+                    const dayCost = dayRows.reduce((s: number, r: any) => s + (r.employer_cost || 0), 0)
+                    const dayHours = dayRows.reduce((s: number, r: any) => s + (r.hours_100 || 0) + (r.hours_125 || 0) + (r.hours_150 || 0), 0)
+                    const dayEmps = new Set(dayRows.map((r: any) => r.employee_name)).size
+                    const isOpen = expandedDate === d
+                    const dateObj = new Date(d + 'T12:00:00')
+                    const dayName = dateObj.toLocaleDateString('he-IL', { weekday: 'short' })
+                    const dateStr = dateObj.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })
+
+                    return (
+                      <Card key={d} className="shadow-sm" style={{ marginBottom: '8px', overflow: 'hidden' }}>
+                        <button onClick={() => setExpandedDate(isOpen ? null : d)}
+                          style={{ width: '100%', display: 'grid', gridTemplateColumns: '80px 1fr 100px 100px 100px 30px', alignItems: 'center', padding: '14px 20px', background: 'white', border: 'none', cursor: 'pointer', fontSize: '13px', textAlign: 'right' }}>
+                          <span style={{ fontWeight: '700', color: '#0f172a' }}>{dayName} {dateStr}</span>
+                          <span style={{ fontSize: '12px', color: '#94a3b8' }}>{dayEmps} עובדים</span>
+                          <span style={{ fontWeight: '600', color: '#64748b' }}>{dayHours.toFixed(1)} ש׳</span>
+                          <span style={{ fontWeight: '700', color: '#818cf8' }}>₪{Math.round(dayCost).toLocaleString()}</span>
+                          <span />
+                          {isOpen ? <ChevronUp size={16} color="#94a3b8" /> : <ChevronDown size={16} color="#94a3b8" />}
+                        </button>
+
+                        {isOpen && (
+                          <div style={{ borderTop: '1px solid #e2e8f0' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 70px 70px 70px 100px', padding: '8px 20px', background: '#f8fafc', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
+                              <span>עובד</span><span>מחלקה</span><span>100%</span><span>125%</span><span>150%</span><span>עלות מעביד</span>
+                            </div>
+                            {dayRows.map((r: any, i: number) => (
+                              <div key={r.id || i} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 70px 70px 70px 100px', padding: '10px 20px', borderBottom: i < dayRows.length - 1 ? '1px solid #f1f5f9' : 'none', fontSize: '13px', alignItems: 'center' }}>
+                                <span style={{ fontWeight: '600', color: '#374151' }}>{r.employee_name}</span>
+                                <span style={{ fontSize: '11px', color: '#818cf8' }}>{deptOptions.find(x => x.value === r.entity_id)?.label || r.entity_id}</span>
+                                <span style={{ color: '#64748b' }}>{r.hours_100 || '—'}</span>
+                                <span style={{ color: r.hours_125 > 0 ? '#f59e0b' : '#d1d5db', fontWeight: r.hours_125 > 0 ? '600' : '400' }}>{r.hours_125 || '—'}</span>
+                                <span style={{ color: r.hours_150 > 0 ? '#fb7185' : '#d1d5db', fontWeight: r.hours_150 > 0 ? '600' : '400' }}>{r.hours_150 || '—'}</span>
+                                <span style={{ fontWeight: '700', color: '#0f172a' }}>₪{Math.round(r.employer_cost || 0).toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </Card>
+                    )
+                  })}
+                </motion.div>
+              )}
+            </>
+          )
+        })()}
 
         {tab === 'employees' && (
           <>
