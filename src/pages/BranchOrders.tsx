@@ -105,7 +105,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
     await supabase.from('branch_expenses').insert({
       branch_id: branchId,
       date: order.date,
-      type: 'supplier',
+      expense_type: 'suppliers',
       supplier: 'מפעל ייצור',
       amount: order.amount,
       doc_number: docNum,

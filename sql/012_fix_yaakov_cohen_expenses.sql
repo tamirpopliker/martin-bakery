@@ -2,11 +2,11 @@
 -- for Yaakov Cohen branch (branch_id = 3)
 -- This handles orders that were approved before the auto-create logic was added
 
-INSERT INTO branch_expenses (branch_id, date, type, supplier, amount, doc_number, from_factory, notes)
+INSERT INTO branch_expenses (branch_id, date, expense_type, supplier, amount, doc_number, from_factory, notes)
 SELECT
   3 as branch_id,
   fs.date,
-  'supplier' as type,
+  'suppliers' as expense_type,
   'מפעל ייצור' as supplier,
   fs.amount,
   COALESCE(fs.doc_number, 'factory_factory_sales_' || fs.id) as doc_number,
@@ -24,11 +24,11 @@ AND NOT EXISTS (
 );
 
 -- Also fix for all other branches (in case they have the same issue)
-INSERT INTO branch_expenses (branch_id, date, type, supplier, amount, doc_number, from_factory, notes)
+INSERT INTO branch_expenses (branch_id, date, expense_type, supplier, amount, doc_number, from_factory, notes)
 SELECT
   fs.target_branch_id as branch_id,
   fs.date,
-  'supplier' as type,
+  'suppliers' as expense_type,
   'מפעל ייצור' as supplier,
   fs.amount,
   COALESCE(fs.doc_number, 'factory_factory_sales_' || fs.id) as doc_number,
