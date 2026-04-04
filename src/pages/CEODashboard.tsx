@@ -370,15 +370,17 @@ export default function CEODashboard({ onBack }: Props) {
 
   // ─── Consolidated view (intercompany eliminated) ──────────────────────────
   const factoryAllSales = factorySales + factoryInternalSales  // total factory including internal
+  const totalExpInternal = branches.reduce((s, b) => s + b.expInternal, 0)
+  const totalExpExternal = branches.reduce((s, b) => s + b.expExternal, 0)
   const consRevenue     = totalRevenue + factorySales  // branches + factory external only
   const consLabor       = grandLabor
-  const consSuppliers   = factorySuppliers  // only actual raw materials
+  const consSuppliers   = factorySuppliers + totalExpExternal  // raw materials + branch external suppliers
   const consWaste       = totalWaste + factoryWaste
   const consFixed       = totalFixed + factoryFixed
-  const consRepairs     = factoryRepairs + totalExpenses - branchInternalExpenses  // branch expenses minus internal
+  const consRepairs     = factoryRepairs
   const consGross       = consRevenue - consSuppliers - consLabor
   const consOverhead    = totalRevenue * overheadPct / 100  // only branches get overhead
-  const consOperating   = consGross - consWaste - consFixed - consOverhead
+  const consOperating   = consGross - consWaste - consFixed - consRepairs - consOverhead
 
   const barData = [
     ...branches.map(b => ({

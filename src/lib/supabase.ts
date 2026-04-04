@@ -566,8 +566,9 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     else fixedCosts += amt
   }
 
-  // Controllable margin = revenue - suppliers - labor - mgmt - waste - repairs
-  const controllableMargin = revenue - expSuppliers - laborEmployer - mgmtCosts - wasteTotal - expRepairs
+  // Controllable margin = revenue - all expenses - labor - mgmt - waste
+  const totalExpenses = expSuppliers + expRepairs + expInfra + expDelivery + expOther
+  const controllableMargin = revenue - totalExpenses - laborEmployer - mgmtCosts - wasteTotal
 
   // Operating profit = controllable - fixed costs - overhead
   const overheadAmount = revenue * overheadPct / 100
