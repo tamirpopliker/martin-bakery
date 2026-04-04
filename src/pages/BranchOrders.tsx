@@ -74,10 +74,10 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
 
     const all: Order[] = [
       ...(fsRes.data || []).map((r: any) => ({
-        ...r, source_table: 'factory_sales' as const, source_type: r.department,
+        ...r, branch_status: r.branch_status || 'pending', source_table: 'factory_sales' as const, source_type: r.department,
       })),
       ...(b2bRes.data || []).map((r: any) => ({
-        ...r, source_table: 'factory_b2b_sales' as const, source_type: r.sale_type,
+        ...r, branch_status: r.branch_status || 'pending', source_table: 'factory_b2b_sales' as const, source_type: r.sale_type,
       })),
     ].sort((a, b) => b.date.localeCompare(a.date))
 
