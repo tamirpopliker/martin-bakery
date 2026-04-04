@@ -30,6 +30,8 @@ interface BranchData {
   revCredit: number
   totalRevenue: number
   expSuppliers: number
+  expSuppliersInternal: number
+  expSuppliersExternal: number
   expRepairs: number
   expInfra: number
   expDelivery: number
@@ -90,7 +92,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
 
     const [revRes, expRes, labRes, wstRes, fcRes] = await Promise.all([
       supabase.from('branch_revenue').select('source, amount, transaction_count, date').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
-      supabase.from('branch_expenses').select('expense_type, amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
+      supabase.from('branch_expenses').select('expense_type, amount, from_factory').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
       supabase.from('branch_labor').select('employer_cost, gross_salary').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
       supabase.from('branch_waste').select('amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
       supabase.from('fixed_costs').select('amount, entity_id').eq('entity_type', entityType).eq('month', monthKey),
@@ -107,7 +109,10 @@ export default function BranchManagerDashboard({ onBack }: Props) {
     const revCredit = revData.filter(r => r.source === 'credit').reduce((s, r) => s + Number(r.amount), 0)
     const totalRevenue = revCashier + revWebsite + revCredit
 
-    const expSuppliers = expData.filter(r => r.expense_type === 'suppliers' || r.expense_type === 'supplier').reduce((s, r) => s + Number(r.amount), 0)
+    const supplierRows = expData.filter(r => r.expense_type === 'suppliers' || r.expense_type === 'supplier')
+    const expSuppliers = supplierRows.reduce((s, r) => s + Number(r.amount), 0)
+    const expSuppliersInternal = supplierRows.filter(r => r.from_factory).reduce((s, r) => s + Number(r.amount), 0)
+    const expSuppliersExternal = supplierRows.filter(r => !r.from_factory).reduce((s, r) => s + Number(r.amount), 0)
     const expRepairs = expData.filter(r => r.expense_type === 'repairs' || r.expense_type === 'repair').reduce((s, r) => s + Number(r.amount), 0)
     const expInfra = expData.filter(r => r.expense_type === 'infrastructure').reduce((s, r) => s + Number(r.amount), 0)
     const expDelivery = expData.filter(r => r.expense_type === 'deliveries' || r.expense_type === 'delivery').reduce((s, r) => s + Number(r.amount), 0)
@@ -133,7 +138,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
     return {
       id: branchId, name, color,
       revCashier, revWebsite, revCredit, totalRevenue,
-      expSuppliers, expRepairs, expInfra, expDelivery, expOther, totalExpenses,
+      expSuppliers, expSuppliersInternal, expSuppliersExternal, expRepairs, expInfra, expDelivery, expOther, totalExpenses,
       laborGross, laborEmployer, wasteTotal, fixedCosts, mgmtCosts,
       grossProfit, operatingProfit,
       laborPct: totalRevenue > 0 ? (laborEmployer / totalRevenue) * 100 : 0,
@@ -500,7 +505,8 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                         // Correct order: revenue, expenses, labor, mgmt → gross profit, then fixedCosts, waste, overhead → operating
                         const costRows: { label: string; key: keyof BranchData; color: string }[] = [
                           { label: 'הכנסות', key: 'totalRevenue', color: '#34d399' },
-                          { label: 'הוצאות', key: 'totalExpenses', color: '#fb7185' },
+                          { label: 'רכישות מפעל', key: 'expSuppliersInternal', color: '#818cf8' },
+                          { label: 'ספקים חיצוניים', key: 'expSuppliersExternal', color: '#fb7185' },
                           { label: 'לייבור', key: 'laborEmployer', color: '#fbbf24' },
                           { label: 'הנהלה וכלליות', key: 'mgmtCosts', color: '#64748b' },
                           { label: 'פחת', key: 'wasteTotal', color: '#fb7185' },

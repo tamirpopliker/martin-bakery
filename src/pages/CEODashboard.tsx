@@ -44,7 +44,8 @@ const fadeIn = {
 
 interface BranchData {
   id: number; name: string; color: string
-  revenue: number; expenses: number; labor: number; waste: number
+  revenue: number; expenses: number; expInternal: number; expExternal: number
+  labor: number; waste: number
   fixedCosts: number; grossProfit: number; operatingProfit: number
   revCashier: number; revCredit: number; revWebsite: number
 }
@@ -223,13 +224,17 @@ export default function CEODashboard({ onBack }: Props) {
         }
       }
 
-      const { data: expData } = await supabase.from('branch_expenses').select('expense_type, amount')
+      const { data: expData } = await supabase.from('branch_expenses').select('expense_type, amount, from_factory')
         .eq('branch_id', br.id).gte('date', from).lt('date', to)
       const expenses = expData ? expData.reduce((s, r) => s + Number(r.amount), 0) : 0
+      let brExpInternal = 0, brExpExternal = 0
       if (expData) {
         for (const r of expData) {
           const type = r.expense_type || 'other'
-          totalExpByType[type] = (totalExpByType[type] || 0) + Number(r.amount)
+          const amt = Number(r.amount)
+          totalExpByType[type] = (totalExpByType[type] || 0) + amt
+          if ((type === 'suppliers' || type === 'supplier') && r.from_factory) brExpInternal += amt
+          else brExpExternal += amt
         }
       }
 
@@ -252,7 +257,7 @@ export default function CEODashboard({ onBack }: Props) {
       const oh = revenue * overheadPct / 100
       const operatingProfit = grossProfit - fixedCosts - waste - oh
 
-      branchResults.push({ ...br, revenue, expenses, labor, waste, fixedCosts, grossProfit, operatingProfit, revCashier: brCashier, revCredit: brCredit, revWebsite: brWebsite })
+      branchResults.push({ ...br, revenue, expenses, expInternal: brExpInternal, expExternal: brExpExternal, labor, waste, fixedCosts, grossProfit, operatingProfit, revCashier: brCashier, revCredit: brCredit, revWebsite: brWebsite })
     }
 
     // Track branch internal expenses (purchases from factory)
@@ -865,7 +870,10 @@ export default function CEODashboard({ onBack }: Props) {
               }
               const rows: PLRow[] = [
                 { label: 'הכנסות', factory: fRev, getBr: br => br.revenue, bold: false, color: '' },
-                { label: 'הוצאות / ספקים', factory: factorySuppliers, getBr: br => br.expenses, bold: false, color: '' },
+                ...(isSegment ? [
+                  { label: 'רכישות פנימיות', factory: 0, getBr: (br: BranchData) => br.expInternal, bold: false, color: '' as const },
+                ] : []),
+                { label: isSegment ? 'ספקים חיצוניים' : 'חומרי גלם / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => isSegment ? br.expExternal : br.expenses, bold: false, color: '' },
                 { label: 'לייבור', factory: factoryLabor, getBr: br => br.labor, bold: false, color: '', kpiKey: 'labor' },
                 { label: 'רווח נשלט', factory: fRev - factorySuppliers - factoryLabor, getBr: br => br.grossProfit, bold: true, color: 'profit' },
                 { label: 'עלויות קבועות', factory: factoryFixed, getBr: br => br.fixedCosts, bold: false, color: '' },

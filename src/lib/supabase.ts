@@ -477,6 +477,8 @@ export interface BranchPLResult {
   revWebsite: number
   revCredit: number
   expSuppliers: number
+  expSuppliersInternal: number  // from_factory=true
+  expSuppliersExternal: number  // from_factory=false or null
   expRepairs: number
   expInfra: number
   expDelivery: number
@@ -522,7 +524,7 @@ export interface ConsolidatedPLResult {
 export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: string, monthKey: string, overheadPct = 5): Promise<BranchPLResult> {
   const [revRes, expRes, labRes, wasteRes, fcRes] = await Promise.all([
     supabase.from('branch_revenue').select('source, amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
-    supabase.from('branch_expenses').select('expense_type, amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('branch_expenses').select('expense_type, amount, from_factory').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
     supabase.from('branch_labor').select('employer_cost').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
     supabase.from('branch_waste').select('amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
     supabase.from('fixed_costs').select('amount, entity_id').eq('entity_type', `branch_${branchId}`).eq('month', monthKey),
@@ -538,11 +540,16 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
   }
   const revenue = revCashier + revWebsite + revCredit
 
-  let expSuppliers = 0, expRepairs = 0, expInfra = 0, expDelivery = 0, expOther = 0
+  let expSuppliers = 0, expSuppliersInternal = 0, expSuppliersExternal = 0
+  let expRepairs = 0, expInfra = 0, expDelivery = 0, expOther = 0
   for (const r of (expRes.data || [])) {
     const amt = Number(r.amount)
     const t = r.expense_type || 'other'
-    if (t === 'suppliers' || t === 'supplier' || t === 'inventory') expSuppliers += amt
+    if (t === 'suppliers' || t === 'supplier' || t === 'inventory') {
+      expSuppliers += amt
+      if (r.from_factory) expSuppliersInternal += amt
+      else expSuppliersExternal += amt
+    }
     else if (t === 'repairs' || t === 'repair') expRepairs += amt
     else if (t === 'infrastructure') expInfra += amt
     else if (t === 'deliveries' || t === 'delivery') expDelivery += amt
@@ -570,7 +577,8 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
 
   const rows: PLRow[] = [
     { label: 'הכנסות', amount: revenue, bold: true, color: '' },
-    { label: 'ספקים', amount: expSuppliers, color: 'expense' },
+    { label: 'רכישות מפעל', amount: expSuppliersInternal, color: 'expense' },
+    { label: 'ספקים חיצוניים', amount: expSuppliersExternal, color: 'expense' },
     { label: 'לייבור', amount: laborEmployer, color: 'expense' },
     { label: 'שכר מנהל (הנהלה)', amount: mgmtCosts, color: 'expense' },
     { label: 'פחת', amount: wasteTotal, color: 'expense' },
@@ -583,7 +591,8 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
 
   return {
     revenue, revCashier, revWebsite, revCredit,
-    expSuppliers, expRepairs, expInfra, expDelivery, expOther,
+    expSuppliers, expSuppliersInternal, expSuppliersExternal,
+    expRepairs, expInfra, expDelivery, expOther,
     laborEmployer, mgmtCosts, wasteTotal, fixedCosts,
     controllableMargin, overheadAmount, operatingProfit, rows,
   }
