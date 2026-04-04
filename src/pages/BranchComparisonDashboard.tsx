@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase } from '../lib/supabase'
+import { supabase, getOverheadPct } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
 import { ArrowRight, BarChart3 } from 'lucide-react'
@@ -64,6 +64,7 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
 
     async function load() {
       setLoading(true)
+      const overheadPct = await getOverheadPct()
       const results: BranchPL[] = []
 
       for (const br of branches.filter(b => selectedIds.includes(b.id))) {
@@ -93,7 +94,7 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
         const fixedCosts = fcData.filter(r => r.entity_id !== 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
         const admin = fcData.filter(r => r.entity_id === 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
         const waste = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
-        const overhead = revenue * 0.05
+        const overhead = revenue * overheadPct / 100
 
         const operatingProfit = revenue - labor - suppliers - repairs - deliveries - fixedCosts - admin - waste - overhead
 

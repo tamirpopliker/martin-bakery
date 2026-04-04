@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, monthEnd, getFixedCostTotal, fetchFactoryPL, fetchBranchPL } from '../lib/supabase'
+import { supabase, monthEnd, getFixedCostTotal, fetchFactoryPL, fetchBranchPL, getOverheadPct } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
@@ -120,7 +120,7 @@ export default function Home() {
   useEffect(() => {
     async function loadKpi() {
       const monthKey = period.monthKey || from.slice(0, 7)
-      const overheadPct = Number(localStorage.getItem('overhead_pct') || '5')
+      const overheadPct = await getOverheadPct()
 
       // Factory P&L via shared function
       const factoryPL = await fetchFactoryPL(from, to, monthKey)

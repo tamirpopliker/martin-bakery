@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, fetchBranchTrends, fetchBranchPL, BranchPLResult, MonthTrend } from '../lib/supabase'
+import { supabase, fetchBranchTrends, fetchBranchPL, getOverheadPct, BranchPLResult, MonthTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import PeriodPicker from '../components/PeriodPicker'
@@ -28,10 +28,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   // P&L result from shared function
   const [pl, setPl] = useState<BranchPLResult | null>(null)
 
-  const [overheadPct, setOverheadPct] = useState(() => {
-    const saved = localStorage.getItem('overhead_pct')
-    return saved ? Number(saved) : 5
-  })
+  const [overheadPct, setOverheadPct] = useState(5)
 
   // KPI targets (dynamic)
   const [laborTarget, setLaborTarget] = useState(28)
@@ -46,8 +43,12 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   async function fetchData() {
     setLoading(true)
 
+    // Fetch overhead from system_settings
+    const oh = await getOverheadPct()
+    setOverheadPct(oh)
+
     // P&L via shared function
-    const plResult = await fetchBranchPL(branchId, from, to, monthKey || from.slice(0, 7), overheadPct)
+    const plResult = await fetchBranchPL(branchId, from, to, monthKey || from.slice(0, 7), oh)
     setPl(plResult)
 
     // KPI targets
@@ -86,7 +87,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
     const pMgmtTotal = prevFc ? prevFc.filter(r => r.entity_id === 'mgmt').reduce((s, r) => s + Number(r.amount), 0) : 0
 
     const prevGross = pRevTotal - pLabTotal - pExpTotal
-    setPrevProfit(prevGross - pFcTotal - pMgmtTotal - pWstTotal - (pRevTotal * overheadPct / 100))
+    setPrevProfit(prevGross - pFcTotal - pMgmtTotal - pWstTotal - (pRevTotal * oh / 100))
 
     setLoading(false)
   }
@@ -95,7 +96,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
 
   const [trendData, setTrendData] = useState<MonthTrend[]>([])
   useEffect(() => {
-    fetchBranchTrends(branchId, monthKey || from.slice(0, 7)).then(setTrendData)
+    getOverheadPct().then(oh => fetchBranchTrends(branchId, monthKey || from.slice(0, 7), oh)).then(setTrendData)
   }, [branchId, monthKey, from])
 
   // derived values from PL result
@@ -357,17 +358,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 70px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
                   <span style={{ fontSize: '14px', color: '#374151', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     העמסת מטה
-                    <input
-                      type="number"
-                      value={overheadPct}
-                      onChange={e => {
-                        const v = Math.max(0, Math.min(100, Number(e.target.value) || 0))
-                        setOverheadPct(v)
-                        localStorage.setItem('overhead_pct', String(v))
-                      }}
-                      style={{ width: '44px', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '2px 6px', fontSize: '13px', textAlign: 'center' as const, fontWeight: '600', color: '#818cf8', background: '#f8fafc' }}
-                    />
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>%</span>
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#818cf8' }}>{overheadPct}%</span>
                   </span>
                   <span style={{ fontSize: '14px', fontWeight: '600', color: overheadAmount > 0 ? '#64748b' : '#94a3b8', textAlign: 'left' as const }}>
                     {overheadAmount > 0 ? fmtM(overheadAmount) : '—'}

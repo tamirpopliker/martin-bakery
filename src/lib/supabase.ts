@@ -151,7 +151,7 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
 }
 
 /** Fetch 6-month trends for a single branch */
-export async function fetchBranchTrends(branchId: number, refMonth: string): Promise<MonthTrend[]> {
+export async function fetchBranchTrends(branchId: number, refMonth: string, overheadPct = 5): Promise<MonthTrend[]> {
   const months = getLast6Months(refMonth)
   const tFrom = months[0] + '-01'
   const tTo = monthEnd(months[5])
@@ -180,7 +180,7 @@ export async function fetchBranchTrends(branchId: number, refMonth: string): Pro
   return months.map(m => {
     const revenue = revByM[m] || 0
     const grossProfit = revenue - (labByM[m] || 0) - (expByM[m] || 0)
-    const operatingProfit = grossProfit - (fcByM[m] || 0) - (wasteByM[m] || 0) - (revenue * 0.05)
+    const operatingProfit = grossProfit - (fcByM[m] || 0) - (wasteByM[m] || 0) - (revenue * overheadPct / 100)
     return { month: m, label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1], revenue, grossProfit, operatingProfit }
   })
 }

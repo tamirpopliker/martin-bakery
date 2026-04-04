@@ -52,9 +52,13 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
   const [newUser, setNewUser] = useState({ email: '', name: '', role: 'branch' as string, branch_id: 1, excluded_departments: [] as string[], can_settings: false, managed_department: null as string | null })
   const [saving, setSaving] = useState(false)
   // ─── Branch management state ──────────────────────────────────────────────
-  const [tab, setTab] = useState<'users' | 'branches'>('users')
+  const [tab, setTab] = useState<'users' | 'branches' | 'settings'>('users')
   const [branchSheetOpen, setBranchSheetOpen] = useState(false)
   const [editBranch, setEditBranch] = useState<{ id?: number; name: string; short_name: string; address: string }>({ name: '', short_name: '', address: '' })
+  // System settings
+  const [overheadPct, setOverheadPct] = useState(5)
+  const [settingsSaving, setSettingsSaving] = useState(false)
+  const [settingsSaved, setSettingsSaved] = useState(false)
   const [branchSaving, setBranchSaving] = useState(false)
 
   async function loadUsers() {
@@ -63,7 +67,20 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
     setLoading(false)
   }
 
-  useEffect(() => { loadUsers() }, [])
+  async function loadSettings() {
+    const { data } = await supabase.from('system_settings').select('value').eq('key', 'overhead_pct').maybeSingle()
+    if (data) setOverheadPct(Number(data.value) || 5)
+  }
+
+  async function saveSettings() {
+    setSettingsSaving(true)
+    await supabase.from('system_settings').upsert({ key: 'overhead_pct', value: String(overheadPct), updated_at: new Date().toISOString() })
+    setSettingsSaving(false)
+    setSettingsSaved(true)
+    setTimeout(() => setSettingsSaved(false), 2000)
+  }
+
+  useEffect(() => { loadUsers(); loadSettings() }, [])
 
   async function handleSave(id: string) {
     setSaving(true)
@@ -165,6 +182,7 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
         {[
           { key: 'users' as const, label: 'משתמשים', icon: UserCog, count: users.length },
           { key: 'branches' as const, label: 'סניפים', icon: Store, count: branches.length },
+          { key: 'settings' as const, label: 'הגדרות מערכת', icon: Save, count: undefined },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{
@@ -176,9 +194,11 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
             }}>
             <t.icon size={16} />
             {t.label}
-            <span style={{ background: tab === t.key ? '#818cf8' : '#e2e8f0', color: tab === t.key ? 'white' : '#64748b', fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
-              {t.count}
-            </span>
+            {t.count !== undefined && (
+              <span style={{ background: tab === t.key ? '#818cf8' : '#e2e8f0', color: tab === t.key ? 'white' : '#64748b', fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
+                {t.count}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -512,6 +532,51 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
           </SheetContent>
         </SheetPortal>
       </Sheet>
+
+      {/* ═══ System Settings Tab ═══ */}
+      {tab === 'settings' && (
+        <motion.div variants={fadeIn} initial="hidden" animate="visible">
+          <Card className="shadow-sm">
+            <CardContent className="p-6">
+              <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b', marginBottom: '20px' }}>הגדרות מערכת</h3>
+
+              <div style={{ maxWidth: '400px' }}>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '8px' }}>
+                  אחוז העמסת מטה על סניפים %
+                </label>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    value={overheadPct}
+                    onChange={e => setOverheadPct(Number(e.target.value))}
+                    min={0} max={100} step={0.5}
+                    style={{ width: '100px', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '16px', fontWeight: '600', textAlign: 'center' }}
+                  />
+                  <span style={{ fontSize: '14px', color: '#94a3b8' }}>%</span>
+                </div>
+                <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px' }}>
+                  אחוז זה מוחל על הכנסות כל סניף לחישוב עלות הנהלה מרכזית
+                </p>
+              </div>
+
+              <div style={{ marginTop: '24px' }}>
+                <button
+                  onClick={saveSettings}
+                  disabled={settingsSaving}
+                  style={{
+                    background: settingsSaved ? '#639922' : '#818cf8',
+                    color: 'white', border: 'none', borderRadius: '10px',
+                    padding: '12px 28px', fontSize: '15px', fontWeight: '700',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
+                  }}>
+                  <Save size={16} />
+                  {settingsSaving ? 'שומר...' : settingsSaved ? '✓ נשמר!' : 'שמור הגדרות'}
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       </div>
     </div>

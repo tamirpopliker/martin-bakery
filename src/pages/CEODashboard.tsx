@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
-import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept } from '../lib/supabase'
+import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept, getOverheadPct } from '../lib/supabase'
 import { ArrowRight, TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck, Building2, Layers } from 'lucide-react'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon, TrophyIcon } from '@/components/icons'
 import { BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
@@ -109,10 +109,7 @@ export default function CEODashboard({ onBack }: Props) {
   const [dailyRevenue, setDailyRevenue] = useState<{ date: string; [key: string]: string | number }[]>([])
   const [expenseBreakdown, setExpenseBreakdown] = useState<{ name: string; value: number }[]>([])
   const [avgLaborTarget, setAvgLaborTarget] = useState(28)
-  const [overheadPct, setOverheadPct] = useState(() => {
-    const saved = localStorage.getItem('overhead_pct')
-    return saved ? Number(saved) : 5
-  })
+  const [overheadPct, setOverheadPct] = useState(5)
   // Per-branch KPI targets: { branchId: { labor_pct, waste_pct } }
   const [branchTargets, setBranchTargets] = useState<Record<number, { labor_pct: number; waste_pct: number }>>({})
   // Factory KPI targets (averaged across departments)
@@ -146,6 +143,9 @@ export default function CEODashboard({ onBack }: Props) {
 
   async function fetchData() {
     setLoading(true)
+
+    const oh = await getOverheadPct()
+    setOverheadPct(oh)
 
     const { data: kpiData } = await supabase.from('branch_kpi_targets').select('branch_id, labor_pct, waste_pct')
     if (kpiData && kpiData.length > 0) {

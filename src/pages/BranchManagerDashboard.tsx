@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
-import { supabase } from '../lib/supabase'
+import { supabase, getOverheadPct } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -77,10 +77,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   const [presentationMode, setPresentationMode] = useState(true)
   const [branches, setBranches] = useState<BranchData[]>([])
   const [prevBranches, setPrevBranches] = useState<BranchData[]>([])
-  const [overheadPct, setOverheadPct] = useState(() => {
-    const saved = localStorage.getItem('overhead_pct')
-    return saved ? Number(saved) : 5
-  })
+  const [overheadPct, setOverheadPct] = useState(5)
   const [chartData, setChartData] = useState<any[]>([])
   const [kpiTargets, setKpiTargets] = useState<Record<number, { labor_pct: number; waste_pct: number; revenue_target: number; basket_target: number; transaction_target: number }>>({})
 
@@ -150,6 +147,8 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   useEffect(() => {
     async function load() {
       setLoading(true)
+      const oh = await getOverheadPct()
+      setOverheadPct(oh)
       const monthKey = from.slice(0, 7)
       const prevMonthKey = comparisonPeriod.from.slice(0, 7)
 
@@ -459,20 +458,10 @@ export default function BranchManagerDashboard({ onBack }: Props) {
             </Card>
           </motion.div>
 
-          {/* ── Overhead % control ── */}
+          {/* ── Overhead % (from system settings) ── */}
           <div className="flex items-center gap-2 mb-3.5 justify-end">
             <span className="text-[13px] font-semibold text-slate-500">העמסת מטה:</span>
-            <input
-              type="number"
-              value={overheadPct}
-              onChange={e => {
-                const v = Math.max(0, Math.min(100, Number(e.target.value) || 0))
-                setOverheadPct(v)
-                localStorage.setItem('overhead_pct', String(v))
-              }}
-              className="w-[50px] border border-slate-200 rounded-lg px-2 py-1 text-sm text-center font-semibold text-indigo-400 bg-white"
-            />
-            <span className="text-[13px] text-slate-500">%</span>
+            <span className="text-sm font-semibold text-indigo-400">{overheadPct}%</span>
           </div>
 
           {/* ── Comparison Table ── */}

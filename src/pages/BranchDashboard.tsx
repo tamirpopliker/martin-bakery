@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
-import { supabase, fetchBranchPL, type BranchPLResult } from '../lib/supabase'
+import { supabase, fetchBranchPL, getOverheadPct, type BranchPLResult } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -132,7 +132,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
   const wastePct = totalRevenue > 0 ? (wasteTotal / totalRevenue) * 100 : 0
   const opProfitPct = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0
 
-  const overheadPct = Number(localStorage.getItem('overhead_pct')) || 5
+  const [overheadPct, setOverheadPct] = useState(5)
 
   useEffect(() => {
     fetchData()
@@ -174,12 +174,14 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
   async function fetchData() {
     setLoading(true)
     try {
+      const oh = await getOverheadPct()
+      setOverheadPct(oh)
       const curMonthKey = monthKey || from.slice(0, 7)
       const prevMonthKey = comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)
 
       const [current, prev, trend, kpiRes] = await Promise.all([
-        fetchBranchPL(branchId, from, to, curMonthKey, overheadPct),
-        fetchBranchPL(branchId, comparisonPeriod.from, comparisonPeriod.to, prevMonthKey, overheadPct),
+        fetchBranchPL(branchId, from, to, curMonthKey, oh),
+        fetchBranchPL(branchId, comparisonPeriod.from, comparisonPeriod.to, prevMonthKey, oh),
         fetchTrend(),
         supabase.from('branch_kpi_targets').select('labor_pct, waste_pct').eq('branch_id', branchId).maybeSingle(),
       ])
