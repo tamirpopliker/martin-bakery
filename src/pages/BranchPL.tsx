@@ -105,6 +105,8 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   const revWebsite      = pl?.revWebsite ?? 0
   const revCredit       = pl?.revCredit ?? 0
   const expSuppliers    = pl?.expSuppliers ?? 0
+  const expSuppliersInternal = pl?.expSuppliersInternal ?? 0
+  const expSuppliersExternal = pl?.expSuppliersExternal ?? 0
   const expRepairs      = pl?.expRepairs ?? 0
   const expInfra        = pl?.expInfra ?? 0
   const expDelivery     = pl?.expDelivery ?? 0
@@ -278,7 +280,8 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                   <span style={{ fontSize: '13px', fontWeight: '700', color: '#fb7185', textAlign: 'left' as const }}>%</span>
                 </div>
                 {[
-                  { label: 'ספקים / מלאי', amount: expSuppliers },
+                  ...(expSuppliersInternal > 0 ? [{ label: 'רכישות מהמפעל', amount: expSuppliersInternal }] : []),
+                  { label: expSuppliersInternal > 0 ? 'ספקים חיצוניים' : 'ספקים / מלאי', amount: expSuppliersInternal > 0 ? expSuppliersExternal : expSuppliers },
                   { label: 'תיקונים', amount: expRepairs },
                   { label: 'תשתיות', amount: expInfra },
                   { label: 'משלוחים', amount: expDelivery },
