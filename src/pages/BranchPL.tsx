@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase, fetchBranchTrends, fetchBranchPL, getOverheadPct, BranchPLResult, MonthTrend } from '../lib/supabase'
+import { fetchBranchProfit } from '../lib/profitCalc'
 import { usePeriod } from '../lib/PeriodContext'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import PeriodPicker from '../components/PeriodPicker'
@@ -49,6 +50,15 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
 
     // P&L via shared function
     const plResult = await fetchBranchPL(branchId, from, to, monthKey || from.slice(0, 7), oh)
+
+    // Override supplier split from View (single source of truth)
+    const viewProfit = await fetchBranchProfit(branchId, from, to)
+    if (viewProfit.revenue > 0) {
+      plResult.expSuppliersInternal = viewProfit.internalSupplierCost
+      plResult.expSuppliersExternal = viewProfit.externalSupplierCost
+      plResult.expSuppliers = viewProfit.totalSupplierCost
+    }
+
     setPl(plResult)
 
     // KPI targets
