@@ -108,12 +108,12 @@ export default function CEODashboard({ onBack }: Props) {
   const [prevTotalOperating, setPrevTotalOperating] = useState(0)
   const [dailyRevenue, setDailyRevenue] = useState<{ date: string; [key: string]: string | number }[]>([])
   const [expenseBreakdown, setExpenseBreakdown] = useState<{ name: string; value: number }[]>([])
-  const [avgLaborTarget, setAvgLaborTarget] = useState(28)
+  const [avgLaborTarget, setAvgLaborTarget] = useState(0)
   const [overheadPct, setOverheadPct] = useState(5)
   // Per-branch KPI targets: { branchId: { labor_pct, waste_pct } }
   const [branchTargets, setBranchTargets] = useState<Record<number, { labor_pct: number; waste_pct: number }>>({})
   // Factory KPI targets (averaged across departments)
-  const [factoryTargets, setFactoryTargets] = useState<{ labor_pct: number; waste_pct: number }>({ labor_pct: 28, waste_pct: 3 })
+  const [factoryTargets, setFactoryTargets] = useState<{ labor_pct: number; waste_pct: number }>({ labor_pct: 0, waste_pct: 3 })
 
   // Factory data
   const [factorySales, setFactorySales]     = useState(0)
@@ -149,16 +149,16 @@ export default function CEODashboard({ onBack }: Props) {
 
     const { data: kpiData } = await supabase.from('branch_kpi_targets').select('branch_id, labor_pct, waste_pct')
     if (kpiData && kpiData.length > 0) {
-      const avg = kpiData.reduce((s, r) => s + Number(r.labor_pct || 28), 0) / kpiData.length
+      const avg = kpiData.reduce((s, r) => s + Number(r.labor_pct || 0), 0) / kpiData.length
       setAvgLaborTarget(avg)
       const tMap: Record<number, { labor_pct: number; waste_pct: number }> = {}
-      kpiData.forEach((r: any) => { tMap[r.branch_id] = { labor_pct: Number(r.labor_pct || 28), waste_pct: Number(r.waste_pct || 3) } })
+      kpiData.forEach((r: any) => { tMap[r.branch_id] = { labor_pct: Number(r.labor_pct || 0), waste_pct: Number(r.waste_pct || 3) } })
       setBranchTargets(tMap)
     }
     // Factory KPI targets
     const { data: fKpiData } = await supabase.from('kpi_targets').select('labor_revenue_pct, waste_pct')
     if (fKpiData && fKpiData.length > 0) {
-      const avgLabor = fKpiData.reduce((s, r) => s + Number(r.labor_revenue_pct || 28), 0) / fKpiData.length
+      const avgLabor = fKpiData.reduce((s, r) => s + Number(r.labor_revenue_pct || 0), 0) / fKpiData.length
       const avgWaste = fKpiData.reduce((s, r) => s + Number(r.waste_pct || 3), 0) / fKpiData.length
       setFactoryTargets({ labor_pct: avgLabor, waste_pct: avgWaste })
     }
@@ -474,7 +474,7 @@ export default function CEODashboard({ onBack }: Props) {
         <TableBody>
           {branches.map((br, i) => {
             const pct = br.revenue > 0 ? (br.labor / br.revenue) * 100 : 0
-            const overTarget = pct > avgLaborTarget
+            const overTarget = avgLaborTarget > 0 && pct > avgLaborTarget
             return (
               <TableRow key={br.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
                 <TableCell>
@@ -484,7 +484,7 @@ export default function CEODashboard({ onBack }: Props) {
                   </div>
                 </TableCell>
                 <TableCell className="text-sm font-semibold text-slate-700">{fmtN(br.labor)}</TableCell>
-                <TableCell className={`text-sm font-semibold ${overTarget ? 'text-rose-500' : 'text-emerald-500'}`}>{pct.toFixed(1)}%</TableCell>
+                <TableCell className={`text-sm font-semibold ${avgLaborTarget > 0 ? (overTarget ? 'text-rose-500' : 'text-emerald-500') : 'text-slate-700'}`}>{pct.toFixed(1)}%</TableCell>
               </TableRow>
             )
           })}
@@ -496,12 +496,12 @@ export default function CEODashboard({ onBack }: Props) {
               </div>
             </TableCell>
             <TableCell className="text-sm font-semibold text-slate-700">{fmtN(factoryLabor)}</TableCell>
-            <TableCell className={`text-sm font-semibold ${factoryLaborPct > avgLaborTarget ? 'text-rose-500' : 'text-emerald-500'}`}>{factoryLaborPct.toFixed(1)}%</TableCell>
+            <TableCell className={`text-sm font-semibold ${avgLaborTarget > 0 ? (factoryLaborPct > avgLaborTarget ? 'text-rose-500' : 'text-emerald-500') : 'text-slate-700'}`}>{factoryLaborPct.toFixed(1)}%</TableCell>
           </TableRow>
           <TableRow className="bg-amber-50 border-t-2 border-amber-200">
             <TableCell className="text-sm font-bold text-slate-800">סה"כ</TableCell>
             <TableCell className="text-sm font-extrabold text-slate-900">{fmtN(grandLabor)}</TableCell>
-            <TableCell className={`text-sm font-bold ${grandLaborPct > avgLaborTarget ? 'text-rose-500' : 'text-emerald-500'}`}>{grandLaborPct.toFixed(1)}%</TableCell>
+            <TableCell className={`text-sm font-bold ${avgLaborTarget > 0 ? (grandLaborPct > avgLaborTarget ? 'text-rose-500' : 'text-emerald-500') : 'text-slate-700'}`}>{grandLaborPct.toFixed(1)}%</TableCell>
           </TableRow>
         </TableBody>
       </Table>
@@ -839,10 +839,10 @@ export default function CEODashboard({ onBack }: Props) {
                 <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('labor_pct_total')}>
                   <CardContent className="p-4">
                     <span className="text-[11px] font-semibold text-slate-400">% לייבור כולל</span>
-                    <div className="text-[22px] font-medium mt-1" style={{ color: kpiLaborPct <= avgLaborTarget ? '#639922' : '#E24B4A' }}>
+                    <div className="text-[22px] font-medium mt-1" style={{ color: avgLaborTarget > 0 ? (kpiLaborPct <= avgLaborTarget ? '#639922' : '#E24B4A') : '#334155' }}>
                       <CountUp end={kpiLaborPct} duration={1.5} separator="," suffix="%" decimals={1} />
                     </div>
-                    <span className="text-[11px] text-slate-400">יעד {avgLaborTarget.toFixed(0)}%</span>
+                    <span className="text-[11px] text-slate-400">{avgLaborTarget > 0 ? `יעד ${avgLaborTarget.toFixed(0)}%` : '\u2014'}</span>
                   </CardContent>
                 </Card>
               </motion.div>

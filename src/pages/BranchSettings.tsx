@@ -59,7 +59,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
   const [tab, setTab] = useState<Tab>(isAdmin ? 'kpi' : 'employees')
 
   // ── KPI ──
-  const [kpi, setKpi] = useState<BranchKpi>({ branch_id: branchId, labor_pct: 28, waste_pct: 3, revenue_target: 0, basket_target: 0, transaction_target: 0 })
+  const [kpi, setKpi] = useState<BranchKpi>({ branch_id: branchId, labor_pct: 0, waste_pct: 3, revenue_target: 0, basket_target: 0, transaction_target: 0 })
   const [kpiSaved, setKpiSaved] = useState(false)
 
   // ── עלויות קבועות ──
@@ -254,7 +254,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
         {tab === 'kpi' && allowedTabs.includes('kpi') && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px', background: '#f8fafc', borderRadius: '10px', padding: '12px 16px' }}>
-              💡 יעדים ניתנים לעדכון — ערכי ברירת מחדל: לייבור 28%, פחת 3%
+              💡 יעדים ניתנים לעדכון — יש להגדיר יעד לייבור לכל סניף, ברירת מחדל פחת 3%
             </div>
 
             <Card className="shadow-sm" style={{ marginBottom: '20px', borderTop: `4px solid ${branchColor}` }}>

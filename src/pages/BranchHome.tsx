@@ -134,7 +134,7 @@ export default function BranchHome({ branch, onBack }: Props) {
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>ייבוא נתונים — סניף {branch.name}</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>העלאת CSV מ-Base44</p>
+          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>העלאת דוח נוכחות PDF</p>
         </div>
       </div>
       <div style={{ padding: '24px', maxWidth: '960px', margin: '0 auto' }}>

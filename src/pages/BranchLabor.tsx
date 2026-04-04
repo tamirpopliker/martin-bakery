@@ -380,7 +380,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   interface DailyRow { date: string; employees: number; hours100: number; hours125: number; hours150: number; gross: number; employer: number }
   const [dailyData, setDailyData] = useState<DailyRow[]>([])
   const [dailyLoading, setDailyLoading] = useState(false)
-  const [laborTargetPct, setLaborTargetPct] = useState(28)
+  const [laborTargetPct, setLaborTargetPct] = useState(0)
   const [laborTrend, setLaborTrend] = useState<BranchLaborTrend[]>([])
 
   // העלאה
@@ -416,7 +416,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
   async function fetchLaborTarget() {
     const { data } = await supabase.from('branch_kpi_targets').select('labor_pct').eq('branch_id', branchId).maybeSingle()
-    if (data) setLaborTargetPct(Number(data.labor_pct) || 28)
+    if (data) setLaborTargetPct(Number(data.labor_pct) || 0)
   }
 
   useEffect(() => {
@@ -668,7 +668,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   const totalEmployer = entries.reduce((s, e) => s + Number(e.employer_cost), 0)
   const totalHours    = entries.reduce((s, e) => s + Number(e.hours), 0)
   const laborPct      = monthRevenue > 0 ? (totalEmployer / monthRevenue) * 100 : 0
-  const kpiOk         = laborPct <= laborTargetPct
+  const kpiOk         = laborTargetPct > 0 ? laborPct <= laborTargetPct : true
   const parsedTotal   = parsedRows.filter(r => r.selected).reduce((s, r) => s + r.gross_salary, 0)
   const parsedEmpTotal = parsedRows.filter(r => r.selected).reduce((s, r) => s + r.employer_cost, 0)
 
@@ -703,7 +703,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
             {kpiOk ? <CheckCircle size={16} color="#34d399" /> : <AlertTriangle size={16} color="#fb7185" />}
             <div>
               <div style={{ fontSize: '15px', fontWeight: '800', color: kpiOk ? '#34d399' : '#fb7185' }}>{laborPct.toFixed(1)}%</div>
-              <div style={{ fontSize: '10px', color: '#64748b' }}>לייבור/הכנסות · יעד {laborTargetPct}%</div>
+              <div style={{ fontSize: '10px', color: '#64748b' }}>לייבור/הכנסות{laborTargetPct > 0 ? ` · יעד ${laborTargetPct}%` : ''}</div>
             </div>
           </div>
           <div style={{ background: branchColor + '15', border: `1px solid ${branchColor}33`, borderRadius: '10px', padding: '8px 14px', textAlign: 'center' }}>
@@ -1142,7 +1142,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                   <YAxis yAxisId="pct" orientation="left" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => v + '%'} />
                   <RTooltip formatter={(value: number, name: string) => name === '% לייבור' ? value + '%' : '₪' + Math.round(value).toLocaleString()} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
-                  <ReferenceLine yAxisId="pct" y={laborTargetPct} stroke="#fb7185" strokeDasharray="5 5" label={{ value: `יעד ${laborTargetPct}%`, fill: '#fb7185', fontSize: 11 }} />
+                  {laborTargetPct > 0 && <ReferenceLine yAxisId="pct" y={laborTargetPct} stroke="#fb7185" strokeDasharray="5 5" label={{ value: `יעד ${laborTargetPct}%`, fill: '#fb7185', fontSize: 11 }} />}
                   <Line yAxisId="cost" type="monotone" dataKey="laborCost" name="עלות לייבור" stroke={branchColor} strokeWidth={2} dot={{ r: 3 }} />
                   <Line yAxisId="cost" type="monotone" dataKey="revenue" name="הכנסות" stroke="#378ADD" strokeWidth={2} dot={{ r: 3 }} />
                   <Line yAxisId="pct" type="monotone" dataKey="laborPct" name="% לייבור" stroke="#f97316" strokeWidth={2.5} dot={{ r: 4 }} />

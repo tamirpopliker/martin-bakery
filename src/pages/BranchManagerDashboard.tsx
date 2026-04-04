@@ -224,7 +224,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   }
   const totalLaborPct = totals.revenue > 0 ? (totals.labor / totals.revenue) * 100 : 0
   const totalWastePct = totals.revenue > 0 ? (totals.waste / totals.revenue) * 100 : 0
-  const getTarget = (brId: number, key: string) => (kpiTargets[brId] as any)?.[key] || (key === 'labor_pct' ? 28 : key === 'waste_pct' ? 3 : 0)
+  const getTarget = (brId: number, key: string) => (kpiTargets[brId] as any)?.[key] || (key === 'labor_pct' ? 0 : key === 'waste_pct' ? 3 : 0)
 
   // Per-branch max for progress bars
   const maxRevenue = useMemo(() => Math.max(...branches.map(b => b.totalRevenue), 1), [branches])
@@ -299,7 +299,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
               <div className="text-[22px] font-medium" style={{ color: '#534AB7' }}>
                 <CountUp end={totalLaborPct} duration={1.5} suffix="%" decimals={1} />
               </div>
-              <span className="text-[11px] text-slate-400">יעד 28%</span>
+              {(() => { const avgTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'labor_pct'), 0) / branches.length : 0; return avgTarget > 0 ? <span className="text-[11px] text-slate-400">יעד {avgTarget.toFixed(0)}%</span> : <span className="text-[11px] text-slate-400">{'\u2014'}</span> })()}
             </div>
           </motion.div>
 
@@ -346,16 +346,16 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[13px] font-semibold text-slate-700">{br.name}</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-[13px] font-medium" style={{ color: br.laborPct <= 28 ? '#639922' : '#E24B4A' }}>
+                            <span className="text-[13px] font-medium" style={{ color: (() => { const t = getTarget(br.id, 'labor_pct'); return t > 0 ? (br.laborPct <= t ? '#639922' : '#E24B4A') : '#334155' })() }}>
                               {br.laborPct.toFixed(1)}%
                             </span>
-                            <span className="text-[11px] text-slate-400">יעד 28%</span>
+                            {(() => { const t = getTarget(br.id, 'labor_pct'); return t > 0 ? <span className="text-[11px] text-slate-400">יעד {t}%</span> : <span className="text-[11px] text-slate-400">{'\u2014'}</span> })()}
                           </div>
                         </div>
                         <div className="h-2 rounded-full bg-slate-100 overflow-hidden relative">
                           <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(barW, 100)}%`, backgroundColor: '#534AB7' }} />
-                          {/* Target line at 28% */}
-                          <div className="absolute top-0 h-full w-px bg-slate-400" style={{ right: `${(28 / Math.max(maxLaborPct, 40)) * 100}%` }} />
+                          {/* Target line */}
+                          {(() => { const t = getTarget(br.id, 'labor_pct'); return t > 0 ? <div className="absolute top-0 h-full w-px bg-slate-400" style={{ right: `${(t / Math.max(maxLaborPct, 40)) * 100}%` }} /> : null })()}
                         </div>
                       </div>
                     )
@@ -641,7 +641,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                         )
 
                         // KPI % rows with targets
-                        const avgLaborTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'labor_pct'), 0) / branches.length : 28
+                        const avgLaborTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'labor_pct'), 0) / branches.length : 0
                         const avgWasteTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'waste_pct'), 0) / branches.length : 3
 
                         rows.push(
@@ -650,12 +650,12 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                             {branches.map(br => {
                               const target = getTarget(br.id, 'labor_pct')
                               return (
-                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: br.laborPct <= target ? '#34d399' : '#fb7185' }}>
-                                  {br.totalRevenue > 0 ? <>{br.laborPct.toFixed(1)}% <span className="text-[10px] text-slate-400 font-normal">(יעד {target}%)</span></> : '\u2014'}
+                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: target > 0 ? (br.laborPct <= target ? '#34d399' : '#fb7185') : '#334155' }}>
+                                  {br.totalRevenue > 0 ? <>{br.laborPct.toFixed(1)}% {target > 0 && <span className="text-[10px] text-slate-400 font-normal">(יעד {target}%)</span>}</> : '\u2014'}
                                 </TableCell>
                               )
                             })}
-                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totalLaborPct <= avgLaborTarget ? '#34d399' : '#fb7185' }}>
+                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: avgLaborTarget > 0 ? (totalLaborPct <= avgLaborTarget ? '#34d399' : '#fb7185') : '#334155' }}>
                               {totalLaborPct.toFixed(1)}%
                             </TableCell>
                           </TableRow>

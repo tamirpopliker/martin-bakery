@@ -45,7 +45,7 @@ const PANEL_FACTORY = [
   { label: 'בצקים',        subtitle: 'ייצור · פחת · תיקונים',         Icon: Croissant,    color: '#8b5cf6', page: 'dept_dough' },
   { label: 'אריזה',        subtitle: 'כמויות · תיקונים · לייבור',     Icon: Package,      color: '#0ea5e9', page: 'dept_packaging' },
   { label: 'ניקיון/נהג',   subtitle: 'תיקונים · לייבור',              Icon: Truck,        color: '#64748b', page: 'dept_cleaning' },
-  { label: 'לייבור מרוכז', subtitle: 'העלאת CSV · כל המחלקות',       Icon: HardHat,      color: '#f59e0b', page: 'labor' },
+  { label: 'לייבור מרוכז', subtitle: 'העלאת דוח נוכחות PDF · כל המחלקות',       Icon: HardHat,      color: '#f59e0b', page: 'labor' },
   { label: 'מכירות',        subtitle: 'קרמים · בצקים · B2B · שונות',  Icon: TrendingUp,   color: '#6366f1', page: 'factory_b2b' },
   { label: 'ספקים',         subtitle: 'חשבוניות · ניהול ספקים',        Icon: ClipboardList, color: '#34d399', page: 'suppliers' },
   { label: 'דשבורד מפעל',  subtitle: 'KPI · רווח · גרפים',           Icon: ProfitIcon,    color: '#6366f1', page: 'factory_dashboard' },
@@ -115,6 +115,7 @@ export default function Home() {
   const [factoryLabor, setFactoryLabor] = useState(0)
   const [revenueSheetOpen, setRevenueSheetOpen] = useState(false)
   const [laborSheetOpen, setLaborSheetOpen] = useState(false)
+  const [branchLaborTargets, setBranchLaborTargets] = useState<Record<number, number>>({})
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -130,6 +131,14 @@ export default function Home() {
       setFactoryLabor(fLabor)
       setFactoryGross(factoryPL.controllableMargin)
 
+      // Fetch per-branch labor targets
+      const { data: kpiData } = await supabase.from('branch_kpi_targets').select('branch_id, labor_pct')
+      const laborTargetMap: Record<number, number> = {}
+      if (kpiData) {
+        kpiData.forEach((r: any) => { laborTargetMap[r.branch_id] = Number(r.labor_pct || 0) })
+        setBranchLaborTargets(laborTargetMap)
+      }
+
       // Branch data via shared function
       const bKpi: BranchKpi[] = []
       let totalBranchRev = 0, totalBranchLab = 0, alertCount = 0
@@ -140,7 +149,8 @@ export default function Home() {
         const rev = brPL.revenue
         const lab = brPL.laborEmployer
         const labPct = rev > 0 ? (lab / rev) * 100 : 0
-        if (labPct > 28) alertCount++
+        const brTarget = laborTargetMap[br.id] || 0
+        if (brTarget > 0 && labPct > brTarget) alertCount++
         totalBranchRev += rev
         totalBranchLab += lab
         totalBranchOP += brPL.operatingProfit
@@ -386,7 +396,7 @@ export default function Home() {
                   </div>
                   <div className="flex items-center gap-1 mt-0.5">
                     <span className="text-[11px] font-bold text-slate-500">{grandLaborPct.toFixed(1)}%</span>
-                    <span className={`text-[11px] font-bold ${grandLaborPct <= 28 ? 'text-emerald-400' : 'text-rose-400'}`}>{grandLaborPct <= 28 ? '✓' : '✗'}</span>
+                    {(() => { const avgT = Object.values(branchLaborTargets).length > 0 ? Object.values(branchLaborTargets).reduce((a, b) => a + b, 0) / Object.values(branchLaborTargets).length : 0; return avgT > 0 ? <span className={`text-[11px] font-bold ${grandLaborPct <= avgT ? 'text-emerald-400' : 'text-rose-400'}`}>{grandLaborPct <= avgT ? '\u2713' : '\u2717'}</span> : null })()}
                   </div>
                 </div>
               </button>
@@ -579,8 +589,8 @@ export default function Home() {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               {rev > 0 && (
-                                <span className={`text-xs font-bold ${labPct <= 28 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                  {labPct.toFixed(1)}% {labPct <= 28 ? '✓' : '✗'}
+                                <span className={`text-xs font-bold ${(() => { const t = branchLaborTargets[br.id] || 0; return t > 0 ? (labPct <= t ? 'text-emerald-400' : 'text-rose-400') : 'text-slate-500' })()}`}>
+                                  {labPct.toFixed(1)}%{(() => { const t = branchLaborTargets[br.id] || 0; return t > 0 ? (labPct <= t ? ' \u2713' : ' \u2717') : '' })()}
                                 </span>
                               )}
                               <ChevronLeft size={14} color="#cbd5e1" />
@@ -808,7 +818,7 @@ export default function Home() {
                       <TableCell className="font-medium text-right">{r.name}</TableCell>
                       <TableCell className="text-center">{fmtK(r.labor)}</TableCell>
                       <TableCell className="text-center">
-                        <span className={r.pct <= 28 ? 'text-emerald-500' : 'text-rose-500'}>{r.pct.toFixed(1)}%</span>
+                        {(() => { const t = branchLaborTargets[branchKpi.find(b => b.name === r.name)?.id ?? 0] || 0; return <span className={t > 0 ? (r.pct <= t ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-700'}>{r.pct.toFixed(1)}%</span> })()}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -816,7 +826,7 @@ export default function Home() {
                     <TableCell className="font-bold text-right">סה"כ</TableCell>
                     <TableCell className="text-center font-bold">{fmtK(totalLabor)}</TableCell>
                     <TableCell className="text-center font-bold">
-                      <span className={totalLaborPct <= 28 ? 'text-emerald-500' : 'text-rose-500'}>{totalLaborPct.toFixed(1)}%</span>
+                      {(() => { const avgT = Object.values(branchLaborTargets).length > 0 ? Object.values(branchLaborTargets).reduce((a, b) => a + b, 0) / Object.values(branchLaborTargets).length : 0; return <span className={avgT > 0 ? (totalLaborPct <= avgT ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-700'}>{totalLaborPct.toFixed(1)}%</span> })()}
                     </TableCell>
                   </TableRow>
                 </TableBody>

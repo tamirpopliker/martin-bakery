@@ -31,7 +31,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   const [overheadPct, setOverheadPct] = useState(5)
 
   // KPI targets (dynamic)
-  const [laborTarget, setLaborTarget] = useState(28)
+  const [laborTarget, setLaborTarget] = useState(0)
   const [wasteTarget, setWasteTarget] = useState(3)
   const [revenueTarget, setRevenueTarget] = useState(0)
 
@@ -54,7 +54,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
     // KPI targets
     const { data: kpiData } = await supabase.from('branch_kpi_targets').select('*').eq('branch_id', branchId).maybeSingle()
     if (kpiData) {
-      setLaborTarget(Number(kpiData.labor_pct) || 28)
+      setLaborTarget(Number(kpiData.labor_pct) || 0)
       setWasteTarget(Number(kpiData.waste_pct) || 3)
       setRevenueTarget(Number(kpiData.revenue_target) || 0)
     }
@@ -197,8 +197,8 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                   </div>
                   <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>% לייבור</span>
                 </div>
-                <div style={{ fontSize: '22px', fontWeight: '800', color: laborPct <= laborTarget ? '#34d399' : '#fb7185' }}>{laborPct.toFixed(1)}%</div>
-                <span style={{ fontSize: '11px', color: '#94a3b8' }}>יעד {laborTarget}%</span>
+                <div style={{ fontSize: '22px', fontWeight: '800', color: laborTarget > 0 ? (laborPct <= laborTarget ? '#34d399' : '#fb7185') : '#334155' }}>{laborPct.toFixed(1)}%</div>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>{laborTarget > 0 ? `יעד ${laborTarget}%` : '\u2014'}</span>
               </CardContent></Card>
 
               {/* רווח נשלט */}

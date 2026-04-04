@@ -108,7 +108,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
   const [pl, setPl] = useState<BranchPLResult | null>(null)
 
   // KPI targets
-  const [laborTarget, setLaborTarget] = useState(28)
+  const [laborTarget, setLaborTarget] = useState(0)
   const [wasteTarget, setWasteTarget] = useState(3)
 
   // Previous period P&L
@@ -307,12 +307,12 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                     <span className="text-[11px] text-slate-400">% לייבור</span>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-[22px] font-medium" style={{ color: laborPct <= laborTarget ? '#639922' : '#E24B4A' }}>
+                    <span className="text-[22px] font-medium" style={{ color: laborTarget > 0 ? (laborPct <= laborTarget ? '#639922' : '#E24B4A') : '#334155' }}>
                       <CountUp end={laborPct} decimals={1} suffix="%" duration={0.8} />
                     </span>
                     <DiffBadge current={laborPct} previous={prevPl && prevPl.revenue > 0 ? (prevPl.laborEmployer / prevPl.revenue) * 100 : 0} inverse />
                   </div>
-                  <span className="text-[11px] text-slate-400">יעד {laborTarget}%</span>
+                  <span className="text-[11px] text-slate-400">{laborTarget > 0 ? `יעד ${laborTarget}%` : '\u2014'}</span>
                 </CardContent>
               </Card>
             </motion.div>
