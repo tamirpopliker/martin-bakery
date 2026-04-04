@@ -51,6 +51,20 @@ interface BranchData {
 
 function fmtN(n: number) { return '₪' + Math.round(n).toLocaleString() }
 
+/**
+ * Get KPI color based on target comparison.
+ * For costs (inverse): lower is better. For profit: higher is better.
+ */
+function kpiColor(actual: number, target: number | null, inverse: boolean): string {
+  if (target === null || target === 0) return '#64748b' // slate
+  const deviation = inverse
+    ? (actual - target) / target  // cost: positive = bad
+    : (target - actual) / target  // profit: positive = bad
+  if (deviation <= 0) return '#639922'     // good (green)
+  if (deviation <= 0.2) return '#BA7517'   // warning (orange)
+  return '#E24B4A'                         // bad (red)
+}
+
 // ─── Custom styled tooltip ──────────────────────────────────────────────────
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
@@ -95,6 +109,14 @@ export default function CEODashboard({ onBack }: Props) {
   const [dailyRevenue, setDailyRevenue] = useState<{ date: string; [key: string]: string | number }[]>([])
   const [expenseBreakdown, setExpenseBreakdown] = useState<{ name: string; value: number }[]>([])
   const [avgLaborTarget, setAvgLaborTarget] = useState(28)
+  const [overheadPct, setOverheadPct] = useState(() => {
+    const saved = localStorage.getItem('overhead_pct')
+    return saved ? Number(saved) : 5
+  })
+  // Per-branch KPI targets: { branchId: { labor_pct, waste_pct } }
+  const [branchTargets, setBranchTargets] = useState<Record<number, { labor_pct: number; waste_pct: number }>>({})
+  // Factory KPI targets (averaged across departments)
+  const [factoryTargets, setFactoryTargets] = useState<{ labor_pct: number; waste_pct: number }>({ labor_pct: 28, waste_pct: 3 })
 
   // Factory data
   const [factorySales, setFactorySales]     = useState(0)
@@ -125,10 +147,20 @@ export default function CEODashboard({ onBack }: Props) {
   async function fetchData() {
     setLoading(true)
 
-    const { data: kpiData } = await supabase.from('branch_kpi_targets').select('labor_pct')
+    const { data: kpiData } = await supabase.from('branch_kpi_targets').select('branch_id, labor_pct, waste_pct')
     if (kpiData && kpiData.length > 0) {
       const avg = kpiData.reduce((s, r) => s + Number(r.labor_pct || 28), 0) / kpiData.length
       setAvgLaborTarget(avg)
+      const tMap: Record<number, { labor_pct: number; waste_pct: number }> = {}
+      kpiData.forEach((r: any) => { tMap[r.branch_id] = { labor_pct: Number(r.labor_pct || 28), waste_pct: Number(r.waste_pct || 3) } })
+      setBranchTargets(tMap)
+    }
+    // Factory KPI targets
+    const { data: fKpiData } = await supabase.from('kpi_targets').select('labor_revenue_pct, waste_pct')
+    if (fKpiData && fKpiData.length > 0) {
+      const avgLabor = fKpiData.reduce((s, r) => s + Number(r.labor_revenue_pct || 28), 0) / fKpiData.length
+      const avgWaste = fKpiData.reduce((s, r) => s + Number(r.waste_pct || 3), 0) / fKpiData.length
+      setFactoryTargets({ labor_pct: avgLabor, waste_pct: avgWaste })
     }
 
     const [fSalesFs, fSalesB2b, fLabor, fSupp, fWaste, fRepairs, fFixed, globalEmpsData, wdData] = await Promise.all([
@@ -217,7 +249,8 @@ export default function CEODashboard({ onBack }: Props) {
       totalExpByType['fixed'] = (totalExpByType['fixed'] || 0) + fixedCosts
 
       const grossProfit = revenue - labor - expenses
-      const operatingProfit = grossProfit - fixedCosts - waste
+      const oh = revenue * overheadPct / 100
+      const operatingProfit = grossProfit - fixedCosts - waste - oh
 
       branchResults.push({ ...br, revenue, expenses, labor, waste, fixedCosts, grossProfit, operatingProfit, revCashier: brCashier, revCredit: brCredit, revWebsite: brWebsite })
     }
@@ -339,7 +372,8 @@ export default function CEODashboard({ onBack }: Props) {
   const consFixed       = totalFixed + factoryFixed
   const consRepairs     = factoryRepairs + totalExpenses - branchInternalExpenses  // branch expenses minus internal
   const consGross       = consRevenue - consSuppliers - consLabor
-  const consOperating   = consGross - consWaste - consFixed
+  const consOverhead    = totalRevenue * overheadPct / 100  // only branches get overhead
+  const consOperating   = consGross - consWaste - consFixed - consOverhead
 
   const barData = [
     ...branches.map(b => ({
@@ -815,190 +849,106 @@ export default function CEODashboard({ onBack }: Props) {
             </motion.div>
               )})()}
 
-            {/* ═══ SEGMENT VIEW: P&L Table ═══ */}
-            {viewMode === 'segment' && (
-              <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5">
-                <Card className="shadow-sm">
-                  <CardContent className="p-4 overflow-x-auto">
-                    <span className="text-[13px] font-bold text-slate-700 block mb-3">טבלת רווח והפסד — לפי מרכז רווח</span>
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-slate-50">
-                          <TableHead className="text-xs font-bold text-slate-500 min-w-[120px]">מדד</TableHead>
-                          <TableHead className="text-xs font-bold text-slate-500 text-center">מפעל</TableHead>
-                          {branches.map(br => (
-                            <TableHead key={br.id} className="text-xs font-bold text-slate-500 text-center">{br.name}</TableHead>
-                          ))}
-                          <TableHead className="text-xs font-bold text-slate-800 text-center bg-amber-50">סה"כ</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {(() => {
-                          const fAllSales = factorySales + factoryInternalSales
-                          const segRows = [
-                            { label: 'הכנסות', factory: fAllSales, getBr: (br: BranchData) => br.revenue, bold: false, color: '' },
-                            { label: 'הוצאות / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => br.expenses, bold: false, color: '' },
-                            { label: 'לייבור', factory: factoryLabor, getBr: (br: BranchData) => br.labor, bold: false, color: '' },
-                            { label: 'רווח נשלט', factory: fAllSales - factorySuppliers - factoryLabor, getBr: (br: BranchData) => br.grossProfit, bold: true, color: 'profit' },
-                            { label: 'עלויות קבועות', factory: factoryFixed, getBr: (br: BranchData) => br.fixedCosts, bold: false, color: '' },
-                            { label: 'פחת', factory: factoryWaste, getBr: (br: BranchData) => br.waste, bold: false, color: '' },
-                            { label: 'רווח תפעולי', factory: fAllSales - factorySuppliers - factoryLabor - factoryFixed - factoryWaste - factoryRepairs, getBr: (br: BranchData) => br.operatingProfit, bold: true, color: 'profit' },
-                          ]
-                          return segRows.map(row => {
-                            const brVals = branches.map(br => row.getBr(br))
-                            const total = row.factory + brVals.reduce((s, v) => s + v, 0)
-                            return (
-                              <TableRow key={row.label} className={row.bold ? 'bg-slate-50' : ''}>
-                                <TableCell className={`text-[12px] ${row.bold ? 'font-bold text-slate-800' : 'text-slate-600'}`}>{row.label}</TableCell>
-                                <TableCell className={`text-[12px] text-center ${row.bold ? 'font-bold' : ''}`} style={{ color: row.color === 'profit' ? (row.factory >= 0 ? '#639922' : '#E24B4A') : '' }}>
-                                  {fmtN(row.factory)}
-                                </TableCell>
-                                {brVals.map((v, i) => (
-                                  <TableCell key={i} className={`text-[12px] text-center ${row.bold ? 'font-bold' : ''}`} style={{ color: row.color === 'profit' ? (v >= 0 ? '#639922' : '#E24B4A') : '' }}>
-                                    {fmtN(v)}
-                                  </TableCell>
-                                ))}
-                                <TableCell className={`text-[12px] text-center bg-amber-50 ${row.bold ? 'font-extrabold' : 'font-bold'}`} style={{ color: row.color === 'profit' ? (total >= 0 ? '#639922' : '#E24B4A') : '' }}>
-                                  {fmtN(total)}
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })
-                        })()}
-                        {/* % rows */}
-                        {(() => {
-                          const fAllSales = factorySales + factoryInternalSales
-                          const fLabPct = fAllSales > 0 ? (factoryLabor / fAllSales * 100) : 0
-                          const fOpPct = fAllSales > 0 ? ((fAllSales - factorySuppliers - factoryLabor - factoryFixed - factoryWaste - factoryRepairs) / fAllSales * 100) : 0
-                          const totalRev = fAllSales + totalRevenue
-                          const totalLab = grandLabor
-                          const totalOp = grandOperating + (fAllSales - factorySales)  // add back internal for segment
-                          return (
-                            <>
-                              <TableRow>
-                                <TableCell className="text-[12px] font-semibold text-slate-600">% לייבור</TableCell>
-                                <TableCell className={`text-[12px] text-center font-semibold ${fLabPct <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>{fLabPct.toFixed(1)}%</TableCell>
-                                {branches.map(br => {
-                                  const pct = br.revenue > 0 ? (br.labor / br.revenue * 100) : 0
-                                  return <TableCell key={br.id} className={`text-[12px] text-center font-semibold ${pct <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>{pct.toFixed(1)}%</TableCell>
-                                })}
-                                <TableCell className={`text-[12px] text-center font-bold bg-amber-50 ${(totalRev > 0 ? totalLab / totalRev * 100 : 0) <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                  {totalRev > 0 ? (totalLab / totalRev * 100).toFixed(1) : '0.0'}%
-                                </TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell className="text-[12px] font-semibold text-slate-600">% רווח תפעולי</TableCell>
-                                <TableCell className={`text-[12px] text-center font-semibold ${fOpPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fOpPct.toFixed(1)}%</TableCell>
-                                {branches.map(br => {
-                                  const pct = br.revenue > 0 ? (br.operatingProfit / br.revenue * 100) : 0
-                                  return <TableCell key={br.id} className={`text-[12px] text-center font-semibold ${pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{pct.toFixed(1)}%</TableCell>
-                                })}
-                                <TableCell className={`text-[12px] text-center font-bold bg-amber-50 ${(totalRev > 0 ? totalOp / totalRev * 100 : 0) >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                  {totalRev > 0 ? (totalOp / totalRev * 100).toFixed(1) : '0.0'}%
-                                </TableCell>
-                              </TableRow>
-                            </>
-                          )
-                        })()}
-                      </TableBody>
-                    </Table>
-                    <p className="text-[11px] text-slate-400 mt-3 text-center">
-                      תצוגה זו כוללת עסקאות פנימיות בין המפעל לסניפים. לתמונה האמיתית של העסק עבור לתצוגה המאוחדת.
-                    </p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
+            {/* ═══ P&L Table (shared for both views) ═══ */}
+            {(() => {
+              const isSegment = viewMode === 'segment'
+              const fRev = isSegment ? factorySales + factoryInternalSales : factorySales
+              const fOp = fRev - factorySuppliers - factoryLabor - factoryFixed - factoryWaste - factoryRepairs
+              const tableTitle = isSegment ? 'טבלת רווח והפסד — לפי מרכז רווח' : 'טבלת רווח והפסד — מאוחדת'
+              const footerNote = isSegment
+                ? 'תצוגה זו כוללת עסקאות פנימיות בין המפעל לסניפים. לתמונה האמיתית של העסק עבור לתצוגה המאוחדת.'
+                : 'תצוגה מאוחדת — הכנסות המפעל כוללות מכירות חיצוניות בלבד. עסקאות פנימיות מבוטלות.'
 
-            {/* ═══ Consolidated P&L table ═══ */}
-            {viewMode === 'consolidated' && (
-              <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5">
-                <Card className="shadow-sm">
-                  <CardContent className="p-4 overflow-x-auto">
-                    <span className="text-[13px] font-bold text-slate-700 block mb-3">טבלת רווח והפסד — מאוחדת</span>
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-slate-50">
-                          <TableHead className="text-xs font-bold text-slate-500 min-w-[120px]">מדד</TableHead>
-                          <TableHead className="text-xs font-bold text-slate-500 text-center">מפעל</TableHead>
-                          {branches.map(br => (
-                            <TableHead key={br.id} className="text-xs font-bold text-slate-500 text-center">{br.name}</TableHead>
-                          ))}
-                          <TableHead className="text-xs font-bold text-slate-800 text-center bg-amber-50">סה"כ</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {(() => {
-                          const consRows = [
-                            { label: 'הכנסות', factory: factorySales, getBr: (br: BranchData) => br.revenue, bold: false, color: '' },
-                            { label: 'הוצאות / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => br.expenses, bold: false, color: '' },
-                            { label: 'לייבור', factory: factoryLabor, getBr: (br: BranchData) => br.labor, bold: false, color: '' },
-                            { label: 'רווח נשלט', factory: factorySales - factorySuppliers - factoryLabor, getBr: (br: BranchData) => br.grossProfit, bold: true, color: 'profit' },
-                            { label: 'עלויות קבועות', factory: factoryFixed, getBr: (br: BranchData) => br.fixedCosts, bold: false, color: '' },
-                            { label: 'פחת', factory: factoryWaste, getBr: (br: BranchData) => br.waste, bold: false, color: '' },
-                            { label: 'רווח תפעולי', factory: factorySales - factorySuppliers - factoryLabor - factoryFixed - factoryWaste - factoryRepairs, getBr: (br: BranchData) => br.operatingProfit, bold: true, color: 'profit' },
-                          ]
-                          return consRows.map(row => {
+              type PLRow = {
+                label: string; factory: number; getBr: (br: BranchData) => number
+                bold: boolean; color: '' | 'profit'; kpiKey?: 'labor' | 'waste' | 'operating'
+              }
+              const rows: PLRow[] = [
+                { label: 'הכנסות', factory: fRev, getBr: br => br.revenue, bold: false, color: '' },
+                { label: 'הוצאות / ספקים', factory: factorySuppliers, getBr: br => br.expenses, bold: false, color: '' },
+                { label: 'לייבור', factory: factoryLabor, getBr: br => br.labor, bold: false, color: '', kpiKey: 'labor' },
+                { label: 'רווח נשלט', factory: fRev - factorySuppliers - factoryLabor, getBr: br => br.grossProfit, bold: true, color: 'profit' },
+                { label: 'עלויות קבועות', factory: factoryFixed, getBr: br => br.fixedCosts, bold: false, color: '' },
+                { label: 'פחת', factory: factoryWaste, getBr: br => br.waste, bold: false, color: '', kpiKey: 'waste' },
+                { label: 'העמסת מטה', factory: 0, getBr: br => br.revenue * overheadPct / 100, bold: false, color: '' },
+                { label: 'רווח תפעולי', factory: fOp, getBr: br => br.operatingProfit, bold: true, color: 'profit', kpiKey: 'operating' },
+              ]
+
+              // Helper: get KPI target for a branch row
+              const getBrTarget = (brId: number, kpiKey?: 'labor' | 'waste' | 'operating'): number | null => {
+                if (!kpiKey) return null
+                const t = branchTargets[brId]
+                if (!t) return null
+                if (kpiKey === 'labor') return t.labor_pct
+                if (kpiKey === 'waste') return t.waste_pct
+                return null
+              }
+              const getFactoryTarget = (kpiKey?: 'labor' | 'waste' | 'operating'): number | null => {
+                if (!kpiKey) return null
+                if (kpiKey === 'labor') return factoryTargets.labor_pct
+                if (kpiKey === 'waste') return factoryTargets.waste_pct
+                return null
+              }
+
+              // Cell renderer with % of revenue sub-text
+              const renderCell = (value: number, entityRev: number, kpiKey: 'labor' | 'waste' | 'operating' | undefined, target: number | null, bold: boolean, profitColor: '' | 'profit', isTotalCol: boolean) => {
+                const pct = entityRev > 0 ? (value / entityRev * 100) : 0
+                const isRevRow = false // revenue row handled separately
+                const pctColor = kpiKey
+                  ? kpiColor(pct, target, kpiKey !== 'operating') // labor & waste: lower=better (inverse), operating: higher=better
+                  : '#64748b'
+                return (
+                  <TableCell className={`text-[12px] text-center ${bold ? 'font-bold' : ''} ${isTotalCol ? 'bg-amber-50' : ''} ${bold && isTotalCol ? 'font-extrabold' : ''}`}>
+                    <div style={{ color: profitColor === 'profit' ? (value >= 0 ? '#639922' : '#E24B4A') : '' }}>
+                      {fmtN(value)}
+                    </div>
+                    {entityRev > 0 && (
+                      <div className="text-[11px]" style={{ color: pctColor }}>
+                        {pct.toFixed(1)}%
+                      </div>
+                    )}
+                  </TableCell>
+                )
+              }
+
+              return (
+                <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5">
+                  <Card className="shadow-sm">
+                    <CardContent className="p-4 overflow-x-auto">
+                      <span className="text-[13px] font-bold text-slate-700 block mb-3">{tableTitle}</span>
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-slate-50">
+                            <TableHead className="text-xs font-bold text-slate-500 min-w-[120px]">מדד</TableHead>
+                            <TableHead className="text-xs font-bold text-slate-500 text-center">מפעל</TableHead>
+                            {branches.map(br => (
+                              <TableHead key={br.id} className="text-xs font-bold text-slate-500 text-center">{br.name}</TableHead>
+                            ))}
+                            <TableHead className="text-xs font-bold text-slate-800 text-center bg-amber-50">סה"כ</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {rows.map(row => {
                             const brVals = branches.map(br => row.getBr(br))
                             const total = row.factory + brVals.reduce((s, v) => s + v, 0)
+                            const totalRev = fRev + branches.reduce((s, br) => s + br.revenue, 0)
                             return (
                               <TableRow key={row.label} className={row.bold ? 'bg-slate-50' : ''}>
                                 <TableCell className={`text-[12px] ${row.bold ? 'font-bold text-slate-800' : 'text-slate-600'}`}>{row.label}</TableCell>
-                                <TableCell className={`text-[12px] text-center ${row.bold ? 'font-bold' : ''}`} style={{ color: row.color === 'profit' ? (row.factory >= 0 ? '#639922' : '#E24B4A') : '' }}>
-                                  {fmtN(row.factory)}
-                                </TableCell>
-                                {brVals.map((v, i) => (
-                                  <TableCell key={i} className={`text-[12px] text-center ${row.bold ? 'font-bold' : ''}`} style={{ color: row.color === 'profit' ? (v >= 0 ? '#639922' : '#E24B4A') : '' }}>
-                                    {fmtN(v)}
-                                  </TableCell>
-                                ))}
-                                <TableCell className={`text-[12px] text-center bg-amber-50 ${row.bold ? 'font-extrabold' : 'font-bold'}`} style={{ color: row.color === 'profit' ? (total >= 0 ? '#639922' : '#E24B4A') : '' }}>
-                                  {fmtN(total)}
-                                </TableCell>
+                                {renderCell(row.factory, fRev, row.kpiKey, getFactoryTarget(row.kpiKey), row.bold, row.color, false)}
+                                {branches.map((br, i) => renderCell(brVals[i], br.revenue, row.kpiKey, getBrTarget(br.id, row.kpiKey), row.bold, row.color, false))}
+                                {renderCell(total, totalRev, row.kpiKey, null, row.bold, row.color, true)}
                               </TableRow>
                             )
-                          })
-                        })()}
-                        {/* % rows */}
-                        {(() => {
-                          const fLabPct = factorySales > 0 ? (factoryLabor / factorySales * 100) : 0
-                          const fOpPct = factorySales > 0 ? ((factorySales - factorySuppliers - factoryLabor - factoryFixed - factoryWaste - factoryRepairs) / factorySales * 100) : 0
-                          return (
-                            <>
-                              <TableRow>
-                                <TableCell className="text-[12px] font-semibold text-slate-600">% לייבור</TableCell>
-                                <TableCell className={`text-[12px] text-center font-semibold ${fLabPct <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>{fLabPct.toFixed(1)}%</TableCell>
-                                {branches.map(br => {
-                                  const pct = br.revenue > 0 ? (br.labor / br.revenue * 100) : 0
-                                  return <TableCell key={br.id} className={`text-[12px] text-center font-semibold ${pct <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>{pct.toFixed(1)}%</TableCell>
-                                })}
-                                <TableCell className={`text-[12px] text-center font-bold bg-amber-50 ${(consRevenue > 0 ? consLabor / consRevenue * 100 : 0) <= avgLaborTarget ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                  {consRevenue > 0 ? (consLabor / consRevenue * 100).toFixed(1) : '0.0'}%
-                                </TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell className="text-[12px] font-semibold text-slate-600">% רווח תפעולי</TableCell>
-                                <TableCell className={`text-[12px] text-center font-semibold ${fOpPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fOpPct.toFixed(1)}%</TableCell>
-                                {branches.map(br => {
-                                  const pct = br.revenue > 0 ? (br.operatingProfit / br.revenue * 100) : 0
-                                  return <TableCell key={br.id} className={`text-[12px] text-center font-semibold ${pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{pct.toFixed(1)}%</TableCell>
-                                })}
-                                <TableCell className={`text-[12px] text-center font-bold bg-amber-50 ${(consRevenue > 0 ? consOperating / consRevenue * 100 : 0) >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                  {consRevenue > 0 ? (consOperating / consRevenue * 100).toFixed(1) : '0.0'}%
-                                </TableCell>
-                              </TableRow>
-                            </>
-                          )
-                        })()}
-                      </TableBody>
-                    </Table>
-                    <p className="text-[11px] text-slate-400 mt-3 text-center">
-                      תצוגה מאוחדת — הכנסות המפעל כוללות מכירות חיצוניות בלבד. עסקאות פנימיות מבוטלות.
-                    </p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
+                          })}
+                        </TableBody>
+                      </Table>
+                      <p className="text-[11px] text-slate-400 mt-3 text-center">{footerNote}</p>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )
+            })()}
 
             {/* ═══ ROW 2: Revenue Breakdown | Expense Breakdown ═══ */}
             <motion.div className="grid grid-cols-2 gap-2.5 mb-2.5" variants={fadeIn} initial="hidden" animate="visible">
