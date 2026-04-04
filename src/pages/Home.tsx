@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, monthEnd, getFixedCostTotal, fetchFactoryPL, fetchBranchPL, getOverheadPct } from '../lib/supabase'
+import { supabase, monthEnd, getFixedCostTotal, fetchFactoryPL, getOverheadPct } from '../lib/supabase'
+import { fetchAllBranchesProfit } from '../lib/profitCalc'
 import { usePeriod } from '../lib/PeriodContext'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
@@ -139,21 +140,24 @@ export default function Home() {
         setBranchLaborTargets(laborTargetMap)
       }
 
-      // Branch data via shared function
+      // Branch data via View (single query for all branches)
+      const branchIds = BRANCHES.map(br => br.id)
+      const branchProfits = await fetchAllBranchesProfit(branchIds, from, to)
+
       const bKpi: BranchKpi[] = []
       let totalBranchRev = 0, totalBranchLab = 0, alertCount = 0
       let totalBranchOP = 0
 
       for (const br of BRANCHES) {
-        const brPL = await fetchBranchPL(br.id, from, to, monthKey, overheadPct)
-        const rev = brPL.revenue
-        const lab = brPL.laborEmployer
+        const bp = branchProfits.find(p => p.branchId === br.id)
+        const rev = bp?.revenue || 0
+        const lab = bp?.laborCost || 0
         const labPct = rev > 0 ? (lab / rev) * 100 : 0
         const brTarget = laborTargetMap[br.id] || 0
         if (brTarget > 0 && labPct > brTarget) alertCount++
         totalBranchRev += rev
         totalBranchLab += lab
-        totalBranchOP += brPL.operatingProfit
+        totalBranchOP += bp?.operatingProfit || 0
         bKpi.push({ id: br.id, name: br.name, color: br.color, revenue: rev, laborCost: lab, laborPct: labPct })
       }
 
@@ -174,12 +178,12 @@ export default function Home() {
       setPrevFactoryRevenue(prevFactoryPL.sales)
       setPrevFactoryGross(prevFactoryPL.controllableMargin)
 
+      const prevBranchProfits = await fetchAllBranchesProfit(branchIds, pFrom, pTo)
       let pTotalBranchRev = 0, pTotalBranchLab = 0, pTotalBranchOP = 0
-      for (const br of BRANCHES) {
-        const pBrPL = await fetchBranchPL(br.id, pFrom, pTo, pMonthKey, overheadPct)
-        pTotalBranchRev += pBrPL.revenue
-        pTotalBranchLab += pBrPL.laborEmployer
-        pTotalBranchOP += pBrPL.operatingProfit
+      for (const bp of prevBranchProfits) {
+        pTotalBranchRev += bp.revenue
+        pTotalBranchLab += bp.laborCost
+        pTotalBranchOP += bp.operatingProfit
       }
       setPrevBranchRevenue(pTotalBranchRev)
       const pAvgPct = pTotalBranchRev > 0 ? (pTotalBranchLab / pTotalBranchRev) * 100 : 0

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept, getOverheadPct } from '../lib/supabase'
+import { fetchAllBranchesProfit } from '../lib/profitCalc'
 import { ArrowRight, TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck, Building2, Layers } from 'lucide-react'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon, TrophyIcon } from '@/components/icons'
 import { BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
@@ -260,13 +261,21 @@ export default function CEODashboard({ onBack }: Props) {
       branchResults.push({ ...br, revenue, expenses, expInternal: brExpInternal, expExternal: brExpExternal, labor, waste, fixedCosts, grossProfit, operatingProfit, revCashier: brCashier, revCredit: brCredit, revWebsite: brWebsite })
     }
 
-    // Track branch internal expenses (purchases from factory)
-    let totalBranchInternal = 0
-    for (const br of BRANCHES) {
-      const { data: intExp } = await supabase.from('branch_expenses').select('amount')
-        .eq('branch_id', br.id).eq('from_factory', true).gte('date', from).lt('date', to)
-      totalBranchInternal += intExp ? intExp.reduce((s, r) => s + Number(r.amount), 0) : 0
+    // Override branch profits from View (single source of truth)
+    const branchIds = BRANCHES.map(br => br.id)
+    const viewProfits = await fetchAllBranchesProfit(branchIds, from, to)
+    for (const br of branchResults) {
+      const vp = viewProfits.find(p => p.branchId === br.id)
+      if (vp) {
+        br.grossProfit = vp.grossProfit
+        br.operatingProfit = vp.operatingProfit
+        br.expInternal = vp.internalSupplierCost
+        br.expExternal = vp.externalSupplierCost
+      }
     }
+
+    // Track branch internal expenses from View data
+    const totalBranchInternal = viewProfits.reduce((s, p) => s + p.internalSupplierCost, 0)
     setBranchInternalExpenses(totalBranchInternal)
 
     setBranches(branchResults)
