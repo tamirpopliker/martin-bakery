@@ -77,24 +77,35 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
     // Admin can access everything
     if (user.role === 'admin') return true
 
-    // Settings pages — department managers cannot access settings at all
-    if (pageKey === 'settings' || pageKey === 'data_import' || pageKey === 'user_management') {
-      if (pageKey === 'user_management') return false // admin only
-      if (isDeptManager) return false // dept manager blocked from settings
-      return user.can_settings
+    // ─── Admin-only pages ───
+    if (pageKey === 'user_management' || pageKey === 'data_import' ||
+        pageKey === 'ceo_dashboard' || pageKey === 'reports_alerts' ||
+        pageKey === 'branch_dashboard' || pageKey === 'branch_comparison') {
+      return false
     }
 
-    // CEO dashboard & reports/alerts - admin only
-    if (pageKey === 'ceo_dashboard' || pageKey === 'reports_alerts') return user.role === 'admin'
+    // ─── Factory Settings: admin only ───
+    if (pageKey === 'settings' || pageKey === 'factory_settings') {
+      return false // non-admins cannot access factory settings
+    }
 
-    // Factory pages
+    // ─── Branch Settings: admin only (KPI + costs) ───
+    if (pageKey === 'branch_settings') {
+      return false // non-admins cannot access branch settings
+    }
+
+    // ─── Factory employees page ───
+    if (pageKey === 'factory_employees') {
+      return user.role === 'factory' // both dept managers and regular factory users
+    }
+
+    // ─── Factory pages ───
     const dept = getDeptFromPage(pageKey)
-    if (dept !== null || pageKey === 'factory_dashboard' || pageKey === 'factory_b2b' || pageKey === 'labor' || pageKey === 'suppliers') {
+    if (dept !== null || pageKey === 'factory_dashboard' || pageKey === 'factory_b2b' ||
+        pageKey === 'labor' || pageKey === 'suppliers') {
       if (user.role === 'branch') return false
 
-      // Department manager: can access all factory pages EXCEPT settings and the OTHER main dept
-      // creams manager can't see dough, dough manager can't see creams
-      // packaging & cleaning are shared
+      // Department manager: can access factory pages except the OTHER main dept
       if (isDeptManager) {
         if (dept === 'creams' && user.managed_department === 'dough') return false
         if (dept === 'dough' && user.managed_department === 'creams') return false
@@ -106,18 +117,17 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
       return true
     }
 
-    // Branch pages
+    // ─── Branch pages ───
     const branchId = getBranchFromPage(pageKey)
     if (branchId !== null) {
       if (user.role === 'factory') return false
-      // Branch user - only their branch
       if (user.role === 'branch') return user.branch_id === branchId
-      return true // admin
+      return true
     }
 
-    // Branch dashboard (all branches overview)
-    if (pageKey === 'branch_dashboard') {
-      return user.role === 'admin'
+    // ─── Management pages ───
+    if (pageKey === 'manage') {
+      return false // non-admins
     }
 
     return true

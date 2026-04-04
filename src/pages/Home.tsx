@@ -20,6 +20,7 @@ import FactoryDashboard from './FactoryDashboard'
 import DepartmentLabor from './DepartmentLabor'
 import FactoryB2B from './FactoryB2B'
 import FactorySettings from './FactorySettings'
+import FactoryEmployees from './FactoryEmployees'
 import CEODashboard from './CEODashboard'
 import BranchHome from './BranchHome'
 import BranchManagerDashboard from './BranchManagerDashboard'
@@ -33,7 +34,7 @@ import {
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
   AlertTriangle, ClipboardList, Truck, UserCog, Activity,
   Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
-  LayoutDashboard, X
+  LayoutDashboard, X, Users
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
@@ -48,7 +49,8 @@ const PANEL_FACTORY = [
   { label: 'מכירות',        subtitle: 'קרמים · בצקים · B2B · שונות',  Icon: TrendingUp,   color: '#6366f1', page: 'factory_b2b' },
   { label: 'ספקים',         subtitle: 'חשבוניות · ניהול ספקים',        Icon: ClipboardList, color: '#34d399', page: 'suppliers' },
   { label: 'דשבורד מפעל',  subtitle: 'KPI · רווח · גרפים',           Icon: ProfitIcon,    color: '#6366f1', page: 'factory_dashboard' },
-  { label: 'הגדרות מפעל',  subtitle: 'יעדים · עובדים · עלויות',      Icon: Settings,     color: '#64748b', page: 'settings' },
+  { label: 'עובדים',        subtitle: 'ניהול עובדי מפעל',              Icon: Users,        color: '#8b5cf6', page: 'factory_employees' },
+  { label: 'הגדרות מפעל',  subtitle: 'יעדים · עלויות קבועות',        Icon: Settings,     color: '#64748b', page: 'settings' },
 ]
 
 const PANEL_MANAGE = [
@@ -88,10 +90,10 @@ export default function Home() {
     ? [...filteredPanelManage, { label: 'ניהול משתמשים', subtitle: 'הרשאות · משתמשים', Icon: UserCog, color: '#8b5cf6', page: 'user_management' }]
     : filteredPanelManage
 
-  // Determine which sections to show
+  // Determine which sections to show based on role
   const showFactory = filteredPanelFactory.length > 0
-  const showBranches = filteredBranches.length > 0 || canAccessPage('branch_dashboard')
-  const showManage = managePanelItems.length > 0
+  const showBranches = appUser?.role === 'admin' || (appUser?.role === 'branch' && filteredBranches.length > 0)
+  const showManage = appUser?.role === 'admin' && managePanelItems.length > 0
 
   // KPI data
   const [factoryRevenue, setFactoryRevenue] = useState(0)
@@ -207,6 +209,7 @@ export default function Home() {
     if (page === 'factory_dashboard')    return <FactoryDashboard onBack={() => setPage(null)} />
     if (page === 'factory_b2b')          return <FactoryB2B onBack={() => setPage(null)} />
     if (page === 'settings')             return <FactorySettings onBack={() => setPage(null)} />
+    if (page === 'factory_employees')  return <FactoryEmployees onBack={() => setPage(null)} />
     if (page === 'ceo_dashboard')        return <CEODashboard onBack={() => setPage(null)} />
     if (page === 'data_import')          return <DataImport onBack={() => setPage(null)} />
     if (page === 'branch_import')        return <DataImport onBack={() => setPage(null)} branchOnly />

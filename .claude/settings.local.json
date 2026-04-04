@@ -165,7 +165,8 @@
       "Bash(xargs grep:*)",
       "Bash(npm install:*)",
       "Bash(node -e \"const p = require\\(''pdfjs-dist/package.json''\\); console.log\\(p.version\\)\")",
-      "WebFetch(domain:base-ui.com)"
+      "WebFetch(domain:base-ui.com)",
+      "Bash(ls C:UsersUSERmartin-bakerysql011*)"
     ]
   }
 }

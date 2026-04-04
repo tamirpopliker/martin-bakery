@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { useAppUser } from '../lib/UserContext'
 import { ArrowRight, Settings, Save, Plus, Pencil, Trash2, Users, Target, DollarSign, Database } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -48,7 +49,14 @@ const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, tra
 
 // ─── קומפוננטה ────────────────────────────────────────────────────────────────
 export default function BranchSettings({ branchId, branchName, branchColor, onBack }: Props) {
-  const [tab, setTab] = useState<Tab>('kpi')
+  const { appUser } = useAppUser()
+  const isAdmin = appUser?.role === 'admin'
+
+  const allowedTabs: Tab[] = isAdmin
+    ? ['kpi', 'costs', 'employees', 'import']
+    : ['employees']
+
+  const [tab, setTab] = useState<Tab>(isAdmin ? 'kpi' : 'employees')
 
   // ── KPI ──
   const [kpi, setKpi] = useState<BranchKpi>({ branch_id: branchId, labor_pct: 28, waste_pct: 3, revenue_target: 0, basket_target: 0, transaction_target: 0 })
@@ -220,7 +228,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
           ['costs',     '💰 עלויות קבועות',  DollarSign],
           ['employees', '👷 עובדים',          Users],
           ['import',    '📥 ייבוא נתונים',  Database],
-        ] as const).map(([key, label]) => (
+        ] as const).filter(([key]) => allowedTabs.includes(key as Tab)).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key as Tab)}
             className={`py-3.5 px-5 bg-transparent border-none cursor-pointer text-sm ${tab === key ? 'font-bold' : 'font-medium'}`}
             style={{ borderBottom: tab === key ? `3px solid ${branchColor}` : '3px solid transparent', color: tab === key ? branchColor : '#64748b' }}>
@@ -231,8 +239,19 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
 
       <div className="page-container" style={{ padding: '28px 32px', maxWidth: '800px', margin: '0 auto' }}>
 
+        {/* ── restricted tab guard ── */}
+        {!allowedTabs.includes(tab) && (
+          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <p style={{ fontSize: '18px', fontWeight: '700', color: '#ef4444', marginBottom: '16px' }}>אין לך הרשאה</p>
+            <Button variant="outline" onClick={() => setTab('employees')} className="gap-2">
+              <ArrowRight size={18} />
+              חזרה לעובדים
+            </Button>
+          </div>
+        )}
+
         {/* ══ יעדי KPI ════════════════════════════════════════════════════ */}
-        {tab === 'kpi' && (
+        {tab === 'kpi' && allowedTabs.includes('kpi') && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px', background: '#f8fafc', borderRadius: '10px', padding: '12px 16px' }}>
               💡 יעדים ניתנים לעדכון — ערכי ברירת מחדל: לייבור 28%, פחת 3%
@@ -310,7 +329,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
         )}
 
         {/* ══ עלויות קבועות ════════════════════════════════════════════════ */}
-        {tab === 'costs' && (
+        {tab === 'costs' && allowedTabs.includes('costs') && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '20px' }}>
               <input type="month" value={costMonth} onChange={e => setCostMonth(e.target.value)}
@@ -469,7 +488,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
         )}
 
         {/* ══ ייבוא נתונים ═══════════════════════════════════════════════ */}
-        {tab === 'import' && (
+        {tab === 'import' && allowedTabs.includes('import') && (
           <DataImport onBack={() => setTab('kpi')} />
         )}
 
