@@ -295,7 +295,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
         {/* ─── טבלת הזמנות ────────────────────────────────────────────────── */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
         <div className="table-scroll"><Card className="shadow-sm"><CardContent className="p-6">
-          <div style={{ display: 'grid', gridTemplateColumns: '36px 100px 80px 1fr 120px 100px 100px 80px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b', alignItems: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '36px 90px 70px 1fr 100px 90px 80px 100px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b', alignItems: 'center' }}>
             <span />
             <span>תאריך</span>
             <span>מקור</span>
@@ -319,7 +319,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
 
             return (
               <div key={editKey} style={{
-                display: 'grid', gridTemplateColumns: '36px 100px 80px 1fr 120px 100px 100px 80px',
+                display: 'grid', gridTemplateColumns: '36px 90px 70px 1fr 100px 90px 80px 100px',
                 alignItems: 'center', padding: '13px 20px',
                 borderBottom: i < filtered.length - 1 ? '1px solid #f1f5f9' : 'none',
                 background: selectedIds.has(editKey) ? '#eff6ff' : i % 2 === 0 ? 'white' : '#fafafa',
@@ -386,8 +386,8 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
                       {order.branch_status === 'pending' && (
                         <button onClick={() => approveOrder(order)}
                           title="אשר"
-                          style={{ background: '#dcfce7', border: 'none', borderRadius: '6px', padding: '5px', cursor: 'pointer' }}>
-                          <CheckCircle size={16} color="#16a34a" />
+                          style={{ background: '#16a34a', color: 'white', border: 'none', borderRadius: '8px', padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: '700' }}>
+                          <CheckCircle size={14} /> אשר
                         </button>
                       )}
                       <button onClick={() => { setEditId(editKey); setEditAmount(String(order.amount)) }}
