@@ -42,7 +42,7 @@ const ROLE_COLORS: Record<string, string> = {
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
-export default function UserManagement({ onBack }: { onBack: () => void }) {
+export default function UserManagement({ onBack, initialTab }: { onBack: () => void; initialTab?: 'users' | 'branches' | 'settings' }) {
   const { branches, getBranchName, refreshBranches } = useBranches()
   const [users, setUsers] = useState<AppUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -52,7 +52,7 @@ export default function UserManagement({ onBack }: { onBack: () => void }) {
   const [newUser, setNewUser] = useState({ email: '', name: '', role: 'branch' as string, branch_id: 1, excluded_departments: [] as string[], can_settings: false, managed_department: null as string | null })
   const [saving, setSaving] = useState(false)
   // ─── Branch management state ──────────────────────────────────────────────
-  const [tab, setTab] = useState<'users' | 'branches' | 'settings'>('users')
+  const [tab, setTab] = useState<'users' | 'branches' | 'settings'>(initialTab || 'users')
   const [branchSheetOpen, setBranchSheetOpen] = useState(false)
   const [editBranch, setEditBranch] = useState<{ id?: number; name: string; short_name: string; address: string }>({ name: '', short_name: '', address: '' })
   // System settings

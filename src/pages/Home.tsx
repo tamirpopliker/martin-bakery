@@ -56,7 +56,7 @@ const PANEL_FACTORY = [
 const PANEL_MANAGE = [
   { label: 'דשבורד מנכ"ל', subtitle: 'מבט רשתי · כל הסניפים', Icon: TrophyIcon,   color: '#f59e0b', page: 'ceo_dashboard' },
   { label: 'דוחות והתראות', subtitle: 'לוג דוחות · כללי התראה', Icon: Mail,         color: '#f59e0b', page: 'reports_alerts' },
-  { label: 'הגדרות מערכת', subtitle: 'יעדים · עובדים · עלויות', Icon: Settings, color: '#64748b', page: 'settings' },
+  { label: 'הגדרות מערכת', subtitle: 'העמסת מטה · הגדרות כלליות', Icon: Settings, color: '#64748b', page: 'system_settings' },
   { label: 'ייבוא נתונים', subtitle: 'CSV מ-Base44 · העלאה',   Icon: Database, color: '#818cf8', page: 'data_import' },
 ]
 
@@ -224,6 +224,7 @@ export default function Home() {
     if (page === 'data_import')          return <DataImport onBack={() => setPage(null)} />
     if (page === 'branch_import')        return <DataImport onBack={() => setPage(null)} branchOnly />
     if (page === 'user_management')      return <UserManagement onBack={() => setPage(null)} />
+    if (page === 'system_settings')      return <UserManagement onBack={() => setPage(null)} initialTab="settings" />
     if (page === 'reports_alerts')       return <ReportsAlerts onBack={() => setPage(null)} />
 
     if (page === 'dept_creams')    return <DepartmentHome department="creams"    onBack={() => setPage(null)} />
@@ -689,7 +690,7 @@ export default function Home() {
                   {[
                     { label: 'ניהול משתמשים', subtitle: 'הרשאות · משתמשים · סניפים', Icon: UserCog, color: '#8b5cf6', page: 'user_management' },
                     { label: 'דוחות והתראות', subtitle: 'לוג דוחות · כללי התראה', Icon: Mail, color: '#f59e0b', page: 'reports_alerts' },
-                    { label: 'הגדרות מערכת', subtitle: 'יעדים · עובדים · עלויות', Icon: Settings, color: '#64748b', page: 'settings' },
+                    { label: 'הגדרות מערכת', subtitle: 'העמסת מטה · הגדרות כלליות', Icon: Settings, color: '#64748b', page: 'system_settings' },
                     { label: 'ייבוא נתונים', subtitle: 'CSV מ-Base44 · העלאה', Icon: Database, color: '#818cf8', page: 'data_import' },
                   ].map(item => {
                     const Icon = item.Icon
