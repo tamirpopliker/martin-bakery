@@ -51,21 +51,18 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
     const plResult = await fetchBranchPL(branchId, from, to, monthKey || from.slice(0, 7), oh)
 
     // Override supplier split from branch_pl_summary View (single source of truth)
-    const viewMonth = (monthKey || from.slice(0, 7)) + '-01'
-    const { data: plSummary, error: plSummaryError } = await supabase
+    const viewMonth = from.substring(0, 7) + '-01'
+    const { data: plSummary } = await supabase
       .from('branch_pl_summary')
-      .select('*')
+      .select('internal_supplier_cost, external_supplier_cost, total_supplier_cost')
       .eq('branch_id', branchId)
-      .gte('month', viewMonth)
-      .lt('month', viewMonth.slice(0, 8) + '32')
+      .eq('month', viewMonth)
+      .maybeSingle()
 
-    console.log('[BranchPL] View query:', { branchId, viewMonth, plSummary, plSummaryError })
-
-    if (plSummary && plSummary.length > 0) {
-      const row = plSummary[0]
-      plResult.expSuppliersInternal = Number(row.internal_supplier_cost || 0)
-      plResult.expSuppliersExternal = Number(row.external_supplier_cost || 0)
-      plResult.expSuppliers = Number(row.total_supplier_cost || 0)
+    if (plSummary) {
+      plResult.expSuppliersInternal = Number(plSummary.internal_supplier_cost || 0)
+      plResult.expSuppliersExternal = Number(plSummary.external_supplier_cost || 0)
+      plResult.expSuppliers = Number(plSummary.total_supplier_cost || 0)
     }
 
     setPl(plResult)
@@ -299,8 +296,8 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                   <span style={{ fontSize: '13px', fontWeight: '700', color: '#fb7185', textAlign: 'left' as const }}>%</span>
                 </div>
                 {[
-                  ...(expSuppliersInternal > 0 ? [{ label: 'רכישות מהמפעל', amount: expSuppliersInternal }] : []),
-                  { label: expSuppliersInternal > 0 ? 'ספקים חיצוניים' : 'ספקים / מלאי', amount: expSuppliersInternal > 0 ? expSuppliersExternal : expSuppliers },
+                  { label: 'רכישות מהמפעל', amount: expSuppliersInternal },
+                  { label: 'ספקים חיצוניים', amount: expSuppliersExternal },
                   { label: 'תיקונים', amount: expRepairs },
                   { label: 'תשתיות', amount: expInfra },
                   { label: 'משלוחים', amount: expDelivery },
