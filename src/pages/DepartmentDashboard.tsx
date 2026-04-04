@@ -56,6 +56,17 @@ function fmtMoney(n: number) { return '₪' + Math.round(n).toLocaleString() }
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
+/** KPI color: green if on target, orange within 20%, red >20%. inverse=true means lower is better. */
+function kpiColor(actual: number, target: number | null, inverse: boolean): string {
+  if (target === null || target === 0) return '#64748b'
+  const deviation = inverse
+    ? (actual - target) / target   // cost: positive = bad
+    : (target - actual) / target   // profit: positive = bad
+  if (deviation <= 0) return '#639922'
+  if (deviation <= 0.2) return '#BA7517'
+  return '#E24B4A'
+}
+
 // --- DiffBadge ---
 function DiffBadge({ current, previous, inverse }: { current: number; previous: number; inverse?: boolean }) {
   if (previous === 0 && current === 0) return null
@@ -178,6 +189,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
 
   const laborPct  = pct(totalLabor, totalSales)
   const wastePct  = pct(totalWaste, totalSales)
+  const productionPct = pct(totalProd, totalSales)
 
   // Previous period percentages for DiffBadge
   const prevLaborPct = pct(prevLabor, prevSales)
@@ -189,6 +201,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
     sales: d.sales,
     production: d.production,
     labor: d.labor,
+    waste: d.waste,
   }))
 
   // --- Cost breakdown for Row 2 right card ---
@@ -232,53 +245,45 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
         {/* ── ROW 1: 4 Golden KPIs ── */}
         <motion.div
           variants={fadeIn} initial="hidden" animate="visible"
-          className="grid grid-cols-4 gap-2.5 mb-2.5"
+          className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-2.5"
         >
           {/* 1. Sales */}
-          <Card className="shadow-sm border border-slate-200 rounded-lg">
-            <CardContent className="p-4">
-              <div className="text-[11px] font-semibold text-slate-400 mb-1">מכירות מחלקה</div>
-              <div className="text-[22px] font-medium" style={{ color: '#378ADD' }}>
-                {fmtMoney(totalSales)}
-              </div>
-              <DiffBadge current={totalSales} previous={prevSales} />
-            </CardContent>
-          </Card>
+          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+            <div className="text-[11px] font-semibold text-slate-400 mb-1">מכירות מחלקה</div>
+            <div className="text-[22px] font-medium" style={{ color: '#378ADD' }}>
+              {fmtMoney(totalSales)}
+            </div>
+            <DiffBadge current={totalSales} previous={prevSales} />
+          </div>
 
           {/* 2. Production cost */}
-          <Card className="shadow-sm border border-slate-200 rounded-lg">
-            <CardContent className="p-4">
-              <div className="text-[11px] font-semibold text-slate-400 mb-1">ייצור (כמות)</div>
-              <div className="text-[22px] font-medium" style={{ color: '#E24B4A' }}>
-                {fmtMoney(totalProd)}
-              </div>
-              <DiffBadge current={totalProd} previous={prevProd} />
-            </CardContent>
-          </Card>
+          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+            <div className="text-[11px] font-semibold text-slate-400 mb-1">ייצור (כמות)</div>
+            <div className="text-[22px] font-medium" style={{ color: '#E24B4A' }}>
+              {fmtMoney(totalProd)}
+            </div>
+            <DiffBadge current={totalProd} previous={prevProd} />
+          </div>
 
           {/* 3. Labor % */}
-          <Card className="shadow-sm border border-slate-200 rounded-lg">
-            <CardContent className="p-4">
-              <div className="text-[11px] font-semibold text-slate-400 mb-1">% לייבור</div>
-              <div className="text-[22px] font-medium" style={{ color: laborPct <= targets.labor_pct ? '#639922' : '#E24B4A' }}>
-                {fmtPct(laborPct)}
-              </div>
-              <div className="text-[11px] text-slate-400">יעד: {fmtPct(targets.labor_pct)}</div>
-              <DiffBadge current={laborPct} previous={prevLaborPct} inverse />
-            </CardContent>
-          </Card>
+          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+            <div className="text-[11px] font-semibold text-slate-400 mb-1">% לייבור</div>
+            <div className="text-[22px] font-medium" style={{ color: '#534AB7' }}>
+              {fmtPct(laborPct)}
+            </div>
+            <div className="text-[11px] text-slate-400">יעד: {fmtPct(targets.labor_pct)}</div>
+            <DiffBadge current={laborPct} previous={prevLaborPct} inverse />
+          </div>
 
           {/* 4. Waste % */}
-          <Card className="shadow-sm border border-slate-200 rounded-lg">
-            <CardContent className="p-4">
-              <div className="text-[11px] font-semibold text-slate-400 mb-1">% פחת</div>
-              <div className="text-[22px] font-medium" style={{ color: wastePct <= targets.waste_pct ? '#639922' : '#E24B4A' }}>
-                {fmtPct(wastePct)}
-              </div>
-              <div className="text-[11px] text-slate-400">יעד: {fmtPct(targets.waste_pct)}</div>
-              <DiffBadge current={wastePct} previous={prevWastePct} />
-            </CardContent>
-          </Card>
+          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+            <div className="text-[11px] font-semibold text-slate-400 mb-1">% פחת</div>
+            <div className="text-[22px] font-medium" style={{ color: '#BA7517' }}>
+              {fmtPct(wastePct)}
+            </div>
+            <div className="text-[11px] text-slate-400">יעד: {fmtPct(targets.waste_pct)}</div>
+            <DiffBadge current={wastePct} previous={prevWastePct} />
+          </div>
         </motion.div>
 
         {/* ── ROW 2: 2 Detail Cards ── */}
@@ -354,7 +359,38 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
           </Card>
         </motion.div>
 
-        {/* ── ROW 3: 6-month / period LineChart ── */}
+        {/* ── ROW 3: KPI Targets with progress bars ── */}
+        <motion.div
+          variants={fadeIn} initial="hidden" animate="visible"
+          className="grid grid-cols-1 md:grid-cols-3 gap-2.5 mb-2.5"
+        >
+          {[
+            { label: '% לייבור', actual: laborPct, target: targets.labor_pct, color: '#534AB7', inverse: true },
+            { label: '% פחת', actual: wastePct, target: targets.waste_pct, color: '#BA7517', inverse: true },
+            { label: '% ייצור', actual: productionPct, target: targets.gross_profit_pct, color: '#378ADD', inverse: true },
+          ].map(item => {
+            const barColor = kpiColor(item.actual, item.target, item.inverse)
+            const ratio = item.target > 0 ? Math.min((item.actual / item.target) * 100, 100) : 0
+            return (
+              <div key={item.label} className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[12px] font-semibold text-slate-500">{item.label}</span>
+                  <span className="text-[12px] font-bold" style={{ color: barColor }}>
+                    {fmtPct(item.actual)} / {fmtPct(item.target)}
+                  </span>
+                </div>
+                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${ratio}%`, background: barColor }}
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </motion.div>
+
+        {/* ── ROW 4: 6-month / period LineChart ── */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-5">
           <Card className="shadow-sm border border-slate-200 rounded-lg">
             <CardContent className="p-4">
@@ -370,8 +406,9 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                   />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Line type="monotone" dataKey="sales" name="מכירות" stroke="#378ADD" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="production" name="ייצור" stroke="#f59e0b" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="labor" name="לייבור" stroke="#E24B4A" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="production" name="ייצור" stroke="#534AB7" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="labor" name="לייבור" stroke="#534AB7" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="waste" name="פחת" stroke="#BA7517" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>

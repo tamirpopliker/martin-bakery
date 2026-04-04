@@ -12,7 +12,10 @@ import { ArrowRight, TrendingUp, TrendingDown, Presentation, EyeOff } from 'luci
 import { ProfitIcon } from '@/components/icons'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts'
 
-const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
+const fadeIn = (delay = 0) => ({
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const, delay } },
+})
 
 interface Props {
   onBack: () => void
@@ -263,54 +266,46 @@ export default function BranchManagerDashboard({ onBack }: Props) {
         <div className="px-8 py-6 max-w-[1200px] mx-auto">
 
           {/* ── ROW 1 — 4 Golden KPIs ── */}
-          <motion.div variants={fadeIn} initial="hidden" animate="visible" className="grid grid-cols-4 gap-2.5 mb-2.5">
+          <motion.div variants={fadeIn(0)} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-2.5">
             {/* 1. Total Revenue */}
-            <Card className="shadow-sm border border-slate-200 rounded-lg">
-              <CardContent className="p-4">
-                <div className="text-[11px] font-semibold text-slate-400 mb-1">סה"כ הכנסות</div>
-                <div className="text-[22px] font-medium" style={{ color: '#378ADD' }}>
-                  <CountUp end={Math.round(totals.revenue)} duration={1.5} separator="," prefix="₪" />
-                </div>
-                <DiffBadge current={totals.revenue} previous={prevTotals.revenue} />
-              </CardContent>
-            </Card>
+            <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+              <div className="text-[11px] font-semibold text-slate-400 mb-1">סה"כ הכנסות</div>
+              <div className="text-[22px] font-medium" style={{ color: '#378ADD' }}>
+                <CountUp end={Math.round(totals.revenue)} duration={1.5} separator="," prefix="₪" />
+              </div>
+              <DiffBadge current={totals.revenue} previous={prevTotals.revenue} />
+            </div>
 
             {/* 2. Total Gross Profit */}
-            <Card className="shadow-sm border border-slate-200 rounded-lg">
-              <CardContent className="p-4">
-                <div className="text-[11px] font-semibold text-slate-400 mb-1 cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">סה"כ רווח נשלט</div>
-                <div className="text-[22px] font-medium" style={{ color: totals.grossProfit >= 0 ? '#639922' : '#E24B4A' }}>
-                  <CountUp end={Math.round(totals.grossProfit)} duration={1.5} separator="," prefix="₪" />
-                </div>
-                <DiffBadge current={totals.grossProfit} previous={prevTotals.grossProfit} />
-              </CardContent>
-            </Card>
+            <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+              <div className="text-[11px] font-semibold text-slate-400 mb-1 cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">סה"כ רווח נשלט</div>
+              <div className="text-[22px] font-medium" style={{ color: totals.grossProfit >= 0 ? '#639922' : '#E24B4A' }}>
+                <CountUp end={Math.round(totals.grossProfit)} duration={1.5} separator="," prefix="₪" />
+              </div>
+              <DiffBadge current={totals.grossProfit} previous={prevTotals.grossProfit} />
+            </div>
 
             {/* 3. Total Operating Profit */}
-            <Card className="shadow-sm border border-slate-200 rounded-lg">
-              <CardContent className="p-4">
-                <div className="text-[11px] font-semibold text-slate-400 mb-1">סה"כ רווח תפעולי</div>
-                <div className="text-[22px] font-medium" style={{ color: totals.operatingProfit >= 0 ? '#639922' : '#E24B4A' }}>
-                  <CountUp end={Math.round(totals.operatingProfit)} duration={1.5} separator="," prefix="₪" />
-                </div>
-                <DiffBadge current={totals.operatingProfit} previous={prevTotals.operatingProfit} />
-              </CardContent>
-            </Card>
+            <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+              <div className="text-[11px] font-semibold text-slate-400 mb-1">סה"כ רווח תפעולי</div>
+              <div className="text-[22px] font-medium" style={{ color: totals.operatingProfit >= 0 ? '#639922' : '#E24B4A' }}>
+                <CountUp end={Math.round(totals.operatingProfit)} duration={1.5} separator="," prefix="₪" />
+              </div>
+              <DiffBadge current={totals.operatingProfit} previous={prevTotals.operatingProfit} />
+            </div>
 
             {/* 4. Average Labor % */}
-            <Card className="shadow-sm border border-slate-200 rounded-lg">
-              <CardContent className="p-4">
-                <div className="text-[11px] font-semibold text-slate-400 mb-1">% לייבור ממוצע</div>
-                <div className="text-[22px] font-medium" style={{ color: totalLaborPct <= 28 ? '#639922' : '#E24B4A' }}>
-                  <CountUp end={totalLaborPct} duration={1.5} suffix="%" decimals={1} />
-                </div>
-                <span className="text-[11px] text-slate-400">יעד 28%</span>
-              </CardContent>
-            </Card>
+            <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+              <div className="text-[11px] font-semibold text-slate-400 mb-1">% לייבור ממוצע</div>
+              <div className="text-[22px] font-medium" style={{ color: '#534AB7' }}>
+                <CountUp end={totalLaborPct} duration={1.5} suffix="%" decimals={1} />
+              </div>
+              <span className="text-[11px] text-slate-400">יעד 28%</span>
+            </div>
           </motion.div>
 
           {/* ── ROW 2 — 2 Detail Cards ── */}
-          <motion.div variants={fadeIn} initial="hidden" animate="visible" className="grid grid-cols-2 gap-2.5 mb-2.5">
+          <motion.div variants={fadeIn(0.1)} initial="hidden" animate="visible" className="grid grid-cols-2 gap-2.5 mb-2.5">
             {/* LEFT: Revenue per branch */}
             <Card className="shadow-sm border border-slate-200 rounded-lg">
               <CardContent className="p-4">
@@ -371,8 +366,69 @@ export default function BranchManagerDashboard({ onBack }: Props) {
             </Card>
           </motion.div>
 
-          {/* ── ROW 3 — Comparative LineChart ── */}
-          <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5">
+          {/* ── ROW 3 — KPI Targets per Branch ── */}
+          <motion.div variants={fadeIn(0.2)} initial="hidden" animate="visible" className="mb-2.5">
+            <div className="text-[15px] font-bold text-slate-900 mb-2">יעדים לפי סניף</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+              {branches.map(br => {
+                const laborTarget = getTarget(br.id, 'labor_pct')
+                const wasteTarget = getTarget(br.id, 'waste_pct')
+                const opPct = br.totalRevenue > 0 ? (brOP(br) / br.totalRevenue * 100) : 0
+
+                const kpiColor = (actual: number, target: number, inverse: boolean) => {
+                  const diff = inverse ? (actual - target) / target : (target - actual) / target
+                  if (diff <= 0) return '#639922'
+                  if (diff <= 0.2) return '#f59e0b'
+                  return '#E24B4A'
+                }
+
+                const laborColor = kpiColor(br.laborPct, laborTarget, true)
+                const wasteColor = kpiColor(br.wastePct, wasteTarget, true)
+                const opColor = opPct >= 0 ? '#639922' : opPct >= -5 ? '#f59e0b' : '#E24B4A'
+
+                return (
+                  <div key={br.id} className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+                    <div className="text-[13px] font-bold text-slate-700 mb-3">{br.name}</div>
+                    <div className="flex flex-col gap-2.5">
+                      {/* Labor % */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-semibold text-slate-500">% לייבור</span>
+                          <span className="text-[11px] font-bold" style={{ color: laborColor }}>{br.laborPct.toFixed(1)}% / {laborTarget}%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min((br.laborPct / Math.max(laborTarget * 1.5, 1)) * 100, 100)}%`, backgroundColor: laborColor }} />
+                        </div>
+                      </div>
+                      {/* Waste % */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-semibold text-slate-500">% פחת</span>
+                          <span className="text-[11px] font-bold" style={{ color: wasteColor }}>{br.wastePct.toFixed(1)}% / {wasteTarget}%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min((br.wastePct / Math.max(wasteTarget * 1.5, 1)) * 100, 100)}%`, backgroundColor: wasteColor }} />
+                        </div>
+                      </div>
+                      {/* Operating Profit % */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-semibold text-slate-500">% רווח תפעולי</span>
+                          <span className="text-[11px] font-bold" style={{ color: opColor }}>{opPct.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(Math.max(opPct, 0), 100)}%`, backgroundColor: opColor }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </motion.div>
+
+          {/* ── ROW 4 — Comparative LineChart ── */}
+          <motion.div variants={fadeIn(0.3)} initial="hidden" animate="visible" className="mb-2.5">
             <Card className="shadow-sm border border-slate-200 rounded-lg">
               <CardContent className="p-4">
                 <div className="text-[13px] font-bold text-slate-700 mb-3">הכנסות לפי סניף - 6 חודשים אחרונים</div>
@@ -386,12 +442,12 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                       contentStyle={{ direction: 'rtl', fontSize: 12 }}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    {BRANCHES.map((br, i) => (
+                    {BRANCHES.map((br) => (
                       <Line
                         key={br.id}
                         type="monotone"
                         dataKey={br.name}
-                        stroke={br.color || CHART_COLORS[i % CHART_COLORS.length]}
+                        stroke={br.color || '#378ADD'}
                         strokeWidth={2}
                         dot={{ r: 3 }}
                         activeDot={{ r: 5 }}
@@ -420,7 +476,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
           </div>
 
           {/* ── Comparison Table ── */}
-          <motion.div variants={fadeIn} initial="hidden" animate="visible">
+          <motion.div variants={fadeIn(0.4)} initial="hidden" animate="visible">
             <div className="table-scroll">
               <Card className="shadow-sm">
                 <CardHeader>
@@ -431,7 +487,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                 <CardContent>
                   {/* Presentation mode banner */}
                   {presentationMode && (
-                    <motion.div variants={fadeIn} initial="hidden" animate="visible"
+                    <motion.div variants={fadeIn(0)} initial="hidden" animate="visible"
                       className="rounded-lg px-4 py-2 mb-4 text-center text-[13px] font-semibold"
                       style={{ background: '#EEEDFE', color: '#3C3489' }}>
                       מצב ישיבה פעיל — נתוני שכר מוסתרים

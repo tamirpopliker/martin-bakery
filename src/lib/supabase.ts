@@ -9,6 +9,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
+/** Fetch overhead_pct from system_settings (defaults to 5 if not found) */
+export async function getOverheadPct(): Promise<number> {
+  const { data } = await supabase.from('system_settings').select('value').eq('key', 'overhead_pct').maybeSingle()
+  return data ? Number(data.value) : 5
+}
+
 /** Returns first day of next month — use with .lt('date', monthEnd(m)) instead of .lte('date', m+'-31') */
 export function monthEnd(yyyyMM: string): string {
   const [y, m] = yyyyMM.split('-').map(Number)

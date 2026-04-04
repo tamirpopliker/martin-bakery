@@ -5,6 +5,7 @@ import { supabase, fetchBranchPL, type BranchPLResult } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { ArrowRight, TrendingUp, TrendingDown, Store } from 'lucide-react'
 import { RevenueIcon, ProfitIcon, LaborIcon } from '@/components/icons'
@@ -13,10 +14,12 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 /* ─── helpers ─── */
 
 function fmtN(n: number) { return '₪' + Math.round(n).toLocaleString() }
+function fmtPct(n: number) { return n.toFixed(1) + '%' }
 
-const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.1 } } }
-const fadeUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } } }
-const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
+const fadeIn = (delay = 0) => ({
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: 'easeOut' as const, delay } },
+})
 
 /* ─── sub-components ─── */
 
@@ -52,24 +55,38 @@ function ChartTooltip({ active, payload, label }: any) {
   )
 }
 
-function ProgressBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  const pct = max > 0 ? (value / max) * 100 : 0
+/** KPI target progress card */
+function KpiTargetCard({ label, actual, target, lowerIsBetter }: {
+  label: string; actual: number; target: number; lowerIsBetter: boolean
+}) {
+  const deviation = lowerIsBetter
+    ? (actual - target) / Math.max(target, 0.01)
+    : (target - actual) / Math.max(target, 0.01)
+
+  const color = deviation <= 0 ? '#639922' : deviation <= 0.2 ? '#E09100' : '#E24B4A'
+  const barPct = lowerIsBetter
+    ? Math.min((actual / Math.max(target, 0.01)) * 100, 150)
+    : Math.min((actual / Math.max(target, 0.01)) * 100, 150)
+
   return (
-    <div className="mb-2.5">
-      <div className="flex justify-between items-center mb-1">
-        <span className="text-[13px] text-slate-600">{label}</span>
-        <span className="text-[13px] font-bold text-slate-700">{fmtN(value)}</span>
-      </div>
-      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-        <motion.div
-          className="h-full rounded-full"
-          style={{ background: color }}
-          initial={{ width: 0 }}
-          animate={{ width: `${Math.min(pct, 100)}%` }}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
-        />
-      </div>
-    </div>
+    <Card className="bg-white border-[0.5px] border-slate-200 rounded-xl p-4">
+      <CardContent className="p-0">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-[13px] font-medium text-slate-600">{label}</span>
+          <span className="text-[13px] font-bold" style={{ color }}>{fmtPct(actual)}</span>
+        </div>
+        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-1.5">
+          <motion.div
+            className="h-full rounded-full"
+            style={{ background: color }}
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min(barPct, 100)}%` }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
+          />
+        </div>
+        <span className="text-[11px] text-slate-400">יעד: {fmtPct(target)}</span>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -92,6 +109,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
 
   // KPI targets
   const [laborTarget, setLaborTarget] = useState(28)
+  const [wasteTarget, setWasteTarget] = useState(3)
 
   // Previous period P&L
   const [prevPl, setPrevPl] = useState<BranchPLResult | null>(null)
@@ -101,17 +119,18 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
 
   // Derived values from current P&L
   const totalRevenue = pl?.revenue ?? 0
-  const revCashier = pl?.revCashier ?? 0
-  const revWebsite = pl?.revWebsite ?? 0
-  const revCredit = pl?.revCredit ?? 0
   const expSupplier = pl?.expSuppliers ?? 0
   const laborEmployer = pl?.laborEmployer ?? 0
   const wasteTotal = pl?.wasteTotal ?? 0
   const fixedCosts = pl?.fixedCosts ?? 0
   const mgmtCosts = pl?.mgmtCosts ?? 0
+  const expRepairs = pl?.expRepairs ?? 0
+  const overheadAmount = pl?.overheadAmount ?? 0
   const controllableMargin = pl?.controllableMargin ?? 0
   const operatingProfit = pl?.operatingProfit ?? 0
   const laborPct = totalRevenue > 0 ? (laborEmployer / totalRevenue) * 100 : 0
+  const wastePct = totalRevenue > 0 ? (wasteTotal / totalRevenue) * 100 : 0
+  const opProfitPct = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0
 
   const overheadPct = Number(localStorage.getItem('overhead_pct')) || 5
 
@@ -162,13 +181,14 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
         fetchBranchPL(branchId, from, to, curMonthKey, overheadPct),
         fetchBranchPL(branchId, comparisonPeriod.from, comparisonPeriod.to, prevMonthKey, overheadPct),
         fetchTrend(),
-        supabase.from('branch_kpi_targets').select('labor_pct').eq('branch_id', branchId).maybeSingle(),
+        supabase.from('branch_kpi_targets').select('labor_pct, waste_pct').eq('branch_id', branchId).maybeSingle(),
       ])
 
       setPl(current)
       setPrevPl(prev)
 
       if (kpiRes.data?.labor_pct) setLaborTarget(kpiRes.data.labor_pct)
+      if (kpiRes.data?.waste_pct) setWasteTarget(kpiRes.data.waste_pct)
 
       setTrendData(trend)
     } catch (err) {
@@ -178,15 +198,26 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
     }
   }
 
-  // Totals for progress bar max values
-  const revenueMax = Math.max(revCashier, revWebsite, revCredit, 1)
-  const expenseItems = [
-    { label: 'ספקים', value: expSupplier },
-    { label: 'לייבור', value: laborEmployer },
-    { label: 'עלויות קבועות', value: fixedCosts + mgmtCosts },
-    { label: 'פחת', value: wasteTotal },
+  /* ─── P&L table rows ─── */
+  const pctOf = (v: number) => totalRevenue > 0 ? ((v / totalRevenue) * 100).toFixed(1) + '%' : '—'
+
+  type PLTableRow = { label: string; amount: number; isSeparator?: boolean; bold?: boolean; bgClass?: string }
+
+  const plRows: PLTableRow[] = [
+    { label: 'הכנסות', amount: totalRevenue },
+    { label: 'ספקים', amount: expSupplier },
+    { label: 'לייבור', amount: laborEmployer },
+    { label: 'שכר מנהל', amount: mgmtCosts },
+    { label: 'פחת', amount: wasteTotal },
+    { label: 'תיקונים', amount: expRepairs },
+    { label: '', amount: 0, isSeparator: true },
+    { label: 'רווח נשלט', amount: controllableMargin, bold: true, bgClass: controllableMargin >= 0 ? 'bg-emerald-50' : 'bg-rose-50' },
+    { label: '', amount: 0, isSeparator: true },
+    { label: 'עלויות קבועות', amount: fixedCosts },
+    { label: 'העמסת מטה', amount: overheadAmount },
+    { label: '', amount: 0, isSeparator: true },
+    { label: 'רווח תפעולי', amount: operatingProfit, bold: true, bgClass: operatingProfit >= 0 ? 'bg-emerald-50' : 'bg-rose-50' },
   ]
-  const expenseMax = Math.max(...expenseItems.map(e => e.value), 1)
 
   return (
     <div dir="rtl">
@@ -215,11 +246,11 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-400" />
           </div>
         ) : (
-          <motion.div variants={staggerContainer} initial="hidden" animate="visible">
+          <>
             {/* ROW 1 — 4 KPI Cards */}
-            <motion.div variants={fadeUp} className="grid grid-cols-4 gap-2.5 mb-2.5">
+            <motion.div variants={fadeIn(0)} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-2.5">
               {/* הכנסות */}
-              <Card className="bg-white border border-slate-200 rounded-lg p-4">
+              <Card className="bg-white border-[0.5px] border-slate-200 rounded-xl p-4">
                 <CardContent className="p-0">
                   <div className="flex items-center gap-2 mb-2">
                     <RevenueIcon size={18} />
@@ -235,7 +266,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
               </Card>
 
               {/* רווח נשלט */}
-              <Card className="bg-white border border-slate-200 rounded-lg p-4">
+              <Card className="bg-white border-[0.5px] border-slate-200 rounded-xl p-4">
                 <CardContent className="p-0">
                   <div className="flex items-center gap-2 mb-2">
                     <ProfitIcon size={18} />
@@ -251,7 +282,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
               </Card>
 
               {/* רווח תפעולי */}
-              <Card className="bg-white border border-slate-200 rounded-lg p-4">
+              <Card className="bg-white border-[0.5px] border-slate-200 rounded-xl p-4">
                 <CardContent className="p-0">
                   <div className="flex items-center gap-2 mb-2">
                     <ProfitIcon size={18} />
@@ -267,7 +298,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
               </Card>
 
               {/* % לייבור */}
-              <Card className="bg-white border border-slate-200 rounded-lg p-4">
+              <Card className="bg-white border-[0.5px] border-slate-200 rounded-xl p-4">
                 <CardContent className="p-0">
                   <div className="flex items-center gap-2 mb-2">
                     <LaborIcon size={18} />
@@ -284,36 +315,79 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
               </Card>
             </motion.div>
 
-            {/* ROW 2 — Detail Cards */}
-            <motion.div variants={fadeUp} className="grid grid-cols-2 gap-2.5 mb-2.5">
-              {/* Revenue Breakdown */}
-              <Card className="bg-white border border-slate-200 rounded-lg p-4">
+            {/* ROW 2 — P&L Table */}
+            <motion.div variants={fadeIn(0.1)} initial="hidden" animate="visible" className="mb-2.5">
+              <Card className="bg-white border-[0.5px] border-slate-200 rounded-xl p-4">
                 <CardHeader className="p-0 mb-3">
-                  <CardTitle className="text-[15px] font-bold text-slate-700">פירוט הכנסות</CardTitle>
+                  <CardTitle className="text-[15px] font-bold text-slate-700">
+                    רווח והפסד — {branchName} — {period.label}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <ProgressBar label="קופה" value={revCashier} max={revenueMax} color="#378ADD" />
-                  <ProgressBar label="אתר" value={revWebsite} max={revenueMax} color="#378ADD" />
-                  <ProgressBar label="הקפה" value={revCredit} max={revenueMax} color="#378ADD" />
-                </CardContent>
-              </Card>
-
-              {/* Expense Breakdown */}
-              <Card className="bg-white border border-slate-200 rounded-lg p-4">
-                <CardHeader className="p-0 mb-3">
-                  <CardTitle className="text-[15px] font-bold text-slate-700">פירוט הוצאות</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {expenseItems.map((item) => (
-                    <ProgressBar key={item.label} label={item.label} value={item.value} max={expenseMax} color="#E24B4A" />
-                  ))}
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[13px] text-slate-500">מדד</TableHead>
+                        <TableHead className="text-[13px] text-slate-500">סכום ₪</TableHead>
+                        <TableHead className="text-[13px] text-slate-500">% מהכנסות</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {plRows.map((row, idx) => {
+                        if (row.isSeparator) {
+                          return (
+                            <TableRow key={`sep-${idx}`} className="hover:bg-transparent">
+                              <TableCell colSpan={3} className="py-0 px-0">
+                                <div className="border-t border-dashed border-slate-200" />
+                              </TableCell>
+                            </TableRow>
+                          )
+                        }
+                        return (
+                          <TableRow key={row.label} className={row.bgClass || ''}>
+                            <TableCell className={`text-[13px] text-slate-700 ${row.bold ? 'font-bold' : ''}`}>
+                              {row.label}
+                            </TableCell>
+                            <TableCell className={`text-[13px] text-slate-800 ${row.bold ? 'font-bold' : ''}`}>
+                              {fmtN(row.amount)}
+                            </TableCell>
+                            <TableCell className={`text-[13px] text-slate-500 ${row.bold ? 'font-bold' : ''}`}>
+                              {pctOf(row.amount)}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
             </motion.div>
 
-            {/* ROW 3 — 6-Month Trend Chart */}
-            <motion.div variants={fadeIn}>
-              <Card className="bg-white border border-slate-200 rounded-lg p-4">
+            {/* ROW 3 — KPI Targets */}
+            <motion.div variants={fadeIn(0.2)} initial="hidden" animate="visible" className="grid grid-cols-1 md:grid-cols-3 gap-2.5 mb-2.5">
+              <KpiTargetCard
+                label="% לייבור"
+                actual={laborPct}
+                target={laborTarget}
+                lowerIsBetter
+              />
+              <KpiTargetCard
+                label="% פחת"
+                actual={wastePct}
+                target={wasteTarget}
+                lowerIsBetter
+              />
+              <KpiTargetCard
+                label="% רווח תפעולי"
+                actual={opProfitPct}
+                target={opProfitPct}
+                lowerIsBetter={false}
+              />
+            </motion.div>
+
+            {/* ROW 4 — 6-Month Trend Chart */}
+            <motion.div variants={fadeIn(0.3)} initial="hidden" animate="visible">
+              <Card className="bg-white border-[0.5px] border-slate-200 rounded-xl p-4">
                 <CardHeader className="p-0 mb-3">
                   <CardTitle className="text-[15px] font-bold text-slate-700">מגמת 6 חודשים</CardTitle>
                 </CardHeader>
@@ -333,7 +407,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                 </CardContent>
               </Card>
             </motion.div>
-          </motion.div>
+          </>
         )}
       </div>
     </div>

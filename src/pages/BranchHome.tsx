@@ -7,7 +7,7 @@ import BranchRevenue from './BranchRevenue'
 import BranchExpenses from './BranchExpenses'
 import BranchLabor from './BranchLabor'
 import BranchWaste from './BranchWaste'
-import BranchPL from './BranchPL'
+// BranchPL removed from navigation — P&L data now shown in BranchDashboard
 import BranchSettings from './BranchSettings'
 import BranchCreditCustomers from './BranchCreditCustomers'
 import BranchSuppliers from './BranchSuppliers'
@@ -66,7 +66,7 @@ const MENU_ITEMS: MenuItem[] = [
   { page: 'suppliers', label: 'ספקים',           subtitle: 'ניהול · קטגוריות',           Icon: Building2,   ready: true, cardBg: '#ecfeff', cardBorder: '#a5f3fc' },
   { page: 'customers', label: 'לקוחות הקפה',    subtitle: 'חובות · תשלומים',            Icon: TrendingUp,  ready: true, cardBg: '#f5f3ff', cardBorder: '#ddd6fe' },
   { page: 'orders',    label: 'הזמנות מהמפעל',  subtitle: 'אישור · עריכה · חומרי גלם', Icon: Package,     ready: true, cardBg: '#fef3c7', cardBorder: '#fde68a' },
-  { page: 'report',    label: 'דוח רווח והפסד', subtitle: 'P&L · השוואה חודשית',       Icon: BarChart3,   ready: true, cardBg: '#eff6ff', cardBorder: '#bfdbfe' },
+  // BranchPL removed — P&L now integrated in BranchDashboard
   { page: 'settings',     label: 'הגדרות סניף',    subtitle: 'KPI · עלויות קבועות · עובדים', Icon: Settings,    ready: true, cardBg: '#f8fafc', cardBorder: '#e2e8f0' },
   { page: 'data_import',  label: 'ייבוא נתונים',   subtitle: 'CSV מ-Base44 · העלאה',         Icon: Upload,      ready: true, cardBg: '#f0f9ff', cardBorder: '#bae6fd' },
 ]
@@ -106,9 +106,7 @@ export default function BranchHome({ branch, onBack }: Props) {
   if (page === 'waste') return (
     <BranchWaste branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
-  if (page === 'report') return (
-    <BranchPL branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
-  )
+  // BranchPL route removed — P&L integrated in dashboard
   if (page === 'settings') return (
     <BranchSettings branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )

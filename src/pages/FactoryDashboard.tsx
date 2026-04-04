@@ -9,6 +9,7 @@ import { getMonthsInRange } from '../lib/period'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 // ─── Animation ────────────────────────────────────────────────────────────────
 const fadeIn = {
@@ -264,16 +265,18 @@ export default function FactoryDashboard({ onBack }: Props) {
   const totalGlobalLabor  = globalLaborCreams + globalLaborDough
   const totalLabor        = hourlyLabor + totalGlobalLabor
 
-  // Profit formulas
-  const grossProfit     = totalSales - totalLabor - totalSuppliers
-  const operatingProfit = grossProfit - fixedCosts - totalWaste - totalRepairs
+  // Profit formulas — controllable margin = sales - suppliers - labor - waste - repairs
+  const controllableMargin = totalSales - totalSuppliers - totalLabor - totalWaste - totalRepairs
+  const operatingProfit    = controllableMargin - fixedCosts
 
   // KPI percentages
-  const laborPct = pct(totalLabor, totalSales)
+  const laborPct  = pct(totalLabor, totalSales)
+  const wastePct  = pct(totalWaste, totalSales)
+  const opPct     = pct(operatingProfit, totalSales)
 
   // Previous period profit (for DiffBadge)
-  const prevGrossProfit     = prev.sales - prev.labor - prev.suppliers
-  const prevOperatingProfit = prevGrossProfit - prev.waste - prev.repairs
+  const prevControllable    = prev.sales - prev.suppliers - prev.labor - prev.waste - prev.repairs
+  const prevOperatingProfit = prevControllable - fixedCosts
 
   // ─── Loading State ──────────────────────────────────────────────────────
   if (loading) return (
@@ -282,7 +285,7 @@ export default function FactoryDashboard({ onBack }: Props) {
     </div>
   )
 
-  // ─── Sales breakdown for Row 2 ─────────────────────────────────────────
+  // ─── Sales breakdown ────────────────────────────────────────────────────
   const salesItems = [
     { label: 'קרמים', value: salesCreams },
     { label: 'בצקים', value: salesDough },
@@ -291,7 +294,7 @@ export default function FactoryDashboard({ onBack }: Props) {
   ]
   const maxSale = Math.max(...salesItems.map(i => i.value), 1)
 
-  // Costs breakdown for Row 2
+  // Costs breakdown
   const costItems = [
     { label: 'ספקים', value: totalSuppliers },
     { label: 'לייבור', value: totalLabor },
@@ -300,6 +303,32 @@ export default function FactoryDashboard({ onBack }: Props) {
     { label: 'תיקונים', value: totalRepairs },
   ]
   const maxCost = Math.max(...costItems.map(i => i.value), 1)
+
+  // ─── P&L Table rows ───────────────────────────────────────────────────
+  const plRows: { label: string; amount: number; type: 'normal' | 'separator' | 'bold' }[] = [
+    { label: 'מכירות', amount: totalSales, type: 'normal' },
+    { label: 'חומרי גלם', amount: totalSuppliers, type: 'normal' },
+    { label: 'לייבור', amount: totalLabor, type: 'normal' },
+    { label: 'פחת', amount: totalWaste, type: 'normal' },
+    { label: 'תיקונים', amount: totalRepairs, type: 'normal' },
+    { label: '──────', amount: 0, type: 'separator' },
+    { label: 'רווח נשלט', amount: controllableMargin, type: 'bold' },
+    { label: '──────', amount: 0, type: 'separator' },
+    { label: 'עלויות קבועות', amount: fixedCosts, type: 'normal' },
+    { label: '──────', amount: 0, type: 'separator' },
+    { label: 'רווח תפעולי', amount: operatingProfit, type: 'bold' },
+  ]
+
+  // ─── KPI color helper ─────────────────────────────────────────────────
+  const kpiColor = (actual: number, target: number, inverse: boolean): string => {
+    if (target === 0) return '#64748b'
+    const deviation = inverse
+      ? (actual - target) / target
+      : (target - actual) / target
+    if (deviation <= 0) return '#639922'
+    if (deviation < 0.15) return '#f59e0b'
+    return '#E24B4A'
+  }
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
@@ -326,93 +355,172 @@ export default function FactoryDashboard({ onBack }: Props) {
       {/* ─── Main Content ─────────────────────────────────────────────── */}
       <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
 
-        {/* ═══ ROW 1 — 4 Golden KPI Cards ═══ */}
-        <motion.div variants={fadeIn} initial="hidden" animate="visible" className="grid grid-cols-4 gap-2.5 mb-2.5">
+        {/* ═══ ROW 1 — 4 KPI Cards ═══ */}
+        <motion.div variants={fadeIn} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-2.5">
 
-          {/* 1. Total Sales (excl. internal) */}
-          <Card className="shadow-sm">
-            <CardContent className="p-4">
-              <div className="text-[11px] font-semibold text-slate-400 mb-1">מכירות כוללות (ללא פנימיות)</div>
-              <div className="flex items-center gap-2">
-                <span className="text-[22px] font-medium" style={{ color: '#378ADD' }}>{fmtM(totalSales)}</span>
-                <DiffBadge current={totalSales} previous={prev.sales} />
-              </div>
-              {salesInternal > 0 && (
-                <div className="text-[11px] text-slate-400 mt-1">מתוכם פנימיות: {fmtM(salesInternal)}</div>
-              )}
-            </CardContent>
-          </Card>
+          {/* 1. Total Sales */}
+          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+            <div className="text-[11px] font-semibold text-slate-400 mb-1">מכירות כוללות</div>
+            <div className="flex items-center gap-2">
+              <span className="text-[22px] font-medium" style={{ color: '#378ADD' }}>{fmtM(totalSales)}</span>
+              <DiffBadge current={totalSales} previous={prev.sales} />
+            </div>
+            {salesInternal > 0 && (
+              <div className="text-[11px] text-slate-400 mt-1">פנימיות: {fmtM(salesInternal)}</div>
+            )}
+          </div>
 
-          {/* 2. Gross Profit */}
-          <Card className="shadow-sm">
-            <CardContent className="p-4">
-              <div className="text-[11px] font-semibold text-slate-400 mb-1 cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</div>
-              <div className="flex items-center gap-2">
-                <span className="text-[22px] font-medium" style={{ color: grossProfit >= 0 ? '#639922' : '#E24B4A' }}>{fmtM(grossProfit)}</span>
-                <DiffBadge current={grossProfit} previous={prevGrossProfit} />
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1">{totalSales > 0 ? (pct(grossProfit, totalSales)).toFixed(1) : '0.0'}% מהמכירות</div>
-            </CardContent>
-          </Card>
+          {/* 2. Controllable Margin */}
+          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+            <div className="text-[11px] font-semibold text-slate-400 mb-1 cursor-help" title="מכירות פחות ספקים, לייבור, פחת ותיקונים">רווח נשלט</div>
+            <div className="flex items-center gap-2">
+              <span className="text-[22px] font-medium" style={{ color: controllableMargin >= 0 ? '#639922' : '#E24B4A' }}>{fmtM(controllableMargin)}</span>
+              <DiffBadge current={controllableMargin} previous={prevControllable} />
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">{totalSales > 0 ? pct(controllableMargin, totalSales).toFixed(1) : '0.0'}% מהמכירות</div>
+          </div>
 
           {/* 3. Operating Profit */}
-          <Card className="shadow-sm">
-            <CardContent className="p-4">
-              <div className="text-[11px] font-semibold text-slate-400 mb-1">רווח תפעולי</div>
-              <div className="flex items-center gap-2">
-                <span className="text-[22px] font-medium" style={{ color: operatingProfit >= 0 ? '#639922' : '#E24B4A' }}>{fmtM(operatingProfit)}</span>
-                <DiffBadge current={operatingProfit} previous={prevOperatingProfit} />
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1">{totalSales > 0 ? (pct(operatingProfit, totalSales)).toFixed(1) : '0.0'}% מהמכירות</div>
-            </CardContent>
-          </Card>
+          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+            <div className="text-[11px] font-semibold text-slate-400 mb-1">רווח תפעולי</div>
+            <div className="flex items-center gap-2">
+              <span className="text-[22px] font-medium" style={{ color: operatingProfit >= 0 ? '#639922' : '#E24B4A' }}>{fmtM(operatingProfit)}</span>
+              <DiffBadge current={operatingProfit} previous={prevOperatingProfit} />
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">{totalSales > 0 ? pct(operatingProfit, totalSales).toFixed(1) : '0.0'}% מהמכירות</div>
+          </div>
 
           {/* 4. Labor % */}
-          <Card className="shadow-sm">
-            <CardContent className="p-4">
-              <div className="text-[11px] font-semibold text-slate-400 mb-1">% לייבור</div>
-              <div className="flex items-center gap-2">
-                <span className="text-[22px] font-medium" style={{ color: '#534AB7' }}>{laborPct.toFixed(1)}%</span>
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1">
-                יעד: {targets.labor_pct.toFixed(1)}%
-                <span className="mr-1.5" style={{ color: laborPct <= targets.labor_pct ? '#639922' : '#E24B4A' }}>
-                  ({laborPct <= targets.labor_pct ? 'עומד ביעד' : 'חורג'})
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+            <div className="text-[11px] font-semibold text-slate-400 mb-1">% לייבור</div>
+            <div className="flex items-center gap-2">
+              <span className="text-[22px] font-medium" style={{ color: '#534AB7' }}>{laborPct.toFixed(1)}%</span>
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">
+              יעד {targets.labor_pct.toFixed(0)}%
+              <span className="mr-1.5" style={{ color: laborPct <= targets.labor_pct ? '#639922' : '#E24B4A' }}>
+                ({laborPct <= targets.labor_pct ? 'עומד ביעד' : 'חורג'})
+              </span>
+            </div>
+          </div>
 
         </motion.div>
 
-        {/* ═══ ROW 2 — 2 Detail Cards ═══ */}
-        <motion.div variants={fadeIn} initial="hidden" animate="visible" className="grid grid-cols-2 gap-2.5 mb-2.5">
-
-          {/* LEFT — Sales by Department */}
+        {/* ═══ ROW 2 — P&L Table ═══ */}
+        <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5" transition={{ delay: 0.1 }}>
           <Card className="shadow-sm">
             <CardContent className="p-4">
-              <div className="text-[13px] font-bold text-slate-700 mb-3">מכירות לפי מחלקה</div>
-              {salesItems.map(item => (
-                <ProgressRow key={item.label} label={item.label} value={item.value} max={maxSale} color="#378ADD" />
-              ))}
+              <span className="text-[13px] font-bold text-slate-700 block mb-3">רווח והפסד — מפעל — {period.label}</span>
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50">
+                    <TableHead className="text-xs font-bold text-slate-500 min-w-[140px]">מדד</TableHead>
+                    <TableHead className="text-xs font-bold text-slate-500 text-center">סכום ₪</TableHead>
+                    <TableHead className="text-xs font-bold text-slate-500 text-center">% מהכנסות</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {plRows.map((row, i) => {
+                    if (row.type === 'separator') {
+                      return (
+                        <TableRow key={`sep-${i}`} className="h-1">
+                          <TableCell colSpan={3} className="p-0"><div className="border-t-2 border-slate-200" /></TableCell>
+                        </TableRow>
+                      )
+                    }
+                    const isBold = row.type === 'bold'
+                    const isProfit = row.label === 'רווח נשלט' || row.label === 'רווח תפעולי'
+                    const profitColor = isProfit ? (row.amount >= 0 ? '#639922' : '#E24B4A') : undefined
+                    const revPct = totalSales > 0 ? (row.amount / totalSales * 100) : 0
+                    const pctColor = isProfit ? profitColor : '#64748b'
+                    return (
+                      <TableRow key={row.label} className={isBold ? 'bg-slate-50' : ''}>
+                        <TableCell className={`px-3.5 py-2.5 text-[12px] ${isBold ? 'font-bold text-slate-800' : 'text-slate-600'}`}>
+                          {row.label}
+                        </TableCell>
+                        <TableCell className={`px-3.5 py-2.5 text-[12px] text-center ${isBold ? 'font-bold' : ''}`} style={{ color: profitColor }}>
+                          {fmtM(row.amount)}
+                        </TableCell>
+                        <TableCell className={`px-3.5 py-2.5 text-[12px] text-center ${isBold ? 'font-bold' : ''}`} style={{ color: pctColor }}>
+                          {revPct.toFixed(1)}%
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
+        </motion.div>
 
-          {/* RIGHT — Costs */}
-          <Card className="shadow-sm">
-            <CardContent className="p-4">
-              <div className="text-[13px] font-bold text-slate-700 mb-3">עלויות</div>
-              {costItems.map(item => (
-                <ProgressRow key={item.label} label={item.label} value={item.value} max={maxCost} color="#E24B4A" />
-              ))}
-            </CardContent>
-          </Card>
+        {/* ═══ ROW 3 — KPI Targets ═══ */}
+        <motion.div variants={fadeIn} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-3 gap-2.5 mb-2.5" transition={{ delay: 0.2 }}>
+
+          {/* Labor % vs target */}
+          {(() => {
+            const actual = laborPct
+            const target = targets.labor_pct
+            const color = kpiColor(actual, target, true)
+            const progressW = target > 0 ? Math.min((actual / target) * 100, 150) : 0
+            return (
+              <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+                <div className="text-[11px] font-semibold text-slate-400 mb-1">% לייבור</div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-lg font-bold" style={{ color }}>{actual.toFixed(1)}%</span>
+                  <span className="text-[11px] text-slate-400">יעד {target.toFixed(0)}%</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(progressW, 100)}%`, backgroundColor: color }} />
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Waste % vs target */}
+          {(() => {
+            const actual = wastePct
+            const target = targets.waste_pct
+            const color = kpiColor(actual, target, true)
+            const progressW = target > 0 ? Math.min((actual / target) * 100, 150) : 0
+            return (
+              <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+                <div className="text-[11px] font-semibold text-slate-400 mb-1">% פחת</div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-lg font-bold" style={{ color }}>{actual.toFixed(1)}%</span>
+                  <span className="text-[11px] text-slate-400">יעד {target.toFixed(0)}%</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(progressW, 100)}%`, backgroundColor: color }} />
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Operating Profit % vs target */}
+          {(() => {
+            const actual = opPct
+            const target = targets.operating_profit_pct
+            const color = kpiColor(actual, target, false)
+            const progressW = target > 0 ? Math.min((actual / target) * 100, 150) : 0
+            return (
+              <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+                <div className="text-[11px] font-semibold text-slate-400 mb-1">% רווח תפעולי</div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-lg font-bold" style={{ color }}>{actual.toFixed(1)}%</span>
+                  <span className="text-[11px] text-slate-400">יעד {target.toFixed(0)}%</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(progressW, 100)}%`, backgroundColor: color }} />
+                </div>
+              </div>
+            )
+          })()}
 
         </motion.div>
 
-        {/* ═══ ROW 3 — 6-Month Trend LineChart ═══ */}
+        {/* ═══ ROW 4 — 6-Month Trend Chart ═══ */}
         {trendData.length > 0 && (
-          <motion.div variants={fadeIn} initial="hidden" animate="visible">
+          <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5" transition={{ delay: 0.3 }}>
             <Card className="shadow-sm">
               <CardContent className="p-4">
                 <div className="text-[13px] font-bold text-slate-700 mb-3">מגמות מפעל — 6 חודשים</div>
@@ -433,6 +541,31 @@ export default function FactoryDashboard({ onBack }: Props) {
             </Card>
           </motion.div>
         )}
+
+        {/* ═══ ROW 5 — Detail Cards (Sales + Costs breakdown) ═══ */}
+        <motion.div variants={fadeIn} initial="hidden" animate="visible" className="grid grid-cols-2 gap-2.5 mb-2.5" transition={{ delay: 0.4 }}>
+
+          {/* Sales by Department */}
+          <Card className="shadow-sm">
+            <CardContent className="p-4">
+              <div className="text-[13px] font-bold text-slate-700 mb-3">מכירות לפי מחלקה</div>
+              {salesItems.map(item => (
+                <ProgressRow key={item.label} label={item.label} value={item.value} max={maxSale} color="#378ADD" />
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Costs */}
+          <Card className="shadow-sm">
+            <CardContent className="p-4">
+              <div className="text-[13px] font-bold text-slate-700 mb-3">עלויות</div>
+              {costItems.map(item => (
+                <ProgressRow key={item.label} label={item.label} value={item.value} max={maxCost} color="#E24B4A" />
+              ))}
+            </CardContent>
+          </Card>
+
+        </motion.div>
 
       </div>
     </div>
