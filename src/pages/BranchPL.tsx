@@ -52,17 +52,20 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
 
     // Override supplier split from branch_pl_summary View (single source of truth)
     const viewMonth = (monthKey || from.slice(0, 7)) + '-01'
-    const { data: plSummary } = await supabase
+    const { data: plSummary, error: plSummaryError } = await supabase
       .from('branch_pl_summary')
-      .select('internal_supplier_cost, external_supplier_cost, total_supplier_cost')
+      .select('*')
       .eq('branch_id', branchId)
-      .eq('month', viewMonth)
-      .maybeSingle()
+      .gte('month', viewMonth)
+      .lt('month', viewMonth.slice(0, 8) + '32')
 
-    if (plSummary) {
-      plResult.expSuppliersInternal = Number(plSummary.internal_supplier_cost || 0)
-      plResult.expSuppliersExternal = Number(plSummary.external_supplier_cost || 0)
-      plResult.expSuppliers = Number(plSummary.total_supplier_cost || 0)
+    console.log('[BranchPL] View query:', { branchId, viewMonth, plSummary, plSummaryError })
+
+    if (plSummary && plSummary.length > 0) {
+      const row = plSummary[0]
+      plResult.expSuppliersInternal = Number(row.internal_supplier_cost || 0)
+      plResult.expSuppliersExternal = Number(row.external_supplier_cost || 0)
+      plResult.expSuppliers = Number(row.total_supplier_cost || 0)
     }
 
     setPl(plResult)
