@@ -649,6 +649,7 @@ export async function fetchConsolidatedPL(
 ): Promise<ConsolidatedPLResult> {
   // Branch totals
   let branchRevenue = 0, branchLabor = 0, branchWaste = 0, branchExpenses = 0, branchFixed = 0
+  let branchInternalExpenses = 0 // from_factory=true expenses to eliminate
   for (const brId of branchIds) {
     const pl = await fetchBranchPL(brId, dateFrom, dateTo, monthKey, overheadPct)
     branchRevenue += pl.revenue
@@ -656,7 +657,16 @@ export async function fetchConsolidatedPL(
     branchWaste += pl.wasteTotal
     branchExpenses += pl.expSuppliers + pl.expRepairs
     branchFixed += pl.fixedCosts
+    // Fetch internal expenses (from_factory=true) to eliminate in consolidated view
+    const { data: intExp } = await supabase.from('branch_expenses')
+      .select('amount')
+      .eq('branch_id', brId)
+      .eq('from_factory', true)
+      .gte('date', dateFrom).lt('date', dateTo)
+    branchInternalExpenses += (intExp || []).reduce((s, r) => s + Number(r.amount), 0)
   }
+  // Eliminate intercompany: subtract internal purchases from branch expenses
+  branchExpenses -= branchInternalExpenses
 
   // Factory (external only for consolidated)
   const factoryPL = await fetchFactoryPL(dateFrom, dateTo, monthKey)

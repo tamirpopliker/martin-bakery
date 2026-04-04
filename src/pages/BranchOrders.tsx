@@ -90,11 +90,36 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
     setEditId(null)
   }, [from, to])
 
+  // ─── יצירת הוצאה בסניף ──────────────────────────────────────────────────────
+  async function createBranchExpense(order: Order) {
+    const docNum = order.doc_number || `factory_${order.source_table}_${order.id}`
+    // Upsert by doc_number + branch_id to avoid duplicates
+    const { data: existing } = await supabase.from('branch_expenses')
+      .select('id')
+      .eq('branch_id', branchId)
+      .eq('doc_number', docNum)
+      .eq('from_factory', true)
+      .maybeSingle()
+    if (existing) return // already exists
+
+    await supabase.from('branch_expenses').insert({
+      branch_id: branchId,
+      date: order.date,
+      type: 'supplier',
+      supplier: 'מפעל ייצור',
+      amount: order.amount,
+      doc_number: docNum,
+      from_factory: true,
+      notes: 'הזמנה פנימית מהמפעל — אושרה אוטומטית',
+    })
+  }
+
   // ─── פעולות ─────────────────────────────────────────────────────────────────
   async function approveOrder(order: Order) {
     await supabase.from(order.source_table)
       .update({ branch_status: 'approved' })
       .eq('id', order.id)
+    await createBranchExpense(order)
     await fetchOrders()
   }
 
@@ -163,6 +188,8 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
       )
     }
     await Promise.all(updates)
+    // Create branch expenses for all approved orders
+    await Promise.all(list.map(o => createBranchExpense(o)))
     await fetchOrders()
   }
 
