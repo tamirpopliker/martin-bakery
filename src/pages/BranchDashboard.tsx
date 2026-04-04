@@ -120,6 +120,8 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
   // Derived values from current P&L
   const totalRevenue = pl?.revenue ?? 0
   const expSupplier = pl?.expSuppliers ?? 0
+  const expSuppliersInternal = pl?.expSuppliersInternal ?? 0
+  const expSuppliersExternal = pl?.expSuppliersExternal ?? 0
   const laborEmployer = pl?.laborEmployer ?? 0
   const wasteTotal = pl?.wasteTotal ?? 0
   const fixedCosts = pl?.fixedCosts ?? 0
@@ -207,7 +209,8 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
 
   const plRows: PLTableRow[] = [
     { label: 'הכנסות', amount: totalRevenue },
-    { label: 'ספקים', amount: expSupplier },
+    ...(expSuppliersInternal > 0 ? [{ label: 'רכישות מפעל', amount: expSuppliersInternal }] : []),
+    { label: expSuppliersInternal > 0 ? 'ספקים חיצוניים' : 'ספקים', amount: expSuppliersExternal > 0 ? expSuppliersExternal : expSupplier },
     { label: 'לייבור', amount: laborEmployer },
     { label: 'שכר מנהל', amount: mgmtCosts },
     { label: 'פחת', amount: wasteTotal },
