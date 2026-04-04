@@ -5,7 +5,7 @@ import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, Plus, Pencil, Trash2, Search, X } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Search, X, Factory, AlertTriangle } from 'lucide-react'
 import { FixedCostIcon } from '@/components/icons'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
@@ -38,6 +38,8 @@ const TYPE_CONFIG: Record<ExpenseType, { label: string; color: string; bg: strin
   deliveries:     { label: 'משלוחים',         color: '#34d399', bg: '#d1fae5' },
   other:          { label: 'אחר',             color: '#64748b', bg: '#f1f5f9' },
 }
+
+const FACTORY_KEYWORDS = ['מפעל', 'פנימי']
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
@@ -76,11 +78,13 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
   const { period, setPeriod, from, to } = usePeriod()
   const [entries, setEntries]         = useState<Entry[]>([])
   const [suppliers, setSuppliers]     = useState<Supplier[]>([])
+  const [branchNames, setBranchNames] = useState<string[]>([])
   const [typeFilter, setTypeFilter]   = useState<ExpenseType | 'all'>('all')
   const [searchFilter, setSearchFilter] = useState('')
   const [editId, setEditId]           = useState<number | null>(null)
   const [editData, setEditData]       = useState<Partial<Entry>>({})
   const [loading, setLoading]         = useState(false)
+  const [showFactoryWarning, setShowFactoryWarning] = useState(false)
 
   // טופס — supplier אינו חובה
   const [date, setDate]       = useState(new Date().toISOString().split('T')[0])
@@ -92,7 +96,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
   const [trendData, setTrendData] = useState<BranchExpensesTrend[]>([])
 
   async function fetchEntries() {
-    const { data } = await supabase.from('branch_expenses').select('*')
+    const { data } = await supabase.from('branch_expenses').select('id, date, expense_type, supplier, amount, doc_number, notes, from_factory')
       .eq('branch_id', branchId)
       .gte('date', from).lt('date', to)
       .order('date', { ascending: false })
@@ -104,15 +108,36 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
     if (data) setSuppliers(data)
   }
 
+  async function fetchBranchNames() {
+    const { data } = await supabase.from('branches').select('name')
+    if (data) setBranchNames(data.map((b: { name: string }) => b.name))
+  }
+
   useEffect(() => {
-    fetchEntries(); fetchSuppliers()
+    fetchEntries(); fetchSuppliers(); fetchBranchNames()
     fetchBranchExpensesTrend(branchId, from.slice(0, 7)).then(setTrendData)
   }, [from, to, branchId])
 
   const supplierNames = suppliers.map(s => s.name)
 
+  function looksLikeFactorySupplier(name: string): boolean {
+    const lower = name.trim().toLowerCase()
+    if (FACTORY_KEYWORDS.some(kw => lower.includes(kw))) return true
+    if (branchNames.some(bn => lower.includes(bn.toLowerCase()))) return true
+    return false
+  }
+
   // ─── כפתור פעיל כל עוד יש סכום ותאריך ──────────────────────────────────
   const canAdd = !loading && !!amount && parseFloat(amount) > 0 && !!date
+
+  function handleAddEntry() {
+    if (!canAdd) return
+    if (expType === 'suppliers' && supplier && looksLikeFactorySupplier(supplier)) {
+      setShowFactoryWarning(true)
+      return
+    }
+    addEntry()
+  }
 
   async function addEntry() {
     if (!canAdd) return
@@ -147,6 +172,12 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
     return true
   })
 
+  // Split supplier entries into internal (factory) and external
+  const showSuppliersSplit = typeFilter === 'suppliers' || typeFilter === 'all'
+  const internalEntries = filtered.filter(e => e.expense_type === 'suppliers' && e.from_factory === true)
+  const externalAndOtherEntries = filtered.filter(e => !(e.expense_type === 'suppliers' && e.from_factory === true))
+  const internalTotal = internalEntries.reduce((s, e) => s + Number(e.amount), 0)
+
   const total    = filtered.reduce((s, e) => s + Number(e.amount), 0)
   const totalAll = entries.reduce((s, e) => s + Number(e.amount), 0)
 
@@ -156,16 +187,77 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
   })).filter(t => t.total > 0)
 
   const bySupplier = Object.values(
-    filtered.reduce((acc: Record<string, any>, e) => {
+    filtered.reduce((acc: Record<string, { name: string; total: number; count: number }>, e) => {
       if (!acc[e.supplier]) acc[e.supplier] = { name: e.supplier, total: 0, count: 0 }
       acc[e.supplier].total += Number(e.amount); acc[e.supplier].count++
       return acc
     }, {})
-  ).sort((a: any, b: any) => b.total - a.total).slice(0, 5)
+  ).sort((a, b) => b.total - a.total).slice(0, 5)
 
   const S = {
     label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
     input: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
+  }
+
+  const gridCols = '100px 90px 1fr 100px 130px 36px 36px'
+
+  function renderEntryRow(entry: Entry, i: number, list: Entry[], isInternal: boolean) {
+    const tc = TYPE_CONFIG[entry.expense_type]
+    return (
+      <div key={entry.id} style={{
+        display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center',
+        padding: '12px 20px',
+        borderBottom: i < list.length - 1 ? '1px solid #f1f5f9' : 'none',
+        background: i % 2 === 0 ? 'white' : '#fafafa',
+        borderRight: isInternal ? '3px solid #a78bfa' : 'none',
+      }}>
+        {editId === entry.id && !isInternal ? (
+          <>
+            <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
+            <select value={editData.expense_type || ''} onChange={e => setEditData({ ...editData, expense_type: e.target.value as ExpenseType })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 6px', fontSize: '11px', fontFamily: 'inherit' }}>
+              {Object.entries(TYPE_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+            <AutocompleteInput value={editData.supplier || ''} onChange={v => setEditData({ ...editData, supplier: v })} options={supplierNames} placeholder="ספק" color={branchColor} />
+            <input type="text" value={editData.doc_number || ''} onChange={e => setEditData({ ...editData, doc_number: e.target.value })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
+            <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
+            <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
+            <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
+          </>
+        ) : (
+          <>
+            <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(entry.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
+            <span style={{ fontSize: '11px', background: tc.bg, color: tc.color, padding: '2px 7px', borderRadius: '20px', fontWeight: '600' }}>{tc.label}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: '600', color: '#374151', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {entry.supplier}
+                  {isInternal && (
+                    <span style={{ fontSize: '10px', background: '#ede9fe', color: '#7c3aed', padding: '1px 8px', borderRadius: '20px', fontWeight: '700', whiteSpace: 'nowrap' }}>פנימי</span>
+                  )}
+                </div>
+                {isInternal && (
+                  <div style={{ fontSize: '10px', color: '#a78bfa', fontStyle: 'italic' }}>נוצר אוטומטית מהזמנה מאושרת</div>
+                )}
+                {entry.notes && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{entry.notes}</div>}
+              </div>
+            </div>
+            <span style={{ fontSize: '13px', color: '#94a3b8' }}>{entry.doc_number || '—'}</span>
+            <span style={{ fontWeight: '800', color: '#fb7185', fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString()}</span>
+            {isInternal ? (
+              <>
+                <span />
+                <span />
+              </>
+            ) : (
+              <>
+                <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
+                <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -207,6 +299,40 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
           </div>
         )}
 
+        {/* Factory warning dialog */}
+        {showFactoryWarning && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }}>
+            <Card className="shadow-xl" style={{ maxWidth: '440px', width: '90%' }}>
+              <CardContent className="p-6" style={{ textAlign: 'center' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+                  <div style={{ background: '#fef3c7', borderRadius: '50%', padding: '12px' }}>
+                    <AlertTriangle size={28} color="#f59e0b" />
+                  </div>
+                </div>
+                <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: '700', color: '#374151' }}>
+                  האם זו רכישה מהמפעל הפנימי?
+                </h3>
+                <p style={{ margin: '0 0 20px', fontSize: '14px', color: '#64748b', lineHeight: '1.6' }}>
+                  אם כן — אשר את ההזמנה בדף ההזמנות במקום להזין ידנית.
+                </p>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                  <Button variant="outline" onClick={() => { setShowFactoryWarning(false); onBack() }}
+                    className="rounded-xl gap-2 px-5 text-[14px] font-bold"
+                    style={{ borderColor: '#7c3aed', color: '#7c3aed' }}>
+                    <Factory size={16} />
+                    כן, עבור להזמנות
+                  </Button>
+                  <Button onClick={() => { setShowFactoryWarning(false); addEntry() }}
+                    className="rounded-xl px-5 text-[14px] font-bold"
+                    style={{ background: '#64748b', color: 'white' }}>
+                    לא, ספק חיצוני
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* טופס הוספה */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
         <Card className="shadow-sm mb-5">
@@ -235,7 +361,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
             <div style={{ display: 'flex', flexDirection: 'column' as const }}>
               <label style={S.label}>סכום ללא מע״מ (₪) *</label>
               <input type="number" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addEntry()}
+                onKeyDown={e => e.key === 'Enter' && handleAddEntry()}
                 style={{ ...S.input, textAlign: 'right' as const, borderColor: amount ? '#e2e8f0' : '#fca5a5' }} />
             </div>
 
@@ -250,7 +376,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
             </div>
           </div>
 
-          <button onClick={addEntry} disabled={!canAdd}
+          <button onClick={handleAddEntry} disabled={!canAdd}
             style={{ background: canAdd ? branchColor : '#e2e8f0', color: canAdd ? 'white' : '#94a3b8', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: canAdd ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Plus size={18} />הוסף הוצאה
           </button>
@@ -280,7 +406,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
         {/* סיכום ספקים */}
         {bySupplier.length > 0 && (
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, marginBottom: '14px' }}>
-            {(bySupplier as any[]).map((s: any) => (
+            {bySupplier.map((s) => (
               <div key={s.name} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '6px 12px', fontSize: '12px' }}>
                 <span style={{ fontWeight: '600', color: '#374151' }}>{s.name}</span>
                 <span style={{ color: '#fb7185', fontWeight: '700', marginRight: '6px' }}>₪{s.total.toLocaleString()}</span>
@@ -290,50 +416,55 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
           </div>
         )}
 
-        {/* טבלה */}
+        {/* טבלה — internal factory section */}
+        {showSuppliersSplit && internalEntries.length > 0 && (
+          <motion.div variants={fadeIn} initial="hidden" animate="visible" style={{ marginBottom: '16px' }}>
+          <div className="table-scroll">
+          <Card className="shadow-sm" style={{ borderRight: '3px solid #a78bfa' }}>
+            <CardContent className="p-0">
+              {/* Section header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: '#f5f3ff', borderBottom: '1px solid #e9e5ff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Factory size={16} color="#7c3aed" />
+                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#7c3aed' }}>רכישות מהמפעל</span>
+                  <span style={{ fontSize: '11px', background: '#ede9fe', color: '#7c3aed', padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>{internalEntries.length} רשומות</span>
+                </div>
+                <span style={{ fontSize: '16px', fontWeight: '800', color: '#7c3aed' }}>סה"כ רכישות מפעל: ₪{internalTotal.toLocaleString()}</span>
+              </div>
+
+              {/* Column headers */}
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols, padding: '10px 20px', background: '#faf8ff', borderBottom: '1px solid #e9e5ff', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                <span>תאריך</span><span>סוג</span><span>ספק</span><span>מסמך</span><span style={{ textAlign: 'left' }}>סכום</span><span /><span />
+              </div>
+
+              {internalEntries.map((entry, i) => renderEntryRow(entry, i, internalEntries, true))}
+            </CardContent>
+          </Card>
+          </div>
+          </motion.div>
+        )}
+
+        {/* טבלה — external / other entries */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
         <div className="table-scroll">
         <Card className="shadow-sm">
           <CardContent className="p-0">
-          <div style={{ display: 'grid', gridTemplateColumns: '100px 90px 1fr 100px 130px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+          {/* Section header when split is active */}
+          {showSuppliersSplit && internalEntries.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>ספקים חיצוניים והוצאות נוספות</span>
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: gridCols, padding: '10px 20px', background: '#f8fafc', borderRadius: internalEntries.length > 0 ? '0' : '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
             <span>תאריך</span><span>סוג</span><span>ספק</span><span>מסמך</span><span style={{ textAlign: 'left' }}>סכום</span><span /><span />
           </div>
 
-          {filtered.length === 0 ? (
-            <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין הוצאות לתקופה זו</div>
-          ) : filtered.map((entry, i) => {
-            const tc = TYPE_CONFIG[entry.expense_type]
-            return (
-              <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '100px 90px 1fr 100px 130px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < filtered.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                {editId === entry.id ? (
-                  <>
-                    <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
-                    <select value={editData.expense_type || ''} onChange={e => setEditData({ ...editData, expense_type: e.target.value as ExpenseType })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 6px', fontSize: '11px', fontFamily: 'inherit' }}>
-                      {Object.entries(TYPE_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                    </select>
-                    <AutocompleteInput value={editData.supplier || ''} onChange={v => setEditData({ ...editData, supplier: v })} options={supplierNames} placeholder="ספק" color={branchColor} />
-                    <input type="text" value={editData.doc_number || ''} onChange={e => setEditData({ ...editData, doc_number: e.target.value })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                    <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                    <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
-                    <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
-                  </>
-                ) : (
-                  <>
-                    <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(entry.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
-                    <span style={{ fontSize: '11px', background: tc.bg, color: tc.color, padding: '2px 7px', borderRadius: '20px', fontWeight: '600' }}>{tc.label}</span>
-                    <div>
-                      <div style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{entry.supplier}</div>
-                      {entry.notes && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{entry.notes}</div>}
-                    </div>
-                    <span style={{ fontSize: '13px', color: '#94a3b8' }}>{entry.doc_number || '—'}</span>
-                    <span style={{ fontWeight: '800', color: '#fb7185', fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString()}</span>
-                    <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                    <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
-                  </>
-                )}
-              </div>
-            )
-          })}
+          {externalAndOtherEntries.length === 0 ? (
+            <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
+              {filtered.length === 0 ? 'אין הוצאות לתקופה זו' : 'אין הוצאות חיצוניות לתקופה זו'}
+            </div>
+          ) : externalAndOtherEntries.map((entry, i) => renderEntryRow(entry, i, externalAndOtherEntries, false))}
 
           {filtered.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', background: '#fff1f2', borderTop: '2px solid #fecdd3', borderRadius: '0 0 20px 20px' }}>

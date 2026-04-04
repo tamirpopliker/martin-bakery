@@ -6,6 +6,7 @@ import PeriodPicker from '../components/PeriodPicker'
 import { ArrowRight, Plus, Pencil, Trash2, Search, X } from 'lucide-react'
 import { RevenueIcon } from '@/components/icons'
 import { detectBranchId, getBranchNameById } from '../lib/internalCustomers'
+import { useBranches } from '../lib/BranchContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
@@ -89,6 +90,8 @@ export default function FactoryB2B({ onBack }: Props) {
   const [tab, setTab]                   = useState<SaleTab>('creams')
   const cfg = TAB_CONFIG[tab]
   const { period, setPeriod, from, to } = usePeriod()
+  const { branches }                    = useBranches()
+  const [selectedBranch, setSelectedBranch] = useState<number | null>(null)
 
   const [entries, setEntries]           = useState<Entry[]>([])
   const [allCustomers, setAllCustomers] = useState<string[]>([])
@@ -138,21 +141,30 @@ export default function FactoryB2B({ onBack }: Props) {
   // ─── CRUD ─────────────────────────────────────────────────────────────────
   async function addEntry() {
     if (!amount || !date || !customer) return
+
+    // warn if free-text matches a branch but user didn't pick from branch buttons
+    if (!selectedBranch) {
+      const fallbackBranch = detectBranchId(customer)
+      if (fallbackBranch !== null) {
+        const proceed = confirm('נראה שהלקוח תואם סניף פנימי. האם להמשיך בלי לבחור סניף?')
+        if (!proceed) return
+      }
+    }
+
     setLoading(true)
-    const branchId = detectBranchId(customer)
     const payload: any = {
       date, customer,
       amount: parseFloat(amount),
       doc_number: docNumber,
       notes,
       [cfg.filterCol]: cfg.filterVal,
-      is_internal: branchId !== null,
-      target_branch_id: branchId,
-      branch_status: branchId !== null ? 'pending' : null,
+      is_internal: selectedBranch !== null,
+      target_branch_id: selectedBranch,
+      branch_status: selectedBranch !== null ? 'pending' : null,
     }
     await supabase.from(cfg.table).insert(payload)
     if (!allCustomers.includes(customer)) setAllCustomers(p => [...p, customer].sort())
-    setAmount(''); setDocNumber(''); setNotes('')
+    setAmount(''); setDocNumber(''); setNotes(''); setSelectedBranch(null)
     await fetchEntries()
     setLoading(false)
   }
@@ -195,6 +207,11 @@ export default function FactoryB2B({ onBack }: Props) {
   ).sort((a, b) => b.total - a.total)
 
   const grandTotal = entries.reduce((s, e) => s + Number(e.amount), 0)
+
+  // detect if free-text customer matches a branch name
+  const matchingBranches = !selectedBranch && customer.trim()
+    ? branches.filter(b => b.name.includes(customer.trim()) || customer.trim().includes(b.name))
+    : []
 
   // ─── סגנונות ─────────────────────────────────────────────────────────────
   const S = {
@@ -255,10 +272,43 @@ export default function FactoryB2B({ onBack }: Props) {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column' as const, gridColumn: 'span 2' }}>
-              <label style={S.label}>לקוח</label>
-              <AutocompleteInput value={customer} onChange={setCustomer} suggestions={allCustomers}
+              <label style={S.label}>מכירה לסניף (פנימי)</label>
+              <div className="flex flex-row gap-2 flex-wrap mb-2">
+                {branches.map(b => (
+                  <Button key={b.id} type="button" size="sm"
+                    variant={selectedBranch === b.id ? 'default' : 'outline'}
+                    className={selectedBranch === b.id ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}
+                    onClick={() => {
+                      setSelectedBranch(b.id)
+                      setCustomer(b.name)
+                    }}
+                  >
+                    {b.name}
+                  </Button>
+                ))}
+              </div>
+              <label style={S.label}>לקוח חיצוני:</label>
+              <AutocompleteInput value={customer} onChange={(v) => { setCustomer(v); setSelectedBranch(null) }} suggestions={allCustomers}
                 placeholder="שם לקוח..."
                 color={cfg.color} />
+              {matchingBranches.length > 0 && (
+                <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                  <div className="mb-1 font-semibold">נראה שזו רכישה פנימית — האם לבחור סניף?</div>
+                  <div className="flex flex-row gap-2 flex-wrap">
+                    {matchingBranches.map(b => (
+                      <Button key={b.id} type="button" size="sm" variant="outline"
+                        className="border-amber-400 text-amber-800 hover:bg-amber-100"
+                        onClick={() => {
+                          setSelectedBranch(b.id)
+                          setCustomer(b.name)
+                        }}
+                      >
+                        {b.name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column' as const }}>
