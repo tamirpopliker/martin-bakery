@@ -26,9 +26,9 @@ export async function fetchBranchProfit(
   startDate: string,
   endDate: string
 ): Promise<BranchProfitResult> {
-  // Extract month range from dates (view is monthly)
-  const startMonth = startDate.slice(0, 7)
-  const endMonth = endDate.slice(0, 7)
+  // month column is DATE type — must use YYYY-MM-01 format
+  const startMonth = startDate.slice(0, 7) + '-01'
+  const endMonth = endDate.slice(0, 7) + '-01'
 
   const { data, error } = await supabase
     .from('branch_pl_summary')
@@ -77,8 +77,9 @@ export async function fetchAllBranchesProfit(
   startDate: string,
   endDate: string
 ): Promise<BranchProfitResult[]> {
-  const startMonth = startDate.slice(0, 7)
-  const endMonth = endDate.slice(0, 7)
+  // month column is DATE type — must use YYYY-MM-01 format
+  const startMonth = startDate.slice(0, 7) + '-01'
+  const endMonth = endDate.slice(0, 7) + '-01'
 
   const { data, error } = await supabase
     .from('branch_pl_summary')
