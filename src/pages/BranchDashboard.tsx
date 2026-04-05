@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, fetchBranchPL, getOverheadPct, type BranchPLResult } from '../lib/supabase'
+import { fetchBranchProfit } from '../lib/profitCalc'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -188,6 +189,14 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
         supabase.from('branch_kpi_targets').select('labor_pct, waste_pct').eq('branch_id', branchId).maybeSingle(),
       ])
 
+      // Override supplier split from View (single source of truth)
+      const viewProfit = await fetchBranchProfit(branchId, from, to)
+      if (viewProfit.revenue > 0) {
+        current.expSuppliersInternal = viewProfit.internalSupplierCost
+        current.expSuppliersExternal = viewProfit.externalSupplierCost
+        current.expSuppliers = viewProfit.totalSupplierCost
+      }
+
       setPl(current)
       setPrevPl(prev)
 
@@ -209,8 +218,8 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
 
   const plRows: PLTableRow[] = [
     { label: 'הכנסות', amount: totalRevenue },
-    ...(expSuppliersInternal > 0 ? [{ label: 'רכישות מפעל', amount: expSuppliersInternal }] : []),
-    { label: expSuppliersInternal > 0 ? 'ספקים חיצוניים' : 'ספקים', amount: expSuppliersExternal > 0 ? expSuppliersExternal : expSupplier },
+    { label: 'רכישות מפעל', amount: expSuppliersInternal },
+    { label: 'ספקים חיצוניים', amount: expSuppliersExternal },
     { label: 'לייבור', amount: laborEmployer },
     { label: 'שכר מנהל', amount: mgmtCosts },
     { label: 'פחת', amount: wasteTotal },
