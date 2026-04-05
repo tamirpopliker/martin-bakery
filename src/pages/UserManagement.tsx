@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useBranches } from '../lib/BranchContext'
+import { useAppUser } from '../lib/UserContext'
 
 interface AppUser {
   id: string
@@ -52,6 +53,8 @@ const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, tra
 
 export default function UserManagement({ onBack, initialTab }: { onBack: () => void; initialTab?: 'users' | 'branches' | 'settings' }) {
   const { branches, getBranchName, refreshBranches } = useBranches()
+  const { appUser } = useAppUser()
+  const isAdmin = appUser?.role === 'admin'
   const [users, setUsers] = useState<AppUser[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -148,12 +151,19 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
   async function handleImportEmployees() {
     const selected = importEmployees.filter(e => e.checked)
     if (selected.length === 0) return
+    // Filter: only import those with email, warn about skipped
+    const withEmail = selected.filter(e => e.email.trim())
+    const withoutEmail = selected.filter(e => !e.email.trim())
+    if (withEmail.length === 0) {
+      setImportSuccess('⚠️ לא הוזנו כתובות אימייל — לא נוצרו חשבונות')
+      return
+    }
     setImportSaving(true)
-    const rows = selected.map(e => ({
+    const rows = withEmail.map(e => ({
       role: 'employee' as const,
       branch_id: importBranchId,
       employee_id: e.id,
-      email: e.email.toLowerCase(),
+      email: e.email.trim().toLowerCase(),
       name: e.name,
       can_settings: false,
       excluded_departments: [],
@@ -161,7 +171,10 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
     }))
     await supabase.from('app_users').insert(rows)
     setImportSaving(false)
-    setImportSuccess(`נוצרו ${selected.length} חשבונות עובדים`)
+    const msg = withoutEmail.length > 0
+      ? `נוצרו ${withEmail.length} חשבונות עובדים (${withoutEmail.length} דולגו — ללא אימייל)`
+      : `נוצרו ${withEmail.length} חשבונות עובדים`
+    setImportSuccess(msg)
     setTimeout(() => {
       setImportSuccess(null)
       setImportModalOpen(false)
@@ -270,10 +283,17 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
       {/* ═══ USERS TAB ═══ */}
       {tab === 'users' && <>
 
-      {/* Import employees button */}
-      {!addMode && (
+      {/* Import employees button — admin + branch managers */}
+      {!addMode && (isAdmin || appUser?.role === 'branch') && (
         <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
-          <button onClick={() => { setImportModalOpen(true); setImportSuccess(null) }}
+          <button onClick={() => {
+            setImportModalOpen(true)
+            setImportSuccess(null)
+            // Branch managers auto-select their branch
+            if (!isAdmin && appUser?.branch_id) {
+              setImportBranchId(appUser.branch_id)
+            }
+          }}
             style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
             <Upload size={16} /> ייבא עובדים מסניף
           </button>
@@ -644,19 +664,26 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
             onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 20px', fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>ייבא עובדים מסניף</h3>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '6px' }}>בחר סניף</label>
-              <select value={importBranchId ?? ''} onChange={e => {
-                  const bId = e.target.value ? Number(e.target.value) : null
-                  setImportBranchId(bId)
-                  if (bId) loadImportEmployees(bId)
-                  else setImportEmployees([])
-                }}
-                style={{ width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box' }}>
-                <option value="">בחר סניף...</option>
-                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-            </div>
+            {/* Branch selector — admin only; branch managers see their branch name */}
+            {isAdmin ? (
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '6px' }}>בחר סניף</label>
+                <select value={importBranchId ?? ''} onChange={e => {
+                    const bId = e.target.value ? Number(e.target.value) : null
+                    setImportBranchId(bId)
+                    if (bId) loadImportEmployees(bId)
+                    else setImportEmployees([])
+                  }}
+                  style={{ width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box' }}>
+                  <option value="">בחר סניף...</option>
+                  {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+            ) : (
+              <div style={{ marginBottom: '16px', fontSize: '14px', fontWeight: '600', color: '#334155' }}>
+                סניף: {getBranchName(appUser?.branch_id || 0)}
+              </div>
+            )}
 
             {importLoading && <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>טוען עובדים...</div>}
 
@@ -666,8 +693,13 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
 
             {!importLoading && importEmployees.length > 0 && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr', gap: '8px', padding: '8px 0', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
-                  <span></span><span>שם</span><span>אימייל</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr', gap: '8px', padding: '8px 0', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b', alignItems: 'center' }}>
+                  <input type="checkbox"
+                    checked={importEmployees.length > 0 && importEmployees.every(e => e.checked)}
+                    ref={el => { if (el) el.indeterminate = importEmployees.some(e => e.checked) && !importEmployees.every(e => e.checked) }}
+                    onChange={e => setImportEmployees(prev => prev.map(emp => ({ ...emp, checked: e.target.checked })))}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                  <span>שם</span><span>אימייל</span>
                 </div>
                 {importEmployees.map((emp, idx) => (
                   <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr', gap: '8px', padding: '10px 0', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
@@ -699,11 +731,11 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
               <button
                 onClick={handleImportEmployees}
-                disabled={importSaving || importEmployees.filter(e => e.checked && e.email).length === 0}
+                disabled={importSaving || importEmployees.filter(e => e.checked).length === 0}
                 style={{
                   flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                  background: importSaving || importEmployees.filter(e => e.checked && e.email).length === 0 ? '#e2e8f0' : '#f59e0b',
-                  color: importSaving || importEmployees.filter(e => e.checked && e.email).length === 0 ? '#94a3b8' : 'white',
+                  background: importSaving || importEmployees.filter(e => e.checked).length === 0 ? '#e2e8f0' : '#f59e0b',
+                  color: importSaving || importEmployees.filter(e => e.checked).length === 0 ? '#94a3b8' : 'white',
                   border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer',
                 }}>
                 <Save size={16} /> {importSaving ? 'יוצר...' : 'צור חשבונות לנבחרים'}
