@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, getOverheadPct } from '../lib/supabase'
+import { fetchAllBranchesProfit } from '../lib/profitCalc'
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -161,6 +162,18 @@ export default function BranchManagerDashboard({ onBack }: Props) {
         Promise.all(BRANCHES.map(br => fetchBranchData(br.id, br.name, br.color, from, to, monthKey))),
         Promise.all(BRANCHES.map(br => fetchBranchData(br.id, br.name, br.color, comparisonPeriod.from, comparisonPeriod.to, prevMonthKey))),
       ])
+
+      // Override supplier split from View (single source of truth)
+      const branchIds = BRANCHES.map(br => br.id)
+      const viewProfits = await fetchAllBranchesProfit(branchIds, from, to)
+      for (const br of current) {
+        const vp = viewProfits.find(p => p.branchId === br.id)
+        if (vp && vp.revenue > 0) {
+          br.expSuppliersInternal = vp.internalSupplierCost
+          br.expSuppliersExternal = vp.externalSupplierCost
+          br.expSuppliers = vp.totalSupplierCost
+        }
+      }
 
       setBranches(current)
       setPrevBranches(previous)

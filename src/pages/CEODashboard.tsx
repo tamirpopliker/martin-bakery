@@ -158,9 +158,9 @@ export default function CEODashboard({ onBack }: Props) {
       setBranchTargets(tMap)
     }
     // Factory KPI targets
-    const { data: fKpiData } = await supabase.from('kpi_targets').select('labor_revenue_pct, waste_pct')
+    const { data: fKpiData } = await supabase.from('kpi_targets').select('labor_pct, waste_pct')
     if (fKpiData && fKpiData.length > 0) {
-      const avgLabor = fKpiData.reduce((s, r) => s + Number(r.labor_revenue_pct || 0), 0) / fKpiData.length
+      const avgLabor = fKpiData.reduce((s, r) => s + Number(r.labor_pct || 28), 0) / fKpiData.length
       const avgWaste = fKpiData.reduce((s, r) => s + Number(r.waste_pct || 3), 0) / fKpiData.length
       setFactoryTargets({ labor_pct: avgLabor, waste_pct: avgWaste })
     }
