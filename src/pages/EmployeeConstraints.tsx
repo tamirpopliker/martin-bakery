@@ -60,13 +60,38 @@ export default function EmployeeConstraints({ onBack }: Props) {
 
   const [days, setDays] = useState<DayConstraint[]>([])
   const [loading, setLoading] = useState(true)
-
-  const employeeId = appUser?.employee_id
+  const [resolvedEmpId, setResolvedEmpId] = useState<number | null>(null)
+  const [noEmployee, setNoEmployee] = useState(false)
 
   useEffect(() => {
-    if (!employeeId) return
-    loadConstraints()
-  }, [employeeId])
+    resolveEmployee()
+  }, [appUser])
+
+  async function resolveEmployee() {
+    // Try app_users.employee_id first
+    if (appUser?.employee_id) {
+      setResolvedEmpId(appUser.employee_id)
+      return
+    }
+    // Fallback: look up by email in branch_employees
+    if (appUser?.email) {
+      const { data } = await supabase
+        .from('branch_employees')
+        .select('id')
+        .eq('email', appUser.email)
+        .maybeSingle()
+      if (data) {
+        setResolvedEmpId(data.id)
+        return
+      }
+    }
+    setNoEmployee(true)
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (resolvedEmpId) loadConstraints()
+  }, [resolvedEmpId])
 
   async function loadConstraints() {
     setLoading(true)
@@ -74,7 +99,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
     const { data } = await supabase
       .from('schedule_constraints')
       .select('date, availability, notes')
-      .eq('employee_id', employeeId!)
+      .eq('employee_id', resolvedEmpId!)
       .in('date', dateList)
 
     const map = new Map<string, { availability: Availability; notes: string }>()
@@ -93,7 +118,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
   }
 
   async function setAvailability(dateStr: string, availability: Availability) {
-    if (!employeeId) return
+    if (!resolvedEmpId) return
 
     setDays(prev => prev.map(d =>
       d.date === dateStr ? { ...d, availability, saving: true, saved: false } : d
@@ -101,7 +126,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
 
     await supabase.from('schedule_constraints').upsert({
       branch_id: appUser?.branch_id,
-      employee_id: employeeId,
+      employee_id: resolvedEmpId,
       date: dateStr,
       availability,
       updated_at: new Date().toISOString(),
@@ -154,7 +179,13 @@ export default function EmployeeConstraints({ onBack }: Props) {
           ))}
         </motion.div>
 
-        {loading ? (
+        {noEmployee ? (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-4">😕</div>
+            <p className="text-slate-500 font-semibold">לא נמצאת כעובד במערכת</p>
+            <p className="text-sm text-slate-400 mt-2">פנה למנהל הסניף שלך לקישור החשבון.</p>
+          </div>
+        ) : loading ? (
           <div className="text-center py-12 text-slate-400">טוען...</div>
         ) : (
           weeks.map((week, wi) => (
