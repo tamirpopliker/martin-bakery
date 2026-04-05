@@ -500,7 +500,16 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       if (rows.length > 0) {
         const { data: emps } = await supabase.from('branch_employees').select('*')
           .eq('branch_id', branchId).eq('active', true)
-        const globalNames = emps?.filter((e: any) => e.is_global || e.wage_type === 'global').map((e: any) => e.name) || []
+        // Global employees: have global_daily_rate > 0, or is_global flag, or wage_type='global'
+        // Also check app_users for branch managers (role='branch')
+        const { data: branchManagers } = await supabase.from('app_users').select('name').eq('role', 'branch').eq('branch_id', branchId)
+        const managerNames = branchManagers?.map((m: any) => m.name) || []
+        const globalNames = [
+          ...(emps?.filter((e: any) =>
+            e.is_global || e.wage_type === 'global' || (e.global_daily_rate && Number(e.global_daily_rate) > 0)
+          ).map((e: any) => e.name) || []),
+          ...managerNames,
+        ]
         const skippedGlobals: string[] = []
 
         // Remove global employees from import
@@ -881,18 +890,19 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                       </div>
 
                       <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: isDetailedMode ? '32px 1fr 65px 65px 65px 70px 95px 105px' : '32px 1fr 65px 65px 65px 105px 115px', padding: '9px 14px', background: '#f8fafc', fontSize: '11px', fontWeight: '700', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: isDetailedMode ? '32px 1fr 65px 65px 65px 70px 60px 95px 105px' : '32px 1fr 65px 65px 65px 105px 115px', padding: '9px 14px', background: '#f8fafc', fontSize: '11px', fontWeight: '700', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
                           <span />
                           <span>שם עובד</span>
                           <span style={{ textAlign: 'center' }}>100%</span>
                           <span style={{ textAlign: 'center' }}>125%</span>
                           <span style={{ textAlign: 'center' }}>150%</span>
                           {isDetailedMode && <span style={{ textAlign: 'center' }}>₪/שעה</span>}
+                          {isDetailedMode && <span style={{ textAlign: 'center' }}>בונוס</span>}
                           <span>ברוטו</span>
                           <span>עלות מעסיק</span>
                         </div>
                         {parsedRows.map((row, i) => (
-                          <div key={i} style={{ display: 'grid', gridTemplateColumns: isDetailedMode ? '32px 1fr 65px 65px 65px 70px 95px 105px' : '32px 1fr 65px 65px 65px 105px 115px', alignItems: 'center', padding: '11px 14px', borderBottom: i < parsedRows.length - 1 ? '1px solid #f1f5f9' : 'none', background: row.selected ? (i % 2 === 0 ? 'white' : '#fafafa') : '#f8fafc', opacity: row.selected ? 1 : 0.4, transition: 'opacity 0.15s' }}>
+                          <div key={i} style={{ display: 'grid', gridTemplateColumns: isDetailedMode ? '32px 1fr 65px 65px 65px 70px 60px 95px 105px' : '32px 1fr 65px 65px 65px 105px 115px', alignItems: 'center', padding: '11px 14px', borderBottom: i < parsedRows.length - 1 ? '1px solid #f1f5f9' : 'none', background: row.selected ? (i % 2 === 0 ? 'white' : '#fafafa') : '#f8fafc', opacity: row.selected ? 1 : 0.4, transition: 'opacity 0.15s' }}>
                             <input type="checkbox" checked={row.selected}
                               onChange={e => setParsedRows(prev => prev.map((r, j) => j === i ? { ...r, selected: e.target.checked } : r))}
                               style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: branchColor }} />
@@ -915,6 +925,15 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                                 }}
                                 placeholder="₪"
                                 style={{ width: '60px', border: `1.5px solid ${row.hourly_rate > 0 ? '#e2e8f0' : '#fca5a5'}`, borderRadius: '6px', padding: '4px 6px', fontSize: '13px', fontWeight: '700', textAlign: 'center', background: row.hourly_rate > 0 ? 'white' : '#fef2f2' }} />
+                            )}
+                            {isDetailedMode && (
+                              <input type="number" value={row.retention_bonus || ''}
+                                onChange={e => {
+                                  const newBonus = parseFloat(e.target.value) || 0
+                                  setParsedRows(prev => prev.map(r => r.name === row.name ? { ...r, retention_bonus: newBonus } : r))
+                                }}
+                                placeholder="0"
+                                style={{ width: '50px', border: '1.5px solid #e2e8f0', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', fontWeight: '600', textAlign: 'center', color: '#f59e0b' }} />
                             )}
                             <span style={{ fontWeight: '700', color: branchColor, fontSize: '13px' }}>₪{Math.round(row.gross_salary).toLocaleString()}</span>
                             <span style={{ fontWeight: '700', color: '#fb7185', fontSize: '13px' }}>₪{Math.round(row.employer_cost).toLocaleString()}</span>
