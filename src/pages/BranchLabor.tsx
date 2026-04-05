@@ -29,6 +29,7 @@ interface ParsedRow {
   hourly_rate: number
   retention_bonus: number
   selected: boolean
+  hasStoredRate?: boolean // true if rate comes from branch_employees
 }
 
 interface Entry {
@@ -532,6 +533,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
             if (match) {
               row.hourly_rate = Number(match.hourly_rate) || 0
               row.retention_bonus = Number(match.retention_bonus) || 0
+              row.hasStoredRate = row.hourly_rate > 0
             }
           }
         }
@@ -880,8 +882,13 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                             אישור לפני שמירה
                           </h3>
                           <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
-                            {isDetailedMode ? 'פורמט מפורט — הזן תעריף שעתי לחישוב שכר' : 'בדוק שהנתונים נכונים — ניתן לבטל עובדים בודדים'}
+                            {isDetailedMode ? 'תעריפי עובדים נטענים אוטומטית מהגדרות העובד' : 'בדוק שהנתונים נכונים — ניתן לבטל עובדים בודדים'}
                           </p>
+                          {isDetailedMode && (
+                            <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#6366f1' }}>
+                              לעריכת תעריפים → ניהול צוות → עובדים
+                            </p>
+                          )}
                         </div>
                         <div style={{ textAlign: 'left' as const, fontSize: '13px' }}>
                           <div style={{ color: '#64748b' }}>ברוטו: <strong style={{ color: branchColor }}>₪{parsedTotal.toLocaleString()}</strong></div>
@@ -917,23 +924,38 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                             <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_125 > 0 ? row.hours_125 : '—'}</span>
                             <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{row.hours_150 > 0 ? row.hours_150 : '—'}</span>
                             {isDetailedMode && (
-                              <input type="number" value={row.hourly_rate || ''}
-                                onChange={e => {
-                                  const newRate = parseFloat(e.target.value) || 0
-                                  // Apply rate to ALL rows of the same employee
-                                  setParsedRows(prev => prev.map(r => r.name === row.name ? { ...r, hourly_rate: newRate, gross_salary: 0, employer_cost: 0 } : r))
-                                }}
-                                placeholder="₪"
-                                style={{ width: '60px', border: `1.5px solid ${row.hourly_rate > 0 ? '#e2e8f0' : '#fca5a5'}`, borderRadius: '6px', padding: '4px 6px', fontSize: '13px', fontWeight: '700', textAlign: 'center', background: row.hourly_rate > 0 ? 'white' : '#fef2f2' }} />
+                              row.hasStoredRate ? (
+                                <div style={{ textAlign: 'center' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: '700', color: branchColor }}>₪{row.hourly_rate}</span>
+                                  <div style={{ fontSize: '9px', color: '#94a3b8' }}>מהגדרות</div>
+                                </div>
+                              ) : (
+                                <div style={{ textAlign: 'center' }}>
+                                  <input type="number" value={row.hourly_rate || ''}
+                                    onChange={e => {
+                                      const newRate = parseFloat(e.target.value) || 0
+                                      setParsedRows(prev => prev.map(r => r.name === row.name ? { ...r, hourly_rate: newRate, gross_salary: 0, employer_cost: 0 } : r))
+                                    }}
+                                    placeholder="₪"
+                                    style={{ width: '60px', border: '1.5px solid #fca5a5', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', fontWeight: '700', textAlign: 'center', background: '#fef2f2' }} />
+                                  <div style={{ fontSize: '9px', color: '#f59e0b' }}>חדש</div>
+                                </div>
+                              )
                             )}
                             {isDetailedMode && (
-                              <input type="number" value={row.retention_bonus || ''}
-                                onChange={e => {
-                                  const newBonus = parseFloat(e.target.value) || 0
-                                  setParsedRows(prev => prev.map(r => r.name === row.name ? { ...r, retention_bonus: newBonus } : r))
-                                }}
-                                placeholder="0"
-                                style={{ width: '50px', border: '1.5px solid #e2e8f0', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', fontWeight: '600', textAlign: 'center', color: '#f59e0b' }} />
+                              row.hasStoredRate && row.retention_bonus > 0 ? (
+                                <div style={{ textAlign: 'center' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: '600', color: '#f59e0b' }}>₪{row.retention_bonus}</span>
+                                </div>
+                              ) : (
+                                <input type="number" value={row.retention_bonus || ''}
+                                  onChange={e => {
+                                    const newBonus = parseFloat(e.target.value) || 0
+                                    setParsedRows(prev => prev.map(r => r.name === row.name ? { ...r, retention_bonus: newBonus } : r))
+                                  }}
+                                  placeholder="0"
+                                  style={{ width: '50px', border: '1.5px solid #e2e8f0', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', fontWeight: '600', textAlign: 'center', color: '#f59e0b' }} />
+                              )
                             )}
                             <span style={{ fontWeight: '700', color: branchColor, fontSize: '13px' }}>₪{Math.round(row.gross_salary).toLocaleString()}</span>
                             <span style={{ fontWeight: '700', color: '#fb7185', fontSize: '13px' }}>₪{Math.round(row.employer_cost).toLocaleString()}</span>
