@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
 const RESEND_API_URL = 'https://api.resend.com/emails'
 
@@ -13,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { email, name, senderName } = await req.json()
+    const { email, name, senderName, branchId, employeeId } = await req.json()
 
     if (!email || !name) {
       return new Response(JSON.stringify({ error: 'Missing email or name' }), {
@@ -22,6 +23,39 @@ serve(async (req) => {
       })
     }
 
+    // ── Pre-create app_users record using service role ──
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const adminClient = createClient(supabaseUrl, serviceRoleKey)
+
+    // Only create if not exists
+    const { data: existing } = await adminClient
+      .from('app_users')
+      .select('id')
+      .eq('email', email.trim().toLowerCase())
+      .maybeSingle()
+
+    if (!existing) {
+      const payload: Record<string, any> = {
+        email: email.trim().toLowerCase(),
+        name,
+        role: 'employee',
+        can_settings: false,
+        excluded_departments: [],
+        managed_department: null,
+      }
+      if (branchId) payload.branch_id = branchId
+      if (employeeId) payload.employee_id = employeeId
+
+      const { error: insertErr } = await adminClient.from('app_users').insert(payload)
+      if (insertErr) {
+        console.error('app_users insert error:', insertErr)
+      } else {
+        console.log(`Pre-created app_users for ${email}`)
+      }
+    }
+
+    // ── Send invitation email via Resend ──
     const apiKey = Deno.env.get('RESEND_API_KEY')
     if (!apiKey) {
       return new Response(JSON.stringify({ error: 'Missing RESEND_API_KEY' }), {

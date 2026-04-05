@@ -219,23 +219,35 @@ export function UserProvider({ session, children }: { session: Session; children
           background: 'white', borderRadius: '20px', padding: '48px', textAlign: 'center',
           boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxWidth: '420px',
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>&#128683;</div>
-          <h2 style={{ margin: '0 0 8px', color: '#0f172a', fontSize: '22px' }}>אין הרשאת גישה</h2>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
+          <h2 style={{ margin: '0 0 8px', color: '#0f172a', fontSize: '22px' }}>המשתמש טרם אושר</h2>
           <p style={{ color: '#94a3b8', marginBottom: '8px', lineHeight: '1.6' }}>
-            המשתמש <strong style={{ color: '#374151' }}>{session.user.email}</strong> לא רשום במערכת.
+            המשתמש <strong style={{ color: '#374151' }}>{session.user.email}</strong> עדיין לא מוגדר במערכת.
           </p>
           <p style={{ color: '#94a3b8', marginBottom: '24px', fontSize: '14px' }}>
-            פנה למנהל המערכת להוספת הרשאות.
+            אם הוזמנת על ידי מנהל — נסה להתחבר שוב בעוד מספר שניות.<br/>
+            אם הבעיה נמשכת — פנה למנהל הסניף שלך.
           </p>
-          <button
-            onClick={() => supabase.auth.signOut()}
-            style={{
-              background: '#ef4444', color: 'white', border: 'none', borderRadius: '10px',
-              padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer',
-            }}
-          >
-            התנתק
-          </button>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                background: '#6366f1', color: 'white', border: 'none', borderRadius: '10px',
+                padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer',
+              }}
+            >
+              נסה שוב
+            </button>
+            <button
+              onClick={() => supabase.auth.signOut()}
+              style={{
+                background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px',
+                padding: '10px 24px', fontSize: '15px', fontWeight: '600', cursor: 'pointer',
+              }}
+            >
+              התנתק
+            </button>
+          </div>
         </div>
       </div>
     )

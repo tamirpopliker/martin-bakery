@@ -97,7 +97,7 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
     setInviteSending(true)
     try {
       const { error } = await supabase.functions.invoke('send-invitation', {
-        body: { email, name, senderName: 'צוות קונדיטוריית מרטין' },
+        body: { email, name, senderName: 'צוות קונדיטוריית מרטין', branchId },
       })
       if (error) throw error
       setInviteSuccess(`ההזמנה נשלחה ל-${name}`)
@@ -117,7 +117,7 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
     for (const emp of selected) {
       try {
         await supabase.functions.invoke('send-invitation', {
-          body: { email: emp.email.trim(), name: emp.name, senderName: 'צוות קונדיטוריית מרטין' },
+          body: { email: emp.email.trim(), name: emp.name, senderName: 'צוות קונדיטוריית מרטין', branchId, employeeId: emp.id },
         })
         sent++
       } catch {}
