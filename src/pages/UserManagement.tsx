@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ArrowRight, Plus, Pencil, Trash2, Save, X, UserCog, Store, ToggleLeft, ToggleRight, Upload } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Save, X, UserCog, Store, ToggleLeft, ToggleRight, Upload, Send } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -72,6 +72,8 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
   const [importLoading, setImportLoading] = useState(false)
   const [importSaving, setImportSaving] = useState(false)
   const [importSuccess, setImportSuccess] = useState<string | null>(null)
+  const [inviteSending, setInviteSending] = useState<Record<string, boolean>>({})
+  const [inviteSent, setInviteSent] = useState<Record<string, boolean>>({})
   // ─── Branch management state ──────────────────────────────────────────────
   const [tab, setTab] = useState<'users' | 'branches' | 'settings'>(initialTab || 'users')
   const [branchSheetOpen, setBranchSheetOpen] = useState(false)
@@ -182,6 +184,30 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
       setImportEmployees([])
       loadUsers()
     }, 2000)
+  }
+
+  async function sendInvitation(email: string, name: string) {
+    const key = email
+    setInviteSending(p => ({ ...p, [key]: true }))
+    try {
+      const { error } = await supabase.functions.invoke('send-invitation', {
+        body: { email, name, senderName: appUser?.name || 'צוות קונדיטוריית מרטין' },
+      })
+      if (error) throw error
+      setInviteSent(p => ({ ...p, [key]: true }))
+    } catch (err) {
+      console.error('Invite error:', err)
+      alert('שגיאה בשליחת ההזמנה')
+    } finally {
+      setInviteSending(p => ({ ...p, [key]: false }))
+    }
+  }
+
+  async function sendAllInvitations() {
+    const selected = importEmployees.filter(e => e.checked && e.email.trim())
+    for (const emp of selected) {
+      await sendInvitation(emp.email.trim(), emp.name)
+    }
   }
 
   async function handleDelete(id: string) {
@@ -693,16 +719,16 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
 
             {!importLoading && importEmployees.length > 0 && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr', gap: '8px', padding: '8px 0', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b', alignItems: 'center' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 70px', gap: '8px', padding: '8px 0', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b', alignItems: 'center' }}>
                   <input type="checkbox"
                     checked={importEmployees.length > 0 && importEmployees.every(e => e.checked)}
                     ref={el => { if (el) el.indeterminate = importEmployees.some(e => e.checked) && !importEmployees.every(e => e.checked) }}
                     onChange={e => setImportEmployees(prev => prev.map(emp => ({ ...emp, checked: e.target.checked })))}
                     style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
-                  <span>שם</span><span>אימייל</span>
+                  <span>שם</span><span>אימייל</span><span>הזמנה</span>
                 </div>
                 {importEmployees.map((emp, idx) => (
-                  <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr', gap: '8px', padding: '10px 0', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
+                  <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 70px', gap: '8px', padding: '10px 0', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
                     <input type="checkbox" checked={emp.checked}
                       onChange={() => {
                         const updated = [...importEmployees]
@@ -717,6 +743,17 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                         setImportEmployees(updated)
                       }}
                       style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 10px', fontSize: '13px', direction: 'ltr', boxSizing: 'border-box' }} />
+                    {emp.email.trim() ? (
+                      inviteSent[emp.email.trim()] ? (
+                        <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600' }}>✓ נשלח</span>
+                      ) : (
+                        <button onClick={() => sendInvitation(emp.email.trim(), emp.name)}
+                          disabled={inviteSending[emp.email.trim()]}
+                          style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: '1px solid #6366f1', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', color: '#6366f1', cursor: 'pointer', fontWeight: '600' }}>
+                          <Send size={12} /> {inviteSending[emp.email.trim()] ? '...' : 'שלח'}
+                        </button>
+                      )
+                    ) : <span />}
                   </div>
                 ))}
               </>
@@ -728,7 +765,13 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexWrap: 'wrap' }}>
+              {importEmployees.filter(e => e.checked && e.email.trim()).length > 0 && (
+                <button onClick={sendAllInvitations}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                  <Send size={16} /> שלח הזמנה לכולם ({importEmployees.filter(e => e.checked && e.email.trim()).length})
+                </button>
+              )}
               <button
                 onClick={handleImportEmployees}
                 disabled={importSaving || importEmployees.filter(e => e.checked).length === 0}
