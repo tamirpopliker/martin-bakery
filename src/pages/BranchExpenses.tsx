@@ -14,6 +14,7 @@ interface Props {
   branchName: string
   branchColor: string
   onBack: () => void
+  onNavigate?: (page: string) => void
 }
 
 type ExpenseType = 'suppliers' | 'repairs' | 'infrastructure' | 'deliveries' | 'other'
@@ -74,7 +75,7 @@ function AutocompleteInput({ value, onChange, options, placeholder, color }: {
   )
 }
 
-export default function BranchExpenses({ branchId, branchName, branchColor, onBack }: Props) {
+export default function BranchExpenses({ branchId, branchName, branchColor, onBack, onNavigate }: Props) {
   const { period, setPeriod, from, to } = usePeriod()
   const [entries, setEntries]         = useState<Entry[]>([])
   const [suppliers, setSuppliers]     = useState<Supplier[]>([])
@@ -334,13 +335,18 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
         )}
 
         {/* Info banner */}
-        <div className="bg-indigo-600 rounded-xl p-4 mb-4 flex items-center gap-4" dir="rtl">
-          <Info size={24} className="text-white flex-shrink-0" />
-          <div className="flex-1">
-            <div className="text-white font-bold text-[14px] mb-1">💡 הוצאות מהמפעל — שים לב</div>
-            <div className="text-indigo-100 text-[13px]">רכישות מהמפעל מתעדכנות אוטומטית דרך מסך ההזמנות. אין צורך להזין אותן כאן ידנית.</div>
+        <div className="bg-indigo-600 rounded-xl p-4 mb-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">💡</span>
+            <div>
+              <p className="text-white font-bold text-base">הוצאות מהמפעל — שים לב</p>
+              <p className="text-indigo-100 text-sm">רכישות מהמפעל מתעדכנות אוטומטית דרך מסך ההזמנות. אין צורך להזין אותן כאן ידנית.</p>
+            </div>
           </div>
-          <button onClick={onBack} className="bg-white text-indigo-700 font-bold px-4 py-2 rounded-lg text-[13px] hover:bg-indigo-50 whitespace-nowrap">
+          <button
+            onClick={() => onNavigate ? onNavigate('orders') : onBack()}
+            className="bg-white text-indigo-700 font-bold px-4 py-2 rounded-lg text-sm whitespace-nowrap shrink-0"
+          >
             מעבר להזמנות ←
           </button>
         </div>
