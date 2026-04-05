@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
-import { Users, Calendar, CheckSquare, ArrowRight, ClipboardList } from 'lucide-react'
+import { Users, Calendar, CheckSquare, ArrowRight, ClipboardList, Settings } from 'lucide-react'
+import { useAppUser } from '../lib/UserContext'
 import { Button } from '@/components/ui/button'
 
 const fadeIn = (delay = 0) => ({
@@ -16,13 +17,16 @@ interface Props {
 }
 
 const cards = [
-  { page: 'employees', label: 'עובדים', emoji: '👤', subtitle: 'תעריפים · פרטי עובד', Icon: Users, ready: true },
-  { page: 'manager-constraints', label: 'זמינות הצוות', emoji: '📋', subtitle: 'אילוצים · זמינות · שבועי', Icon: ClipboardList, ready: true },
-  { page: 'branch-schedule', label: 'סידור עבודה', emoji: '📅', subtitle: 'משמרות · שבועי · פרסום', Icon: Calendar, ready: false },
-  { page: 'branch-tasks', label: 'משימות', emoji: '✅', subtitle: 'יומיות · שיוך · מעקב', Icon: CheckSquare, ready: false },
+  { page: 'employees', label: 'עובדים', emoji: '👤', subtitle: 'תעריפים · פרטי עובד', Icon: Users, ready: true, adminOnly: false },
+  { page: 'manager-constraints', label: 'זמינות הצוות', emoji: '📋', subtitle: 'אילוצים · זמינות · שבועי', Icon: ClipboardList, ready: true, adminOnly: false },
+  { page: 'shift-settings', label: 'הגדרות משמרות', emoji: '⚙️', subtitle: 'תפקידים · משמרות · דרישות', Icon: Settings, ready: true, adminOnly: true },
+  { page: 'branch-schedule', label: 'סידור עבודה', emoji: '📅', subtitle: 'משמרות · שבועי · פרסום', Icon: Calendar, ready: false, adminOnly: false },
+  { page: 'branch-tasks', label: 'משימות', emoji: '✅', subtitle: 'יומיות · שיוך · מעקב', Icon: CheckSquare, ready: false, adminOnly: false },
 ]
 
 export default function BranchTeam({ branchName, branchColor, onBack, onNavigate }: Props) {
+  const { appUser } = useAppUser()
+  const isManagerOrAdmin = appUser?.role === 'admin' || appUser?.role === 'branch'
   return (
     <div className="max-w-3xl mx-auto px-4 py-6" dir="rtl">
       {/* Header */}
@@ -40,7 +44,7 @@ export default function BranchTeam({ branchName, branchColor, onBack, onNavigate
 
       {/* Cards */}
       <div className="flex flex-col gap-3">
-        {cards.map((card, i) => (
+        {cards.filter(c => !c.adminOnly || isManagerOrAdmin).map((card, i) => (
           <motion.div key={card.page} variants={fadeIn(0.1 + i * 0.1)} initial="hidden" animate="visible">
             <div
               className="bg-white rounded-xl p-5 cursor-pointer hover:shadow-md transition-shadow relative overflow-hidden"

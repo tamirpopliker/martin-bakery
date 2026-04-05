@@ -16,6 +16,7 @@ import BranchOrders from './BranchOrders'
 import BranchEmployees from './BranchEmployees'
 import BranchTeam from './BranchTeam'
 import ManagerConstraintsView from './ManagerConstraintsView'
+import ShiftSettings from './ShiftSettings'
 import BranchDashboard from './BranchDashboard'
 import DataImport from './DataImport'
 
@@ -50,6 +51,7 @@ type BranchPage =
   | 'employees'
   | 'branch-team'
   | 'manager-constraints'
+  | 'shift-settings'
 
 interface MenuItem {
   page: BranchPage
@@ -131,6 +133,9 @@ export default function BranchHome({ branch, onBack }: Props) {
   )
   if (page === 'manager-constraints') return (
     <ManagerConstraintsView branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-team')} />
+  )
+  if (page === 'shift-settings') return (
+    <ShiftSettings branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-team')} />
   )
   if (page === 'employees') return (
     <BranchEmployees branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />

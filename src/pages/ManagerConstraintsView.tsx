@@ -2,14 +2,17 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
 
 const fadeIn = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.35 } } }
 
 type Availability = 'unavailable' | 'prefer_not' | 'available'
+type ViewMode = 'day' | 'shift'
 
 interface Employee { id: number; name: string }
-interface Constraint { employee_id: number; date: string; availability: Availability }
+interface Constraint { employee_id: number; date: string; availability: Availability; shift_id: number | null }
+interface BranchShift { id: number; name: string; start_time: string; end_time: string; days_of_week: number[] }
+interface StaffingRequirement { shift_id: number; role_id: number; required_count: number }
 
 const AVAIL_EMOJI: Record<Availability, string> = {
   available: '🟢',
@@ -48,8 +51,11 @@ interface Props {
 export default function ManagerConstraintsView({ branchId, branchName, branchColor, onBack }: Props) {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [constraints, setConstraints] = useState<Constraint[]>([])
+  const [shifts, setShifts] = useState<BranchShift[]>([])
+  const [staffingReqs, setStaffingReqs] = useState<StaffingRequirement[]>([])
   const [weekOffset, setWeekOffset] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [viewMode, setViewMode] = useState<ViewMode>('shift')
 
   const weekDays = getWeekDays(weekOffset)
   const weekLabel = `${formatShortDate(weekDays[0])} — ${formatShortDate(weekDays[6])}`
@@ -58,24 +64,34 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
 
   async function loadData() {
     setLoading(true)
-    const [empsRes, consRes] = await Promise.all([
+    const [empsRes, consRes, shiftsRes, staffingRes] = await Promise.all([
       supabase.from('branch_employees').select('id, name').eq('branch_id', branchId).eq('active', true).order('name'),
-      supabase.from('schedule_constraints').select('employee_id, date, availability')
+      supabase.from('schedule_constraints').select('employee_id, date, availability, shift_id')
         .eq('branch_id', branchId)
         .gte('date', weekDays[0])
         .lte('date', weekDays[6]),
+      supabase.from('branch_shifts').select('id, name, start_time, end_time, days_of_week')
+        .eq('branch_id', branchId)
+        .eq('is_active', true),
+      supabase.from('shift_staffing_requirements').select('shift_id, role_id, required_count'),
     ])
     if (empsRes.data) setEmployees(empsRes.data)
     if (consRes.data) setConstraints(consRes.data as Constraint[])
+    if (shiftsRes.data) setShifts(shiftsRes.data as BranchShift[])
+    if (staffingRes.data) setStaffingReqs(staffingRes.data as StaffingRequirement[])
     setLoading(false)
   }
 
-  function getAvail(empId: number, date: string): Availability | null {
-    const c = constraints.find(c => c.employee_id === empId && c.date === date)
+  function getAvail(empId: number, date: string, shiftId?: number): Availability | null {
+    const c = constraints.find(c =>
+      c.employee_id === empId &&
+      c.date === date &&
+      (shiftId === undefined || c.shift_id === shiftId || c.shift_id === null)
+    )
     return c ? c.availability : null
   }
 
-  // Summary per day
+  // Summary per day (used by day view)
   function getDaySummary(date: string) {
     const isSat = new Date(date + 'T12:00:00').getDay() === 6
     if (isSat) return null
@@ -90,6 +106,30 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
     return { available, unavailable, preferNot, noData }
   }
 
+  // Get shifts that apply to a specific day of week (0=Sunday ... 6=Saturday)
+  function getShiftsForDay(date: string): BranchShift[] {
+    const dayOfWeek = new Date(date + 'T12:00:00').getDay()
+    return shifts.filter(s => s.days_of_week && s.days_of_week.includes(dayOfWeek))
+  }
+
+  // Get total required count for a shift (sum across all roles)
+  function getRequiredCount(shiftId: number): number {
+    return staffingReqs
+      .filter(r => r.shift_id === shiftId)
+      .reduce((sum, r) => sum + r.required_count, 0)
+  }
+
+  // Get shift summary: available count and required count
+  function getShiftSummary(date: string, shiftId: number) {
+    let available = 0
+    for (const emp of employees) {
+      const av = getAvail(emp.id, date, shiftId)
+      if (av === 'available') available++
+    }
+    const required = getRequiredCount(shiftId)
+    return { available, required }
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-6" dir="rtl">
       {/* Header */}
@@ -102,6 +142,32 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
         </div>
         <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: branchColor }}>
           <span className="text-white text-lg">📋</span>
+        </div>
+      </motion.div>
+
+      {/* View mode toggle */}
+      <motion.div variants={fadeIn} initial="hidden" animate="visible" className="flex items-center justify-center gap-2 mb-4">
+        <div className="bg-slate-100 rounded-xl p-1 flex gap-1">
+          <button
+            onClick={() => setViewMode('day')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+              viewMode === 'day'
+                ? 'bg-white text-slate-800 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            הצג לפי יום
+          </button>
+          <button
+            onClick={() => setViewMode('shift')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+              viewMode === 'shift'
+                ? 'bg-white text-slate-800 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            הצג לפי משמרת
+          </button>
         </div>
       </motion.div>
 
@@ -124,7 +190,8 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
 
       {loading ? (
         <div className="text-center py-12 text-slate-400">טוען...</div>
-      ) : (
+      ) : viewMode === 'day' ? (
+        /* ===== DAY VIEW (existing grid) ===== */
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
           <div className="bg-white rounded-xl overflow-hidden" style={{ border: '0.5px solid #e2e8f0' }}>
             {/* Header row */}
@@ -183,6 +250,93 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
               })}
             </div>
           </div>
+
+          {employees.length === 0 && (
+            <div className="text-center py-8 text-slate-400 text-sm">
+              אין עובדים פעילים בסניף זה
+            </div>
+          )}
+        </motion.div>
+      ) : (
+        /* ===== SHIFT VIEW ===== */
+        <motion.div variants={fadeIn} initial="hidden" animate="visible" className="space-y-6">
+          {shifts.length === 0 ? (
+            <div className="text-center py-8 text-slate-400 text-sm">
+              לא הוגדרו משמרות לסניף זה
+            </div>
+          ) : weekDays.map((date, dayIdx) => {
+            const isSat = new Date(date + 'T12:00:00').getDay() === 6
+            if (isSat) return null
+            const dayShifts = getShiftsForDay(date)
+            if (dayShifts.length === 0) return null
+
+            return (
+              <div key={date}>
+                {/* Day header */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-bold text-slate-700">
+                    {DAY_NAMES_SHORT[dayIdx]} — {formatShortDate(date)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {dayShifts.map(shift => {
+                    const summary = getShiftSummary(date, shift.id)
+                    const isShort = summary.required > 0 && summary.available < summary.required
+
+                    return (
+                      <div
+                        key={shift.id}
+                        className="bg-white rounded-xl p-4"
+                        style={{ border: '0.5px solid #e2e8f0' }}
+                      >
+                        {/* Shift header */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <div className="text-sm font-bold text-slate-800">{shift.name}</div>
+                            <div className="text-[11px] text-slate-400">
+                              {shift.start_time?.slice(0, 5)} — {shift.end_time?.slice(0, 5)}
+                            </div>
+                          </div>
+                          {isShort && (
+                            <div className="flex items-center gap-1 bg-red-50 text-red-600 text-[11px] font-bold px-2 py-1 rounded-lg">
+                              <AlertTriangle size={12} />
+                              חסר כ״א
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Employee list */}
+                        <div className="space-y-1.5 mb-3">
+                          {employees.map(emp => {
+                            const av = getAvail(emp.id, date, shift.id)
+                            const emoji = av ? AVAIL_EMOJI[av] : '⚪'
+                            return (
+                              <div key={emp.id} className="flex items-center gap-2">
+                                <span className="text-sm">{emoji}</span>
+                                <span className="text-xs text-slate-600 truncate">{emp.name}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Summary */}
+                        <div
+                          className="text-[11px] font-bold pt-2 text-center"
+                          style={{
+                            borderTop: '1px solid #f1f5f9',
+                            color: isShort ? '#dc2626' : '#64748b',
+                          }}
+                        >
+                          {summary.available} זמינים / דרישה: {summary.required}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
 
           {employees.length === 0 && (
             <div className="text-center py-8 text-slate-400 text-sm">

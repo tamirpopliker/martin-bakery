@@ -13,10 +13,20 @@ const fadeIn = (delay = 0) => ({
 
 type Availability = 'unavailable' | 'prefer_not' | 'available'
 
-interface DayConstraint {
-  date: string // YYYY-MM-DD
+interface BranchShift {
+  id: number
+  name: string
+  start_time: string
+  end_time: string
+  days_of_week: number[]
+}
+
+interface DayShiftConstraint {
+  date: string
+  shiftId: number
+  shiftName: string
+  shiftTime: string
   availability: Availability
-  notes: string
   saving?: boolean
   saved?: boolean
 }
@@ -40,13 +50,21 @@ function getNext28Days(): string[] {
   return days
 }
 
+function getDayOfWeek(dateStr: string): number {
+  return new Date(dateStr + 'T12:00:00').getDay()
+}
+
 function isSaturday(dateStr: string): boolean {
-  return new Date(dateStr + 'T12:00:00').getDay() === 6
+  return getDayOfWeek(dateStr) === 6
 }
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00')
   return d.toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })
+}
+
+function formatTime(time: string): string {
+  return time.slice(0, 5)
 }
 
 interface Props {
@@ -58,7 +76,8 @@ export default function EmployeeConstraints({ onBack }: Props) {
   const { branches } = useBranches()
   const branchName = branches.find(b => b.id === appUser?.branch_id)?.name || ''
 
-  const [days, setDays] = useState<DayConstraint[]>([])
+  const [shifts, setShifts] = useState<BranchShift[]>([])
+  const [constraints, setConstraints] = useState<DayShiftConstraint[]>([])
   const [loading, setLoading] = useState(true)
   const [resolvedEmpId, setResolvedEmpId] = useState<number | null>(null)
   const [noEmployee, setNoEmployee] = useState(false)
@@ -90,68 +109,149 @@ export default function EmployeeConstraints({ onBack }: Props) {
   }
 
   useEffect(() => {
-    if (resolvedEmpId) loadConstraints()
+    if (resolvedEmpId) loadShiftsAndConstraints()
   }, [resolvedEmpId])
 
-  async function loadConstraints() {
+  async function loadShiftsAndConstraints() {
     setLoading(true)
     const dateList = getNext28Days()
-    const { data } = await supabase
-      .from('schedule_constraints')
-      .select('date, availability, notes')
-      .eq('employee_id', resolvedEmpId!)
-      .in('date', dateList)
 
-    const map = new Map<string, { availability: Availability; notes: string }>()
-    if (data) {
-      for (const row of data) {
-        map.set(row.date, { availability: row.availability as Availability, notes: row.notes || '' })
+    // Load shifts and constraints in parallel
+    const [shiftsRes, constraintsRes] = await Promise.all([
+      supabase
+        .from('branch_shifts')
+        .select('id, name, start_time, end_time, days_of_week')
+        .eq('branch_id', appUser?.branch_id)
+        .eq('is_active', true),
+      supabase
+        .from('schedule_constraints')
+        .select('date, availability, notes, shift_id')
+        .eq('employee_id', resolvedEmpId!)
+        .in('date', dateList),
+    ])
+
+    const loadedShifts: BranchShift[] = (shiftsRes.data || []) as BranchShift[]
+    setShifts(loadedShifts)
+
+    // Build a map: "date|shiftId" -> availability
+    const map = new Map<string, Availability>()
+    if (constraintsRes.data) {
+      for (const row of constraintsRes.data) {
+        const key = `${row.date}|${row.shift_id ?? 0}`
+        map.set(key, row.availability as Availability)
       }
     }
 
-    setDays(dateList.map(date => ({
-      date,
-      availability: map.get(date)?.availability || 'available',
-      notes: map.get(date)?.notes || '',
-    })))
+    // Build DayShiftConstraint list
+    const result: DayShiftConstraint[] = []
+    for (const date of dateList) {
+      if (isSaturday(date)) {
+        // Add a placeholder for Saturday display
+        result.push({
+          date,
+          shiftId: 0,
+          shiftName: '',
+          shiftTime: '',
+          availability: 'available',
+        })
+        continue
+      }
+
+      const dow = getDayOfWeek(date)
+      const applicableShifts = loadedShifts.filter(s =>
+        s.days_of_week && s.days_of_week.includes(dow)
+      )
+
+      if (applicableShifts.length === 0) {
+        // No shifts for this day - add a placeholder
+        result.push({
+          date,
+          shiftId: 0,
+          shiftName: 'אין משמרות',
+          shiftTime: '',
+          availability: 'available',
+        })
+      } else {
+        for (const shift of applicableShifts) {
+          const key = `${date}|${shift.id}`
+          result.push({
+            date,
+            shiftId: shift.id,
+            shiftName: shift.name,
+            shiftTime: `${formatTime(shift.start_time)}-${formatTime(shift.end_time)}`,
+            availability: map.get(key) || 'available',
+          })
+        }
+      }
+    }
+
+    setConstraints(result)
     setLoading(false)
   }
 
-  async function setAvailability(dateStr: string, availability: Availability) {
-    if (!resolvedEmpId) return
+  async function setAvailability(dateStr: string, shiftId: number, availability: Availability) {
+    if (!resolvedEmpId || shiftId === 0) return
 
-    setDays(prev => prev.map(d =>
-      d.date === dateStr ? { ...d, availability, saving: true, saved: false } : d
+    const key = `${dateStr}|${shiftId}`
+
+    // Update local state immediately
+    setConstraints(prev => prev.map(c =>
+      `${c.date}|${c.shiftId}` === key
+        ? { ...c, availability, saving: true, saved: false }
+        : c
     ))
 
-    await supabase.from('schedule_constraints').upsert({
-      branch_id: appUser?.branch_id,
-      employee_id: resolvedEmpId,
-      date: dateStr,
-      availability,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'employee_id,date' })
+    // Delete existing constraint for this emp+date+shift, then insert new
+    await supabase
+      .from('schedule_constraints')
+      .delete()
+      .eq('employee_id', resolvedEmpId)
+      .eq('date', dateStr)
+      .eq('shift_id', shiftId)
 
-    setDays(prev => prev.map(d =>
-      d.date === dateStr ? { ...d, saving: false, saved: true } : d
+    await supabase
+      .from('schedule_constraints')
+      .insert({
+        branch_id: appUser?.branch_id,
+        employee_id: resolvedEmpId,
+        date: dateStr,
+        shift_id: shiftId,
+        availability,
+        updated_at: new Date().toISOString(),
+      })
+
+    // Show saved indicator
+    setConstraints(prev => prev.map(c =>
+      `${c.date}|${c.shiftId}` === key
+        ? { ...c, saving: false, saved: true }
+        : c
     ))
     setTimeout(() => {
-      setDays(prev => prev.map(d =>
-        d.date === dateStr ? { ...d, saved: false } : d
+      setConstraints(prev => prev.map(c =>
+        `${c.date}|${c.shiftId}` === key
+          ? { ...c, saved: false }
+          : c
       ))
     }, 1500)
   }
 
-  // Group days into weeks (Sunday-Saturday)
-  const weeks: DayConstraint[][] = []
-  let currentWeek: DayConstraint[] = []
-  for (const day of days) {
-    const dow = new Date(day.date + 'T12:00:00').getDay()
+  // Group constraints by date, then group dates into weeks
+  const dateGroups = new Map<string, DayShiftConstraint[]>()
+  for (const c of constraints) {
+    const list = dateGroups.get(c.date) || []
+    list.push(c)
+    dateGroups.set(c.date, list)
+  }
+
+  const weeks: { date: string; items: DayShiftConstraint[] }[][] = []
+  let currentWeek: { date: string; items: DayShiftConstraint[] }[] = []
+  for (const [date, items] of dateGroups) {
+    const dow = getDayOfWeek(date)
     if (dow === 0 && currentWeek.length > 0) {
       weeks.push(currentWeek)
       currentWeek = []
     }
-    currentWeek.push(day)
+    currentWeek.push({ date, items })
   }
   if (currentWeek.length > 0) weeks.push(currentWeek)
 
@@ -194,42 +294,62 @@ export default function EmployeeConstraints({ onBack }: Props) {
               <div className="px-4 py-2 bg-slate-50 text-xs font-bold text-slate-500">
                 שבוע {wi + 1}
               </div>
-              {week.map(day => {
-                const sat = isSaturday(day.date)
-                const cfg = AVAIL_CONFIG[day.availability]
+              {week.map(({ date, items }) => {
+                const sat = isSaturday(date)
                 return (
-                  <div key={day.date} className="flex items-center gap-3 px-4 py-3"
-                    style={{ borderBottom: '1px solid #f1f5f9', opacity: sat ? 0.4 : 1 }}>
-                    <div className="flex-1">
-                      <span className="text-sm font-semibold text-slate-700">{formatDate(day.date)}</span>
+                  <div key={date} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    {/* Day header */}
+                    <div className="px-4 pt-3 pb-1" style={{ opacity: sat ? 0.4 : 1 }}>
+                      <span className="text-sm font-semibold text-slate-700">{formatDate(date)}</span>
                     </div>
                     {sat ? (
-                      <span className="text-xs text-slate-400">שבת</span>
+                      <div className="px-4 pb-3" style={{ opacity: 0.4 }}>
+                        <span className="text-xs text-slate-400">שבת</span>
+                      </div>
                     ) : (
-                      <div className="flex gap-1.5">
-                        {(['available', 'prefer_not', 'unavailable'] as Availability[]).map(av => {
-                          const ac = AVAIL_CONFIG[av]
-                          const active = day.availability === av
+                      <div className="px-4 pb-3 flex flex-col gap-1.5">
+                        {items.map(item => {
+                          if (item.shiftId === 0) {
+                            return (
+                              <div key="no-shift" className="text-xs text-slate-400 py-1">
+                                {item.shiftName}
+                              </div>
+                            )
+                          }
                           return (
-                            <button key={av} onClick={() => setAvailability(day.date, av)}
-                              className="transition-all duration-150"
-                              style={{
-                                padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '600',
-                                border: `1.5px solid ${active ? ac.border : '#e2e8f0'}`,
-                                background: active ? ac.bg : 'white',
-                                color: active ? ac.color : '#94a3b8',
-                                cursor: 'pointer',
-                              }}>
-                              {ac.emoji}
-                            </button>
+                            <div key={item.shiftId} className="flex items-center gap-2">
+                              <div className="flex-1 min-w-0">
+                                <span className="text-xs font-medium text-slate-600">{item.shiftName}</span>
+                                <span className="text-xs text-slate-400 mr-1">{item.shiftTime}</span>
+                              </div>
+                              <div className="flex gap-1.5 items-center">
+                                {(['available', 'prefer_not', 'unavailable'] as Availability[]).map(av => {
+                                  const ac = AVAIL_CONFIG[av]
+                                  const active = item.availability === av
+                                  return (
+                                    <button key={av} onClick={() => setAvailability(date, item.shiftId, av)}
+                                      className="transition-all duration-150"
+                                      style={{
+                                        padding: '4px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '600',
+                                        border: `1.5px solid ${active ? ac.border : '#e2e8f0'}`,
+                                        background: active ? ac.bg : 'white',
+                                        color: active ? ac.color : '#94a3b8',
+                                        cursor: 'pointer',
+                                      }}>
+                                      {ac.emoji}
+                                    </button>
+                                  )
+                                })}
+                                {item.saved && (
+                                  <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                    className="flex items-center text-emerald-500">
+                                    <Check size={14} />
+                                  </motion.span>
+                                )}
+                              </div>
+                            </div>
                           )
                         })}
-                        {day.saved && (
-                          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
-                            className="flex items-center text-emerald-500">
-                            <Check size={14} />
-                          </motion.span>
-                        )}
                       </div>
                     )}
                   </div>
