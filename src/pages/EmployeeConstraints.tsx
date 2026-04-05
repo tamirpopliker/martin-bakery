@@ -36,11 +36,13 @@ interface EmployeeRoleAssignment {
   role_id: number
 }
 
-const AVAIL_CONFIG: Record<Availability, { label: string; emoji: string; color: string; bg: string; border: string }> = {
-  available:    { label: 'יכול',         emoji: '🟢', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
-  prefer_not:   { label: 'מעדיף שלא',   emoji: '🟡', color: '#ca8a04', bg: '#fefce8', border: '#fde68a' },
-  unavailable:  { label: 'לא יכול',     emoji: '🔴', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+const AVAIL_CONFIG: Record<Availability, { label: string; icon: string; color: string; bg: string; border: string }> = {
+  available:    { label: 'פנוי',         icon: '✓', color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
+  prefer_not:   { label: 'מעדיף שלא',   icon: '~', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+  unavailable:  { label: 'לא יכול',     icon: '✕', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
 }
+
+const CYCLE_ORDER: Availability[] = ['available', 'prefer_not', 'unavailable']
 
 const DAY_NAMES_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
 
@@ -52,7 +54,11 @@ function getWeekDays(weekOffset: number): string[] {
   for (let i = 0; i < 7; i++) {
     const d = new Date(sunday)
     d.setDate(sunday.getDate() + i)
-    days.push(d.toISOString().split('T')[0])
+    // Use local date format to avoid timezone issues
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    days.push(`${yyyy}-${mm}-${dd}`)
   }
   return days
 }
@@ -295,8 +301,8 @@ export default function EmployeeConstraints({ onBack }: Props) {
             <motion.div variants={fadeIn(0.05)} initial="hidden" animate="visible"
               className="flex justify-center gap-4 mb-5 text-xs">
               {Object.entries(AVAIL_CONFIG).map(([, cfg]) => (
-                <span key={cfg.label} className="flex items-center gap-1">
-                  <span>{cfg.emoji}</span> {cfg.label}
+                <span key={cfg.label} className="flex items-center gap-1" style={{ color: cfg.color }}>
+                  <span style={{ fontWeight: '700' }}>{cfg.icon}</span> {cfg.label}
                 </span>
               ))}
             </motion.div>
@@ -367,16 +373,20 @@ export default function EmployeeConstraints({ onBack }: Props) {
 
                             if (isSat) {
                               return (
-                                <td key={date} className="text-center py-2" style={{ background: '#f1f5f9' }}>
-                                  <span className="text-[10px] text-slate-300">שבת</span>
+                                <td key={date} className="p-1">
+                                  <div style={{ height: '64px', borderRadius: '10px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <span className="text-[10px] text-slate-300">שבת</span>
+                                  </div>
                                 </td>
                               )
                             }
 
                             if (!applies) {
                               return (
-                                <td key={date} className="text-center py-2" style={{ background: '#fafafa' }}>
-                                  <span className="text-slate-200">—</span>
+                                <td key={date} className="p-1">
+                                  <div style={{ height: '64px', borderRadius: '10px', background: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <span className="text-slate-200">—</span>
+                                  </div>
                                 </td>
                               )
                             }
@@ -384,35 +394,37 @@ export default function EmployeeConstraints({ onBack }: Props) {
                             const key = `${date}|${shift.id}`
                             const current = constraintMap.get(key) || 'available'
                             const isSaved = savedKeys.has(key)
+                            const ac = AVAIL_CONFIG[current]
+                            const nextAvail = CYCLE_ORDER[(CYCLE_ORDER.indexOf(current) + 1) % 3]
 
                             return (
-                              <td key={date} className="text-center py-1.5 px-0.5">
-                                <div className="flex gap-0.5 items-center justify-center flex-wrap">
-                                  {(['available', 'prefer_not', 'unavailable'] as Availability[]).map(av => {
-                                    const ac = AVAIL_CONFIG[av]
-                                    const active = current === av
-                                    return (
-                                      <button key={av} onClick={() => setAvailability(date, shift.id, av)}
-                                        className="transition-all duration-150"
-                                        style={{
-                                          padding: '2px 6px', borderRadius: '6px', fontSize: '11px', fontWeight: '600',
-                                          border: `1.5px solid ${active ? ac.border : '#e2e8f0'}`,
-                                          background: active ? ac.bg : 'white',
-                                          color: active ? ac.color : '#94a3b8',
-                                          cursor: 'pointer',
-                                          lineHeight: 1.2,
-                                        }}>
-                                        {ac.emoji}
-                                      </button>
-                                    )
-                                  })}
+                              <td key={date} className="p-1">
+                                <motion.button
+                                  whileTap={{ scale: 0.93 }}
+                                  onClick={() => setAvailability(date, shift.id, nextAvail)}
+                                  className="w-full transition-colors duration-200 relative"
+                                  style={{
+                                    height: '64px',
+                                    borderRadius: '10px',
+                                    border: `1.5px solid ${ac.border}`,
+                                    background: ac.bg,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '2px',
+                                  }}>
+                                  <span style={{ fontSize: '20px', fontWeight: '800', color: ac.color, lineHeight: 1 }}>{ac.icon}</span>
+                                  <span style={{ fontSize: '9px', fontWeight: '600', color: ac.color }}>{ac.label}</span>
                                   {isSaved && (
                                     <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
-                                      className="flex items-center text-emerald-500">
-                                      <Check size={12} />
+                                      style={{ position: 'absolute', top: '3px', left: '3px' }}
+                                      className="text-emerald-500">
+                                      <Check size={10} />
                                     </motion.span>
                                   )}
-                                </div>
+                                </motion.button>
                               </td>
                             )
                           })}
