@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { ArrowRight, Plus, Pencil, Users, Save, ToggleLeft, ToggleRight } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Users, Save, ToggleLeft, ToggleRight, Send, Mail } from 'lucide-react'
 
 interface Props {
   branchId: number
@@ -40,6 +40,13 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
     id: undefined as number | undefined,
     name: '', email: '', phone: '', hourly_rate: '', retention_bonus: '', active: true,
   })
+  // Invite state
+  const [inviteModal, setInviteModal] = useState<{ empId: number; name: string; email: string } | null>(null)
+  const [inviteSending, setInviteSending] = useState(false)
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null)
+  // Bulk invite
+  const [bulkInviteOpen, setBulkInviteOpen] = useState(false)
+  const [bulkList, setBulkList] = useState<{ id: number; name: string; email: string; checked: boolean }[]>([])
 
   async function fetchEmployees() {
     const { data, error } = await supabase.from('branch_employees').select('*')
@@ -80,6 +87,45 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
     fetchEmployees()
   }
 
+  async function sendInvite(email: string, name: string) {
+    setInviteSending(true)
+    try {
+      const { error } = await supabase.functions.invoke('send-invitation', {
+        body: { email, name, senderName: 'צוות קונדיטוריית מרטין' },
+      })
+      if (error) throw error
+      setInviteSuccess(`ההזמנה נשלחה ל-${name}`)
+      setTimeout(() => { setInviteSuccess(null); setInviteModal(null) }, 2000)
+    } catch (err) {
+      console.error('Invite error:', err)
+      alert('שגיאה בשליחת ההזמנה')
+    } finally {
+      setInviteSending(false)
+    }
+  }
+
+  async function sendBulkInvites() {
+    const selected = bulkList.filter(e => e.checked && e.email.trim())
+    setInviteSending(true)
+    let sent = 0
+    for (const emp of selected) {
+      try {
+        await supabase.functions.invoke('send-invitation', {
+          body: { email: emp.email.trim(), name: emp.name, senderName: 'צוות קונדיטוריית מרטין' },
+        })
+        sent++
+      } catch {}
+    }
+    setInviteSending(false)
+    setInviteSuccess(`נשלחו ${sent} הזמנות`)
+    setTimeout(() => { setInviteSuccess(null); setBulkInviteOpen(false) }, 2000)
+  }
+
+  function openBulkInvite() {
+    setBulkList(employees.filter(e => e.active).map(e => ({ id: e.id, name: e.name, email: e.email || '', checked: false })))
+    setBulkInviteOpen(true)
+  }
+
   function openNew() {
     setForm({ id: undefined, name: '', email: '', phone: '', hourly_rate: '', retention_bonus: '', active: true })
     setSheetOpen(true)
@@ -110,7 +156,11 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
           <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>עובדי הסניף — {branchName}</h1>
           <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>{activeCount} עובדים פעילים · תעריפי שעה</p>
         </div>
-        <div style={{ marginRight: 'auto' }}>
+        <div style={{ marginRight: 'auto', display: 'flex', gap: '8px' }}>
+          <button onClick={openBulkInvite}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            <Mail size={16} /> הזמן את כולם 📧
+          </button>
           <button onClick={openNew}
             style={{ display: 'flex', alignItems: 'center', gap: '6px', background: branchColor, color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
             <Plus size={16} /> הוסף עובד
@@ -124,8 +174,8 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
         ) : (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <Card className="shadow-sm" style={{ overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 80px 70px 80px 60px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
-                <span>שם</span><span>אימייל</span><span>טלפון</span><span>₪/שעה</span><span>בונוס</span><span>סטטוס</span><span>פעולות</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 80px 70px 80px 60px 60px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                <span>שם</span><span>אימייל</span><span>טלפון</span><span>₪/שעה</span><span>בונוס</span><span>סטטוס</span><span>עריכה</span><span>הזמנה</span>
               </div>
               {employees.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
@@ -133,7 +183,7 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
                   <div>אין עובדים. לחץ "הוסף עובד" כדי להתחיל.</div>
                 </div>
               ) : employees.map(emp => (
-                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 80px 70px 80px 60px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: emp.active ? 1 : 0.5 }}>
+                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 120px 80px 70px 80px 60px 60px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: emp.active ? 1 : 0.5 }}>
                   <span style={{ fontWeight: '600', color: '#0f172a' }}>{emp.name}</span>
                   <span style={{ color: '#64748b', fontSize: '12px' }}>{emp.email || '—'}</span>
                   <span style={{ color: '#64748b', fontSize: '12px' }}>{emp.phone || '—'}</span>
@@ -147,6 +197,10 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
                   <button onClick={() => openEdit(emp)}
                     style={{ background: '#f1f5f9', color: branchColor, border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
                     <Pencil size={13} />
+                  </button>
+                  <button onClick={() => setInviteModal({ empId: emp.id, name: emp.name, email: emp.email || '' })}
+                    style={{ background: '#eef2ff', color: '#6366f1', border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
+                    <Send size={13} />
                   </button>
                 </div>
               ))}
@@ -204,6 +258,74 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
           </SheetContent>
         </SheetPortal>
       </Sheet>
+
+      {/* Single Invite Modal */}
+      {inviteModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => { setInviteModal(null); setInviteSuccess(null) }}>
+          <div style={{ background: 'white', borderRadius: '16px', padding: '28px', width: '400px', direction: 'rtl' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>הזמן את {inviteModal.name} לאפליקציה ✉️</h3>
+            <label style={S.label}>אימייל Google</label>
+            <input value={inviteModal.email} onChange={e => setInviteModal({ ...inviteModal, email: e.target.value })}
+              placeholder="email@gmail.com" style={{ ...S.input, direction: 'ltr', marginBottom: '16px' }} />
+            {inviteSuccess && <div style={{ padding: '10px', background: '#f0fdf4', borderRadius: '8px', color: '#16a34a', fontWeight: '600', fontSize: '13px', marginBottom: '12px', textAlign: 'center' }}>{inviteSuccess}</div>}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => sendInvite(inviteModal.email.trim(), inviteModal.name)}
+                disabled={inviteSending || !inviteModal.email.trim()}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: !inviteModal.email.trim() || inviteSending ? '#e2e8f0' : '#6366f1', color: !inviteModal.email.trim() || inviteSending ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                <Send size={14} /> {inviteSending ? 'שולח...' : 'שלח הזמנה'}
+              </button>
+              <button onClick={() => { setInviteModal(null); setInviteSuccess(null) }}
+                style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Invite Modal */}
+      {bulkInviteOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => { setBulkInviteOpen(false); setInviteSuccess(null) }}>
+          <div style={{ background: 'white', borderRadius: '16px', padding: '28px', width: '520px', maxHeight: '80vh', overflow: 'auto', direction: 'rtl' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>הזמן עובדים לאפליקציה — {branchName}</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr', gap: '8px', padding: '8px 0', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b', alignItems: 'center' }}>
+              <input type="checkbox"
+                checked={bulkList.length > 0 && bulkList.every(e => e.checked)}
+                ref={el => { if (el) el.indeterminate = bulkList.some(e => e.checked) && !bulkList.every(e => e.checked) }}
+                onChange={e => setBulkList(prev => prev.map(emp => ({ ...emp, checked: e.target.checked })))}
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+              <span>שם</span><span>אימייל</span>
+            </div>
+            {bulkList.map((emp, idx) => (
+              <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr', gap: '8px', padding: '10px 0', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
+                <input type="checkbox" checked={emp.checked}
+                  onChange={() => { const u = [...bulkList]; u[idx] = { ...u[idx], checked: !u[idx].checked }; setBulkList(u) }}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>{emp.name}</span>
+                <input value={emp.email} placeholder="email@gmail.com"
+                  onChange={e => { const u = [...bulkList]; u[idx] = { ...u[idx], email: e.target.value }; setBulkList(u) }}
+                  style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 10px', fontSize: '13px', direction: 'ltr', boxSizing: 'border-box' }} />
+              </div>
+            ))}
+            {inviteSuccess && <div style={{ marginTop: '12px', padding: '10px', background: '#f0fdf4', borderRadius: '8px', color: '#16a34a', fontWeight: '600', fontSize: '13px', textAlign: 'center' }}>{inviteSuccess}</div>}
+            <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+              <button onClick={sendBulkInvites}
+                disabled={inviteSending || bulkList.filter(e => e.checked && e.email.trim()).length === 0}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: inviteSending || bulkList.filter(e => e.checked && e.email.trim()).length === 0 ? '#e2e8f0' : '#6366f1', color: inviteSending || bulkList.filter(e => e.checked && e.email.trim()).length === 0 ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '12px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                <Send size={16} /> {inviteSending ? 'שולח...' : `שלח הזמנות (${bulkList.filter(e => e.checked && e.email.trim()).length})`}
+              </button>
+              <button onClick={() => setBulkInviteOpen(false)}
+                style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '12px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                סגור
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
