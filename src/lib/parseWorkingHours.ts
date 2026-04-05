@@ -1,15 +1,16 @@
 /**
  * parseWorkingHoursPDF — חילוץ שורות יומיות מדו"ח נוכחות מפורט של CashOnTab
  *
- * אסטרטגיה חדשה: ה-PDF הוא טבלה אחת שמתפרשת על פני מספר עמודים.
- * כל העובדים מופיעים בטבלה אחת (לא עובד-לכל-עמוד).
+ * שני פורמטים נתמכים:
  *
- * שלב 1: איחוד כל הפריטים מכל העמודים לרשימה אחת
- * שלב 2: זיהוי כותרות עמודות מהשורה הראשונה עם "רגילות"
- * שלב 3: זיהוי עמודת "שם" לשמות עובדים
- * שלב 4: סריקת שורות נתונים (שורות עם תאריך DD/MM/YYYY)
+ * 1. BLOCK FORMAT (עדיפות ראשונה):
+ *    - כל עובד מופיע כבלוק עם "שם עובד:" בכותרת
+ *    - שורות נתונים עם תאריכים ושעות כניסה/יציאה
+ *    - סיכום עובד בתחתית עם "רגילות | רמח 1 | רמח 2 | חריגות"
+ *    - ה"רגילות" הוא כותרת סיכום ולא כותרת נתונים!
  *
- * פולבק: אם נמצא "שם עובד:" כהדר עצמאי — שימוש בפורמט עובד-לכל-עמוד
+ * 2. PER-PAGE FORMAT (פולבק):
+ *    - עובד אחד לכל עמוד עם "שם עובד:" וכותרות עמודות
  */
 
 export interface ParsedEmployee {
@@ -145,15 +146,19 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
 
   console.log(`[parseWorkingHours] Format detection: perPageCount=${perPageCount}, tabularHeaderFound=${tabularHeaderFound}, totalPages=${allPages.length}`)
 
-  // If most pages have "שם עובד:", use per-page format.
-  // Otherwise use tabular format.
-  const useTabular = tabularHeaderFound && perPageCount < allPages.length / 2
+  // Detect block format: "שם עובד:" appears AND "רגילות" is in summary footers (not data headers).
+  // Block format has employee name headers with data rows between them and summary sections below.
+  // If both "שם עובד:" and "רגילות" are present, prefer block format since "רגילות" is a summary footer.
+  const useBlock = perPageCount > 0 && tabularHeaderFound
 
-  if (useTabular) {
-    console.log(`[parseWorkingHours] Using TABULAR format (multi-employee table across pages)`)
-    parseTabularFormat(allPages, employees, seenKeys)
-  } else {
+  if (useBlock) {
+    console.log(`[parseWorkingHours] Using BLOCK format (employee blocks with summary footers)`)
+    parseBlockFormat(allPages, employees, seenKeys)
+  } else if (perPageCount > 0) {
     console.log(`[parseWorkingHours] Using PER-PAGE format (one employee per page with "שם עובד:")`)
+    parsePerPageFormat(allPages, employees, seenKeys)
+  } else {
+    console.log(`[parseWorkingHours] Using PER-PAGE format (fallback)`)
     parsePerPageFormat(allPages, employees, seenKeys)
   }
 
@@ -165,281 +170,169 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// TABULAR FORMAT: All employees in one big table spanning multiple pages
+// BLOCK FORMAT: Employee blocks with "שם עובד:" headers, data rows, and
+// summary footers containing "רגילות". The "רגילות" line is in the SUMMARY
+// section (below data rows), NOT a data column header.
 // ══════════════════════════════════════════════════════════════════════════════
-function parseTabularFormat(
+function parseBlockFormat(
   allPages: PdfItem[][],
   employees: ParsedEmployee[],
   seenKeys: Set<string>,
 ) {
-  // Step 1: Concatenate all items from all pages, offsetting Y so pages don't overlap.
-  // We use a large Y offset per page so rows from different pages don't merge.
-  const PAGE_Y_OFFSET = 10000
-  const allItems: PdfItem[] = []
-  for (let pageIdx = 0; pageIdx < allPages.length; pageIdx++) {
-    for (const item of allPages[pageIdx]) {
-      allItems.push({
-        text: item.text,
-        x: item.x,
-        y: item.y + pageIdx * PAGE_Y_OFFSET,
-      })
-    }
-  }
-
-  // Step 2: Find header columns from the FIRST occurrence of "רגילות"
-  // We scan page by page to find the header row.
-  const columnXs = new Map<string, number>()
-  let headerY = -1
-  let headerPageIdx = -1
-
-  for (let pageIdx = 0; pageIdx < allPages.length; pageIdx++) {
-    const pageItems = allPages[pageIdx]
-    const groups = groupByY(pageItems)
-
-    for (const [y, row] of groups) {
-      const hasRegular = row.some(it => it.text === 'רגילות')
-      if (!hasRegular) continue
-
-      // Skip summary lines
-      const lineText = row.map(it => it.text).join(' ')
-      if (lineText.includes('סיכום') || lineText.includes('כדר"מ')) continue
-
-      // Found the header row with "רגילות"
-      headerY = y
-      headerPageIdx = pageIdx
-
-      for (const item of row) {
-        if (item.text === 'רגילות') columnXs.set('regular', item.x)
-        if (item.text === 'חריגות') columnXs.set('exceptions', item.x)
-        if (item.text === '1 רמח' || item.text === 'רמח 1' || item.text === 'רמה 1' || item.text === '1 רמה') columnXs.set('level1', item.x)
-        if (item.text === '2 רמח' || item.text === 'רמח 2' || item.text === 'רמה 2' || item.text === '2 רמה') columnXs.set('level2', item.x)
-      }
-
-      // Also look for "רמח" or "רמה" items that are separate from numbers
-      for (let i = 0; i < row.length; i++) {
-        const item = row[i]
-        if (item.text === 'רמח' || item.text === 'רמה') {
-          // Look for adjacent number
-          for (let j = i - 1; j <= i + 1; j++) {
-            if (j >= 0 && j < row.length && j !== i) {
-              if (row[j].text === '1') columnXs.set('level1', item.x)
-              else if (row[j].text === '2') columnXs.set('level2', item.x)
-            }
-          }
-        }
-      }
-
-      break
-    }
-    if (headerY >= 0) break
-  }
-
-  if (headerY < 0) {
-    console.warn(`[parseWorkingHours] TABULAR: no header row with "רגילות" found!`)
-    return
-  }
-
-  // Step 2b: Find additional header columns from adjacent rows (within ~15 Y units)
-  // Look for "שם" column, "תאריך", "סניף", etc. in header area
-  const headerPage = allPages[headerPageIdx]
-  const headerGroups = groupByY(headerPage)
-  let nameColumnX = -1
-
-  for (const [y, row] of headerGroups) {
-    if (Math.abs(y - headerY) > 20) continue // Only near the header row
-
-    for (const item of row) {
-      if (item.text === 'שם' || item.text === 'שם עובד' || item.text === 'עובד') {
-        nameColumnX = item.x
-        columnXs.set('employee_name', item.x)
-      }
-      if (item.text === 'תאריך') columnXs.set('date', item.x)
-      if (item.text === 'סניף') columnXs.set('branch', item.x)
-      if (item.text === 'קופה') columnXs.set('register', item.x)
-      if (item.text === 'יציאה') columnXs.set('exit_time', item.x)
-      if (item.text === 'כניסה') columnXs.set('entry_time', item.x)
-    }
-
-    // Also check for combined header items like "שם עובד"
-    const lineText = row.map(it => it.text).join(' ')
-    if (lineText.includes('שם') && nameColumnX < 0) {
-      const nameItem = row.find(it => it.text.includes('שם'))
-      if (nameItem) {
-        nameColumnX = nameItem.x
-        columnXs.set('employee_name', nameItem.x)
-      }
-    }
-  }
-
-  console.log(`[parseWorkingHours] TABULAR: Header found on page ${headerPageIdx + 1}, Y=${headerY}`)
-  console.log(`[parseWorkingHours] TABULAR: Column X positions:`, Object.fromEntries(columnXs))
-  console.log(`[parseWorkingHours] TABULAR: Employee name column X=${nameColumnX}`)
-
-  // Step 3: Process data rows from ALL pages
-  // A data row is identified by having a date pattern DD/MM/YYYY
+  // Process page by page, tracking current employee name across pages
+  let currentName = ''
   let dataRowCount = 0
   const debugRows: string[] = []
 
   for (let pageIdx = 0; pageIdx < allPages.length; pageIdx++) {
     const pageItems = allPages[pageIdx]
     const groups = groupByY(pageItems)
-    const yKeys = [...groups.keys()].sort((a, b) => b - a) // top to bottom
+    const yKeys = [...groups.keys()].sort((a, b) => b - a) // top to bottom (high Y = top of page)
 
     for (const y of yKeys) {
       const row = groups.get(y)!
       const lineText = row.map(it => it.text).join(' ')
 
-      // Skip header/footer/summary lines
-      if (lineText.includes('סיכום') || lineText.includes('CashOnTab') || lineText.includes('עמוד')
-        || lineText.includes('רגילות') || lineText.includes('סה"כ ימי')) continue
+      // ── Check for employee name ("שם עובד:" line) ──
+      const nameItem = row.find(it => it.text.includes('שם עובד') || it.text.includes('עובד:'))
+      if (nameItem) {
+        let foundName = ''
 
-      // Find date item (DD/MM/YYYY)
+        // Try extracting name inline from the item text
+        const inlineMatch = nameItem.text.match(/שם\s*עובד[:\s]+(.+)/)
+        if (inlineMatch) {
+          foundName = inlineMatch[1].trim()
+            .replace(/\s+קוד.*/, '').replace(/\s+מחסנים.*/, '')
+            .replace(/\s*\d+\s*$/, '').replace(/[0-9:,]/g, '').trim()
+        }
+
+        if (!foundName) {
+          // Name is in a separate item on the same line — look for Hebrew items
+          // that aren't keywords. In RTL PDF, the name is typically to the left of "שם עובד:".
+          const skipKeywords = ['קוד', 'שם', 'עובד', 'סניף', 'דו"ח', 'נוכחות',
+            'מחסנים', 'מספר', 'המפעל', 'עד', 'תאריך', 'מ-', 'CashOnTab', 'עמוד']
+          const candidates = row.filter(it =>
+            it !== nameItem &&
+            /[\u05D0-\u05EA]/.test(it.text) && it.text.length > 2 &&
+            !skipKeywords.some(kw => it.text.includes(kw))
+          )
+          if (candidates.length > 0) {
+            // Pick the candidate that looks most like a person name
+            // (closest to nameItem but not a branch/department keyword)
+            foundName = candidates[0].text.replace(/[0-9:,]/g, '').trim()
+          }
+        }
+
+        if (foundName) {
+          currentName = foundName.replace(/\s+/g, ' ').trim()
+          console.log(`[parseWorkingHours] BLOCK: Page ${pageIdx + 1} found employee "${currentName}"`)
+        }
+        continue
+      }
+
+      // Skip if no current employee
+      if (!currentName) continue
+
+      // ── Skip summary/footer/header lines ──
+      if (lineText.includes('סיכום לעובד') || lineText.includes('סה"כ ימי')) continue
+      if (lineText.includes('רגילות') || lineText.includes('חריגות')) continue
+      if (lineText.includes('CashOnTab') || lineText.includes('עמוד')) continue
+      if (lineText.includes('סה"כ שעות')) continue
+      if (lineText.includes('דו"ח נוכחות')) continue
+      if (lineText.includes('עד תאריך') || lineText.includes('מתאריך')) continue
+
+      // ── Check for date → this is a data row ──
       const dateItem = row.find(it => /^\d{2}\/\d{2}\/\d{4}$/.test(it.text))
       if (!dateItem) continue
 
       dataRowCount++
 
-      // Parse date
       const [dd, mm, yyyy] = dateItem.text.split('/')
       const dateStr = `${yyyy}-${mm}-${dd}`
 
-      // Extract employee name: find Hebrew text items near the employee_name column X
-      // If no name column was identified, use the rightmost Hebrew text that isn't a known header/branch keyword
-      let employeeName = ''
+      // ── Extract hours from the row ──
+      // Data rows contain HH:MM values for entry time, exit time, and hour totals.
+      // Strategy: find all HH:MM items, separate entry/exit times (reasonable work hours)
+      // from hour-type totals (smaller values like 06:21, 00:00).
+      const timeItems = row.filter(it => /^\d{1,3}:\d{2}$/.test(it.text))
 
-      if (nameColumnX >= 0) {
-        // Find Hebrew items closest to nameColumnX
-        const hebrewItems = row.filter(it => /[\u05D0-\u05EA]/.test(it.text))
-        let bestItem: PdfItem | null = null
-        let bestDist = Infinity
-        for (const it of hebrewItems) {
-          const dist = Math.abs(it.x - nameColumnX)
-          if (dist < bestDist) {
-            bestDist = dist
-            bestItem = it
-          }
-        }
-        if (bestItem && bestDist <= 60) {
-          employeeName = bestItem.text
-        }
-      }
+      // Separate into "work times" (entry/exit, typically 5:00-23:59) and
+      // "hour values" (totals, typically 0:00-24:00 but representing durations)
+      // Work times are at higher X values (right side in LTR coords = left in RTL visual),
+      // hour totals are at lower X values.
+      const dateX = dateItem.x
 
-      if (!employeeName) {
-        // Fallback: find all Hebrew text items and pick the one that looks like a name
-        const hebrewItems = row.filter(it =>
-          /[\u05D0-\u05EA]/.test(it.text) &&
-          !it.text.includes('סה"כ') &&
-          !/^[א-ת]'$/.test(it.text) // Skip day-of-week like ד', א'
-        )
-        // The employee name is typically the rightmost Hebrew text (highest X in LTR PDF coords)
-        // or at a specific known X. Try the item with the highest X that's NOT a single-char day abbreviation.
-        const candidates = hebrewItems.filter(it => it.text.length > 2)
-        if (candidates.length > 0) {
-          // If there's a branch column, the employee name is a different Hebrew text
-          const branchX = columnXs.get('branch')
-          if (branchX !== undefined && candidates.length >= 2) {
-            // Separate branch from employee name by X proximity to branch column
-            const sorted = candidates.sort((a, b) => {
-              const aDist = Math.abs(a.x - branchX)
-              const bDist = Math.abs(b.x - branchX)
-              return aDist - bDist
-            })
-            // The closest to branchX is the branch name, the other is the employee name
-            employeeName = sorted.length > 1 ? sorted[1].text : sorted[0].text
-          } else {
-            // Just take the rightmost Hebrew text
-            employeeName = candidates.sort((a, b) => b.x - a.x)[0].text
-          }
+      // Items to the LEFT of date (lower X) are typically hour totals
+      // Items to the RIGHT of date (higher X) or near it are entry/exit times
+      // But in RTL PDFs, the date column is on the right side, so items with X < dateX are hour totals
+      const hourTotalItems = timeItems.filter(it => it.x < dateX - 30)
+      const workTimeItems = timeItems.filter(it => it.x >= dateX - 30 && it !== dateItem)
+
+      let totalH = 0
+
+      // Try to get total from the hour total columns
+      // The rightmost hour-total item (closest to date) is likely the "total hours" column
+      if (hourTotalItems.length > 0) {
+        // Sort by X descending — rightmost first (closest to date column)
+        const sorted = [...hourTotalItems].sort((a, b) => b.x - a.x)
+        const totalCandidate = parseHHMM(sorted[0].text)
+        if (totalCandidate > 0 && totalCandidate < 24) {
+          totalH = totalCandidate
         }
       }
 
-      if (!employeeName) {
-        if (dataRowCount <= 5) {
-          console.warn(`[parseWorkingHours] TABULAR: Row at page ${pageIdx + 1} Y=${y} — no employee name found. Items: ${row.map(it => `${it.text}(${it.x})`).join(' | ')}`)
-        }
-        continue
-      }
+      // Fallback: calculate from entry/exit times
+      if (totalH <= 0 && workTimeItems.length >= 2) {
+        const workHours = workTimeItems
+          .map(it => ({ ...it, hours: parseHHMM(it.text) }))
+          .filter(it => it.hours >= 5 && it.hours <= 24)
+          .sort((a, b) => a.hours - b.hours)
 
-      // Clean employee name
-      employeeName = employeeName.replace(/[0-9:,]/g, '').replace(/\s+/g, ' ').trim()
-      if (!employeeName) continue
-
-      // Extract hour values — map numeric/HH:MM items to columns
-      const cellMap = new Map<string, number>()
-
-      for (const item of row) {
-        // Skip date, Hebrew text, day-of-week abbreviations
-        if (/^\d{2}\/\d{2}\/\d{4}$/.test(item.text)) continue
-        if (/[\u05D0-\u05EA]/.test(item.text)) continue
-
-        // Try HH:MM format
-        const hhmmVal = parseHHMM(item.text)
-        if (hhmmVal > 0) {
-          const col = findClosestColumn(item.x, columnXs)
-          if (col && !['register', 'branch', 'date', 'report_type', 'employee_name'].includes(col)) {
-            cellMap.set(col, hhmmVal)
-          }
-          continue
-        }
-
-        // Try plain number
-        const val = parseFloat(item.text.replace(/,/g, ''))
-        if (!isNaN(val)) {
-          const col = findClosestColumn(item.x, columnXs)
-          if (col && !['register', 'branch', 'date', 'report_type', 'employee_name'].includes(col)) {
-            cellMap.set(col, val)
-          }
+        if (workHours.length >= 2) {
+          totalH = workHours[workHours.length - 1].hours - workHours[0].hours
         }
       }
 
-      // Compute total hours
-      const h100 = cellMap.get('regular') || 0
-      const h125 = cellMap.get('level1') || 0
-      const h150 = cellMap.get('level2') || 0
-      const hExcept = cellMap.get('exceptions') || 0
-      let totalH = cellMap.get('total_hours') || 0
-
-      // If no explicit total, sum the parts
+      // Another fallback: just find the largest reasonable HH:MM that looks like a duration
       if (totalH <= 0) {
-        totalH = h100 + h125 + h150 + hExcept
-      }
-
-      if (totalH <= 0) {
-        // Try using entry/exit times to compute total
-        const entryH = cellMap.get('entry_time') || 0
-        const exitH = cellMap.get('exit_time') || 0
-        if (exitH > entryH) totalH = exitH - entryH
+        const allHours = timeItems.map(it => parseHHMM(it.text)).filter(h => h > 0 && h < 24)
+        // Exclude values that look like clock times (>= 5 hours as absolute time)
+        // Duration totals for a day should be < 16 hours
+        const durations = allHours.filter(h => h < 16)
+        if (durations.length > 0) {
+          totalH = Math.max(...durations)
+        }
       }
 
       if (totalH <= 0) continue
 
-      const key = `${employeeName}|${dateStr}`
+      const key = `${currentName}|${dateStr}`
       if (seenKeys.has(key)) continue
       seenKeys.add(key)
 
       employees.push({
-        name: employeeName,
+        name: currentName,
         date: dateStr,
         total_hours: Math.round(totalH * 100) / 100,
-        hours_100: Math.round(h100 * 100) / 100,
-        hours_125: Math.round(h125 * 100) / 100,
-        hours_150: Math.round(h150 * 100) / 100,
+        hours_100: Math.round(totalH * 100) / 100, // Daily breakdown not available in block format
+        hours_125: 0,
+        hours_150: 0,
       })
 
-      // Debug: log first 3 data rows
-      if (debugRows.length < 3) {
+      // Debug: log first 5 data rows
+      if (debugRows.length < 5) {
         debugRows.push(
-          `  Row ${dataRowCount}: employee="${employeeName}", date=${dateStr}, total=${totalH}, h100=${h100}, h125=${h125}, h150=${h150}, cells=${JSON.stringify(Object.fromEntries(cellMap))}`
+          `  Row ${dataRowCount}: employee="${currentName}", date=${dateStr}, total=${totalH}, items=${row.map(it => `${it.text}(${it.x})`).join(' | ')}`
         )
       }
     }
   }
 
-  console.log(`[parseWorkingHours] TABULAR: Processed ${dataRowCount} data rows`)
+  console.log(`[parseWorkingHours] BLOCK: Processed ${dataRowCount} data rows`)
   if (debugRows.length > 0) {
-    console.log(`[parseWorkingHours] TABULAR: First ${debugRows.length} parsed rows:\n${debugRows.join('\n')}`)
+    console.log(`[parseWorkingHours] BLOCK: First ${debugRows.length} parsed rows:\n${debugRows.join('\n')}`)
   }
-  console.log(`[parseWorkingHours] TABULAR: Resulted in ${employees.length} employee-day records for ${new Set(employees.map(e => e.name)).size} unique employees`)
+  console.log(`[parseWorkingHours] BLOCK: Resulted in ${employees.length} employee-day records for ${new Set(employees.map(e => e.name)).size} unique employees`)
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
