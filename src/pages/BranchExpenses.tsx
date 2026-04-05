@@ -334,12 +334,13 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
         )}
 
         {/* Info banner */}
-        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-4 flex items-center gap-3" dir="rtl">
-          <Info size={18} className="text-indigo-500 flex-shrink-0" />
-          <span className="text-[13px] text-indigo-700">
-            הוצאות רכישה מהמפעל מתעדכנות אוטומטית דרך מסך ההזמנות. אין צורך להזין אותן כאן.
-          </span>
-          <button onClick={onBack} className="text-[12px] text-indigo-600 font-semibold hover:underline mr-auto whitespace-nowrap">
+        <div className="bg-indigo-600 rounded-xl p-4 mb-4 flex items-center gap-4" dir="rtl">
+          <Info size={24} className="text-white flex-shrink-0" />
+          <div className="flex-1">
+            <div className="text-white font-bold text-[14px] mb-1">💡 הוצאות מהמפעל — שים לב</div>
+            <div className="text-indigo-100 text-[13px]">רכישות מהמפעל מתעדכנות אוטומטית דרך מסך ההזמנות. אין צורך להזין אותן כאן ידנית.</div>
+          </div>
+          <button onClick={onBack} className="bg-white text-indigo-700 font-bold px-4 py-2 rounded-lg text-[13px] hover:bg-indigo-50 whitespace-nowrap">
             מעבר להזמנות ←
           </button>
         </div>
