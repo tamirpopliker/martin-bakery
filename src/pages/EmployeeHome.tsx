@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Calendar, Hand, CheckSquare, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
 import { supabase } from '../lib/supabase'
+import EmployeeConstraints from './EmployeeConstraints'
 
 const fadeIn = (delay = 0) => ({
   hidden: { opacity: 0, y: 18 },
@@ -11,15 +13,20 @@ const fadeIn = (delay = 0) => ({
 })
 
 const cards = [
-  { key: 'schedule', label: 'הסידור שלי', emoji: '📅', subtitle: 'משמרות · שעות · ימים', Icon: Calendar },
-  { key: 'constraints', label: 'האילוצים שלי', emoji: '🙋', subtitle: 'זמינות · העדפות · חופש', Icon: Hand },
-  { key: 'tasks', label: 'המשימות שלי', emoji: '✅', subtitle: 'יומיות · שיוך · מעקב', Icon: CheckSquare },
+  { key: 'schedule', label: 'הסידור שלי', emoji: '📅', subtitle: 'משמרות · שעות · ימים', Icon: Calendar, ready: false },
+  { key: 'constraints', label: 'האילוצים שלי', emoji: '🙋', subtitle: 'זמינות · העדפות · חופש', Icon: Hand, ready: true },
+  { key: 'tasks', label: 'המשימות שלי', emoji: '✅', subtitle: 'יומיות · שיוך · מעקב', Icon: CheckSquare, ready: false },
 ]
 
 export default function EmployeeHome() {
   const { appUser, logout } = useAppUser()
   const { branches } = useBranches()
   const branchName = branches.find(b => b.id === appUser?.branch_id)?.name || ''
+  const [page, setPage] = useState<string | null>(null)
+
+  if (page === 'constraints') {
+    return <EmployeeConstraints onBack={() => setPage(null)} />
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50 to-white" dir="rtl">
@@ -35,7 +42,8 @@ export default function EmployeeHome() {
           {cards.map((card, i) => (
             <motion.div key={card.key} variants={fadeIn(0.1 + i * 0.1)} initial="hidden" animate="visible">
               <div className="bg-white rounded-xl p-5 cursor-pointer hover:shadow-md transition-shadow relative overflow-hidden"
-                style={{ border: '0.5px solid #e2e8f0' }}>
+                style={{ border: '0.5px solid #e2e8f0' }}
+                onClick={() => card.ready ? setPage(card.key) : undefined}>
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl">
                     {card.emoji}
@@ -44,7 +52,9 @@ export default function EmployeeHome() {
                     <h3 className="font-bold text-base text-slate-800">{card.label}</h3>
                     <p className="text-xs text-slate-400 mt-0.5">{card.subtitle}</p>
                   </div>
-                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">בקרוב</span>
+                  {!card.ready && (
+                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">בקרוב</span>
+                  )}
                 </div>
               </div>
             </motion.div>

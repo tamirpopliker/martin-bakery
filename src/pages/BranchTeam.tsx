@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Users, Calendar, CheckSquare, ArrowRight } from 'lucide-react'
+import { Users, Calendar, CheckSquare, ArrowRight, ClipboardList } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const fadeIn = (delay = 0) => ({
@@ -17,6 +17,7 @@ interface Props {
 
 const cards = [
   { page: 'employees', label: 'עובדים', emoji: '👤', subtitle: 'תעריפים · פרטי עובד', Icon: Users, ready: true },
+  { page: 'manager-constraints', label: 'זמינות הצוות', emoji: '📋', subtitle: 'אילוצים · זמינות · שבועי', Icon: ClipboardList, ready: true },
   { page: 'branch-schedule', label: 'סידור עבודה', emoji: '📅', subtitle: 'משמרות · שבועי · פרסום', Icon: Calendar, ready: false },
   { page: 'branch-tasks', label: 'משימות', emoji: '✅', subtitle: 'יומיות · שיוך · מעקב', Icon: CheckSquare, ready: false },
 ]
