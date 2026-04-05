@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Calendar, Hand, CheckSquare, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -23,6 +23,42 @@ export default function EmployeeHome() {
   const { branches } = useBranches()
   const branchName = branches.find(b => b.id === appUser?.branch_id)?.name || ''
   const [page, setPage] = useState<string | null>(null)
+  const [nextWeekCount, setNextWeekCount] = useState(0)
+
+  useEffect(() => {
+    async function fetchNextWeekAvailability() {
+      let empId = appUser?.employee_id
+      if (!empId && appUser?.email) {
+        const { data } = await supabase
+          .from('branch_employees')
+          .select('id')
+          .eq('email', appUser.email)
+          .maybeSingle()
+        if (data) empId = data.id
+      }
+      if (!empId) return
+
+      const today = new Date()
+      const nextWeekStart = new Date(today)
+      nextWeekStart.setDate(today.getDate() + 1)
+      const nextWeekEnd = new Date(today)
+      nextWeekEnd.setDate(today.getDate() + 7)
+
+      const startStr = nextWeekStart.toISOString().slice(0, 10)
+      const endStr = nextWeekEnd.toISOString().slice(0, 10)
+
+      const { data: constraints } = await supabase
+        .from('schedule_constraints')
+        .select('id')
+        .eq('employee_id', empId)
+        .gte('date', startStr)
+        .lte('date', endStr)
+
+      setNextWeekCount(constraints?.length ?? 0)
+    }
+
+    fetchNextWeekAvailability()
+  }, [appUser])
 
   if (page === 'constraints') {
     return <EmployeeConstraints onBack={() => setPage(null)} />
@@ -35,6 +71,18 @@ export default function EmployeeHome() {
         <motion.div variants={fadeIn(0)} initial="hidden" animate="visible" className="text-center mb-8">
           <h1 className="text-2xl font-bold text-slate-800">שלום, {appUser?.name || 'עובד'} 👋</h1>
           {branchName && <p className="text-sm text-slate-500 mt-1">{branchName}</p>}
+        </motion.div>
+
+        {/* Next week availability */}
+        <motion.div variants={fadeIn(0.05)} initial="hidden" animate="visible">
+          <div style={{
+            background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: '12px',
+            padding: '12px 16px', marginBottom: '16px', textAlign: 'center'
+          }}>
+            <span style={{ fontSize: '13px', color: '#4338ca', fontWeight: '600' }}>
+              הזמינות שלך לשבוע הבא: {nextWeekCount} משמרות מסומנות
+            </span>
+          </div>
         </motion.div>
 
         {/* Cards */}

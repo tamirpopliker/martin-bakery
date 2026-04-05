@@ -529,3 +529,8 @@ martin-bakery/
 8. **כללי התרעה ריקים** — טרם הוגדרו ערכי סף. יש לעשות דרך AlertsManagement.
 9. **SQL files 006 ו-007 טרם הורצו על Supabase** — צריך להריץ בדשבורד.
 10. **theme_color של PWA** — #818cf8 (indigo).
+11. **מודול סידור עבודה** — טבלאות: shift_roles, employee_role_assignments, branch_shifts, shift_staffing_requirements, schedule_constraints (עם shift_id). דפים: ShiftSettings (4 לשוניות), EmployeeConstraints (לוח שבועי + תפקידים), ManagerConstraintsView (תצוגת יום/משמרת), EmployeeHome (דף בית עובד).
+12. **תפקידי עובדים** — role='employee' ב-app_users עם employee_id → branch_employees. הצטרפות דרך send-invitation Edge Function שיוצר app_users אוטומטית.
+13. **מצב ישיבה** — BranchManagerDashboard מציג מצב ישיבה כברירת מחדל (מסתיר נתוני שכר).
+14. **P&L אחיד** — "רווח נשלט" (Controllable Margin) + "רווח תפעולי". fetchBranchPL / fetchFactoryPL ב-supabase.ts.
+15. **ספקים פנימיים** — from_factory=true ב-branch_expenses. פיצול בטבלאות P&L: "רכישות מפעל" + "ספקים חיצוניים".
