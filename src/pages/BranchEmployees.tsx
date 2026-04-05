@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { ArrowRight, Plus, Pencil, Users, Save, ToggleLeft, ToggleRight, Send, Mail } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Users, Save, ToggleLeft, ToggleRight, Send, Mail, Upload } from 'lucide-react'
 
 interface Props {
   branchId: number
@@ -47,6 +47,12 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   // Bulk invite
   const [bulkInviteOpen, setBulkInviteOpen] = useState(false)
   const [bulkList, setBulkList] = useState<{ id: number; name: string; email: string; checked: boolean }[]>([])
+  // Import to app_users
+  const [importOpen, setImportOpen] = useState(false)
+  const [importList, setImportList] = useState<{ id: number; name: string; email: string; checked: boolean }[]>([])
+  const [importLoading, setImportLoading] = useState(false)
+  const [importSaving, setImportSaving] = useState(false)
+  const [importMsg, setImportMsg] = useState<string | null>(null)
 
   async function fetchEmployees() {
     const { data, error } = await supabase.from('branch_employees').select('*')
@@ -126,6 +132,47 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
     setBulkInviteOpen(true)
   }
 
+  async function openImport() {
+    setImportOpen(true)
+    setImportMsg(null)
+    setImportLoading(true)
+    // Load active employees that don't have app_users yet
+    const { data: existingUsers } = await supabase.from('app_users').select('employee_id').not('employee_id', 'is', null)
+    const usedIds = new Set((existingUsers || []).map((u: any) => u.employee_id))
+    const available = employees.filter(e => e.active && !usedIds.has(e.id))
+    setImportList(available.map(e => ({ id: e.id, name: e.name, email: e.email || '', checked: false })))
+    setImportLoading(false)
+  }
+
+  async function handleImport() {
+    const selected = importList.filter(e => e.checked)
+    if (selected.length === 0) return
+    const withEmail = selected.filter(e => e.email.trim())
+    const withoutEmail = selected.filter(e => !e.email.trim())
+    if (withEmail.length === 0) {
+      setImportMsg('⚠️ לא הוזנו כתובות אימייל — לא נוצרו חשבונות')
+      return
+    }
+    setImportSaving(true)
+    const rows = withEmail.map(e => ({
+      role: 'employee' as const,
+      branch_id: branchId,
+      employee_id: e.id,
+      email: e.email.trim().toLowerCase(),
+      name: e.name,
+      can_settings: false,
+      excluded_departments: [],
+      managed_department: null,
+    }))
+    await supabase.from('app_users').insert(rows)
+    setImportSaving(false)
+    const msg = withoutEmail.length > 0
+      ? `נוצרו ${withEmail.length} חשבונות (${withoutEmail.length} דולגו — ללא אימייל)`
+      : `נוצרו ${withEmail.length} חשבונות עובדים`
+    setImportMsg(msg)
+    setTimeout(() => { setImportMsg(null); setImportOpen(false) }, 2500)
+  }
+
   function openNew() {
     setForm({ id: undefined, name: '', email: '', phone: '', hourly_rate: '', retention_bonus: '', active: true })
     setSheetOpen(true)
@@ -157,6 +204,10 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
           <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>{activeCount} עובדים פעילים · תעריפי שעה</p>
         </div>
         <div style={{ marginRight: 'auto', display: 'flex', gap: '8px' }}>
+          <button onClick={openImport}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            <Upload size={16} /> ייבא לאפליקציה
+          </button>
           <button onClick={openBulkInvite}
             style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
             <Mail size={16} /> הזמן את כולם 📧
@@ -281,6 +332,59 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
                 ביטול
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import to App Modal */}
+      {importOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setImportOpen(false)}>
+          <div style={{ background: 'white', borderRadius: '16px', padding: '28px', width: '520px', maxHeight: '80vh', overflow: 'auto', direction: 'rtl' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>ייבא עובדים לאפליקציה — {branchName}</h3>
+            <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#64748b' }}>בחר עובדים שעדיין אין להם חשבון במערכת. הזן אימייל Google לכל עובד.</p>
+            {importLoading ? (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>טוען...</div>
+            ) : importList.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '14px' }}>כל העובדים כבר מחוברים למערכת ✓</div>
+            ) : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr', gap: '8px', padding: '8px 0', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b', alignItems: 'center' }}>
+                  <input type="checkbox"
+                    checked={importList.every(e => e.checked)}
+                    ref={el => { if (el) el.indeterminate = importList.some(e => e.checked) && !importList.every(e => e.checked) }}
+                    onChange={e => setImportList(prev => prev.map(emp => ({ ...emp, checked: e.target.checked })))}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                  <span>שם</span><span>אימייל Google</span>
+                </div>
+                {importList.map((emp, idx) => (
+                  <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr', gap: '8px', padding: '10px 0', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
+                    <input type="checkbox" checked={emp.checked}
+                      onChange={() => { const u = [...importList]; u[idx] = { ...u[idx], checked: !u[idx].checked }; setImportList(u) }}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>{emp.name}</span>
+                    <input value={emp.email} placeholder="email@gmail.com"
+                      onChange={e => { const u = [...importList]; u[idx] = { ...u[idx], email: e.target.value }; setImportList(u) }}
+                      style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 10px', fontSize: '13px', direction: 'ltr', boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+              </>
+            )}
+            {importMsg && <div style={{ marginTop: '12px', padding: '10px', background: '#f0fdf4', borderRadius: '8px', color: '#16a34a', fontWeight: '600', fontSize: '13px', textAlign: 'center' }}>{importMsg}</div>}
+            {importList.length > 0 && (
+              <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                <button onClick={handleImport}
+                  disabled={importSaving || importList.filter(e => e.checked).length === 0}
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: importSaving || importList.filter(e => e.checked).length === 0 ? '#e2e8f0' : '#f59e0b', color: importSaving || importList.filter(e => e.checked).length === 0 ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '12px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                  {importSaving ? 'יוצר חשבונות...' : `צור חשבונות (${importList.filter(e => e.checked).length})`}
+                </button>
+                <button onClick={() => setImportOpen(false)}
+                  style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '12px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                  סגור
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

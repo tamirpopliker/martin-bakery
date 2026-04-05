@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { ArrowRight, ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useAppUser } from '../lib/UserContext'
 import BranchRevenue from './BranchRevenue'
 import BranchExpenses from './BranchExpenses'
 import BranchLabor from './BranchLabor'
@@ -74,6 +75,8 @@ const MENU_ITEMS: MenuItem[] = [
 ]
 
 export default function BranchHome({ branch, onBack }: Props) {
+  const { appUser } = useAppUser()
+  const isAdmin = appUser?.role === 'admin'
   const [page, setPage] = useState<BranchPage | null>(null)
   const [hovCard, setHovCard] = useState<BranchPage | null>(null)
   const [pendingOrders, setPendingOrders] = useState(0)
@@ -188,7 +191,11 @@ export default function BranchHome({ branch, onBack }: Props) {
           initial="hidden"
           animate="visible"
         >
-          {MENU_ITEMS.map(item => {
+          {MENU_ITEMS.filter(item => {
+            // Hide settings and data_import for non-admin users
+            if (!isAdmin && (item.page === 'settings' || item.page === 'data_import')) return false
+            return true
+          }).map(item => {
             const Icon = item.Icon
             const isHov = hovCard === item.page
             return (
