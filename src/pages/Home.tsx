@@ -11,6 +11,7 @@ import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitl
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import PeriodPicker from '../components/PeriodPicker'
 import InstallPWA from '../components/InstallPWA'
+import EmployeeHome from './EmployeeHome'
 import DailyProduction from './DailyProduction'
 import FactoryWaste from './FactoryWaste'
 import FactoryRepairs from './FactoryRepairs'
@@ -74,6 +75,9 @@ const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, tra
 export default function Home() {
   const { period, setPeriod, from, to, comparisonPeriod } = usePeriod()
   const { appUser, canAccessPage, logout } = useAppUser()
+
+  // Employee role gets their own dedicated home page
+  if (appUser?.role === 'employee') return <EmployeeHome />
   const { branches: branchList } = useBranches()
   const [page, setPage]         = useState<string | null>(null)
   const [expandedSection, setExpandedSection] = useState<string | null>('factory')

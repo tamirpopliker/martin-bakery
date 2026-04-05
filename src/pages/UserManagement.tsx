@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ArrowRight, Plus, Pencil, Trash2, Save, X, UserCog, Store, ToggleLeft, ToggleRight } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Save, X, UserCog, Store, ToggleLeft, ToggleRight, Upload } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -11,18 +11,25 @@ interface AppUser {
   id: string
   email: string
   name: string
-  role: 'admin' | 'factory' | 'branch'
+  role: 'admin' | 'factory' | 'branch' | 'employee'
   branch_id: number | null
   excluded_departments: string[]
   can_settings: boolean
   auth_uid: string | null
   managed_department: string | null
+  employee_id: number | null
+}
+
+interface BranchEmployee {
+  id: number
+  name: string
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: 'אדמין',
+  admin: 'מנהל מערכת',
   factory: 'מפעל',
-  branch: 'סניף',
+  branch: 'מנהל סניף',
+  employee: 'עובד',
 }
 
 const DEPT_LABELS: Record<string, string> = {
@@ -38,6 +45,7 @@ const ROLE_COLORS: Record<string, string> = {
   admin: '#c084fc',
   factory: '#818cf8',
   branch: '#34d399',
+  employee: '#f59e0b',
 }
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
@@ -49,8 +57,18 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editData, setEditData] = useState<Partial<AppUser>>({})
   const [addMode, setAddMode] = useState(false)
-  const [newUser, setNewUser] = useState({ email: '', name: '', role: 'branch' as string, branch_id: 1, excluded_departments: [] as string[], can_settings: false, managed_department: null as string | null })
+  const [newUser, setNewUser] = useState({ email: '', name: '', role: 'branch' as string, branch_id: 1, excluded_departments: [] as string[], can_settings: false, managed_department: null as string | null, employee_id: null as number | null })
   const [saving, setSaving] = useState(false)
+  // ─── Employee selection state (for add form) ──────────────────────────────
+  const [branchEmployees, setBranchEmployees] = useState<BranchEmployee[]>([])
+  const [usedEmployeeIds, setUsedEmployeeIds] = useState<number[]>([])
+  // ─── Import employees modal state ─────────────────────────────────────────
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [importBranchId, setImportBranchId] = useState<number | null>(null)
+  const [importEmployees, setImportEmployees] = useState<(BranchEmployee & { checked: boolean; email: string })[]>([])
+  const [importLoading, setImportLoading] = useState(false)
+  const [importSaving, setImportSaving] = useState(false)
+  const [importSuccess, setImportSuccess] = useState<string | null>(null)
   // ─── Branch management state ──────────────────────────────────────────────
   const [tab, setTab] = useState<'users' | 'branches' | 'settings'>(initialTab || 'users')
   const [branchSheetOpen, setBranchSheetOpen] = useState(false)
@@ -72,6 +90,24 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
     if (data) setOverheadPct(Number(data.value) || 5)
   }
 
+  async function loadBranchEmployees(branchId: number) {
+    const { data: emps } = await supabase.from('branch_employees').select('id, name').eq('branch_id', branchId).eq('active', true)
+    const { data: usedData } = await supabase.from('app_users').select('employee_id').not('employee_id', 'is', null)
+    const usedIds = (usedData || []).map(u => u.employee_id as number)
+    setBranchEmployees(emps || [])
+    setUsedEmployeeIds(usedIds)
+  }
+
+  async function loadImportEmployees(branchId: number) {
+    setImportLoading(true)
+    const { data: emps } = await supabase.from('branch_employees').select('id, name').eq('branch_id', branchId).eq('active', true)
+    const { data: usedData } = await supabase.from('app_users').select('employee_id').not('employee_id', 'is', null)
+    const usedIds = new Set((usedData || []).map(u => u.employee_id as number))
+    const available = (emps || []).filter(e => !usedIds.has(e.id))
+    setImportEmployees(available.map(e => ({ ...e, checked: false, email: '' })))
+    setImportLoading(false)
+  }
+
   async function saveSettings() {
     setSettingsSaving(true)
     await supabase.from('system_settings').upsert({ key: 'overhead_pct', value: String(overheadPct), updated_at: new Date().toISOString() })
@@ -85,8 +121,9 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
   async function handleSave(id: string) {
     setSaving(true)
     const update: any = { ...editData }
-    if (update.role !== 'branch') update.branch_id = null
+    if (update.role !== 'branch' && update.role !== 'employee') update.branch_id = null
     if (update.role !== 'factory') { update.excluded_departments = []; update.managed_department = null }
+    if (update.role !== 'employee') { update.employee_id = null }
     if (update.role === 'admin') { update.can_settings = true; update.branch_id = null; update.excluded_departments = []; update.managed_department = null }
     await supabase.from('app_users').update(update).eq('id', id)
     setEditingId(null)
@@ -97,14 +134,41 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
   async function handleAdd() {
     setSaving(true)
     const insert: any = { ...newUser, email: newUser.email.toLowerCase() }
-    if (insert.role !== 'branch') insert.branch_id = null
+    if (insert.role !== 'branch' && insert.role !== 'employee') insert.branch_id = null
     if (insert.role !== 'factory') { insert.excluded_departments = []; insert.managed_department = null }
+    if (insert.role !== 'employee') { insert.employee_id = null }
     if (insert.role === 'admin') { insert.can_settings = true; insert.branch_id = null; insert.excluded_departments = []; insert.managed_department = null }
     await supabase.from('app_users').insert(insert)
     setAddMode(false)
-    setNewUser({ email: '', name: '', role: 'branch', branch_id: 1, excluded_departments: [], can_settings: false, managed_department: null })
+    setNewUser({ email: '', name: '', role: 'branch', branch_id: 1, excluded_departments: [], can_settings: false, managed_department: null, employee_id: null })
     setSaving(false)
     loadUsers()
+  }
+
+  async function handleImportEmployees() {
+    const selected = importEmployees.filter(e => e.checked)
+    if (selected.length === 0) return
+    setImportSaving(true)
+    const rows = selected.map(e => ({
+      role: 'employee' as const,
+      branch_id: importBranchId,
+      employee_id: e.id,
+      email: e.email.toLowerCase(),
+      name: e.name,
+      can_settings: false,
+      excluded_departments: [],
+      managed_department: null,
+    }))
+    await supabase.from('app_users').insert(rows)
+    setImportSaving(false)
+    setImportSuccess(`נוצרו ${selected.length} חשבונות עובדים`)
+    setTimeout(() => {
+      setImportSuccess(null)
+      setImportModalOpen(false)
+      setImportBranchId(null)
+      setImportEmployees([])
+      loadUsers()
+    }, 2000)
   }
 
   async function handleDelete(id: string) {
@@ -206,6 +270,16 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
       {/* ═══ USERS TAB ═══ */}
       {tab === 'users' && <>
 
+      {/* Import employees button */}
+      {!addMode && (
+        <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+          <button onClick={() => { setImportModalOpen(true); setImportSuccess(null) }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            <Upload size={16} /> ייבא עובדים מסניף
+          </button>
+        </div>
+      )}
+
       {/* Add user form */}
       {addMode && (
         <Card className="shadow-sm" style={{ marginBottom: '20px', border: '2px solid #c084fc' }}>
@@ -226,21 +300,49 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
               </div>
               <div>
                 <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>תפקיד</label>
-                <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}
+                <select value={newUser.role} onChange={e => {
+                    const role = e.target.value
+                    setNewUser({ ...newUser, role, employee_id: null })
+                    if ((role === 'employee' || role === 'branch') && newUser.branch_id) {
+                      loadBranchEmployees(newUser.branch_id)
+                    }
+                  }}
                   style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', boxSizing: 'border-box' }}
                 >
-                  <option value="admin">אדמין</option>
+                  <option value="admin">מנהל מערכת</option>
                   <option value="factory">מפעל</option>
-                  <option value="branch">סניף</option>
+                  <option value="branch">מנהל סניף</option>
+                  <option value="employee">עובד</option>
                 </select>
               </div>
-              {newUser.role === 'branch' && (
+              {(newUser.role === 'branch' || newUser.role === 'employee') && (
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>סניף</label>
-                  <select value={newUser.branch_id} onChange={e => setNewUser({ ...newUser, branch_id: Number(e.target.value) })}
+                  <select value={newUser.branch_id} onChange={e => {
+                      const branchId = Number(e.target.value)
+                      setNewUser({ ...newUser, branch_id: branchId, employee_id: null })
+                      if (newUser.role === 'employee') loadBranchEmployees(branchId)
+                    }}
                     style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', boxSizing: 'border-box' }}
                   >
                     {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                </div>
+              )}
+              {newUser.role === 'employee' && (
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>עובד</label>
+                  <select value={newUser.employee_id ?? ''} onChange={e => {
+                      const empId = e.target.value ? Number(e.target.value) : null
+                      const emp = branchEmployees.find(be => be.id === empId)
+                      setNewUser({ ...newUser, employee_id: empId, name: emp ? emp.name : newUser.name })
+                    }}
+                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', boxSizing: 'border-box' }}
+                  >
+                    <option value="">בחר עובד...</option>
+                    {branchEmployees.filter(be => !usedEmployeeIds.includes(be.id)).map(be => (
+                      <option key={be.id} value={be.id}>{be.name}</option>
+                    ))}
                   </select>
                 </div>
               )}
@@ -333,12 +435,13 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                   <select value={editData.role || 'branch'} onChange={e => setEditData({ ...editData, role: e.target.value as any })}
                     style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }}
                   >
-                    <option value="admin">אדמין</option>
+                    <option value="admin">מנהל מערכת</option>
                     <option value="factory">מפעל</option>
-                    <option value="branch">סניף</option>
+                    <option value="branch">מנהל סניף</option>
+                    <option value="employee">עובד</option>
                   </select>
                   <div>
-                    {editData.role === 'branch' && (
+                    {(editData.role === 'branch' || editData.role === 'employee') && (
                       <select value={editData.branch_id ?? 1} onChange={e => setEditData({ ...editData, branch_id: Number(e.target.value) })}
                         style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }}
                       >
@@ -394,7 +497,7 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                   </span>
                   <span style={{ color: '#374151' }}>
                     {user.role === 'admin' ? 'הכל' :
-                     user.role === 'branch' && user.branch_id ? getBranchName(user.branch_id) :
+                     (user.role === 'branch' || user.role === 'employee') && user.branch_id ? getBranchName(user.branch_id) :
                      user.managed_department ? `מנהל ${DEPT_LABELS[user.managed_department]}` :
                      'כל המפעל'}
                   </span>
@@ -532,6 +635,87 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
           </SheetContent>
         </SheetPortal>
       </Sheet>
+
+      {/* ═══ Import Employees Modal ═══ */}
+      {importModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => { setImportModalOpen(false); setImportBranchId(null); setImportEmployees([]) }}>
+          <div style={{ background: 'white', borderRadius: '16px', padding: '28px', width: '560px', maxHeight: '80vh', overflow: 'auto', direction: 'rtl' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 20px', fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>ייבא עובדים מסניף</h3>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '6px' }}>בחר סניף</label>
+              <select value={importBranchId ?? ''} onChange={e => {
+                  const bId = e.target.value ? Number(e.target.value) : null
+                  setImportBranchId(bId)
+                  if (bId) loadImportEmployees(bId)
+                  else setImportEmployees([])
+                }}
+                style={{ width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box' }}>
+                <option value="">בחר סניף...</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+
+            {importLoading && <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>טוען עובדים...</div>}
+
+            {!importLoading && importBranchId && importEmployees.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '14px' }}>אין עובדים זמינים לייבוא (כולם כבר משויכים)</div>
+            )}
+
+            {!importLoading && importEmployees.length > 0 && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr', gap: '8px', padding: '8px 0', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                  <span></span><span>שם</span><span>אימייל</span>
+                </div>
+                {importEmployees.map((emp, idx) => (
+                  <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr', gap: '8px', padding: '10px 0', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
+                    <input type="checkbox" checked={emp.checked}
+                      onChange={() => {
+                        const updated = [...importEmployees]
+                        updated[idx] = { ...updated[idx], checked: !updated[idx].checked }
+                        setImportEmployees(updated)
+                      }} />
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>{emp.name}</span>
+                    <input value={emp.email} placeholder="email@example.com"
+                      onChange={e => {
+                        const updated = [...importEmployees]
+                        updated[idx] = { ...updated[idx], email: e.target.value }
+                        setImportEmployees(updated)
+                      }}
+                      style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 10px', fontSize: '13px', direction: 'ltr', boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+              </>
+            )}
+
+            {importSuccess && (
+              <div style={{ marginTop: '16px', padding: '12px', background: '#f0fdf4', borderRadius: '10px', color: '#16a34a', fontWeight: '600', fontSize: '14px', textAlign: 'center' }}>
+                {importSuccess}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <button
+                onClick={handleImportEmployees}
+                disabled={importSaving || importEmployees.filter(e => e.checked && e.email).length === 0}
+                style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                  background: importSaving || importEmployees.filter(e => e.checked && e.email).length === 0 ? '#e2e8f0' : '#f59e0b',
+                  color: importSaving || importEmployees.filter(e => e.checked && e.email).length === 0 ? '#94a3b8' : 'white',
+                  border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer',
+                }}>
+                <Save size={16} /> {importSaving ? 'יוצר...' : 'צור חשבונות לנבחרים'}
+              </button>
+              <button onClick={() => { setImportModalOpen(false); setImportBranchId(null); setImportEmployees([]) }}
+                style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}>
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══ System Settings Tab ═══ */}
       {tab === 'settings' && (

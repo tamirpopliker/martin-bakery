@@ -7,12 +7,13 @@ export interface AppUser {
   id: string
   email: string
   name: string
-  role: 'admin' | 'factory' | 'branch'
+  role: 'admin' | 'factory' | 'branch' | 'employee'
   branch_id: number | null
   excluded_departments: string[]
   can_settings: boolean
   auth_uid: string | null
   managed_department: string | null // 'creams' | 'dough' | 'packaging' | 'cleaning' | null
+  employee_id?: number | null
 }
 
 interface UserContextValue {
@@ -76,6 +77,11 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
   return (pageKey: string) => {
     // Admin can access everything
     if (user.role === 'admin') return true
+
+    // Employee can only access employee pages
+    if (user.role === 'employee') {
+      return ['employee-home', 'employee-schedule', 'employee-constraints', 'employee-tasks'].includes(pageKey)
+    }
 
     // ─── Admin-only pages ───
     if (pageKey === 'user_management' || pageKey === 'data_import' ||
