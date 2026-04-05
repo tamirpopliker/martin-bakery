@@ -166,8 +166,10 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       // Override supplier split from View (single source of truth)
       const branchIds = BRANCHES.map(br => br.id)
       const viewProfits = await fetchAllBranchesProfit(branchIds, from, to)
+      console.log('[BranchManager] viewProfits:', JSON.stringify(viewProfits))
       for (const br of current) {
         const vp = viewProfits.find(p => p.branchId === br.id)
+        console.log('[BranchManager] branch', br.id, 'vp:', JSON.stringify(vp))
         if (vp && vp.revenue > 0) {
           br.expSuppliersInternal = vp.internalSupplierCost
           br.expSuppliersExternal = vp.externalSupplierCost
