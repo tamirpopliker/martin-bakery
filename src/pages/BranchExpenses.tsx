@@ -5,7 +5,7 @@ import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, Plus, Pencil, Trash2, Search, X, Factory, AlertTriangle } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Trash2, Search, X, Factory, AlertTriangle, Info } from 'lucide-react'
 import { FixedCostIcon } from '@/components/icons'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
@@ -332,6 +332,17 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
             </Card>
           </div>
         )}
+
+        {/* Info banner */}
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-4 flex items-center gap-3" dir="rtl">
+          <Info size={18} className="text-indigo-500 flex-shrink-0" />
+          <span className="text-[13px] text-indigo-700">
+            הוצאות רכישה מהמפעל מתעדכנות אוטומטית דרך מסך ההזמנות. אין צורך להזין אותן כאן.
+          </span>
+          <button onClick={onBack} className="text-[12px] text-indigo-600 font-semibold hover:underline mr-auto whitespace-nowrap">
+            מעבר להזמנות ←
+          </button>
+        </div>
 
         {/* טופס הוספה */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
