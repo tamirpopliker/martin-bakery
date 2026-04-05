@@ -116,44 +116,79 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
     console.log(`[parseWorkingHours] ── PAGE ${pageIdx + 1} ──\n${rawText}`)
 
     // ── שלב 1: מצא שם עובד ──
-    // Search through GROUPED lines (sorted by Y) — more reliable than raw fullText
-    // because fullText joins items in pdf.js stream order which may not be visual order
+    // PDF items are sorted by X ascending (LTR), but the content is RTL Hebrew.
+    // We try multiple strategies to find the employee name.
     let name = ''
     for (const y of yKeys) {
       const row = groups.get(y)!
-      const lineText = row.map(it => it.text).join(' ')
+      // Try both LTR and RTL join orders
+      const lineTextLTR = row.map(it => it.text).join(' ')
+      const lineTextRTL = [...row].sort((a, b) => b.x - a.x).map(it => it.text).join(' ')
 
-      // Try "שם עובד:" on this line
-      const m = lineText.match(/שם עובד[:\s]+(.+?)(?:\s+קוד|\s*$)/)
-      if (m) {
-        name = m[1].trim().replace(/\s+/g, ' ')
-        // Remove trailing numbers/codes
-        name = name.replace(/\s*\d+\s*$/, '').trim()
-        break
-      }
-
-      // Also try: find item containing "שם עובד" and take the next Hebrew items
-      const idx = row.findIndex(it => it.text.includes('שם עובד'))
-      if (idx >= 0) {
-        const item = row[idx]
-        // The name might be INSIDE this item: "שם עובד: אסף דוד"
-        const inlineMatch = item.text.match(/שם עובד[:\s]+(.+)/)
+      // Strategy 1: find "שם עובד" in any item on this line
+      const nameItem = row.find(it => it.text.includes('שם עובד') || it.text.includes('עובד:'))
+      if (nameItem) {
+        // The name might be INSIDE this item: "שם עובד: אסף דוד" or "אסף דוד :עובד םש"
+        const inlineMatch = nameItem.text.match(/שם\s*עובד[:\s]+(.+)/)
         if (inlineMatch) {
-          name = inlineMatch[1].trim().replace(/\s+קוד.*/, '').replace(/\s+מחסנים.*/, '').trim()
+          name = inlineMatch[1].trim().replace(/\s+קוד.*/, '').replace(/\s+מחסנים.*/, '').replace(/\s*\d+\s*$/, '').trim()
         }
-        // Or the name might be in adjacent items (sorted by X)
+        // Or: name is a separate item — look for Hebrew items with HIGHER X (to the left in RTL = name area)
         if (!name) {
-          const hebItems = row.slice(idx + 1).filter(it => /[\u05D0-\u05EA]/.test(it.text) && !it.text.includes('קוד') && !it.text.includes('מחסנים'))
-          if (hebItems.length) name = hebItems.map(it => it.text).join(' ')
+          const nameItems = row.filter(it =>
+            it !== nameItem &&
+            /[\u05D0-\u05EA]/.test(it.text) &&
+            !it.text.includes('קוד') &&
+            !it.text.includes('מחסנים') &&
+            !it.text.includes('סניף') &&
+            !it.text.includes('שם עובד') &&
+            !it.text.includes('מספר') &&
+            !it.text.includes('דו"ח') &&
+            !it.text.includes('נוכחות') &&
+            !it.text.includes('המפעל') &&
+            it.x < nameItem.x // In RTL PDFs, name is to the right (lower X or higher X depends on encoding)
+          )
+          // Also try items to the right of "שם עובד"
+          const nameItems2 = row.filter(it =>
+            it !== nameItem &&
+            /[\u05D0-\u05EA]/.test(it.text) &&
+            !it.text.includes('קוד') &&
+            !it.text.includes('מחסנים') &&
+            !it.text.includes('סניף') &&
+            !it.text.includes('שם עובד') &&
+            !it.text.includes('מספר') &&
+            !it.text.includes('דו"ח') &&
+            !it.text.includes('נוכחות') &&
+            !it.text.includes('המפעל') &&
+            it.x > nameItem.x
+          )
+          const candidates = nameItems.length ? nameItems : nameItems2
+          if (candidates.length) {
+            name = candidates.sort((a, b) => b.x - a.x).map(it => it.text).join(' ')
+          }
         }
         if (name) break
       }
+
+      // Strategy 2: regex on both join orders
+      for (const txt of [lineTextLTR, lineTextRTL]) {
+        const m = txt.match(/שם\s*עובד[:\s]+(.+?)(?:\s+קוד|\s+מספר|\s*$)/)
+        if (m && !name) {
+          name = m[1].trim().replace(/\s+/g, ' ').replace(/\s*\d+\s*$/, '').trim()
+          break
+        }
+      }
+      if (name) break
     }
 
     if (!name) {
-      console.warn(`[parseWorkingHours] Page ${pageIdx + 1}: no employee name found`)
+      // Last resort: look for the line with "שם עובד" in raw text and log it for debugging
+      const rawNameLine = rawText.split('\n').find(l => l.includes('עובד'))
+      console.warn(`[parseWorkingHours] Page ${pageIdx + 1}: no employee name found. Nearest line: ${rawNameLine || 'none'}`)
       continue
     }
+    // Clean up any remaining noise from name
+    name = name.replace(/[0-9:,]/g, '').replace(/\s+/g, ' ').trim()
     console.log(`[parseWorkingHours] Page ${pageIdx + 1}: found employee "${name}"`)
 
     // ── שלב 2: מצא עמודות מתוך כל שורות הכותרת ──
