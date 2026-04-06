@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Users, Calendar, CheckSquare, ArrowRight, ClipboardList, Settings, History } from 'lucide-react'
+import { Users, CalendarCheck, History, Clock, ClipboardList, Calendar, Settings, Mail, ArrowRight } from 'lucide-react'
 import { useAppUser } from '../lib/UserContext'
 import { Button } from '@/components/ui/button'
 
@@ -16,13 +16,33 @@ interface Props {
   onNavigate: (page: string) => void
 }
 
-const cards = [
-  { page: 'employees', label: 'עובדים', emoji: '👤', subtitle: 'תעריפים · פרטי עובד', Icon: Users, ready: true, adminOnly: false },
-  { page: 'manager-constraints', label: 'זמינות הצוות', emoji: '📋', subtitle: 'אילוצים · זמינות · שבועי', Icon: ClipboardList, ready: true, adminOnly: false },
-  { page: 'shift-settings', label: 'הגדרות משמרות', emoji: '⚙️', subtitle: 'תפקידים · משמרות · דרישות', Icon: Settings, ready: true, adminOnly: true },
-  { page: 'weekly-schedule', label: 'סידור עבודה', emoji: '📅', subtitle: 'שיבוץ שבועי · משמרות', Icon: Calendar, ready: true, adminOnly: false },
-  { page: 'schedule-history', label: 'היסטוריית סידורים', emoji: '📜', subtitle: 'סידורים שפורסמו · ארכיון', Icon: History, ready: true, adminOnly: false },
-  { page: 'branch-tasks', label: 'משימות', emoji: '✅', subtitle: 'יומיות · שיוך · מעקב', Icon: CheckSquare, ready: false, adminOnly: false },
+const categories = [
+  {
+    title: 'צוות',
+    icon: Users,
+    items: [
+      { page: 'branch-employees', label: 'ניהול עובדים', subtitle: 'תעריפים · פרטי עובד', Icon: Users },
+      { page: 'invite-employees', label: 'הזמנת עובד', subtitle: 'שליחת הזמנה · אימייל', Icon: Mail },
+      { page: 'shift-settings', label: 'תפקידי עובדים', subtitle: 'שיוך תפקידים', Icon: Settings, tabOverride: 'employees' },
+    ]
+  },
+  {
+    title: 'סידור עבודה',
+    icon: CalendarCheck,
+    items: [
+      { page: 'weekly-schedule', label: 'סידור שבועי', subtitle: 'שיבוץ · משמרות', Icon: CalendarCheck },
+      { page: 'schedule-history', label: 'היסטוריית סידורים', subtitle: 'ארכיון · סידורים שפורסמו', Icon: History },
+      { page: 'shift-settings', label: 'הגדרות משמרות', subtitle: 'משמרות · דרישות', Icon: Settings },
+    ]
+  },
+  {
+    title: 'זמינות',
+    icon: Clock,
+    items: [
+      { page: 'manager-constraints', label: 'זמינות הצוות', subtitle: 'אילוצים · שבועי', Icon: ClipboardList },
+      { page: 'shift-settings', label: 'חגים וימים מיוחדים', subtitle: 'חגים · עומס · תבניות', Icon: Calendar, tabOverride: 'holidays' },
+    ]
+  },
 ]
 
 export default function BranchTeam({ branchName, branchColor, onBack, onNavigate }: Props) {
@@ -43,32 +63,28 @@ export default function BranchTeam({ branchName, branchColor, onBack, onNavigate
         </div>
       </motion.div>
 
-      {/* Cards */}
-      <div className="flex flex-col gap-3">
-        {cards.filter(c => !c.adminOnly || isManagerOrAdmin).map((card, i) => (
-          <motion.div key={card.page} variants={fadeIn(0.1 + i * 0.1)} initial="hidden" animate="visible">
-            <div
-              className="bg-white rounded-xl p-5 cursor-pointer hover:shadow-md transition-shadow relative overflow-hidden"
-              style={{ border: '0.5px solid #e2e8f0' }}
-              onClick={() => card.ready ? onNavigate(card.page) : undefined}
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
-                  style={{ background: branchColor + '18' }}>
-                  {card.emoji}
+      {/* Category cards */}
+      {categories.map(cat => (
+        <div key={cat.title} style={{ marginBottom: 20 }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #e2e8f0' }}>
+            <cat.icon size={16} style={{ color: '#94a3b8' }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>{cat.title}</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {cat.items.map(item => (
+              <button key={item.page + item.label} onClick={() => onNavigate(item.page)}
+                style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 14px', textAlign: 'right', cursor: 'pointer' }}
+                className="hover:shadow-sm transition-shadow">
+                <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+                  <item.Icon size={16} style={{ color: branchColor }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{item.label}</span>
                 </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-base text-slate-800">{card.label}</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">{card.subtitle}</p>
-                </div>
-                {!card.ready && (
-                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">בקרוב</span>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>{item.subtitle}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

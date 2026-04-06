@@ -77,7 +77,8 @@ export default function Home() {
   const { appUser, canAccessPage, logout } = useAppUser()
 
   // Employee role gets their own dedicated home page
-  if (appUser?.role === 'employee') return <EmployeeHome />
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  if (appUser?.role === 'employee') return <EmployeeHome onNavigate={() => {}} />
   const { branches: branchList } = useBranches()
   const [page, setPage]         = useState<string | null>(null)
   const [expandedSection, setExpandedSection] = useState<string | null>('factory')
