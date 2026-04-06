@@ -22,7 +22,7 @@ const categories = [
     icon: Users,
     items: [
       { page: 'branch-employees', label: 'ניהול עובדים', subtitle: 'תעריפים · פרטי עובד', Icon: Users },
-      { page: 'invite-employees', label: 'הזמנת עובד', subtitle: 'שליחת הזמנה · אימייל', Icon: Mail },
+      { page: 'branch-employees', label: 'הזמנת עובד', subtitle: 'שליחת הזמנה · אימייל', Icon: Mail },
       { page: 'shift-settings', label: 'תפקידי עובדים', subtitle: 'שיוך תפקידים', Icon: Settings, tabOverride: 'employees' },
     ]
   },

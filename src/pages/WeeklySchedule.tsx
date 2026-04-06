@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { ArrowRight, ChevronLeft, ChevronRight, X, Check, AlertTriangle, Users } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, X, Users } from 'lucide-react'
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } }
 
@@ -155,6 +155,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
   const [isPublished, setIsPublished] = useState(false)
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
   const [showPublishDialog, setShowPublishDialog] = useState(false)
+  const [mobileDayIdx, setMobileDayIdx] = useState(0)
   const popoverRef = useRef<HTMLDivElement>(null)
 
   const currentWeekSunday = getSundayOfCurrentWeek()
@@ -677,19 +678,29 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
       ) : (
         <>
           {/* Main grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-            {weekDates.map((date, dayIdx) => {
+          {(() => {
+            const today = formatDate(new Date())
+
+            function renderDayColumn(dayIdx: number) {
+              const date = weekDates[dayIdx]
+              const isToday = date === today
               const sd = specialDays.find(s => s.date === date)
 
               if (sd?.shift_pattern === 'closed') {
                 return (
                   <div key={date}>
-                    <div className="text-center mb-2">
-                      <div className="text-sm font-bold text-slate-700">{DAY_NAMES[dayIdx]}</div>
-                      <div className="text-xs text-slate-400">{formatShortDate(addDays(weekStart, dayIdx))}</div>
+                    <div style={{
+                      position: 'sticky', top: 0, zIndex: 10,
+                      background: isToday ? '#eef2ff' : '#f8fafc',
+                      border: isToday ? '2px solid #6366f1' : '1px solid #e2e8f0',
+                      borderRadius: 10, padding: '8px 10px', textAlign: 'center',
+                      marginBottom: 8
+                    }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: isToday ? '#4338ca' : '#334155' }}>{DAY_NAMES[dayIdx]}</div>
+                      <div style={{ fontSize: 11, color: '#94a3b8' }}>{formatShortDate(addDays(weekStart, dayIdx))}</div>
                       <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '6px', background: '#ede9fe', color: '#7c3aed' }}>{'\u{1F54E}'} {sd.name}</span>
                     </div>
-                    <div key={date} style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, textAlign: 'center' }}>
+                    <div style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, textAlign: 'center' }}>
                       <div style={{ fontSize: 24, marginBottom: 4 }}>🔒</div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>סגור</div>
                       <div style={{ fontSize: 11, color: '#94a3b8' }}>{sd.name}</div>
@@ -701,9 +712,15 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
               const dayShifts = getEffectiveShiftsForDay(dayIdx, date)
               return (
                 <div key={date}>
-                  <div className="text-center mb-2">
-                    <div className="text-sm font-bold text-slate-700">{DAY_NAMES[dayIdx]}</div>
-                    <div className="text-xs text-slate-400">{formatShortDate(addDays(weekStart, dayIdx))}</div>
+                  <div style={{
+                    position: 'sticky', top: 0, zIndex: 10,
+                    background: isToday ? '#eef2ff' : '#f8fafc',
+                    border: isToday ? '2px solid #6366f1' : '1px solid #e2e8f0',
+                    borderRadius: 10, padding: '8px 10px', textAlign: 'center',
+                    marginBottom: 8
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: isToday ? '#4338ca' : '#334155' }}>{DAY_NAMES[dayIdx]}</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{formatShortDate(addDays(weekStart, dayIdx))}</div>
                     {(() => {
                       if (!sd) return null
                       const badge = sd.type === 'holiday' ? { bg: '#ede9fe', color: '#7c3aed', icon: '\u{1F54E}' }
@@ -724,82 +741,94 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
                     {dayShifts.map(shift => {
                       const shiftRoles = getRolesForShift(shift.id, date)
                       const cardSummary = getShiftCardSummary(shift.id, date)
-                      const isFull = cardSummary.total > 0 && cardSummary.filled >= cardSummary.total
 
                       return (
-                        <Card key={shift.id} style={{ border: '1px solid #e2e8f0' }}>
-                          <CardContent style={{ padding: '10px' }}>
-                            {/* Shift header */}
-                            <div style={{ marginBottom: '8px', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
-                              <div className="text-sm font-bold text-slate-800">{shift.name}</div>
-                              <div className="text-[11px] text-slate-400">
-                                {shift.start_time?.slice(0, 5)} - {shift.end_time?.slice(0, 5)}
-                              </div>
+                        <div key={shift.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', background: 'white' }}>
+                          {/* Shift header */}
+                          <div style={{
+                            background: '#eef2ff', borderRadius: '10px 10px 0 0',
+                            padding: '8px 12px', borderBottom: '1px solid #c7d2fe'
+                          }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{shift.name}</div>
+                            <div style={{ fontSize: 11, color: '#64748b' }}>
+                              {shift.start_time?.slice(0, 5)} - {shift.end_time?.slice(0, 5)}
                             </div>
+                          </div>
 
-                            {/* Role slots */}
-                            <div className="flex flex-col gap-1.5">
-                              {shiftRoles.map(sr => {
-                                const slots = []
-                                for (let i = 0; i < sr.count; i++) {
-                                  const assignment = getAssignment(shift.id, sr.roleId, date, i)
-                                  slots.push(
-                                    <div key={`${sr.roleId}-${i}`}
-                                      className="flex items-center justify-between py-1.5 px-2 rounded-lg"
-                                      style={{ background: '#f8fafc' }}>
-                                      <span className="text-xs text-slate-500 flex items-center gap-1">
-                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: roleColors.get(sr.roleId) || '#6366f1', display: 'inline-block', marginLeft: 4 }} />
-                                        {sr.roleName}
-                                      </span>
-                                      {assignment ? (
-                                        <div className="flex items-center gap-1">
-                                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                                            style={{ background: roleColors.get(sr.roleId) || '#6366f1', color: 'white' }}>
-                                            {getEmployeeName(assignment.employee_id)} &middot; {sr.roleName}
-                                          </span>
-                                          <button onClick={() => removeAssignment(assignment.id)}
-                                            className="text-red-400 hover:text-red-600">
-                                            <X size={14} />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <button
-                                          onClick={(e) => openPopover(shift.id, sr.roleId, date, i, e)}
-                                          className="text-indigo-500 hover:text-indigo-700 text-lg font-bold">
-                                          +
-                                        </button>
-                                      )}
+                          {/* Role slots */}
+                          <div>
+                            {shiftRoles.map(sr => {
+                              const roleColor = roleColors.get(sr.roleId) || '#6366f1'
+                              const slots = []
+                              for (let i = 0; i < sr.count; i++) {
+                                const assignment = getAssignment(shift.id, sr.roleId, date, i)
+                                slots.push(
+                                  <div key={`${sr.roleId}-${i}`}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '1px solid #f1f5f9' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: roleColor, display: 'inline-block' }} />
+                                      <span style={{ fontSize: 12, color: '#64748b' }}>{sr.roleName}</span>
                                     </div>
-                                  )
-                                }
-                                return slots
-                              })}
-                            </div>
+                                    {assignment ? (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: roleColor, color: 'white' }}>
+                                          {getEmployeeName(assignment.employee_id)}
+                                        </span>
+                                        <button onClick={() => removeAssignment(assignment.id)}
+                                          style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>×</button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={(e) => openPopover(shift.id, sr.roleId, date, i, e)}
+                                        style={{ color: '#6366f1', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 6, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>+</button>
+                                    )}
+                                  </div>
+                                )
+                              }
+                              return slots
+                            })}
+                          </div>
 
-                            {/* Card summary footer */}
-                            {cardSummary.total > 0 && (
-                              <div className="flex items-center justify-center gap-1.5 mt-2 pt-2"
-                                style={{ borderTop: '1px solid #f1f5f9' }}>
-                                {isFull ? (
-                                  <Check size={14} style={{ color: '#10b981' }} />
-                                ) : (
-                                  <AlertTriangle size={14} style={{ color: '#ef4444' }} />
-                                )}
-                                <span className="text-[11px] font-bold"
-                                  style={{ color: isFull ? '#10b981' : '#ef4444' }}>
-                                  {`${cardSummary.filled}/${cardSummary.total} \u05EA\u05E4\u05E7\u05D9\u05D3\u05D9\u05DD \u05D0\u05D5\u05D9\u05E9\u05D5`}
-                                </span>
+                          {/* Card footer progress */}
+                          {cardSummary.total > 0 && (
+                            <div style={{ padding: '6px 10px', background: cardSummary.filled === cardSummary.total ? '#f0fdf4' : '#fef2f2', borderRadius: '0 0 10px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: cardSummary.filled === cardSummary.total ? '#15803d' : '#dc2626' }}>
+                                {cardSummary.filled === cardSummary.total ? '\u2705' : '\u26A0\uFE0F'} {cardSummary.filled}/{cardSummary.total} {'\u05D0\u05D5\u05D9\u05E9\u05D5'}
+                              </span>
+                              <div style={{ width: 60, height: 4, background: '#e2e8f0', borderRadius: 2, overflow: 'hidden' }}>
+                                <div style={{ width: `${cardSummary.total > 0 ? (cardSummary.filled / cardSummary.total) * 100 : 0}%`, height: '100%', background: cardSummary.filled === cardSummary.total ? '#22c55e' : '#ef4444', borderRadius: 2 }} />
                               </div>
-                            )}
-                          </CardContent>
-                        </Card>
+                            </div>
+                          )}
+                        </div>
                       )
                     })}
                   </div>
                 </div>
               )
-            })}
-          </div>
+            }
+
+            return (
+              <>
+                {/* Mobile day-by-day navigation */}
+                <div className="md:hidden" style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
+                    {DAY_NAMES.map((name, i) => (
+                      <button key={i} onClick={() => setMobileDayIdx(i)}
+                        style={{ width: mobileDayIdx === i ? 24 : 8, height: 8, borderRadius: 4, border: 'none', cursor: 'pointer',
+                          background: mobileDayIdx === i ? '#6366f1' : '#cbd5e1', transition: 'width 0.2s' }} />
+                    ))}
+                  </div>
+                  {renderDayColumn(mobileDayIdx)}
+                </div>
+
+                {/* Desktop grid */}
+                <div className="hidden md:grid md:grid-cols-6 gap-2" style={{ marginBottom: 32 }}>
+                  {[0, 1, 2, 3, 4, 5].map(i => renderDayColumn(i))}
+                </div>
+              </>
+            )
+          })()}
 
           {/* Weekly summary panel */}
           {summary && (

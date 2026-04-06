@@ -97,6 +97,16 @@ serve(async (req) => {
     let sent = 0
     let skipped = 0
 
+    // Build full branch calendar grouped by date → shift → assignments
+    const dates = [...new Set(assignments.map(a => a.date))].sort()
+    const shiftsByDate = new Map<string, Map<number, typeof assignments>>()
+    for (const a of assignments) {
+      if (!shiftsByDate.has(a.date)) shiftsByDate.set(a.date, new Map())
+      const dateMap = shiftsByDate.get(a.date)!
+      if (!dateMap.has(a.shift_id)) dateMap.set(a.shift_id, [])
+      dateMap.get(a.shift_id)!.push(a)
+    }
+
     for (const [employeeId, empAssignments] of grouped) {
       const employee = employeesMap.get(employeeId)
       if (!employee || !employee.email) {
@@ -104,31 +114,39 @@ serve(async (req) => {
         continue
       }
 
-      // Sort by date
-      empAssignments.sort((a, b) => a.date.localeCompare(b.date))
+      const myAssignmentKeys = new Set(empAssignments.map(a => `${a.date}_${a.shift_id}_${a.employee_id}`))
 
-      // Build table rows
-      const rows = empAssignments.map((a) => {
-        const shift = shiftsMap.get(a.shift_id)
-        const role = a.role_id ? rolesMap.get(a.role_id) : null
-        const date = new Date(a.date + 'T00:00:00')
-        const dayOfWeek = date.getDay()
-        const dayName = hebrewDays[dayOfWeek] || ''
-        const dateStr = a.date
-        const shiftName = shift?.name || ''
-        const startTime = shift?.start_time?.slice(0, 5) || ''
-        const endTime = shift?.end_time?.slice(0, 5) || ''
-        const roleName = role?.name || ''
+      // Build full branch calendar HTML
+      let calendarHtml = ''
+      for (const date of dates) {
+        const d = new Date(date + 'T00:00:00')
+        const dayName = hebrewDays[d.getDay()] || ''
+        const dateStr = date.split('-').reverse().slice(0, 2).join('/')
 
-        return `
-          <tr>
-            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${dayName}</td>
-            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${dateStr}</td>
-            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${shiftName}</td>
-            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${startTime} - ${endTime}</td>
-            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${roleName}</td>
-          </tr>`
-      }).join('')
+        calendarHtml += `<h3 style="color: #1e293b; font-size: 14px; margin: 16px 0 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">יום ${dayName} ${dateStr}</h3>`
+
+        const dateShifts = shiftsByDate.get(date)
+        if (!dateShifts) continue
+
+        for (const [shiftId, shiftAssigns] of dateShifts) {
+          const shift = shiftsMap.get(shiftId)
+          const startTime = shift?.start_time?.slice(0, 5) || ''
+          const endTime = shift?.end_time?.slice(0, 5) || ''
+
+          calendarHtml += `<table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 10px; border: 1px solid #e2e8f0; border-radius: 6px;">`
+          calendarHtml += `<tr style="background: #eef2ff;"><td colspan="2" style="padding: 6px 10px; font-weight: 700; color: #3730a3; font-size: 13px;">${shift?.name || ''} (${startTime}–${endTime})</td></tr>`
+
+          for (const sa of shiftAssigns) {
+            const emp = employeesMap.get(sa.employee_id)
+            const role = sa.role_id ? rolesMap.get(sa.role_id) : null
+            const isMe = myAssignmentKeys.has(`${sa.date}_${sa.shift_id}_${sa.employee_id}`)
+            const bgColor = isMe ? '#e0e7ff' : 'white'
+
+            calendarHtml += `<tr style="background: ${bgColor};"><td style="padding: 5px 10px; border-bottom: 1px solid #f1f5f9; color: #64748b; width: 40%;">${role?.name || ''}</td><td style="padding: 5px 10px; border-bottom: 1px solid #f1f5f9; font-weight: ${isMe ? '700' : '400'}; color: #1e293b;">${emp?.name || '?'}${isMe ? ' ⬅️' : ''}</td></tr>`
+          }
+          calendarHtml += '</table>'
+        }
+      }
 
       const html = `
         <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; background: #f8fafc; border-radius: 12px;">
@@ -137,24 +155,14 @@ serve(async (req) => {
           </div>
           <div style="background: white; border-radius: 10px; padding: 24px; border: 1px solid #e2e8f0;">
             <p style="color: #0f172a; font-size: 16px; margin: 0 0 8px;">שלום ${employee.name}!</p>
-            <p style="color: #334155; font-size: 15px; line-height: 1.7; margin: 0 0 20px;">
-              הסידור שלך לשבוע הבא פורסם:
+            <p style="color: #334155; font-size: 15px; line-height: 1.7; margin: 0 0 8px;">
+              סידור העבודה לשבוע ${week_start} פורסם.
             </p>
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #334155; margin-bottom: 20px;">
-              <thead>
-                <tr style="background: #f1f5f9;">
-                  <th style="padding: 8px 12px; text-align: right; border-bottom: 2px solid #e2e8f0;">יום</th>
-                  <th style="padding: 8px 12px; text-align: right; border-bottom: 2px solid #e2e8f0;">תאריך</th>
-                  <th style="padding: 8px 12px; text-align: right; border-bottom: 2px solid #e2e8f0;">משמרת</th>
-                  <th style="padding: 8px 12px; text-align: right; border-bottom: 2px solid #e2e8f0;">שעות</th>
-                  <th style="padding: 8px 12px; text-align: right; border-bottom: 2px solid #e2e8f0;">תפקיד</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rows}
-              </tbody>
-            </table>
-            <p style="color: #334155; font-size: 14px; margin: 0 0 8px;">
+            <p style="color: #6366f1; font-size: 13px; font-weight: 600; margin: 0 0 16px;">
+              💡 המשמרות שלך מסומנות בכחול
+            </p>
+            ${calendarHtml}
+            <p style="color: #334155; font-size: 14px; margin: 16px 0 0;">
               <a href="https://martin-bakery.vercel.app" style="color: #2563eb;">לצפייה במערכת</a>
             </p>
             <p style="color: #64748b; font-size: 14px; margin: 20px 0 0;">
@@ -165,7 +173,7 @@ serve(async (req) => {
         </div>
       `
 
-      const subject = `הסידור שלך לשבוע ${week_start} פורסם 📅`
+      const subject = `סידור עבודה שבוע ${week_start} — קונדיטוריית מרטין 📅`
 
       const response = await fetch(RESEND_API_URL, {
         method: 'POST',

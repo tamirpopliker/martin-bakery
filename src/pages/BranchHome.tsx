@@ -51,6 +51,7 @@ type BranchPage =
   | 'data_import'
   | 'orders'
   | 'employees'
+  | 'branch-employees'
   | 'branch-team'
   | 'manager-constraints'
   | 'shift-settings'
@@ -150,6 +151,9 @@ export default function BranchHome({ branch, onBack }: Props) {
   )
   if (page === 'employees') return (
     <BranchEmployees branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
+  )
+  if (page === 'branch-employees') return (
+    <BranchEmployees branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-team')} />
   )
   if (page === 'data_import') return (
     <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
