@@ -52,6 +52,7 @@ interface SpecialDay {
   name: string
   type: string
   staffing_multiplier: number
+  shift_pattern: string
   source: string | null
 }
 
@@ -639,6 +640,7 @@ function HolidaysTab({ branchId }: { branchId: number }) {
   const [hebcalLoading, setHebcalLoading] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [addForm, setAddForm] = useState({ date: '', name: '', type: 'holiday', staffing_multiplier: 1.5 })
+  const [newShiftPattern, setNewShiftPattern] = useState('regular')
 
   async function fetchSpecialDays() {
     const { data } = await supabase.from('special_days').select('*')
@@ -675,6 +677,7 @@ function HolidaysTab({ branchId }: { branchId: number }) {
         type: 'holiday',
         source: 'hebcal',
         staffing_multiplier: 1.5,
+        shift_pattern: 'friday',
       }))
       await supabase.from('special_days').insert(rows)
       setHebcalItems([])
@@ -692,8 +695,10 @@ function HolidaysTab({ branchId }: { branchId: number }) {
       name: addForm.name.trim(),
       type: addForm.type,
       staffing_multiplier: addForm.staffing_multiplier,
+      shift_pattern: newShiftPattern,
     })
     setAddForm({ date: '', name: '', type: 'holiday', staffing_multiplier: 1.5 })
+    setNewShiftPattern('regular')
     setShowAddForm(false)
     fetchSpecialDays()
   }
@@ -799,6 +804,15 @@ function HolidaysTab({ branchId }: { branchId: number }) {
                     onChange={e => setAddForm({ ...addForm, staffing_multiplier: Number(e.target.value) })} />
                 </div>
               </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>תבנית משמרות</label>
+                <select value={newShiftPattern} onChange={e => setNewShiftPattern(e.target.value)}
+                  style={{ width: '100%', padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13 }}>
+                  <option value="regular">📅 רגיל — כל המשמרות</option>
+                  <option value="friday">🕍 ערב חג — כמו שישי</option>
+                  <option value="closed">🔒 סגור — אין משמרות</option>
+                </select>
+              </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <Button onClick={addSpecialDay} style={{ gap: '6px' }}>
                   <Check style={{ width: '16px', height: '16px' }} /> הוסף
@@ -822,6 +836,7 @@ function HolidaysTab({ branchId }: { branchId: number }) {
                     <th style={{ textAlign: 'right', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>תאריך</th>
                     <th style={{ textAlign: 'right', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>שם</th>
                     <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>סוג</th>
+                    <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>תבנית</th>
                     <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>מכפיל</th>
                     <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}></th>
                   </tr>
@@ -832,6 +847,15 @@ function HolidaysTab({ branchId }: { branchId: number }) {
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', direction: 'ltr', textAlign: 'right' }}>{day.date}</td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: '500' }}>{day.name}</td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>{typeBadge(day.type)}</td>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                        <span style={{
+                          fontSize: 10, padding: '2px 8px', borderRadius: 6,
+                          background: day.shift_pattern === 'closed' ? '#fef2f2' : day.shift_pattern === 'friday' ? '#f3e8ff' : '#f1f5f9',
+                          color: day.shift_pattern === 'closed' ? '#991b1b' : day.shift_pattern === 'friday' ? '#7c3aed' : '#64748b'
+                        }}>
+                          {day.shift_pattern === 'closed' ? '🔒 סגור' : day.shift_pattern === 'friday' ? '🕍 כמו שישי' : '📅 רגיל'}
+                        </span>
+                      </td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center', fontWeight: '600' }}>x{day.staffing_multiplier}</td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
                         <Button variant="ghost" size="sm" onClick={() => deleteSpecialDay(day.id)} style={{ color: '#ef4444' }}>

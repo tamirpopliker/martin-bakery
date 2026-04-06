@@ -65,6 +65,7 @@ interface SpecialDay {
   name: string
   type: string
   staffing_multiplier: number
+  shift_pattern: string
 }
 
 interface EmployeeRoleAssignment {
@@ -223,6 +224,22 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     return shifts.filter(s => s.days_of_week && s.days_of_week.includes(dayIndex))
   }
 
+  function getEffectiveShiftsForDay(dayIndex: number, date: string): BranchShift[] {
+    const sd = specialDays.find(s => s.date === date)
+
+    if (sd?.shift_pattern === 'closed') {
+      return [] // No shifts on closed days
+    }
+
+    if (sd?.shift_pattern === 'friday') {
+      // Use Friday shifts (days_of_week includes 5) regardless of actual day
+      return shifts.filter(s => (s.days_of_week as number[]).includes(5))
+    }
+
+    // Regular: filter by actual day of week
+    return shifts.filter(s => (s.days_of_week as number[]).includes(dayIndex))
+  }
+
   function getAdjustedRequired(shiftId: number, date: string): { roleId: number; count: number }[] {
     const sd = specialDays.find(s => s.date === date)
     const multiplier = sd?.staffing_multiplier || 1.0
@@ -363,7 +380,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
 
     for (let dayIdx = 0; dayIdx < 6; dayIdx++) {
       const date = weekDates[dayIdx]
-      const dayShifts = getShiftsForDay(dayIdx)
+      const dayShifts = getEffectiveShiftsForDay(dayIdx, date)
       for (const shift of dayShifts) {
         totalShifts++
         const summary = getShiftCardSummary(shift.id, date)
@@ -396,7 +413,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
 
     for (let dayIdx = 0; dayIdx < 6; dayIdx++) {
       const date = weekDates[dayIdx]
-      const dayShifts = getShiftsForDay(dayIdx)
+      const dayShifts = getEffectiveShiftsForDay(dayIdx, date)
 
       for (const shift of dayShifts) {
         const adjustedReqs = getAdjustedRequired(shift.id, date)
@@ -456,7 +473,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     let unfilled = 0
     for (let dayIdx = 0; dayIdx < 6; dayIdx++) {
       const date = weekDates[dayIdx]
-      for (const shift of getShiftsForDay(dayIdx)) {
+      for (const shift of getEffectiveShiftsForDay(dayIdx, date)) {
         const reqs = getAdjustedRequired(shift.id, date)
         const totalReq = reqs.reduce((s, r) => s + r.count, 0)
         const filled = newAssignments.filter(a => a.shift_id === shift.id && a.date === date).length
@@ -567,14 +584,32 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
           {/* Main grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
             {weekDates.map((date, dayIdx) => {
-              const dayShifts = getShiftsForDay(dayIdx)
+              const sd = specialDays.find(s => s.date === date)
+
+              if (sd?.shift_pattern === 'closed') {
+                return (
+                  <div key={date}>
+                    <div className="text-center mb-2">
+                      <div className="text-sm font-bold text-slate-700">{DAY_NAMES[dayIdx]}</div>
+                      <div className="text-xs text-slate-400">{formatShortDate(addDays(weekStart, dayIdx))}</div>
+                      <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '6px', background: '#ede9fe', color: '#7c3aed' }}>{'\u{1F54E}'} {sd.name}</span>
+                    </div>
+                    <div key={date} style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, textAlign: 'center' }}>
+                      <div style={{ fontSize: 24, marginBottom: 4 }}>🔒</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>סגור</div>
+                      <div style={{ fontSize: 11, color: '#94a3b8' }}>{sd.name}</div>
+                    </div>
+                  </div>
+                )
+              }
+
+              const dayShifts = getEffectiveShiftsForDay(dayIdx, date)
               return (
                 <div key={date}>
                   <div className="text-center mb-2">
                     <div className="text-sm font-bold text-slate-700">{DAY_NAMES[dayIdx]}</div>
                     <div className="text-xs text-slate-400">{formatShortDate(addDays(weekStart, dayIdx))}</div>
                     {(() => {
-                      const sd = specialDays.find(s => s.date === date)
                       if (!sd) return null
                       const badge = sd.type === 'holiday' ? { bg: '#ede9fe', color: '#7c3aed', icon: '\u{1F54E}' }
                         : sd.type === 'high_demand' ? { bg: '#fef2f2', color: '#dc2626', icon: '\u{1F4C8}' }
@@ -583,6 +618,11 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
                     })()}
                   </div>
                   <div className="flex flex-col gap-3">
+                    {sd?.shift_pattern === 'friday' && (
+                      <div style={{ fontSize: 11, color: '#7c3aed', fontWeight: 600, marginBottom: 4, textAlign: 'center' }}>
+                        🕍 ערב חג — משמרת אחת
+                      </div>
+                    )}
                     {dayShifts.length === 0 && (
                       <div className="text-center text-xs text-slate-300 py-4">{'\u05D0\u05D9\u05DF \u05DE\u05E9\u05DE\u05E8\u05D5\u05EA'}</div>
                     )}
