@@ -146,6 +146,8 @@ export function UserProvider({ session, children }: { session: Session; children
   const [appUser, setAppUser] = useState<AppUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [unauthorized, setUnauthorized] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
+  const [retryCountdown, setRetryCountdown] = useState(0)
 
   useEffect(() => {
     async function loadUser() {
@@ -156,13 +158,30 @@ export function UserProvider({ session, children }: { session: Session; children
         return
       }
 
-      const { data, error } = await supabase
-        .from('app_users')
-        .select('*')
-        .ilike('email', email)
-        .single()
+      // Try to find the user, with retries for new accounts (trigger may need time)
+      let data: any = null
+      let attempts = 0
+      const maxAttempts = retryCount === 0 ? 3 : 1
+      const delayMs = 2000
 
-      if (error || !data) {
+      while (attempts < maxAttempts) {
+        const result = await supabase
+          .from('app_users')
+          .select('*')
+          .ilike('email', email)
+          .single()
+
+        if (result.data) {
+          data = result.data
+          break
+        }
+        attempts++
+        if (attempts < maxAttempts) {
+          await new Promise(r => setTimeout(r, delayMs))
+        }
+      }
+
+      if (!data) {
         setUnauthorized(true)
         setLoading(false)
         return
@@ -209,7 +228,27 @@ export function UserProvider({ session, children }: { session: Session; children
     )
   }
 
+  // Auto-retry for pending approval
+  useEffect(() => {
+    if (!unauthorized || retryCount >= 3) return
+    setRetryCountdown(5)
+    const interval = setInterval(() => {
+      setRetryCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          setRetryCount(c => c + 1)
+          setUnauthorized(false)
+          setLoading(true)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [unauthorized, retryCount])
+
   if (unauthorized) {
+    const canAutoRetry = retryCount < 3
     return (
       <div style={{
         minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -219,18 +258,27 @@ export function UserProvider({ session, children }: { session: Session; children
           background: 'white', borderRadius: '20px', padding: '48px', textAlign: 'center',
           boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxWidth: '420px',
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-          <h2 style={{ margin: '0 0 8px', color: '#0f172a', fontSize: '22px' }}>המשתמש טרם אושר</h2>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>{canAutoRetry ? '⏳' : '🔒'}</div>
+          <h2 style={{ margin: '0 0 8px', color: '#0f172a', fontSize: '22px' }}>
+            {canAutoRetry ? 'ממתין לאישור...' : 'המשתמש טרם אושר'}
+          </h2>
           <p style={{ color: '#94a3b8', marginBottom: '8px', lineHeight: '1.6' }}>
             המשתמש <strong style={{ color: '#374151' }}>{session.user.email}</strong> עדיין לא מוגדר במערכת.
           </p>
-          <p style={{ color: '#94a3b8', marginBottom: '24px', fontSize: '14px' }}>
-            אם הוזמנת על ידי מנהל — נסה להתחבר שוב בעוד מספר שניות.<br/>
-            אם הבעיה נמשכת — פנה למנהל הסניף שלך.
-          </p>
+          {canAutoRetry ? (
+            <p style={{ color: '#6366f1', marginBottom: '24px', fontSize: '14px', fontWeight: '600' }}>
+              אם הוזמנת על ידי מנהל — המערכת מכינה את חשבונך.<br/>
+              מנסה שוב בעוד {retryCountdown} שניות... (ניסיון {retryCount + 1}/3)
+            </p>
+          ) : (
+            <p style={{ color: '#94a3b8', marginBottom: '24px', fontSize: '14px' }}>
+              אם הוזמנת על ידי מנהל — נסה להתחבר שוב בעוד מספר שניות.<br/>
+              אם הבעיה נמשכת — פנה למנהל הסניף שלך.
+            </p>
+          )}
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => { setRetryCount(0); setUnauthorized(false); setLoading(true) }}
               style={{
                 background: '#6366f1', color: 'white', border: 'none', borderRadius: '10px',
                 padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer',
