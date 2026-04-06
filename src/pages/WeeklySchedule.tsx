@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { ArrowRight, ChevronLeft, ChevronRight, X, Users } from 'lucide-react'
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } }
 
@@ -157,13 +154,14 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
   const [showPublishDialog, setShowPublishDialog] = useState(false)
   const [mobileDayIdx, setMobileDayIdx] = useState(0)
+  const [hoveredAssignment, setHoveredAssignment] = useState<number | null>(null)
+  const [popoverSearch, setPopoverSearch] = useState('')
   const popoverRef = useRef<HTMLDivElement>(null)
 
   const currentWeekSunday = getSundayOfCurrentWeek()
   const canGoBack = weekStart.getTime() > currentWeekSunday.getTime()
 
   const weekEnd = addDays(weekStart, 5) // Friday
-  const weekLabel = `${formatShortDate(weekStart)} \u2013 ${formatShortDate(weekEnd)}`
 
   const weekDates: string[] = []
   for (let i = 0; i < 6; i++) {
@@ -342,6 +340,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
   function openPopover(shiftId: number, roleId: number, date: string, slotIndex: number, e: React.MouseEvent) {
     const rect = (e.target as HTMLElement).getBoundingClientRect()
     setPopover({ shiftId, roleId, date, slotIndex, x: rect.left, y: rect.bottom + 4 })
+    setPopoverSearch('')
   }
 
   function getPopoverEmployees(): { emp: BranchEmployee; avail: Availability | null; alreadyAssigned: boolean }[] {
@@ -613,408 +612,393 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     })
   }
 
+  const prevWeek = () => { if (canGoBack) setWeekStart(prev => addDays(prev, -7)) }
+  const nextWeek = () => setWeekStart(prev => addDays(prev, 7))
+
   const summary = !loading ? getWeeklySummary() : null
+
+  // --- RENDER ---
 
   return (
     <motion.div dir="rtl" initial="hidden" animate="visible" variants={fadeIn}
-      style={{ padding: '16px', maxWidth: '1400px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowRight style={{ width: '18px', height: '18px' }} />
-        </Button>
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', margin: 0 }}>
-            {`\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E2\u05D1\u05D5\u05D3\u05D4 \u2014 ${weekLabel}`}
-          </h1>
-          <span style={{ fontSize: '13px', color: '#64748b' }}>{branchName}</span>
-        </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={printSchedule} style={{ padding: '6px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, cursor: 'pointer', background: 'white' }}>
-            {'\u{1F5A8}\uFE0F'} {'\u05D4\u05D3\u05E4\u05E1'}
-          </button>
-          <button onClick={copyForWhatsapp} style={{ padding: '6px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, cursor: 'pointer', background: 'white' }}>
-            {'\u{1F4F1}'} {'\u05D4\u05E2\u05EA\u05E7 \u05DC\u05D5\u05D5\u05D8\u05E1\u05D0\u05E4'}
-          </button>
-        </div>
-        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: branchColor }} />
-      </div>
+      style={{ maxWidth: 1400, margin: '0 auto' }}>
 
-      {/* Week navigation */}
-      <div className="flex items-center justify-center gap-4 mb-5">
-        <Button variant="outline" size="sm" disabled={!canGoBack}
-          onClick={() => setWeekStart(prev => addDays(prev, -7))} className="rounded-lg">
-          <ChevronRight size={16} />
-        </Button>
-        <span className="text-sm font-bold text-slate-700 min-w-[160px] text-center">{weekLabel}</span>
-        <Button variant="outline" size="sm"
-          onClick={() => setWeekStart(prev => addDays(prev, 7))} className="rounded-lg">
-          <ChevronLeft size={16} />
-        </Button>
-        <Button onClick={() => setShowAutoDialog(true)}
-          style={{ background: '#6366f1', color: 'white' }}
-          className="gap-2">
-          <span>{'\u2728'}</span> {'\u05E9\u05D1\u05E5 \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05EA'}
-        </Button>
-        <Button variant="outline" onClick={() => setShowClearDialog(true)}
-          style={{ borderColor: '#ef4444', color: '#ef4444' }}
-          className="gap-2">
-          {'\u05E0\u05E7\u05D4 \u05E9\u05D9\u05D1\u05D5\u05E5'}
-        </Button>
-      </div>
-
-      {/* Publish status banner */}
-      {!loading && (isPublished ? (
-        <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 12, padding: '10px 16px', marginBottom: 10 }}
-          className="flex items-center justify-between">
-          <span style={{ color: '#065f46', fontSize: 13, fontWeight: 600 }}>
-            {'\u2705 \u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E4\u05D5\u05E8\u05E1\u05DD'}{publishedAt ? ` \u2014 ${new Date(publishedAt).toLocaleDateString('he-IL')} ${new Date(publishedAt).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}` : ''}
-          </span>
-          <button onClick={unpublishSchedule} style={{ color: '#ef4444', fontSize: 12, fontWeight: 600, background: 'none', border: '1px solid #ef4444', borderRadius: 8, padding: '4px 12px', cursor: 'pointer' }}>
-            {'\u05D1\u05D8\u05DC \u05E4\u05E8\u05E1\u05D5\u05DD'}
-          </button>
-        </div>
-      ) : (
-        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '10px 16px', marginBottom: 10 }}
-          className="flex items-center justify-between">
-          <span style={{ color: '#92400e', fontSize: 13, fontWeight: 600 }}>{'\u26A0\uFE0F \u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05D8\u05E8\u05DD \u05E4\u05D5\u05E8\u05E1\u05DD \u2014 \u05D4\u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05D0\u05D9\u05E0\u05DD \u05E8\u05D5\u05D0\u05D9\u05DD \u05D0\u05D5\u05EA\u05D5'}</span>
-          <button onClick={() => setShowPublishDialog(true)} style={{ color: 'white', background: '#6366f1', fontSize: 12, fontWeight: 700, border: 'none', borderRadius: 8, padding: '6px 16px', cursor: 'pointer' }}>
-            {'\u05E4\u05E8\u05E1\u05DD \u05E1\u05D9\u05D3\u05D5\u05E8 \u2713'}
-          </button>
-        </div>
-      ))}
-
-      {loading ? (
-        <div className="text-center py-12 text-slate-400">{'\u05D8\u05D5\u05E2\u05DF...'}</div>
-      ) : (
-        <>
-          {/* Main grid */}
-          {(() => {
-            const today = formatDate(new Date())
-
-            function renderDayColumn(dayIdx: number) {
-              const date = weekDates[dayIdx]
-              const isToday = date === today
-              const sd = specialDays.find(s => s.date === date)
-
-              if (sd?.shift_pattern === 'closed') {
-                return (
-                  <div key={date}>
-                    <div style={{
-                      position: 'sticky', top: 0, zIndex: 10,
-                      background: isToday ? '#eef2ff' : '#f8fafc',
-                      border: isToday ? '2px solid #6366f1' : '1px solid #e2e8f0',
-                      borderRadius: 10, padding: '8px 10px', textAlign: 'center',
-                      marginBottom: 8
-                    }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: isToday ? '#4338ca' : '#334155' }}>{DAY_NAMES[dayIdx]}</div>
-                      <div style={{ fontSize: 11, color: '#94a3b8' }}>{formatShortDate(addDays(weekStart, dayIdx))}</div>
-                      <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '6px', background: '#ede9fe', color: '#7c3aed' }}>{'\u{1F54E}'} {sd.name}</span>
-                    </div>
-                    <div style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20, textAlign: 'center' }}>
-                      <div style={{ fontSize: 24, marginBottom: 4 }}>🔒</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>סגור</div>
-                      <div style={{ fontSize: 11, color: '#94a3b8' }}>{sd.name}</div>
-                    </div>
-                  </div>
-                )
-              }
-
-              const dayShifts = getEffectiveShiftsForDay(dayIdx, date)
-              return (
-                <div key={date}>
-                  <div style={{
-                    position: 'sticky', top: 0, zIndex: 10,
-                    background: isToday ? '#eef2ff' : '#f8fafc',
-                    border: isToday ? '2px solid #6366f1' : '1px solid #e2e8f0',
-                    borderRadius: 10, padding: '8px 10px', textAlign: 'center',
-                    marginBottom: 8
-                  }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: isToday ? '#4338ca' : '#334155' }}>{DAY_NAMES[dayIdx]}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{formatShortDate(addDays(weekStart, dayIdx))}</div>
-                    {(() => {
-                      if (!sd) return null
-                      const badge = sd.type === 'holiday' ? { bg: '#ede9fe', color: '#7c3aed', icon: '\u{1F54E}' }
-                        : sd.type === 'high_demand' ? { bg: '#fef2f2', color: '#dc2626', icon: '\u{1F4C8}' }
-                        : { bg: '#eff6ff', color: '#2563eb', icon: '\u{1F4C9}' }
-                      return <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '6px', background: badge.bg, color: badge.color }}>{badge.icon} {sd.name}</span>
-                    })()}
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    {sd?.shift_pattern === 'friday' && (
-                      <div style={{ fontSize: 11, color: '#7c3aed', fontWeight: 600, marginBottom: 4, textAlign: 'center' }}>
-                        🕍 ערב חג — משמרת אחת
-                      </div>
-                    )}
-                    {dayShifts.length === 0 && (
-                      <div className="text-center text-xs text-slate-300 py-4">{'\u05D0\u05D9\u05DF \u05DE\u05E9\u05DE\u05E8\u05D5\u05EA'}</div>
-                    )}
-                    {dayShifts.map(shift => {
-                      const shiftRoles = getRolesForShift(shift.id, date)
-                      const cardSummary = getShiftCardSummary(shift.id, date)
-
-                      return (
-                        <div key={shift.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', background: 'white' }}>
-                          {/* Shift header */}
-                          <div style={{
-                            background: '#eef2ff', borderRadius: '10px 10px 0 0',
-                            padding: '8px 12px', borderBottom: '1px solid #c7d2fe'
-                          }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>{shift.name}</div>
-                            <div style={{ fontSize: 11, color: '#64748b' }}>
-                              {shift.start_time?.slice(0, 5)} - {shift.end_time?.slice(0, 5)}
-                            </div>
-                          </div>
-
-                          {/* Role slots */}
-                          <div>
-                            {shiftRoles.map(sr => {
-                              const roleColor = roleColors.get(sr.roleId) || '#6366f1'
-                              const slots = []
-                              for (let i = 0; i < sr.count; i++) {
-                                const assignment = getAssignment(shift.id, sr.roleId, date, i)
-                                slots.push(
-                                  <div key={`${sr.roleId}-${i}`}
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '1px solid #f1f5f9' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: roleColor, display: 'inline-block' }} />
-                                      <span style={{ fontSize: 12, color: '#64748b' }}>{sr.roleName}</span>
-                                    </div>
-                                    {assignment ? (
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: roleColor, color: 'white' }}>
-                                          {(() => {
-                                            const emp = employees.find(e => e.id === assignment.employee_id)
-                                            const badge = emp?.training_status === 'mentor' ? '⭐ ' : emp?.training_status === 'trainee' ? '📚 ' : ''
-                                            return `${badge}${emp?.name || '?'}`
-                                          })()}
-                                        </span>
-                                        <button onClick={() => removeAssignment(assignment.id)}
-                                          style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>×</button>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        onClick={(e) => openPopover(shift.id, sr.roleId, date, i, e)}
-                                        style={{ color: '#6366f1', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 6, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>+</button>
-                                    )}
-                                  </div>
-                                )
-                              }
-                              return slots
-                            })}
-                          </div>
-
-                          {/* Trainee without mentor warning */}
-                          {(() => {
-                            const shiftAssigns = assignments.filter(a => a.shift_id === shift.id && a.date === date)
-                            const hasTrainee = shiftAssigns.some(a => {
-                              const emp = employees.find(e => e.id === a.employee_id)
-                              return emp?.training_status === 'trainee'
-                            })
-                            const hasMentor = shiftAssigns.some(a => {
-                              const emp = employees.find(e => e.id === a.employee_id)
-                              return emp?.training_status === 'mentor'
-                            })
-                            if (hasTrainee && !hasMentor) {
-                              return (
-                                <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 600, marginTop: 4, padding: '4px 8px', background: '#fef2f2', borderRadius: 6 }}>
-                                  ⚠️ מתלמד ללא חונך
-                                </div>
-                              )
-                            }
-                            return null
-                          })()}
-
-                          {/* Card footer progress */}
-                          {cardSummary.total > 0 && (
-                            <div style={{ padding: '6px 10px', background: cardSummary.filled === cardSummary.total ? '#f0fdf4' : '#fef2f2', borderRadius: '0 0 10px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span style={{ fontSize: 11, fontWeight: 600, color: cardSummary.filled === cardSummary.total ? '#15803d' : '#dc2626' }}>
-                                {(() => {
-                                  const shiftAssignsForSummary = assignments.filter(a => a.shift_id === shift.id && a.date === date)
-                                  const traineeCount = shiftAssignsForSummary.filter(a => {
-                                    const emp = employees.find(e => e.id === a.employee_id)
-                                    return emp?.training_status === 'trainee'
-                                  }).length
-                                  const regularCount = cardSummary.filled - traineeCount
-                                  return `${cardSummary.filled === cardSummary.total ? '\u2705' : '\u26A0\uFE0F'} ${regularCount}/${cardSummary.total} תפקידים${traineeCount > 0 ? ` + ${traineeCount} מתלמדים` : ''}`
-                                })()}
-                              </span>
-                              <div style={{ width: 60, height: 4, background: '#e2e8f0', borderRadius: 2, overflow: 'hidden' }}>
-                                <div style={{ width: `${cardSummary.total > 0 ? (cardSummary.filled / cardSummary.total) * 100 : 0}%`, height: '100%', background: cardSummary.filled === cardSummary.total ? '#22c55e' : '#ef4444', borderRadius: 2 }} />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            }
-
-            return (
-              <>
-                {/* Mobile day-by-day navigation */}
-                <div className="md:hidden" style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
-                    {DAY_NAMES.map((name, i) => (
-                      <button key={i} onClick={() => setMobileDayIdx(i)}
-                        style={{ width: mobileDayIdx === i ? 24 : 8, height: 8, borderRadius: 4, border: 'none', cursor: 'pointer',
-                          background: mobileDayIdx === i ? '#6366f1' : '#cbd5e1', transition: 'width 0.2s' }} />
-                    ))}
-                  </div>
-                  {renderDayColumn(mobileDayIdx)}
-                </div>
-
-                {/* Desktop grid */}
-                <div className="hidden md:grid md:grid-cols-6 gap-2" style={{ marginBottom: 32 }}>
-                  {[0, 1, 2, 3, 4, 5].map(i => renderDayColumn(i))}
-                </div>
-              </>
-            )
-          })()}
-
-          {/* Weekly summary panel */}
-          {summary && (
-            <Card style={{ border: '1px solid #e2e8f0' }}>
-              <CardContent style={{ padding: '16px' }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Users size={18} style={{ color: '#64748b' }} />
-                  <span className="text-base font-bold text-slate-800">{'\u05E1\u05D9\u05DB\u05D5\u05DD \u05E9\u05D1\u05D5\u05E2\u05D9'}</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-                  <div className="text-center p-3 rounded-xl" style={{ background: '#f8fafc' }}>
-                    <div className="text-2xl font-bold text-slate-700">{summary.totalShifts}</div>
-                    <div className="text-xs text-slate-500">{'\u05E1\u05D4\u05F4\u05DB \u05DE\u05E9\u05DE\u05E8\u05D5\u05EA'}</div>
-                  </div>
-                  <div className="text-center p-3 rounded-xl" style={{ background: '#f0fdf4' }}>
-                    <div className="text-2xl font-bold" style={{ color: '#10b981' }}>{summary.fullShifts}</div>
-                    <div className="text-xs" style={{ color: '#16a34a' }}>{'\u05DE\u05D0\u05D5\u05D9\u05E9\u05D5\u05EA \u05DE\u05DC\u05D0\u05D5\u05EA'}</div>
-                  </div>
-                  <div className="text-center p-3 rounded-xl" style={{ background: '#fef2f2' }}>
-                    <div className="text-2xl font-bold" style={{ color: '#ef4444' }}>{summary.incompleteShifts}</div>
-                    <div className="text-xs" style={{ color: '#dc2626' }}>{'\u05D7\u05E1\u05E8\u05D5\u05EA'}</div>
-                  </div>
-                  <div className="text-center p-3 rounded-xl" style={{ background: '#f8fafc' }}>
-                    <div className="text-2xl font-bold text-slate-700">{summary.unassigned.length}</div>
-                    <div className="text-xs text-slate-500">{'\u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05DC\u05DC\u05D0 \u05E9\u05D9\u05D1\u05D5\u05E5'}</div>
-                  </div>
-                </div>
-
-                {summary.unassigned.length > 0 && (
-                  <div>
-                    <div className="text-xs font-bold text-slate-500 mb-2">{'\u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05DC\u05DC\u05D0 \u05E9\u05D9\u05D1\u05D5\u05E5 \u05D4\u05E9\u05D1\u05D5\u05E2:'}</div>
-                    <div className="flex flex-wrap gap-2">
-                      {summary.unassigned.map(emp => (
-                        <span key={emp.id} className="text-xs px-3 py-1 rounded-full"
-                          style={{ background: '#f1f5f9', color: '#64748b' }}>
-                          {emp.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </>
-      )}
-
-      {/* Auto-schedule dialog */}
-      {showAutoDialog && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowAutoDialog(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-2">{'\u05E9\u05D9\u05D1\u05D5\u05E5 \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9'}</h3>
-            <p className="text-sm text-slate-600 mb-4">{'\u05D4\u05D0\u05DD \u05DC\u05E9\u05D1\u05E5 \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05EA \u05D0\u05EA \u05D4\u05E9\u05D1\u05D5\u05E2? \u05E4\u05E2\u05D5\u05DC\u05D4 \u05D6\u05D5 \u05EA\u05D7\u05DC\u05D9\u05E3 \u05E9\u05D9\u05D1\u05D5\u05E6\u05D9\u05DD \u05E7\u05D9\u05D9\u05DE\u05D9\u05DD.'}</p>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowAutoDialog(false)}>{'\u05D1\u05D9\u05D8\u05D5\u05DC'}</Button>
-              <Button onClick={runAutoSchedule} style={{ background: '#6366f1', color: 'white' }}>{'\u05E9\u05D1\u05E5'}</Button>
+      {/* ─── Sticky Header ─── */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button onClick={onBack} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#94a3b8', padding: 4 }}>→</button>
+              <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>סידור עבודה שבועי</h1>
             </div>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
           </div>
-        </div>
-      )}
-
-      {/* Clear dialog */}
-      {showClearDialog && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowClearDialog(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-2">{'\u05E0\u05D9\u05E7\u05D5\u05D9 \u05E9\u05D9\u05D1\u05D5\u05E6\u05D9\u05DD'}</h3>
-            <p className="text-sm text-slate-600 mb-4">{'\u05D4\u05D0\u05DD \u05DC\u05DE\u05D7\u05D5\u05E7 \u05D0\u05EA \u05DB\u05DC \u05D4\u05E9\u05D9\u05D1\u05D5\u05E6\u05D9\u05DD \u05DC\u05E9\u05D1\u05D5\u05E2 \u05D6\u05D4?'}</p>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowClearDialog(false)}>{'\u05D1\u05D9\u05D8\u05D5\u05DC'}</Button>
-              <Button onClick={clearWeekAssignments} style={{ background: '#ef4444', color: 'white' }}>{'\u05E0\u05E7\u05D4'}</Button>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={prevWeek} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: canGoBack ? '#94a3b8' : '#e2e8f0', padding: 4 }}>›</button>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#334155', minWidth: 140, textAlign: 'center' }}>
+              {formatShortDate(weekStart)} – {formatShortDate(weekEnd)}
+            </span>
+            <button onClick={nextWeek} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#94a3b8', padding: 4 }}>‹</button>
           </div>
-        </div>
-      )}
-
-      {/* Publish dialog */}
-      {showPublishDialog && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowPublishDialog(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{'\u05E4\u05E8\u05E1\u05D5\u05DD \u05E1\u05D9\u05D3\u05D5\u05E8'}</h3>
-            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>{'\u05DC\u05D0\u05D7\u05E8 \u05D4\u05E4\u05E8\u05E1\u05D5\u05DD \u05D4\u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05D9\u05D5\u05DB\u05DC\u05D5 \u05DC\u05E8\u05D0\u05D5\u05EA \u05D0\u05EA \u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E9\u05DC\u05D4\u05DD.'}</p>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setShowPublishDialog(false)} style={{ padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>{'\u05D1\u05D9\u05D8\u05D5\u05DC'}</button>
-              <button onClick={publishSchedule} style={{ padding: '6px 16px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{'\u05E4\u05E8\u05E1\u05DD'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Employee selection popover */}
-      {popover && (
-        <div ref={popoverRef}
-          className="fixed z-50 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden"
-          style={{
-            left: `${Math.min(popover.x, window.innerWidth - 260)}px`,
-            top: `${Math.min(popover.y, window.innerHeight - 300)}px`,
-            width: '240px',
-            maxHeight: '280px',
-          }}>
-          <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between"
-            style={{ background: '#f8fafc' }}>
-            <span className="text-xs font-bold text-slate-600">{'\u05D1\u05D7\u05E8 \u05E2\u05D5\u05D1\u05D3'}</span>
-            <button onClick={() => setPopover(null)} className="text-slate-400 hover:text-slate-600">
-              <X size={14} />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => setShowAutoDialog(true)} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              שבץ אוטומטית ✦
+            </button>
+            <button onClick={printSchedule} style={{ background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>
+              🖨️
+            </button>
+            <button onClick={copyForWhatsapp} style={{ background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>
+              📱
             </button>
           </div>
-          <div style={{ overflowY: 'auto', maxHeight: '240px' }}>
-            {getPopoverEmployees().length === 0 && (
-              <div className="text-center py-4 text-xs text-slate-400">{'\u05D0\u05D9\u05DF \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05DE\u05EA\u05D0\u05D9\u05DE\u05D9\u05DD \u05DC\u05EA\u05E4\u05E7\u05D9\u05D3'}</div>
+        </div>
+      </div>
+
+      <div style={{ padding: '12px 20px' }}>
+
+        {/* ─── Publish Banner ─── */}
+        {!loading && (
+          !isPublished ? (
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '10px 16px', margin: '12px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 13, color: '#92400e' }}>○ טיוטה — העובדים אינם רואים את הסידור</span>
+              <button onClick={() => setShowPublishDialog(true)} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '6px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                פרסם סידור →
+              </button>
+            </div>
+          ) : (
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '10px 16px', margin: '12px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 13, color: '#166534' }}>✓ פורסם {publishedAt ? new Date(publishedAt).toLocaleDateString('he-IL') : ''}</span>
+              <button onClick={unpublishSchedule} style={{ background: 'none', color: '#94a3b8', border: 'none', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
+                בטל פרסום
+              </button>
+            </div>
+          )
+        )}
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: '#94a3b8', fontSize: 14 }}>טוען...</div>
+        ) : (
+          <>
+            {/* ─── Mobile Day Tabs ─── */}
+            <div className="md:hidden" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
+                {DAY_NAMES.map((name, i) => (
+                  <button key={i} onClick={() => setMobileDayIdx(i)}
+                    style={{ width: mobileDayIdx === i ? 24 : 8, height: 8, borderRadius: 4, border: 'none', cursor: 'pointer',
+                      background: mobileDayIdx === i ? '#6366f1' : '#cbd5e1', transition: 'width 0.2s' }} />
+                ))}
+              </div>
+              {renderDayColumn(mobileDayIdx)}
+            </div>
+
+            {/* ─── Desktop: Day Column Headers ─── */}
+            <div className="hidden md:grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 4, padding: '0 4px' }}>
+              {weekDates.slice(0, 6).map((date, i) => {
+                const isToday = date === formatDate(new Date())
+                const sd = specialDays.find(s => s.date === date)
+                return (
+                  <div key={date} style={{ textAlign: 'center', padding: '8px 0' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: isToday ? '#6366f1' : '#64748b' }}>
+                      {DAY_NAMES[i]}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                      {date.split('-').reverse().slice(0, 2).join('/')}
+                    </div>
+                    {sd && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{'\u25CF'} {sd.name}</div>}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* ─── Desktop: Grid of Shift Cards ─── */}
+            <div className="hidden md:grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, alignItems: 'start' }}>
+              {[0, 1, 2, 3, 4, 5].map(dayIdx => {
+                const date = weekDates[dayIdx]
+                const sd = specialDays.find(s => s.date === date)
+
+                if (sd?.shift_pattern === 'closed') {
+                  return (
+                    <div key={date} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', padding: 20, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>סגור</div>
+                        <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 2 }}>{sd.name}</div>
+                      </div>
+                    </div>
+                  )
+                }
+
+                const dayShifts = getEffectiveShiftsForDay(dayIdx, date)
+
+                return (
+                  <div key={date} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {sd?.shift_pattern === 'friday' && (
+                      <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>ערב חג — משמרת אחת</div>
+                    )}
+                    {dayShifts.length === 0 && (
+                      <div style={{ textAlign: 'center', fontSize: 12, color: '#cbd5e1', padding: '16px 0' }}>אין משמרות</div>
+                    )}
+                    {dayShifts.map(shift => renderShiftCard(shift, date))}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* ─── Weekly Summary ─── */}
+            {summary && (
+              <div style={{ textAlign: 'center', padding: '24px 0 16px', fontSize: 13, color: '#94a3b8' }}>
+                {summary.totalShifts} משמרות · {summary.fullShifts} מלאות
+                {summary.incompleteShifts > 0 && (
+                  <> · <span style={{ color: '#ef4444' }}>{summary.incompleteShifts} חסרות</span></>
+                )}
+                {' · '}
+                <button onClick={() => setShowClearDialog(true)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
+                  נקה שיבוץ
+                </button>
+              </div>
             )}
+          </>
+        )}
+      </div>
+
+      {/* ─── Auto-schedule Dialog ─── */}
+      {showAutoDialog && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowAutoDialog(false)}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 360, margin: '0 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>שיבוץ אוטומטי</h3>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 20px' }}>האם לשבץ אוטומטית את השבוע? פעולה זו תחליף שיבוצים קיימים.</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
+              <button onClick={runAutoSchedule} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>שבץ</button>
+              <button onClick={() => setShowAutoDialog(false)} style={{ background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 20px', fontSize: 13, cursor: 'pointer' }}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Clear Dialog ─── */}
+      {showClearDialog && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowClearDialog(false)}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 360, margin: '0 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>ניקוי שיבוצים</h3>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 20px' }}>האם למחוק את כל השיבוצים לשבוע זה?</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
+              <button onClick={clearWeekAssignments} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>נקה</button>
+              <button onClick={() => setShowClearDialog(false)} style={{ background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 20px', fontSize: 13, cursor: 'pointer' }}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Publish Dialog ─── */}
+      {showPublishDialog && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowPublishDialog(false)}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 360, margin: '0 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>פרסום סידור</h3>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 20px' }}>לאחר הפרסום העובדים יוכלו לראות את הסידור שלהם.</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
+              <button onClick={publishSchedule} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>פרסם</button>
+              <button onClick={() => setShowPublishDialog(false)} style={{ background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 20px', fontSize: 13, cursor: 'pointer' }}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Employee Selection Popover ─── */}
+      {popover && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50 }} onClick={() => setPopover(null)}>
+          <div ref={popoverRef} style={{
+            position: 'absolute',
+            top: Math.min(popover.y, window.innerHeight - 300),
+            left: Math.min(popover.x, window.innerWidth - 260),
+            background: 'white', borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+            border: '1px solid #f1f5f9', width: 240, maxHeight: 300, overflow: 'auto',
+            padding: 8,
+          }} onClick={e => e.stopPropagation()}>
+            <input
+              type="text" placeholder="חפש עובד..." autoFocus
+              value={popoverSearch}
+              onChange={e => setPopoverSearch(e.target.value)}
+              style={{ width: '100%', border: '1px solid #f1f5f9', borderRadius: 8, padding: '8px 10px', fontSize: 13, marginBottom: 6, outline: 'none', boxSizing: 'border-box' }}
+            />
             {(() => {
               const popoverShiftAssigns = assignments.filter(a => a.shift_id === popover.shiftId && a.date === popover.date)
               const hasMentorInShift = popoverShiftAssigns.some(a => {
                 const e = employees.find(emp => emp.id === a.employee_id)
                 return e?.training_status === 'mentor'
               })
-              return getPopoverEmployees().map(({ emp, avail, alreadyAssigned }) => {
-                const trainingBadge = emp.training_status === 'mentor' ? '⭐ ' : emp.training_status === 'trainee' ? '📚 ' : ''
-                return (
-                  <button key={emp.id}
-                    onClick={() => addAssignment(popover.shiftId, popover.roleId, popover.date, emp.id)}
-                    className="w-full text-right px-3 py-2 hover:bg-slate-50 flex items-center justify-between gap-2 transition-colors"
-                    style={{ borderBottom: '1px solid #f8fafc' }}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">{AVAIL_EMOJI[avail || 'available']}</span>
-                      <span className="text-xs font-medium text-slate-700">{trainingBadge}{emp.name}</span>
-                      {emp.training_status === 'trainee' && !hasMentorInShift && (
-                        <span style={{ fontSize: 10, color: '#f59e0b' }}>⚠️ אין חונך במשמרת</span>
-                      )}
-                    </div>
-                    {alreadyAssigned && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold whitespace-nowrap">
-                        {'\u05DE\u05E9\u05D5\u05D1\u05E5'}
-                      </span>
-                    )}
-                  </button>
-                )
-              })
+              const allEmps = getPopoverEmployees()
+              const filtered = popoverSearch
+                ? allEmps.filter(({ emp }) => emp.name.includes(popoverSearch))
+                : allEmps
+
+              if (filtered.length === 0) {
+                return <div style={{ textAlign: 'center', padding: '12px 0', fontSize: 12, color: '#94a3b8' }}>אין עובדים מתאימים לתפקיד</div>
+              }
+
+              return filtered.map(({ emp, avail, alreadyAssigned }) => (
+                <button key={emp.id}
+                  onClick={() => addAssignment(popover.shiftId, popover.roleId, popover.date, emp.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', background: 'none', border: 'none', borderRadius: 8, cursor: 'pointer', textAlign: 'right', fontSize: 13 }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                    background: avail === 'available' || avail === null ? '#10b981' : avail === 'prefer_not' ? '#f59e0b' : avail === 'unavailable' ? '#ef4444' : '#cbd5e1'
+                  }} />
+                  <span style={{ color: '#1e293b', flex: 1 }}>
+                    {emp.training_status === 'mentor' && '⭐ '}
+                    {emp.training_status === 'trainee' && '📚 '}
+                    {emp.name}
+                  </span>
+                  {alreadyAssigned && (
+                    <span style={{ fontSize: 10, color: '#94a3b8' }}>משובץ</span>
+                  )}
+                  {emp.training_status === 'trainee' && !hasMentorInShift && (
+                    <span style={{ fontSize: 10, color: '#f59e0b' }}>יש לוודא חונך</span>
+                  )}
+                </button>
+              ))
             })()}
           </div>
         </div>
       )}
     </motion.div>
   )
+
+  // ─── Render helpers (inside component scope) ───
+
+  function renderDayColumn(dayIdx: number) {
+    const date = weekDates[dayIdx]
+    const isToday = date === formatDate(new Date())
+    const sd = specialDays.find(s => s.date === date)
+
+    if (sd?.shift_pattern === 'closed') {
+      return (
+        <div key={date}>
+          <div style={{ textAlign: 'center', padding: '8px 0', marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: isToday ? '#6366f1' : '#64748b' }}>{DAY_NAMES[dayIdx]}</div>
+            <div style={{ fontSize: 12, color: '#94a3b8' }}>{formatShortDate(addDays(weekStart, dayIdx))}</div>
+            {sd && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{'\u25CF'} {sd.name}</div>}
+          </div>
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', padding: 20, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>סגור</div>
+            <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 2 }}>{sd.name}</div>
+          </div>
+        </div>
+      )
+    }
+
+    const dayShifts = getEffectiveShiftsForDay(dayIdx, date)
+
+    return (
+      <div key={date}>
+        <div style={{ textAlign: 'center', padding: '8px 0', marginBottom: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: isToday ? '#6366f1' : '#64748b' }}>{DAY_NAMES[dayIdx]}</div>
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>{formatShortDate(addDays(weekStart, dayIdx))}</div>
+          {sd && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{'\u25CF'} {sd.name}</div>}
+        </div>
+        {sd?.shift_pattern === 'friday' && (
+          <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', marginBottom: 4 }}>ערב חג — משמרת אחת</div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {dayShifts.length === 0 && (
+            <div style={{ textAlign: 'center', fontSize: 12, color: '#cbd5e1', padding: '16px 0' }}>אין משמרות</div>
+          )}
+          {dayShifts.map(shift => renderShiftCard(shift, date))}
+        </div>
+      </div>
+    )
+  }
+
+  function renderShiftCard(shift: BranchShift, date: string) {
+    const shiftRoles = getRolesForShift(shift.id, date)
+    const cardSummary = getShiftCardSummary(shift.id, date)
+    const hasShortage = cardSummary.total > 0 && cardSummary.filled < cardSummary.total
+
+    // Trainee without mentor check
+    const shiftAssigns = assignments.filter(a => a.shift_id === shift.id && a.date === date)
+    const hasTrainee = shiftAssigns.some(a => {
+      const emp = employees.find(e => e.id === a.employee_id)
+      return emp?.training_status === 'trainee'
+    })
+    const hasMentor = shiftAssigns.some(a => {
+      const emp = employees.find(e => e.id === a.employee_id)
+      return emp?.training_status === 'mentor'
+    })
+    const hasTraineeNoMentor = hasTrainee && !hasMentor
+
+    const traineeCount = shiftAssigns.filter(a => {
+      const emp = employees.find(e => e.id === a.employee_id)
+      return emp?.training_status === 'trainee'
+    }).length
+
+    return (
+      <div key={shift.id} style={{
+        background: 'white',
+        borderRadius: 12,
+        border: hasShortage ? '1px solid #fecaca' : '1px solid #f1f5f9',
+        padding: 14,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        transition: 'box-shadow 0.2s',
+      }}>
+        {/* Header */}
+        <div style={{ marginBottom: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{shift.name}</span>
+          <span style={{ fontSize: 11, color: '#94a3b8', marginRight: 6 }}>{shift.start_time?.slice(0, 5)}–{shift.end_time?.slice(0, 5)}</span>
+        </div>
+
+        {/* Role slots */}
+        {shiftRoles.map(sr => {
+          const slots = []
+          for (let i = 0; i < sr.count; i++) {
+            const assignment = getAssignment(shift.id, sr.roleId, date, i)
+            slots.push(
+              <div key={`${sr.roleId}-${i}`} style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>{sr.roleName}</div>
+                {assignment ? (
+                  <div
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}
+                    onMouseEnter={() => setHoveredAssignment(assignment.id)}
+                    onMouseLeave={() => setHoveredAssignment(null)}>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>
+                      {(() => {
+                        const emp = employees.find(e => e.id === assignment.employee_id)
+                        return (
+                          <>
+                            {emp?.name || '?'}
+                            {emp?.training_status === 'mentor' && <span style={{ fontSize: 10, marginRight: 4 }}>⭐</span>}
+                            {emp?.training_status === 'trainee' && <span style={{ fontSize: 10, marginRight: 4 }}>📚</span>}
+                          </>
+                        )
+                      })()}
+                    </span>
+                    {hoveredAssignment === assignment.id && (
+                      <button onClick={() => removeAssignment(assignment.id)} style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
+                    )}
+                  </div>
+                ) : (
+                  <button onClick={(e) => openPopover(shift.id, sr.roleId, date, i, e)}
+                    style={{ fontSize: 12, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>
+                    + הוסף
+                  </button>
+                )}
+              </div>
+            )
+          }
+          return slots
+        })}
+
+        {/* Trainee warning */}
+        {hasTraineeNoMentor && (
+          <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>יש לוודא חונך</div>
+        )}
+
+        {/* Summary bottom line */}
+        {cardSummary.total > 0 && (
+          <div style={{ borderTop: '1px solid #f8fafc', paddingTop: 6, marginTop: 6, fontSize: 11, color: cardSummary.filled >= cardSummary.total ? '#10b981' : '#ef4444' }}>
+            {cardSummary.filled}/{cardSummary.total} {cardSummary.filled >= cardSummary.total ? '✓' : ''}
+            {traineeCount > 0 ? ` + ${traineeCount} מתלמדים` : ''}
+          </div>
+        )}
+      </div>
+    )
+  }
 }
