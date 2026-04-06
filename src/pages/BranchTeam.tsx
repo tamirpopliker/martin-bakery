@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Users, Calendar, CheckSquare, ArrowRight, ClipboardList, Settings } from 'lucide-react'
+import { Users, Calendar, CheckSquare, ArrowRight, ClipboardList, Settings, History } from 'lucide-react'
 import { useAppUser } from '../lib/UserContext'
 import { Button } from '@/components/ui/button'
 
@@ -21,6 +21,7 @@ const cards = [
   { page: 'manager-constraints', label: 'זמינות הצוות', emoji: '📋', subtitle: 'אילוצים · זמינות · שבועי', Icon: ClipboardList, ready: true, adminOnly: false },
   { page: 'shift-settings', label: 'הגדרות משמרות', emoji: '⚙️', subtitle: 'תפקידים · משמרות · דרישות', Icon: Settings, ready: true, adminOnly: true },
   { page: 'weekly-schedule', label: 'סידור עבודה', emoji: '📅', subtitle: 'שיבוץ שבועי · משמרות', Icon: Calendar, ready: true, adminOnly: false },
+  { page: 'schedule-history', label: 'היסטוריית סידורים', emoji: '📜', subtitle: 'סידורים שפורסמו · ארכיון', Icon: History, ready: true, adminOnly: false },
   { page: 'branch-tasks', label: 'משימות', emoji: '✅', subtitle: 'יומיות · שיוך · מעקב', Icon: CheckSquare, ready: false, adminOnly: false },
 ]
 

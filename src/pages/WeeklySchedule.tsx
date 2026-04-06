@@ -30,6 +30,7 @@ interface Props {
   branchName: string
   branchColor: string
   onBack: () => void
+  initialWeekStart?: string
 }
 
 interface BranchShift {
@@ -130,8 +131,14 @@ function addDays(d: Date, n: number): Date {
   return r
 }
 
-export default function WeeklySchedule({ branchId, branchName, branchColor, onBack }: Props) {
-  const [weekStart, setWeekStart] = useState<Date>(getSundayOfNextWeek)
+export default function WeeklySchedule({ branchId, branchName, branchColor, onBack, initialWeekStart }: Props) {
+  const [weekStart, setWeekStart] = useState<Date>(() => {
+    if (initialWeekStart) {
+      const d = new Date(initialWeekStart + 'T00:00:00')
+      if (!isNaN(d.getTime())) return d
+    }
+    return getSundayOfNextWeek()
+  })
   const [shifts, setShifts] = useState<BranchShift[]>([])
   const [roles, setRoles] = useState<ShiftRole[]>([])
   const [staffingReqs, setStaffingReqs] = useState<StaffingRequirement[]>([])
@@ -503,7 +510,14 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     }, { onConflict: 'branch_id,week_start' })
     setIsPublished(true)
     setPublishedAt(new Date().toISOString())
-    alert('\u2705 \u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E4\u05D5\u05E8\u05E1\u05DD \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4')
+    try {
+      await supabase.functions.invoke('send-schedule', {
+        body: { branch_id: branchId, week_start: weekDates[0], week_end: weekDates[5] }
+      })
+    } catch (e) {
+      console.warn('Email send failed:', e)
+    }
+    alert('\u2705 \u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E4\u05D5\u05E8\u05E1\u05DD \u05D5\u05DE\u05D9\u05D9\u05DC\u05D9\u05DD \u05E0\u05E9\u05DC\u05D7\u05D5 \u05DC\u05E2\u05D5\u05D1\u05D3\u05D9\u05DD')
   }
 
   async function unpublishSchedule() {
@@ -512,6 +526,79 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
       .eq('branch_id', branchId).eq('week_start', weekDates[0])
     setIsPublished(false)
     setPublishedAt(null)
+  }
+
+  function printSchedule() {
+    const DAY_NAMES = ['\u05E8\u05D0\u05E9\u05D5\u05DF', '\u05E9\u05E0\u05D9', '\u05E9\u05DC\u05D9\u05E9\u05D9', '\u05E8\u05D1\u05D9\u05E2\u05D9', '\u05D7\u05DE\u05D9\u05E9\u05D9', '\u05E9\u05D9\u05E9\u05D9']
+    let html = `<html dir="rtl"><head><meta charset="utf-8"><style>
+      body { font-family: Arial, sans-serif; direction: rtl; padding: 20px; }
+      h1 { text-align: center; color: #1e293b; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: right; font-size: 13px; }
+      th { background: #f1f5f9; font-weight: bold; }
+      .role { font-size: 11px; color: #64748b; }
+      @media print { body { padding: 0; } }
+    </style></head><body>`
+    html += `<h1>\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E2\u05D1\u05D5\u05D3\u05D4 \u2014 ${branchName}</h1>`
+    html += `<p style="text-align:center;color:#64748b">\u05E9\u05D1\u05D5\u05E2 ${weekDates[0]} \u05E2\u05D3 ${weekDates[5]}</p>`
+    html += '<table><tr><th>\u05D9\u05D5\u05DD</th><th>\u05DE\u05E9\u05DE\u05E8\u05EA</th><th>\u05E2\u05D5\u05D1\u05D3\u05D9\u05DD</th></tr>'
+
+    for (let d = 0; d < 6; d++) {
+      const date = weekDates[d]
+      const dayShifts = getEffectiveShiftsForDay(d, date)
+      for (const shift of dayShifts) {
+        const shiftAssigns = assignments.filter(a => a.shift_id === shift.id && a.date === date)
+        const empNames = shiftAssigns.map(a => {
+          const emp = employees.find(e => e.id === a.employee_id)
+          const role = roles.find(r => r.id === a.role_id)
+          return `${emp?.name || '?'} <span class="role">(${role?.name || ''})</span>`
+        }).join('<br>')
+        html += `<tr><td>${DAY_NAMES[d]} ${date.split('-').reverse().slice(0,2).join('/')}</td>`
+        html += `<td>${shift.name} ${(shift.start_time||'').slice(0,5)}-${(shift.end_time||'').slice(0,5)}</td>`
+        html += `<td>${empNames || '<span style="color:#94a3b8">\u05DC\u05D0 \u05D0\u05D5\u05D9\u05E9</span>'}</td></tr>`
+      }
+    }
+    html += '</table></body></html>'
+    const w = window.open('', '_blank')
+    if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500) }
+  }
+
+  function copyForWhatsapp() {
+    const DAY_NAMES = ['\u05E8\u05D0\u05E9\u05D5\u05DF', '\u05E9\u05E0\u05D9', '\u05E9\u05DC\u05D9\u05E9\u05D9', '\u05E8\u05D1\u05D9\u05E2\u05D9', '\u05D7\u05DE\u05D9\u05E9\u05D9', '\u05E9\u05D9\u05E9\u05D9']
+    const SHIFT_EMOJI: Record<string, string> = {}
+    shifts.forEach(s => {
+      if ((s.start_time||'').startsWith('07')) SHIFT_EMOJI[s.id] = '\u{1F305}'
+      else if ((s.start_time||'').startsWith('14')) SHIFT_EMOJI[s.id] = '\u{1F306}'
+      else SHIFT_EMOJI[s.id] = '\u{1F4C5}'
+    })
+
+    let text = `\u{1F4C5} \u05E1\u05D9\u05D3\u05D5\u05E8 \u05E9\u05D1\u05D5\u05E2 ${weekDates[0].split('-').reverse().slice(0,2).join('/')}\u2013${weekDates[5].split('-').reverse().slice(0,2).join('/')}\n`
+    text += `\u05E1\u05E0\u05D9\u05E3 ${branchName}\n\n`
+
+    for (let d = 0; d < 6; d++) {
+      const date = weekDates[d]
+      const dayShifts = getEffectiveShiftsForDay(d, date)
+      if (dayShifts.length === 0) continue
+      text += `*\u05D9\u05D5\u05DD ${DAY_NAMES[d]} ${date.split('-').reverse().slice(0,2).join('/')}:*\n`
+      for (const shift of dayShifts) {
+        text += `${SHIFT_EMOJI[shift.id] || '\u{1F4C5}'} ${shift.name} (${(shift.start_time||'').slice(0,5)}-${(shift.end_time||'').slice(0,5)}):\n`
+        const shiftAssigns = assignments.filter(a => a.shift_id === shift.id && a.date === date)
+        if (shiftAssigns.length === 0) {
+          text += `  _\u05DC\u05D0 \u05D0\u05D5\u05D9\u05E9_\n`
+        } else {
+          for (const a of shiftAssigns) {
+            const emp = employees.find(e => e.id === a.employee_id)
+            const role = roles.find(r => r.id === a.role_id)
+            text += `  \u2022 ${emp?.name || '?'} \u2014 ${role?.name || ''}\n`
+          }
+        }
+      }
+      text += '\n'
+    }
+
+    navigator.clipboard.writeText(text).then(() => {
+      alert('\u2705 \u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05D4\u05D5\u05E2\u05EA\u05E7 \u2014 \u05D4\u05D3\u05D1\u05E7 \u05D1\u05D5\u05D5\u05D8\u05E1\u05D0\u05E4')
+    })
   }
 
   const summary = !loading ? getWeeklySummary() : null
@@ -529,6 +616,14 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
             {`\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E2\u05D1\u05D5\u05D3\u05D4 \u2014 ${weekLabel}`}
           </h1>
           <span style={{ fontSize: '13px', color: '#64748b' }}>{branchName}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={printSchedule} style={{ padding: '6px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, cursor: 'pointer', background: 'white' }}>
+            {'\u{1F5A8}\uFE0F'} {'\u05D4\u05D3\u05E4\u05E1'}
+          </button>
+          <button onClick={copyForWhatsapp} style={{ padding: '6px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, cursor: 'pointer', background: 'white' }}>
+            {'\u{1F4F1}'} {'\u05D4\u05E2\u05EA\u05E7 \u05DC\u05D5\u05D5\u05D8\u05E1\u05D0\u05E4'}
+          </button>
         </div>
         <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: branchColor }} />
       </div>

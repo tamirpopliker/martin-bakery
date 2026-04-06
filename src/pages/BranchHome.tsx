@@ -18,6 +18,7 @@ import BranchTeam from './BranchTeam'
 import ManagerConstraintsView from './ManagerConstraintsView'
 import ShiftSettings from './ShiftSettings'
 import WeeklySchedule from './WeeklySchedule'
+import ScheduleHistory from './ScheduleHistory'
 import BranchDashboard from './BranchDashboard'
 import DataImport from './DataImport'
 
@@ -54,6 +55,7 @@ type BranchPage =
   | 'manager-constraints'
   | 'shift-settings'
   | 'weekly-schedule'
+  | 'schedule-history'
 
 interface MenuItem {
   page: BranchPage
@@ -84,6 +86,7 @@ export default function BranchHome({ branch, onBack }: Props) {
   const { appUser } = useAppUser()
   const isAdmin = appUser?.role === 'admin'
   const [page, setPage] = useState<BranchPage | null>(null)
+  const [pageData, setPageData] = useState<any>(null)
   const [hovCard, setHovCard] = useState<BranchPage | null>(null)
   const [pendingOrders, setPendingOrders] = useState(0)
 
@@ -140,7 +143,10 @@ export default function BranchHome({ branch, onBack }: Props) {
     <ShiftSettings branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-team')} />
   )
   if (page === 'weekly-schedule') return (
-    <WeeklySchedule branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-team')} />
+    <WeeklySchedule branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-team')} initialWeekStart={pageData?.initialWeekStart} />
+  )
+  if (page === 'schedule-history') return (
+    <ScheduleHistory branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-team')} onNavigate={(p, data) => { setPageData(data); setPage(p as BranchPage) }} />
   )
   if (page === 'employees') return (
     <BranchEmployees branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
