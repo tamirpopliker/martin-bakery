@@ -224,7 +224,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
 
   function getAvailColor(empId: number, date: string, shiftId?: number): string {
     const av = getEmployeeAvailability(empId, date, shiftId)
-    if (!av) return UNKNOWN_COLOR
+    if (!av) return AVAIL_COLORS.available // Default: available (green) if not set
     return AVAIL_COLORS[av]
   }
 
@@ -281,8 +281,8 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
       return { emp, avail, alreadyAssigned }
     }).sort((a, b) => {
       const order: Record<string, number> = { available: 0, prefer_not: 1, unavailable: 2 }
-      const aOrder = a.avail ? (order[a.avail] ?? 3) : 3
-      const bOrder = b.avail ? (order[b.avail] ?? 3) : 3
+      const aOrder = a.avail ? (order[a.avail] ?? 0) : 0  // null = available (first)
+      const bOrder = b.avail ? (order[b.avail] ?? 0) : 0
       if (aOrder !== bOrder) return aOrder - bOrder
       if (a.alreadyAssigned !== b.alreadyAssigned) return a.alreadyAssigned ? 1 : -1
       return 0
@@ -529,7 +529,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
                 className="w-full text-right px-3 py-2 hover:bg-slate-50 flex items-center justify-between gap-2 transition-colors"
                 style={{ borderBottom: '1px solid #f8fafc' }}>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm">{AVAIL_EMOJI[avail || 'unknown']}</span>
+                  <span className="text-sm">{AVAIL_EMOJI[avail || 'available']}</span>
                   <span className="text-xs font-medium text-slate-700">{emp.name}</span>
                 </div>
                 {alreadyAssigned && (
