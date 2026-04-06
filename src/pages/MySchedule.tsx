@@ -30,6 +30,16 @@ interface ShiftAssignment {
   role_id: number
 }
 
+interface AllAssignment {
+  shift_id: number
+  date: string
+  employee_id: number
+  role_id: number
+  emp_name: string
+  role_name: string
+  role_color: string
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
@@ -84,10 +94,13 @@ export default function MySchedule({ onBack }: Props) {
   const [shifts, setShifts] = useState<BranchShift[]>([])
   const [roles, setRoles] = useState<ShiftRole[]>([])
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([])
+  const [allAssignments, setAllAssignments] = useState<AllAssignment[]>([])
   const [publishedWeeks, setPublishedWeeks] = useState<string[]>([])
   const [selectedWeek, setSelectedWeek] = useState<'current' | 'next'>('current')
   const [loading, setLoading] = useState(true)
   const [branchName, setBranchName] = useState('')
+  const [myEmployeeId, setMyEmployeeId] = useState<number | null>(null)
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set())
 
   const currentWeekStart = getSundayOfCurrentWeek()
   const nextWeekStart = getSundayOfNextWeek()
@@ -135,6 +148,7 @@ export default function MySchedule({ onBack }: Props) {
         setLoading(false)
         return
       }
+      setMyEmployeeId(employeeId)
 
       // Load branch name
       const { data: branchData } = await supabase
@@ -166,6 +180,14 @@ export default function MySchedule({ onBack }: Props) {
 
       setAssignments(assignmentData || [])
 
+      // Load ALL assignments for coworker display
+      const { data: allAssData } = await supabase
+        .from('shift_assignments')
+        .select('shift_id, date, employee_id, role_id')
+        .eq('branch_id', appUser.branch_id)
+        .gte('date', rangeStart)
+        .lte('date', rangeEnd)
+
       // Load shifts and roles
       const [shiftsRes, rolesRes] = await Promise.all([
         supabase.from('branch_shifts').select('id, name, start_time, end_time').eq('branch_id', appUser.branch_id),
@@ -174,6 +196,29 @@ export default function MySchedule({ onBack }: Props) {
 
       setShifts(shiftsRes.data || [])
       setRoles(rolesRes.data || [])
+
+      // Load employee names for coworkers
+      const { data: empsData } = await supabase
+        .from('branch_employees')
+        .select('id, name')
+        .eq('branch_id', appUser.branch_id)
+        .eq('active', true)
+
+      const empMap = new Map<number, string>()
+      empsData?.forEach((e: any) => empMap.set(e.id, e.name))
+      const roleMap = new Map<number, { name: string; color: string }>()
+      rolesRes.data?.forEach((r: any) => roleMap.set(r.id, { name: r.name, color: r.color || '#6366f1' }))
+
+      const enriched: AllAssignment[] = (allAssData || []).map((a: any) => ({
+        shift_id: a.shift_id,
+        date: a.date,
+        employee_id: a.employee_id,
+        role_id: a.role_id,
+        emp_name: empMap.get(a.employee_id) || '?',
+        role_name: roleMap.get(a.role_id)?.name || '',
+        role_color: roleMap.get(a.role_id)?.color || '#6366f1',
+      }))
+      setAllAssignments(enriched)
     } finally {
       setLoading(false)
     }
@@ -317,6 +362,19 @@ export default function MySchedule({ onBack }: Props) {
                 )
               }
 
+              const coworkers = allAssignments.filter(
+                a => a.shift_id === dayAssignment.shift_id && a.date === dateStr && a.employee_id !== myEmployeeId
+              )
+              const isExpanded = expandedDays.has(dateStr)
+              const toggleExpand = () => {
+                setExpandedDays(prev => {
+                  const next = new Set(prev)
+                  if (next.has(dateStr)) next.delete(dateStr)
+                  else next.add(dateStr)
+                  return next
+                })
+              }
+
               return (
                 <motion.div
                   key={dateStr}
@@ -343,6 +401,43 @@ export default function MySchedule({ onBack }: Props) {
                         </span>
                       )}
                     </div>
+
+                    {/* Coworkers section */}
+                    <button
+                      onClick={toggleExpand}
+                      className="mt-3 w-full text-right flex items-center gap-1.5 text-xs font-medium transition-colors"
+                      style={{ color: '#6366f1' }}
+                    >
+                      <span style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }}>◀</span>
+                      👥 עמיתים במשמרת ({coworkers.length})
+                    </button>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        transition={{ duration: 0.2 }}
+                        className="mt-2 pt-2"
+                        style={{ borderTop: '1px solid #e2e8f0' }}
+                      >
+                        {coworkers.length === 0 ? (
+                          <p className="text-xs text-slate-400">אתה היחיד במשמרת זו</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {coworkers.map(cw => (
+                              <div key={`${cw.employee_id}-${cw.role_id}`} className="flex items-center gap-2">
+                                <span
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-white"
+                                  style={{ backgroundColor: cw.role_color }}
+                                >
+                                  {cw.role_name}
+                                </span>
+                                <span className="text-xs text-slate-700">{cw.emp_name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
                   </div>
                 </motion.div>
               )
