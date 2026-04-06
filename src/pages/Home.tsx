@@ -75,10 +75,6 @@ const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, tra
 export default function Home() {
   const { period, setPeriod, from, to, comparisonPeriod } = usePeriod()
   const { appUser, canAccessPage, logout } = useAppUser()
-
-  // Employee role gets their own dedicated home page
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  if (appUser?.role === 'employee') return <EmployeeHome onNavigate={() => {}} />
   const { branches: branchList } = useBranches()
   const [page, setPage]         = useState<string | null>(null)
   const [expandedSection, setExpandedSection] = useState<string | null>('factory')
@@ -199,6 +195,9 @@ export default function Home() {
     }
     loadKpi()
   }, [from, to])
+
+  // Employee role gets their own dedicated home page (after all hooks)
+  if (appUser?.role === 'employee') return <EmployeeHome onNavigate={(p) => setPage(p)} />
 
   // ─── Page routing with floating home button ────────────────────────────────
   function renderPage(): JSX.Element | null {
