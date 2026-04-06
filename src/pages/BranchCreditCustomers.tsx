@@ -2,9 +2,6 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { ArrowRight, CreditCard, Plus, Pencil, Trash2, ChevronDown, ChevronUp, DollarSign, AlertTriangle } from 'lucide-react'
-import { RevenueIcon } from '@/components/icons'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 
 interface Props {
   branchId: number
@@ -168,220 +165,215 @@ export default function BranchCreditCustomers({ branchId, branchName, branchColo
   const totalDebt = Object.values(balances).reduce((s, v) => s + Math.max(v, 0), 0)
 
   const S = {
-    label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
-    input: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
+    label: { fontSize: 13, fontWeight: 600 as const, color: '#64748b', marginBottom: 6, display: 'block' as const },
+    input: { border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const, background: 'white' },
   }
 
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      {/* כותרת */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div style={{ width: '40px', height: '40px', background: branchColor + '20', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <RevenueIcon size={20} color={branchColor} />
-        </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>לקוחות הקפה — {branchName}</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>ניהול חובות · היסטוריה · תשלומים</p>
-        </div>
-        <div style={{ marginRight: 'auto', display: 'flex', gap: '10px', alignItems: 'center' }}>
-          {totalDebt > 0 && (
-            <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '10px', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertTriangle size={16} color="#fb7185" />
-              <div>
-                <div style={{ fontSize: '15px', fontWeight: '800', color: '#fb7185' }}>₪{Math.round(totalDebt).toLocaleString()}</div>
-                <div style={{ fontSize: '10px', color: '#64748b' }}>סה"כ חוב פתוח</div>
-              </div>
+      {/* Header */}
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div>
+              <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>לקוחות הקפה</h1>
+              <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
             </div>
-          )}
+            {totalDebt > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 16 }}>
+                <AlertTriangle size={14} color="#ef4444" />
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#ef4444' }}>₪{Math.round(totalDebt).toLocaleString()}</span>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>חוב פתוח</span>
+              </div>
+            )}
+          </div>
+          <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ArrowRight size={14} /> חזרה</span>
+          </button>
         </div>
       </div>
 
-      {/* טאבים */}
-      <div className="flex px-8 bg-white border-b border-slate-200">
+      {/* Tabs */}
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '0 20px', display: 'flex', gap: 0 }}>
         <button onClick={() => { setTab('list'); resetForm() }}
-          className={`py-3.5 px-5 bg-transparent border-none cursor-pointer text-sm ${tab === 'list' ? 'font-bold' : 'font-medium'}`}
-          style={{ borderBottom: tab === 'list' ? `3px solid ${branchColor}` : '3px solid transparent', color: tab === 'list' ? branchColor : '#64748b' }}>
+          style={{ background: 'none', border: 'none', borderBottom: tab === 'list' ? '2px solid #6366f1' : '2px solid transparent', padding: '12px 16px', fontSize: 13, fontWeight: tab === 'list' ? 700 : 500, color: tab === 'list' ? '#6366f1' : '#64748b', cursor: 'pointer' }}>
           רשימת לקוחות
         </button>
         <button onClick={() => { setTab('add'); if (!editId) resetForm() }}
-          className={`py-3.5 px-5 bg-transparent border-none cursor-pointer text-sm ${tab === 'add' ? 'font-bold' : 'font-medium'}`}
-          style={{ borderBottom: tab === 'add' ? `3px solid ${branchColor}` : '3px solid transparent', color: tab === 'add' ? branchColor : '#64748b' }}>
+          style={{ background: 'none', border: 'none', borderBottom: tab === 'add' ? '2px solid #6366f1' : '2px solid transparent', padding: '12px 16px', fontSize: 13, fontWeight: tab === 'add' ? 700 : 500, color: tab === 'add' ? '#6366f1' : '#64748b', cursor: 'pointer' }}>
           {editId ? 'עריכת לקוח' : 'הוספת לקוח'}
         </button>
       </div>
 
-      <div className="page-container" style={{ padding: '24px 32px', maxWidth: '900px', margin: '0 auto' }}>
+      <div style={{ padding: '20px', maxWidth: 900, margin: '0 auto' }}>
 
-        {/* רשימה */}
+        {/* Customer List */}
         {tab === 'list' && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <div className="table-scroll">
-              <Card className="shadow-sm">
-                <CardContent className="p-6">
-                  {loading ? (
-                    <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>טוען...</div>
-                  ) : customers.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>
-                      <CreditCard size={40} color="#e2e8f0" style={{ marginBottom: '12px' }} />
-                      <div style={{ fontSize: '15px', fontWeight: '600' }}>אין לקוחות הקפה</div>
-                      <div style={{ fontSize: '13px', marginTop: '4px' }}>הוסף לקוח חדש בטאב "הוספת לקוח"</div>
-                    </div>
-                  ) : (
-                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-                      {customers.map((c, i) => {
-                        const balance = balances[c.id] || 0
-                        const isExp = expanded === c.id
-                        return (
-                          <div key={c.id}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 110px 36px 36px 30px', alignItems: 'center', padding: '14px 16px', borderBottom: (i < customers.length - 1 || isExp) ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa', cursor: 'pointer' }}
-                              onClick={() => toggleExpand(c)}>
-                              <div>
-                                <div style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>{c.name}</div>
-                                {c.phone && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{c.phone}</div>}
-                              </div>
-                              <div style={{ textAlign: 'center' }}>
-                                {c.credit_limit > 0 && (
-                                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>מסגרת: ₪{c.credit_limit.toLocaleString()}</div>
-                                )}
-                              </div>
-                              <div style={{ textAlign: 'left' as const }}>
-                                <span style={{ fontSize: '15px', fontWeight: '800', color: balance > 0 ? '#fb7185' : '#34d399' }}>
-                                  ₪{Math.round(Math.abs(balance)).toLocaleString()}
-                                </span>
-                                <div style={{ fontSize: '10px', color: '#94a3b8' }}>{balance > 0 ? 'חוב' : balance < 0 ? 'יתרה לזכות' : 'מאוזן'}</div>
-                              </div>
-                              <button onClick={e => { e.stopPropagation(); startEdit(c) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                                <Pencil size={14} color="#94a3b8" />
-                              </button>
-                              <button onClick={e => { e.stopPropagation(); deleteCustomer(c.id) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                                <Trash2 size={14} color="#fb7185" />
-                              </button>
-                              {isExp ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
-                            </div>
-
-                            {/* expanded: history + payment */}
-                            {isExp && (
-                              <div style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-
-                                {/* payment form */}
-                                <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'flex-end', flexWrap: 'wrap' as const }}>
-                                  <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                                    <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>תאריך</label>
-                                    <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)}
-                                      style={{ ...S.input, width: '140px', padding: '7px 10px', fontSize: '13px' }} />
-                                  </div>
-                                  <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-                                    <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>סכום תשלום (₪)</label>
-                                    <input type="number" placeholder="0" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-                                      style={{ ...S.input, width: '120px', padding: '7px 10px', fontSize: '13px', textAlign: 'right' as const }} />
-                                  </div>
-                                  <div style={{ display: 'flex', flexDirection: 'column' as const, flex: 1 }}>
-                                    <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px' }}>הערה</label>
-                                    <input type="text" placeholder="אופציונלי" value={payNotes} onChange={e => setPayNotes(e.target.value)}
-                                      style={{ ...S.input, padding: '7px 10px', fontSize: '13px' }} />
-                                  </div>
-                                  <button onClick={() => addPayment(c.name)} disabled={!payAmount || parseFloat(payAmount) <= 0}
-                                    style={{ background: payAmount && parseFloat(payAmount) > 0 ? '#34d399' : '#e2e8f0', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' as const }}>
-                                    <DollarSign size={14} />רשום תשלום
-                                  </button>
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                  {/* עסקאות הקפה */}
-                                  <div>
-                                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#fb7185', marginBottom: '6px' }}>עסקאות הקפה</div>
-                                    {txs.length === 0 ? (
-                                      <div style={{ fontSize: '12px', color: '#94a3b8', padding: '8px' }}>אין עסקאות</div>
-                                    ) : (
-                                      <div style={{ maxHeight: '180px', overflowY: 'auto' as const, border: '1px solid #e2e8f0', borderRadius: '8px', background: 'white' }}>
-                                        {txs.map(tx => (
-                                          <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '1px solid #f1f5f9', fontSize: '12px' }}>
-                                            <span style={{ color: '#64748b' }}>{new Date(tx.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
-                                            <span style={{ fontWeight: '600', color: '#fb7185' }}>₪{Number(tx.amount).toLocaleString()}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* תשלומים */}
-                                  <div>
-                                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#34d399', marginBottom: '6px' }}>תשלומים</div>
-                                    {payments.length === 0 ? (
-                                      <div style={{ fontSize: '12px', color: '#94a3b8', padding: '8px' }}>אין תשלומים</div>
-                                    ) : (
-                                      <div style={{ maxHeight: '180px', overflowY: 'auto' as const, border: '1px solid #e2e8f0', borderRadius: '8px', background: 'white' }}>
-                                        {payments.map(p => (
-                                          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '1px solid #f1f5f9', fontSize: '12px' }}>
-                                            <span style={{ color: '#64748b' }}>
-                                              {new Date(p.date + 'T12:00:00').toLocaleDateString('he-IL')}
-                                              {p.notes && <span style={{ color: '#94a3b8', marginRight: '6px' }}>({p.notes})</span>}
-                                            </span>
-                                            <span style={{ fontWeight: '600', color: '#34d399' }}>₪{Number(p.amount).toLocaleString()}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 14 }}>טוען...</div>
+              ) : customers.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>
+                  <CreditCard size={36} color="#e2e8f0" style={{ marginBottom: 12 }} />
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>אין לקוחות הקפה</div>
+                  <div style={{ fontSize: 13, marginTop: 4 }}>הוסף לקוח חדש בטאב "הוספת לקוח"</div>
+                </div>
+              ) : (
+                <>
+                  {/* Table header */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 110px 36px 36px 30px', padding: '10px 16px', fontSize: 11, fontWeight: 600, color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>
+                    <span>לקוח</span>
+                    <span style={{ textAlign: 'center' }}>מסגרת</span>
+                    <span style={{ textAlign: 'left' }}>יתרה</span>
+                    <span /><span /><span />
+                  </div>
+                  {customers.map((c, i) => {
+                    const balance = balances[c.id] || 0
+                    const isExp = expanded === c.id
+                    return (
+                      <div key={c.id}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 110px 36px 36px 30px', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #f8fafc', cursor: 'pointer' }}
+                          onClick={() => toggleExpand(c)}>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>{c.name}</div>
+                            {c.phone && <div style={{ fontSize: 11, color: '#94a3b8' }}>{c.phone}</div>}
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            {c.credit_limit > 0 && (
+                              <div style={{ fontSize: 12, color: '#94a3b8' }}>₪{c.credit_limit.toLocaleString()}</div>
                             )}
                           </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                          <div style={{ textAlign: 'left' as const }}>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: balance > 0 ? '#ef4444' : balance < 0 ? '#34d399' : '#94a3b8' }}>
+                              ₪{Math.round(Math.abs(balance)).toLocaleString()}
+                            </span>
+                            <div style={{ fontSize: 10, color: '#94a3b8' }}>{balance > 0 ? 'חוב' : balance < 0 ? 'יתרה לזכות' : 'מאוזן'}</div>
+                          </div>
+                          <button onClick={e => { e.stopPropagation(); startEdit(c) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+                            <Pencil size={14} color="#94a3b8" />
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); deleteCustomer(c.id) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+                            <Trash2 size={14} color="#ef4444" />
+                          </button>
+                          {isExp ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
+                        </div>
+
+                        {/* Expanded: history + payment */}
+                        {isExp && (
+                          <div style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
+
+                            {/* Payment form */}
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'flex-end', flexWrap: 'wrap' as const }}>
+                              <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>תאריך</label>
+                                <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)}
+                                  style={{ ...S.input, width: 140, padding: '7px 10px', fontSize: 13 }} />
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>סכום תשלום (₪)</label>
+                                <input type="number" placeholder="0" value={payAmount} onChange={e => setPayAmount(e.target.value)}
+                                  style={{ ...S.input, width: 120, padding: '7px 10px', fontSize: 13, textAlign: 'right' as const }} />
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column' as const, flex: 1 }}>
+                                <label style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>הערה</label>
+                                <input type="text" placeholder="אופציונלי" value={payNotes} onChange={e => setPayNotes(e.target.value)}
+                                  style={{ ...S.input, padding: '7px 10px', fontSize: 13 }} />
+                              </div>
+                              <button onClick={() => addPayment(c.name)} disabled={!payAmount || parseFloat(payAmount) <= 0}
+                                style={{ background: payAmount && parseFloat(payAmount) > 0 ? '#6366f1' : '#e2e8f0', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' as const }}>
+                                <DollarSign size={14} />רשום תשלום
+                              </button>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                              {/* Credit txs */}
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', marginBottom: 6 }}>עסקאות הקפה</div>
+                                {txs.length === 0 ? (
+                                  <div style={{ fontSize: 12, color: '#94a3b8', padding: 8 }}>אין עסקאות</div>
+                                ) : (
+                                  <div style={{ maxHeight: 180, overflowY: 'auto' as const, borderRadius: 8, background: 'white', border: '1px solid #f1f5f9' }}>
+                                    {txs.map(tx => (
+                                      <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '1px solid #f8fafc', fontSize: 12 }}>
+                                        <span style={{ color: '#64748b' }}>{new Date(tx.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
+                                        <span style={{ fontWeight: 600, color: '#ef4444' }}>₪{Number(tx.amount).toLocaleString()}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Payments */}
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: '#34d399', marginBottom: 6 }}>תשלומים</div>
+                                {payments.length === 0 ? (
+                                  <div style={{ fontSize: 12, color: '#94a3b8', padding: 8 }}>אין תשלומים</div>
+                                ) : (
+                                  <div style={{ maxHeight: 180, overflowY: 'auto' as const, borderRadius: 8, background: 'white', border: '1px solid #f1f5f9' }}>
+                                    {payments.map(p => (
+                                      <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '1px solid #f8fafc', fontSize: 12 }}>
+                                        <span style={{ color: '#64748b' }}>
+                                          {new Date(p.date + 'T12:00:00').toLocaleDateString('he-IL')}
+                                          {p.notes && <span style={{ color: '#94a3b8', marginRight: 6 }}>({p.notes})</span>}
+                                        </span>
+                                        <span style={{ fontWeight: 600, color: '#34d399' }}>₪{Number(p.amount).toLocaleString()}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </>
+              )}
             </div>
           </motion.div>
         )}
 
-        {/* הוספה/עריכה */}
+        {/* Add/Edit form */}
         {tab === 'add' && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <Card className="shadow-sm">
-              <CardContent className="p-6">
-                <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>
-                  {editId ? 'עריכת לקוח' : 'הוספת לקוח הקפה חדש'}
-                </h2>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <label style={S.label}>שם לקוח</label>
-                    <input type="text" placeholder="שם מלא..." value={formName} onChange={e => setFormName(e.target.value)} style={S.input} />
-                  </div>
-                  <div>
-                    <label style={S.label}>טלפון</label>
-                    <input type="text" placeholder="050-..." value={formPhone} onChange={e => setFormPhone(e.target.value)} style={S.input} />
-                  </div>
-                  <div>
-                    <label style={S.label}>מסגרת אשראי (₪)</label>
-                    <input type="number" placeholder="0" value={formLimit} onChange={e => setFormLimit(e.target.value)} style={{ ...S.input, textAlign: 'right' as const }} />
-                  </div>
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <label style={S.label}>הערות</label>
-                    <input type="text" placeholder="אופציונלי..." value={formNotes} onChange={e => setFormNotes(e.target.value)} style={S.input} />
-                  </div>
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 24 }}>
+              <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                {editId ? 'עריכת לקוח' : 'הוספת לקוח הקפה חדש'}
+              </h2>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={S.label}>שם לקוח</label>
+                  <input type="text" placeholder="שם מלא..." value={formName} onChange={e => setFormName(e.target.value)} style={S.input} />
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={saveCustomer} disabled={!formName.trim()}
-                    style={{ background: formName.trim() ? branchColor : '#e2e8f0', color: formName.trim() ? 'white' : '#94a3b8', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Plus size={18} />{editId ? 'עדכן' : 'הוסף לקוח'}
+                <div>
+                  <label style={S.label}>טלפון</label>
+                  <input type="text" placeholder="050-..." value={formPhone} onChange={e => setFormPhone(e.target.value)} style={S.input} />
+                </div>
+                <div>
+                  <label style={S.label}>מסגרת אשראי (₪)</label>
+                  <input type="number" placeholder="0" value={formLimit} onChange={e => setFormLimit(e.target.value)} style={{ ...S.input, textAlign: 'right' as const }} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={S.label}>הערות</label>
+                  <input type="text" placeholder="אופציונלי..." value={formNotes} onChange={e => setFormNotes(e.target.value)} style={S.input} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={saveCustomer} disabled={!formName.trim()}
+                  style={{ background: formName.trim() ? '#6366f1' : '#e2e8f0', color: formName.trim() ? 'white' : '#94a3b8', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Plus size={16} />{editId ? 'עדכן' : 'הוסף לקוח'}
+                </button>
+                {editId && (
+                  <button onClick={() => { resetForm(); setTab('list') }}
+                    style={{ background: 'none', border: '1px solid #e2e8f0', color: '#64748b', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    ביטול
                   </button>
-                  {editId && (
-                    <button onClick={() => { resetForm(); setTab('list') }}
-                      style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-                      ביטול
-                    </button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                )}
+              </div>
+            </div>
           </motion.div>
         )}
 

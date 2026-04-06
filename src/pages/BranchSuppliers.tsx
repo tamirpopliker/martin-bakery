@@ -2,9 +2,6 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { ArrowRight, Building2, Plus, Pencil, Trash2, Phone, Search, CheckCircle, XCircle } from 'lucide-react'
-import { FixedCostIcon } from '@/components/icons'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 
 interface Props {
   branchId: number
@@ -103,159 +100,150 @@ export default function BranchSuppliers({ branchId, branchName, branchColor, onB
   const activeCount = suppliers.filter(s => s.active).length
 
   const S = {
-    label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
-    input: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
+    label: { fontSize: 13, fontWeight: 600 as const, color: '#64748b', marginBottom: 6, display: 'block' as const },
+    input: { border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const, background: 'white' },
   }
 
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      {/* כותרת */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div style={{ width: '40px', height: '40px', background: branchColor + '20', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <FixedCostIcon size={20} color={branchColor} />
-        </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>ספקים — {branchName}</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>{activeCount} ספקים פעילים מתוך {suppliers.length}</p>
+      {/* Header */}
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>ספקים</h1>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName} - {activeCount} ספקים פעילים מתוך {suppliers.length}</p>
+          </div>
+          <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ArrowRight size={14} /> חזרה</span>
+          </button>
         </div>
       </div>
 
-      {/* טאבים */}
-      <div className="flex px-8 bg-white border-b border-slate-200">
+      {/* Tabs */}
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '0 20px', display: 'flex', gap: 0 }}>
         <button onClick={() => { setTab('list'); resetForm() }}
-          className={`py-3.5 px-5 bg-transparent border-none cursor-pointer text-sm ${tab === 'list' ? 'font-bold' : 'font-medium'}`}
-          style={{ borderBottom: tab === 'list' ? `3px solid ${branchColor}` : '3px solid transparent', color: tab === 'list' ? branchColor : '#64748b' }}>
+          style={{ background: 'none', border: 'none', borderBottom: tab === 'list' ? '2px solid #6366f1' : '2px solid transparent', padding: '12px 16px', fontSize: 13, fontWeight: tab === 'list' ? 700 : 500, color: tab === 'list' ? '#6366f1' : '#64748b', cursor: 'pointer' }}>
           רשימת ספקים
         </button>
         <button onClick={() => { setTab('add'); if (!editId) resetForm() }}
-          className={`py-3.5 px-5 bg-transparent border-none cursor-pointer text-sm ${tab === 'add' ? 'font-bold' : 'font-medium'}`}
-          style={{ borderBottom: tab === 'add' ? `3px solid ${branchColor}` : '3px solid transparent', color: tab === 'add' ? branchColor : '#64748b' }}>
+          style={{ background: 'none', border: 'none', borderBottom: tab === 'add' ? '2px solid #6366f1' : '2px solid transparent', padding: '12px 16px', fontSize: 13, fontWeight: tab === 'add' ? 700 : 500, color: tab === 'add' ? '#6366f1' : '#64748b', cursor: 'pointer' }}>
           {editId ? 'עריכת ספק' : 'הוספת ספק'}
         </button>
       </div>
 
-      <div className="page-container" style={{ padding: '24px 32px', maxWidth: '900px', margin: '0 auto' }}>
+      <div style={{ padding: '20px', maxWidth: 900, margin: '0 auto' }}>
 
         {tab === 'list' && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <div className="table-scroll">
-              <Card className="shadow-sm">
-                <CardContent className="p-6">
-                  {/* חיפוש */}
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                    <div style={{ position: 'relative' as const, flex: 1 }}>
-                      <Search size={16} color="#94a3b8" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                      <input type="text" placeholder="חיפוש ספק..." value={search} onChange={e => setSearch(e.target.value)}
-                        style={{ ...S.input, paddingRight: '36px' }} />
-                    </div>
-                  </div>
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
+              {/* Search */}
+              <div style={{ padding: '16px 16px 12px' }}>
+                <div style={{ position: 'relative' as const }}>
+                  <Search size={16} color="#94a3b8" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }} />
+                  <input type="text" placeholder="חיפוש ספק..." value={search} onChange={e => setSearch(e.target.value)}
+                    style={{ ...S.input, paddingRight: 36 }} />
+                </div>
+              </div>
 
-                  {loading ? (
-                    <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>טוען...</div>
-                  ) : filtered.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>
-                      <Building2 size={40} color="#e2e8f0" style={{ marginBottom: '12px' }} />
-                      <div style={{ fontSize: '15px', fontWeight: '600' }}>{search ? 'לא נמצאו תוצאות' : 'אין ספקים'}</div>
-                    </div>
-                  ) : (
-                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px 36px 36px', padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
-                        <span>שם ספק</span>
-                        <span>קטגוריה</span>
-                        <span>איש קשר</span>
-                        <span>טלפון</span>
-                        <span />
-                        <span />
-                      </div>
-                      {filtered.map((s, i) => (
-                        <div key={s.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px 36px 36px', alignItems: 'center', padding: '12px 16px', borderBottom: i < filtered.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa', opacity: s.active ? 1 : 0.5 }}>
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <button onClick={() => toggleActive(s.id, s.active)} title={s.active ? 'לחץ לביטול' : 'לחץ להפעלה'}
-                                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex' }}>
-                                {s.active ? <CheckCircle size={16} color="#34d399" /> : <XCircle size={16} color="#94a3b8" />}
-                              </button>
-                              <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>{s.name}</span>
-                            </div>
-                            {s.notes && <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px', marginRight: '24px' }}>{s.notes}</div>}
-                          </div>
-                          <span style={{ fontSize: '12px', color: '#64748b' }}>
-                            {s.category && (
-                              <span style={{ background: branchColor + '15', color: branchColor, padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '600' }}>{s.category}</span>
-                            )}
-                          </span>
-                          <span style={{ fontSize: '13px', color: '#64748b' }}>{s.contact || '—'}</span>
-                          <span style={{ fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            {s.phone ? <><Phone size={12} color="#94a3b8" />{s.phone}</> : '—'}
-                          </span>
-                          <button onClick={() => startEdit(s)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                            <Pencil size={14} color="#94a3b8" />
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 14 }}>טוען...</div>
+              ) : filtered.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>
+                  <Building2 size={36} color="#e2e8f0" style={{ marginBottom: 12 }} />
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{search ? 'לא נמצאו תוצאות' : 'אין ספקים'}</div>
+                </div>
+              ) : (
+                <>
+                  {/* Table header */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px 36px 36px', padding: '10px 16px', fontSize: 11, fontWeight: 600, color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>
+                    <span>שם ספק</span>
+                    <span>קטגוריה</span>
+                    <span>איש קשר</span>
+                    <span>טלפון</span>
+                    <span />
+                    <span />
+                  </div>
+                  {filtered.map((s, i) => (
+                    <div key={s.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px 36px 36px', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #f8fafc', opacity: s.active ? 1 : 0.5 }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <button onClick={() => toggleActive(s.id, s.active)} title={s.active ? 'לחץ לביטול' : 'לחץ להפעלה'}
+                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, display: 'flex' }}>
+                            {s.active ? <CheckCircle size={16} color="#34d399" /> : <XCircle size={16} color="#94a3b8" />}
                           </button>
-                          <button onClick={() => deleteSup(s.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                            <Trash2 size={14} color="#fb7185" />
-                          </button>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>{s.name}</span>
                         </div>
-                      ))}
+                        {s.notes && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2, marginRight: 24 }}>{s.notes}</div>}
+                      </div>
+                      <span>
+                        {s.category && (
+                          <span style={{ background: '#f1f5f9', color: '#64748b', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>{s.category}</span>
+                        )}
+                      </span>
+                      <span style={{ fontSize: 13, color: '#64748b' }}>{s.contact || '\u2014'}</span>
+                      <span style={{ fontSize: 13, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {s.phone ? <><Phone size={12} color="#94a3b8" />{s.phone}</> : '\u2014'}
+                      </span>
+                      <button onClick={() => startEdit(s)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+                        <Pencil size={14} color="#94a3b8" />
+                      </button>
+                      <button onClick={() => deleteSup(s.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+                        <Trash2 size={14} color="#ef4444" />
+                      </button>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                  ))}
+                </>
+              )}
             </div>
           </motion.div>
         )}
 
         {tab === 'add' && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <Card className="shadow-sm">
-              <CardContent className="p-6">
-                <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>
-                  {editId ? 'עריכת ספק' : 'הוספת ספק חדש'}
-                </h2>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <label style={S.label}>שם ספק</label>
-                    <input type="text" placeholder="שם..." value={formName} onChange={e => setFormName(e.target.value)} style={S.input} />
-                  </div>
-                  <div>
-                    <label style={S.label}>איש קשר</label>
-                    <input type="text" placeholder="שם איש קשר..." value={formContact} onChange={e => setFormContact(e.target.value)} style={S.input} />
-                  </div>
-                  <div>
-                    <label style={S.label}>טלפון</label>
-                    <input type="text" placeholder="050-..." value={formPhone} onChange={e => setFormPhone(e.target.value)} style={S.input} />
-                  </div>
-                  <div>
-                    <label style={S.label}>קטגוריה</label>
-                    <select value={formCat} onChange={e => setFormCat(e.target.value)}
-                      style={{ ...S.input, background: 'white', cursor: 'pointer' }}>
-                      <option value="">בחר קטגוריה...</option>
-                      {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={S.label}>הערות</label>
-                    <input type="text" placeholder="אופציונלי..." value={formNotes} onChange={e => setFormNotes(e.target.value)} style={S.input} />
-                  </div>
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 24 }}>
+              <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                {editId ? 'עריכת ספק' : 'הוספת ספק חדש'}
+              </h2>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={S.label}>שם ספק</label>
+                  <input type="text" placeholder="שם..." value={formName} onChange={e => setFormName(e.target.value)} style={S.input} />
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={save} disabled={!formName.trim()}
-                    style={{ background: formName.trim() ? branchColor : '#e2e8f0', color: formName.trim() ? 'white' : '#94a3b8', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Plus size={18} />{editId ? 'עדכן' : 'הוסף ספק'}
+                <div>
+                  <label style={S.label}>איש קשר</label>
+                  <input type="text" placeholder="שם איש קשר..." value={formContact} onChange={e => setFormContact(e.target.value)} style={S.input} />
+                </div>
+                <div>
+                  <label style={S.label}>טלפון</label>
+                  <input type="text" placeholder="050-..." value={formPhone} onChange={e => setFormPhone(e.target.value)} style={S.input} />
+                </div>
+                <div>
+                  <label style={S.label}>קטגוריה</label>
+                  <select value={formCat} onChange={e => setFormCat(e.target.value)}
+                    style={{ ...S.input, cursor: 'pointer' }}>
+                    <option value="">בחר קטגוריה...</option>
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>הערות</label>
+                  <input type="text" placeholder="אופציונלי..." value={formNotes} onChange={e => setFormNotes(e.target.value)} style={S.input} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={save} disabled={!formName.trim()}
+                  style={{ background: formName.trim() ? '#6366f1' : '#e2e8f0', color: formName.trim() ? 'white' : '#94a3b8', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Plus size={16} />{editId ? 'עדכן' : 'הוסף ספק'}
+                </button>
+                {editId && (
+                  <button onClick={() => { resetForm(); setTab('list') }}
+                    style={{ background: 'none', border: '1px solid #e2e8f0', color: '#64748b', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    ביטול
                   </button>
-                  {editId && (
-                    <button onClick={() => { resetForm(); setTab('list') }}
-                      style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-                      ביטול
-                    </button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                )}
+              </div>
+            </div>
           </motion.div>
         )}
 

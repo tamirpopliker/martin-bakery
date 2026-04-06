@@ -6,11 +6,7 @@ import { fetchAllBranchesProfit } from '../lib/profitCalc'
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Button } from '@/components/ui/button'
 import { ArrowRight, TrendingUp, TrendingDown, Presentation, EyeOff } from 'lucide-react'
-import { ProfitIcon } from '@/components/icons'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 const fadeIn = (delay = 0) => ({
@@ -59,19 +55,17 @@ function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString() }
 
 function DiffBadge({ current, previous, inverse }: { current: number; previous: number; inverse?: boolean }) {
   if (previous === 0 && current === 0) return null
-  if (previous === 0) return <TrendingUp size={12} className="text-emerald-400" />
+  if (previous === 0) return <TrendingUp size={12} style={{ color: '#34d399' }} />
   const pct = ((current - previous) / Math.abs(previous)) * 100
   const isUp = pct > 0
   const isGood = inverse ? !isUp : isUp
   return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${isGood ? 'text-emerald-500' : 'text-rose-500'}`}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 700, color: isGood ? '#34d399' : '#ef4444' }}>
       {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
       {Math.abs(pct).toFixed(1)}%
     </span>
   )
 }
-
-const CHART_COLORS = ['#818cf8', '#34d399', '#fb923c', '#f472b6', '#38bdf8', '#a78bfa', '#fbbf24', '#4ade80']
 
 export default function BranchManagerDashboard({ onBack }: Props) {
   const { period, setPeriod, from, to, comparisonPeriod } = usePeriod()
@@ -129,7 +123,6 @@ export default function BranchManagerDashboard({ onBack }: Props) {
     const grossProfit = totalRevenue - laborEmployer - totalExpenses
     const operatingProfit = grossProfit - fixedCosts - mgmtCosts - wasteTotal
 
-    // Transaction & basket calculations
     const totalTransactions = revData.filter(r => r.source === 'cashier').reduce((s, r) => s + (Number(r.transaction_count) || 0), 0)
     const uniqueDays = new Set(revData.filter(r => r.source === 'cashier' && Number(r.transaction_count) > 0).map(r => r.date)).size
     const workingDays = uniqueDays || 1
@@ -163,7 +156,6 @@ export default function BranchManagerDashboard({ onBack }: Props) {
         Promise.all(BRANCHES.map(br => fetchBranchData(br.id, br.name, br.color, comparisonPeriod.from, comparisonPeriod.to, prevMonthKey))),
       ])
 
-      // Override supplier split from View (single source of truth)
       const branchIds = BRANCHES.map(br => br.id)
       const viewProfits = await fetchAllBranchesProfit(branchIds, from, to)
       console.log('[BranchManager] viewProfits:', JSON.stringify(viewProfits))
@@ -180,13 +172,11 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       setBranches(current)
       setPrevBranches(previous)
 
-      // Fetch KPI targets for all branches
       const { data: kpiData } = await supabase.from('branch_kpi_targets').select('branch_id, labor_pct, waste_pct, revenue_target, basket_target, transaction_target')
       const kpiMap: typeof kpiTargets = {}
       ;(kpiData || []).forEach((k: any) => { kpiMap[k.branch_id] = k })
       setKpiTargets(kpiMap)
 
-      // Fetch 6-month revenue data for chart
       const now = new Date(from)
       const months: { key: string; label: string; from: string; to: string }[] = []
       for (let i = 5; i >= 0; i--) {
@@ -246,149 +236,162 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   const totalWastePct = totals.revenue > 0 ? (totals.waste / totals.revenue) * 100 : 0
   const getTarget = (brId: number, key: string) => (kpiTargets[brId] as any)?.[key] || (key === 'labor_pct' ? 0 : key === 'waste_pct' ? 3 : 0)
 
-  // Per-branch max for progress bars
   const maxRevenue = useMemo(() => Math.max(...branches.map(b => b.totalRevenue), 1), [branches])
   const maxLaborPct = useMemo(() => Math.max(...branches.map(b => b.laborPct), 1), [branches])
 
+  // Chart colors - indigo/gray palette
+  const CHART_COLORS = ['#6366f1', '#818cf8', '#a5b4fc', '#94a3b8', '#64748b', '#475569', '#c7d2fe', '#e2e8f0']
+
+  // Table cell style helper
+  const cellStyle = (bold?: boolean, color?: string): React.CSSProperties => ({
+    padding: '10px 14px',
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: bold ? 700 : 500,
+    color: color || '#374151',
+    borderBottom: '1px solid #f8fafc',
+  })
+
+  const headerCellStyle: React.CSSProperties = {
+    padding: '10px 14px',
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#94a3b8',
+    borderBottom: '1px solid #f1f5f9',
+  }
+
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
       {/* Header */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div className="w-11 h-11 rounded-[14px] flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #818cf8, #34d399)' }}>
-          <ProfitIcon size={22} color="white" />
-        </div>
-        <div>
-          <h1 className="m-0 text-[22px] font-extrabold text-slate-900">דשבורד מנהל סניפים</h1>
-          <p className="m-0 text-[13px] text-slate-400">השוואת ביצועים &middot; P&amp;L &middot; KPI</p>
-        </div>
-        <div className="mr-auto flex items-center gap-3">
-          <PeriodPicker period={period} onChange={setPeriod} />
-          <Button
-            variant={presentationMode ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setPresentationMode(v => !v)}
-            className={`rounded-xl gap-2 px-4 text-[13px] font-bold ${presentationMode ? 'bg-indigo-500 hover:bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-900'}`}
-          >
-            {presentationMode ? <EyeOff size={15} /> : <Presentation size={15} />}
-            {presentationMode ? 'יציאה ממצב ישיבה' : 'מצב ישיבה'}
-          </Button>
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>דשבורד מנהל סניפים</h1>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>השוואת ביצועים &middot; P&amp;L &middot; KPI</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <PeriodPicker period={period} onChange={setPeriod} />
+            <button
+              onClick={() => setPresentationMode(v => !v)}
+              style={{
+                background: presentationMode ? '#6366f1' : 'none',
+                color: presentationMode ? 'white' : '#64748b',
+                border: presentationMode ? 'none' : '1px solid #e2e8f0',
+                borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+              {presentationMode ? <EyeOff size={14} /> : <Presentation size={14} />}
+              {presentationMode ? 'יציאה ממצב ישיבה' : 'מצב ישיבה'}
+            </button>
+            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ArrowRight size={14} /> חזרה</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {loading && <div className="text-center py-16 text-slate-400">טוען נתונים...</div>}
+      {loading && <div style={{ textAlign: 'center', padding: '64px 0', color: '#94a3b8', fontSize: 14 }}>טוען נתונים...</div>}
 
       {!loading && (
-        <div className="px-8 py-6 max-w-[1200px] mx-auto">
+        <div style={{ padding: '20px', maxWidth: 1200, margin: '0 auto' }}>
 
-          {/* ── ROW 1 — 4 Golden KPIs ── */}
-          <motion.div variants={fadeIn(0)} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-2.5">
-            {/* 1. Total Revenue */}
-            <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-              <div className="text-[11px] font-semibold text-slate-400 mb-1">סה"כ הכנסות</div>
-              <div className="text-[22px] font-medium" style={{ color: '#378ADD' }}>
+          {/* KPI Cards */}
+          <motion.div variants={fadeIn(0)} initial="hidden" animate="visible" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>סה"כ הכנסות</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#6366f1' }}>
                 <CountUp end={Math.round(totals.revenue)} duration={1.5} separator="," prefix="₪" />
               </div>
               <DiffBadge current={totals.revenue} previous={prevTotals.revenue} />
             </div>
 
-            {/* 2. Total Gross Profit */}
-            <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-              <div className="text-[11px] font-semibold text-slate-400 mb-1 cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">סה"כ רווח נשלט</div>
-              <div className="text-[22px] font-medium" style={{ color: totals.grossProfit >= 0 ? '#639922' : '#E24B4A' }}>
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4, cursor: 'help' }} title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">סה"כ רווח נשלט</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: totals.grossProfit >= 0 ? '#34d399' : '#ef4444' }}>
                 <CountUp end={Math.round(totals.grossProfit)} duration={1.5} separator="," prefix="₪" />
               </div>
               <DiffBadge current={totals.grossProfit} previous={prevTotals.grossProfit} />
             </div>
 
-            {/* 3. Total Operating Profit */}
-            <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-              <div className="text-[11px] font-semibold text-slate-400 mb-1">סה"כ רווח תפעולי</div>
-              <div className="text-[22px] font-medium" style={{ color: totals.operatingProfit >= 0 ? '#639922' : '#E24B4A' }}>
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>סה"כ רווח תפעולי</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: totals.operatingProfit >= 0 ? '#34d399' : '#ef4444' }}>
                 <CountUp end={Math.round(totals.operatingProfit)} duration={1.5} separator="," prefix="₪" />
               </div>
               <DiffBadge current={totals.operatingProfit} previous={prevTotals.operatingProfit} />
             </div>
 
-            {/* 4. Average Labor % */}
-            <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-              <div className="text-[11px] font-semibold text-slate-400 mb-1">% לייבור ממוצע</div>
-              <div className="text-[22px] font-medium" style={{ color: '#534AB7' }}>
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>% לייבור ממוצע</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#6366f1' }}>
                 <CountUp end={totalLaborPct} duration={1.5} suffix="%" decimals={1} />
               </div>
-              {(() => { const avgTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'labor_pct'), 0) / branches.length : 0; return avgTarget > 0 ? <span className="text-[11px] text-slate-400">יעד {avgTarget.toFixed(0)}%</span> : <span className="text-[11px] text-slate-400">{'\u2014'}</span> })()}
+              {(() => { const avgTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'labor_pct'), 0) / branches.length : 0; return avgTarget > 0 ? <span style={{ fontSize: 11, color: '#94a3b8' }}>יעד {avgTarget.toFixed(0)}%</span> : <span style={{ fontSize: 11, color: '#94a3b8' }}>{'\u2014'}</span> })()}
             </div>
           </motion.div>
 
-          {/* ── ROW 2 — 2 Detail Cards ── */}
-          <motion.div variants={fadeIn(0.1)} initial="hidden" animate="visible" className="grid grid-cols-2 gap-2.5 mb-2.5">
-            {/* LEFT: Revenue per branch */}
-            <Card className="shadow-sm border border-slate-200 rounded-lg">
-              <CardContent className="p-4">
-                <div className="text-[13px] font-bold text-slate-700 mb-3">הכנסות לפי סניף</div>
-                <div className="flex flex-col gap-3">
-                  {branches.map(br => {
-                    const profitPct = br.totalRevenue > 0 ? (br.grossProfit / br.totalRevenue) * 100 : 0
-                    const barW = (br.totalRevenue / maxRevenue) * 100
-                    return (
-                      <div key={br.id}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[13px] font-semibold text-slate-700">{br.name}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[13px] font-medium text-slate-900">{fmtM(br.totalRevenue)}</span>
-                            <span className="text-[11px] font-bold" style={{ color: profitPct >= 0 ? '#639922' : '#E24B4A' }}>
-                              {profitPct.toFixed(1)}%
-                            </span>
-                          </div>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${barW}%`, backgroundColor: '#378ADD' }} />
+          {/* Detail Cards Row */}
+          <motion.div variants={fadeIn(0.1)} initial="hidden" animate="visible" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            {/* Revenue per branch */}
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>הכנסות לפי סניף</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {branches.map(br => {
+                  const profitPct = br.totalRevenue > 0 ? (br.grossProfit / br.totalRevenue) * 100 : 0
+                  const barW = (br.totalRevenue / maxRevenue) * 100
+                  return (
+                    <div key={br.id}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{br.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: '#0f172a' }}>{fmtM(br.totalRevenue)}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: profitPct >= 0 ? '#34d399' : '#ef4444' }}>
+                            {profitPct.toFixed(1)}%
+                          </span>
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+                      <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.5s', width: `${barW}%`, backgroundColor: '#6366f1' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
 
-            {/* RIGHT: Labor per branch */}
-            <Card className="shadow-sm border border-slate-200 rounded-lg">
-              <CardContent className="p-4">
-                <div className="text-[13px] font-bold text-slate-700 mb-3">לייבור לפי סניף</div>
-                <div className="flex flex-col gap-3">
-                  {branches.map(br => {
-                    const barW = (br.laborPct / Math.max(maxLaborPct, 40)) * 100
-                    return (
-                      <div key={br.id}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[13px] font-semibold text-slate-700">{br.name}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[13px] font-medium" style={{ color: (() => { const t = getTarget(br.id, 'labor_pct'); return t > 0 ? (br.laborPct <= t ? '#639922' : '#E24B4A') : '#334155' })() }}>
-                              {br.laborPct.toFixed(1)}%
-                            </span>
-                            {(() => { const t = getTarget(br.id, 'labor_pct'); return t > 0 ? <span className="text-[11px] text-slate-400">יעד {t}%</span> : <span className="text-[11px] text-slate-400">{'\u2014'}</span> })()}
-                          </div>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden relative">
-                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(barW, 100)}%`, backgroundColor: '#534AB7' }} />
-                          {/* Target line */}
-                          {(() => { const t = getTarget(br.id, 'labor_pct'); return t > 0 ? <div className="absolute top-0 h-full w-px bg-slate-400" style={{ right: `${(t / Math.max(maxLaborPct, 40)) * 100}%` }} /> : null })()}
+            {/* Labor per branch */}
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>לייבור לפי סניף</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {branches.map(br => {
+                  const barW = (br.laborPct / Math.max(maxLaborPct, 40)) * 100
+                  return (
+                    <div key={br.id}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{br.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: (() => { const t = getTarget(br.id, 'labor_pct'); return t > 0 ? (br.laborPct <= t ? '#34d399' : '#ef4444') : '#374151' })() }}>
+                            {br.laborPct.toFixed(1)}%
+                          </span>
+                          {(() => { const t = getTarget(br.id, 'labor_pct'); return t > 0 ? <span style={{ fontSize: 11, color: '#94a3b8' }}>יעד {t}%</span> : <span style={{ fontSize: 11, color: '#94a3b8' }}>{'\u2014'}</span> })()}
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+                      <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden', position: 'relative' }}>
+                        <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.5s', width: `${Math.min(barW, 100)}%`, backgroundColor: '#818cf8' }} />
+                        {(() => { const t = getTarget(br.id, 'labor_pct'); return t > 0 ? <div style={{ position: 'absolute', top: 0, height: '100%', width: 1, background: '#94a3b8', right: `${(t / Math.max(maxLaborPct, 40)) * 100}%` }} /> : null })()}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </motion.div>
 
-          {/* ── ROW 3 — KPI Targets per Branch ── */}
-          <motion.div variants={fadeIn(0.2)} initial="hidden" animate="visible" className="mb-2.5">
-            <div className="text-[15px] font-bold text-slate-900 mb-2">יעדים לפי סניף</div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+          {/* KPI Targets per Branch */}
+          <motion.div variants={fadeIn(0.2)} initial="hidden" animate="visible" style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>יעדים לפי סניף</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
               {branches.map(br => {
                 const laborTarget = getTarget(br.id, 'labor_pct')
                 const wasteTarget = getTarget(br.id, 'waste_pct')
@@ -396,47 +399,44 @@ export default function BranchManagerDashboard({ onBack }: Props) {
 
                 const kpiColor = (actual: number, target: number, inverse: boolean) => {
                   const diff = inverse ? (actual - target) / target : (target - actual) / target
-                  if (diff <= 0) return '#639922'
+                  if (diff <= 0) return '#34d399'
                   if (diff <= 0.2) return '#f59e0b'
-                  return '#E24B4A'
+                  return '#ef4444'
                 }
 
                 const laborColor = kpiColor(br.laborPct, laborTarget, true)
                 const wasteColor = kpiColor(br.wastePct, wasteTarget, true)
-                const opColor = opPct >= 0 ? '#639922' : opPct >= -5 ? '#f59e0b' : '#E24B4A'
+                const opColor = opPct >= 0 ? '#34d399' : opPct >= -5 ? '#f59e0b' : '#ef4444'
 
                 return (
-                  <div key={br.id} className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-                    <div className="text-[13px] font-bold text-slate-700 mb-3">{br.name}</div>
-                    <div className="flex flex-col gap-2.5">
-                      {/* Labor % */}
+                  <div key={br.id} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>{br.name}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] font-semibold text-slate-500">% לייבור</span>
-                          <span className="text-[11px] font-bold" style={{ color: laborColor }}>{br.laborPct.toFixed(1)}% / {laborTarget}%</span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>% לייבור</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: laborColor }}>{br.laborPct.toFixed(1)}% / {laborTarget}%</span>
                         </div>
-                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min((br.laborPct / Math.max(laborTarget * 1.5, 1)) * 100, 100)}%`, backgroundColor: laborColor }} />
+                        <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.5s', width: `${Math.min((br.laborPct / Math.max(laborTarget * 1.5, 1)) * 100, 100)}%`, backgroundColor: laborColor }} />
                         </div>
                       </div>
-                      {/* Waste % */}
                       <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] font-semibold text-slate-500">% פחת</span>
-                          <span className="text-[11px] font-bold" style={{ color: wasteColor }}>{br.wastePct.toFixed(1)}% / {wasteTarget}%</span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>% פחת</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: wasteColor }}>{br.wastePct.toFixed(1)}% / {wasteTarget}%</span>
                         </div>
-                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min((br.wastePct / Math.max(wasteTarget * 1.5, 1)) * 100, 100)}%`, backgroundColor: wasteColor }} />
+                        <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.5s', width: `${Math.min((br.wastePct / Math.max(wasteTarget * 1.5, 1)) * 100, 100)}%`, backgroundColor: wasteColor }} />
                         </div>
                       </div>
-                      {/* Operating Profit % */}
                       <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] font-semibold text-slate-500">% רווח תפעולי</span>
-                          <span className="text-[11px] font-bold" style={{ color: opColor }}>{opPct.toFixed(1)}%</span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>% רווח תפעולי</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: opColor }}>{opPct.toFixed(1)}%</span>
                         </div>
-                        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(Math.max(opPct, 0), 100)}%`, backgroundColor: opColor }} />
+                        <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.5s', width: `${Math.min(Math.max(opPct, 0), 100)}%`, backgroundColor: opColor }} />
                         </div>
                       </div>
                     </div>
@@ -446,339 +446,305 @@ export default function BranchManagerDashboard({ onBack }: Props) {
             </div>
           </motion.div>
 
-          {/* ── ROW 4 — Comparative LineChart ── */}
-          <motion.div variants={fadeIn(0.3)} initial="hidden" animate="visible" className="mb-2.5">
-            <Card className="shadow-sm border border-slate-200 rounded-lg">
-              <CardContent className="p-4">
-                <div className="text-[13px] font-bold text-slate-700 mb-3">הכנסות לפי סניף - 6 חודשים אחרונים</div>
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={chartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} />
-                    <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}K`} />
-                    <Tooltip
-                      formatter={(value: any) => [fmtM(Number(value)), '']}
-                      contentStyle={{ direction: 'rtl', fontSize: 12 }}
+          {/* Line Chart */}
+          <motion.div variants={fadeIn(0.3)} initial="hidden" animate="visible" style={{ marginBottom: 10 }}>
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>הכנסות לפי סניף - 6 חודשים אחרונים</div>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={chartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                  <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}K`} />
+                  <Tooltip
+                    formatter={(value: any) => [fmtM(Number(value)), '']}
+                    contentStyle={{ direction: 'rtl', fontSize: 12 }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  {BRANCHES.map((br, idx) => (
+                    <Line
+                      key={br.id}
+                      type="monotone"
+                      dataKey={br.name}
+                      stroke={CHART_COLORS[idx % CHART_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
                     />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    {BRANCHES.map((br) => (
-                      <Line
-                        key={br.id}
-                        type="monotone"
-                        dataKey={br.name}
-                        stroke={br.color || '#378ADD'}
-                        strokeWidth={2}
-                        dot={{ r: 3 }}
-                        activeDot={{ r: 5 }}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </motion.div>
 
-          {/* ── Overhead % (from system settings) ── */}
-          <div className="flex items-center gap-2 mb-3.5 justify-end">
-            <span className="text-[13px] font-semibold text-slate-500">העמסת מטה:</span>
-            <span className="text-sm font-semibold text-indigo-400">{overheadPct}%</span>
+          {/* Overhead info */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, justifyContent: 'flex-end' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>העמסת מטה:</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#6366f1' }}>{overheadPct}%</span>
           </div>
 
-          {/* ── Comparison Table ── */}
+          {/* Comparison Table */}
           <motion.div variants={fadeIn(0.4)} initial="hidden" animate="visible">
-            <div className="table-scroll">
-              <Card className="shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-base font-bold text-slate-900">
-                    טבלת השוואה — {period.label}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {/* Presentation mode banner */}
-                  {presentationMode && (
-                    <motion.div variants={fadeIn(0)} initial="hidden" animate="visible"
-                      className="rounded-lg px-4 py-2 mb-4 text-center text-[13px] font-semibold"
-                      style={{ background: '#EEEDFE', color: '#3C3489' }}>
-                      מצב ישיבה פעיל — נתוני שכר מוסתרים
-                    </motion.div>
-                  )}
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-b-2 border-slate-200">
-                        <TableHead className="text-right text-slate-500 font-semibold text-xs px-3.5 py-2.5">מדד</TableHead>
-                        {branches.map(br => (
-                          <TableHead key={br.id} className="text-center font-bold text-[13px] px-3.5 py-2.5">
-                            <span style={{ color: br.color }}>{br.name}</span>
-                          </TableHead>
-                        ))}
-                        <TableHead className="text-center font-bold text-[13px] text-slate-900 px-3.5 py-2.5">סה"כ</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(() => {
-                        const HIDDEN_IN_PRESENTATION = new Set(['laborEmployer', 'mgmtCosts', 'totalExpenses'])
-                        // Correct order: revenue, expenses, labor, mgmt → gross profit, then fixedCosts, waste, overhead → operating
-                        const costRows: { label: string; key: keyof BranchData; color: string }[] = [
-                          { label: 'הכנסות', key: 'totalRevenue', color: '#34d399' },
-                          { label: 'רכישות מפעל', key: 'expSuppliersInternal', color: '#818cf8' },
-                          { label: 'ספקים חיצוניים', key: 'expSuppliersExternal', color: '#fb7185' },
-                          { label: 'לייבור', key: 'laborEmployer', color: '#fbbf24' },
-                          { label: 'הנהלה וכלליות', key: 'mgmtCosts', color: '#64748b' },
-                          { label: 'פחת', key: 'wasteTotal', color: '#fb7185' },
-                        ]
-                        const visibleCostRows = presentationMode ? costRows.filter(r => !HIDDEN_IN_PRESENTATION.has(r.key)) : costRows
-                        const rows: JSX.Element[] = []
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>טבלת השוואה - {period.label}</div>
+              </div>
 
-                        // Cost rows before gross profit
-                        visibleCostRows.forEach((row, ri) => {
-                          const isBold = row.key === 'totalRevenue'
-                          const totalVal = branches.reduce((s, b) => s + b[row.key], 0)
-                          rows.push(
-                            <TableRow key={row.key} className={isBold ? 'bg-slate-50' : ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                              <TableCell className={`px-3.5 py-2.5 text-slate-700 ${isBold ? 'font-bold' : 'font-medium'}`}>{row.label}</TableCell>
-                              {branches.map(br => (
-                                <TableCell key={br.id} className={`px-3.5 py-2.5 text-center ${isBold ? 'font-bold' : 'font-medium'}`} style={{ color: br[row.key] === 0 ? '#94a3b8' : row.color }}>
-                                  {br[row.key] === 0 ? '\u2014' : fmtM(Number(br[row.key]))}
-                                </TableCell>
-                              ))}
-                              <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
-                                {totalVal === 0 ? '\u2014' : fmtM(totalVal)}
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })
+              {/* Presentation mode banner */}
+              {presentationMode && (
+                <div style={{ padding: '8px 20px', textAlign: 'center', fontSize: 13, fontWeight: 600, background: '#f8fafc', color: '#6366f1', borderBottom: '1px solid #f1f5f9' }}>
+                  מצב ישיבה פעיל - נתוני שכר מוסתרים
+                </div>
+              )}
 
-                        // Presentation mode: merged labor % row
-                        if (presentationMode) {
-                          rows.push(
-                            <TableRow key="labor-exp-pct" className="bg-indigo-50/50">
-                              <TableCell className="px-3.5 py-2.5 font-bold" style={{ color: '#3C3489' }}>עלויות עבודה %</TableCell>
-                              {branches.map(br => {
-                                const pct = br.totalRevenue > 0 ? ((br.laborEmployer + br.totalExpenses + br.mgmtCosts) / br.totalRevenue * 100) : 0
-                                return (
-                                  <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: '#534AB7' }}>
-                                    {br.totalRevenue > 0 ? pct.toFixed(1) + '%' : '\u2014'}
-                                  </TableCell>
-                                )
-                              })}
-                              <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: '#534AB7' }}>
-                                {totals.revenue > 0 ? ((totals.labor + totals.expenses + totals.mgmtCosts) / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
-                              </TableCell>
-                            </TableRow>
-                          )
-                        }
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...headerCellStyle, textAlign: 'right' }}>מדד</th>
+                      {branches.map(br => (
+                        <th key={br.id} style={headerCellStyle}>
+                          <span style={{ color: '#6366f1' }}>{br.name}</span>
+                        </th>
+                      ))}
+                      <th style={{ ...headerCellStyle, color: '#0f172a' }}>סה"כ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const HIDDEN_IN_PRESENTATION = new Set(['laborEmployer', 'mgmtCosts', 'totalExpenses'])
+                      const costRows: { label: string; key: keyof BranchData; color: string }[] = [
+                        { label: 'הכנסות', key: 'totalRevenue', color: '#34d399' },
+                        { label: 'רכישות מפעל', key: 'expSuppliersInternal', color: '#818cf8' },
+                        { label: 'ספקים חיצוניים', key: 'expSuppliersExternal', color: '#ef4444' },
+                        { label: 'לייבור', key: 'laborEmployer', color: '#f59e0b' },
+                        { label: 'הנהלה וכלליות', key: 'mgmtCosts', color: '#64748b' },
+                        { label: 'פחת', key: 'wasteTotal', color: '#ef4444' },
+                      ]
+                      const visibleCostRows = presentationMode ? costRows.filter(r => !HIDDEN_IN_PRESENTATION.has(r.key)) : costRows
+                      const rows: JSX.Element[] = []
 
-                        // Gross profit row
+                      visibleCostRows.forEach((row) => {
+                        const isBold = row.key === 'totalRevenue'
+                        const totalVal = branches.reduce((s, b) => s + b[row.key], 0)
                         rows.push(
-                          <TableRow key="grossProfit" className="bg-slate-50 border-t border-slate-200">
-                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700"><span className="cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span></TableCell>
+                          <tr key={row.key}>
+                            <td style={{ ...cellStyle(isBold), textAlign: 'right' }}>{row.label}</td>
+                            {branches.map(br => (
+                              <td key={br.id} style={cellStyle(isBold, br[row.key] === 0 ? '#94a3b8' : row.color)}>
+                                {br[row.key] === 0 ? '\u2014' : fmtM(Number(br[row.key]))}
+                              </td>
+                            ))}
+                            <td style={cellStyle(true, '#0f172a')}>
+                              {totalVal === 0 ? '\u2014' : fmtM(totalVal)}
+                            </td>
+                          </tr>
+                        )
+                      })
+
+                      // Presentation mode: merged labor % row
+                      if (presentationMode) {
+                        rows.push(
+                          <tr key="labor-exp-pct">
+                            <td style={{ ...cellStyle(true), textAlign: 'right', color: '#6366f1' }}>עלויות עבודה %</td>
                             {branches.map(br => {
-                              const gp = brGross(br)
+                              const pct = br.totalRevenue > 0 ? ((br.laborEmployer + br.totalExpenses + br.mgmtCosts) / br.totalRevenue * 100) : 0
                               return (
-                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: gp >= 0 ? '#34d399' : '#fb7185' }}>
-                                  {fmtM(gp)}
-                                </TableCell>
+                                <td key={br.id} style={cellStyle(true, '#6366f1')}>
+                                  {br.totalRevenue > 0 ? pct.toFixed(1) + '%' : '\u2014'}
+                                </td>
                               )
                             })}
-                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.grossProfit >= 0 ? '#34d399' : '#fb7185' }}>
-                              {fmtM(totals.grossProfit)}
-                            </TableCell>
-                          </TableRow>
+                            <td style={cellStyle(true, '#6366f1')}>
+                              {totals.revenue > 0 ? ((totals.labor + totals.expenses + totals.mgmtCosts) / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
+                            </td>
+                          </tr>
                         )
+                      }
 
-                        // % Gross profit row
+                      // Gross profit
+                      rows.push(
+                        <tr key="grossProfit" style={{ background: '#fafafa' }}>
+                          <td style={{ ...cellStyle(true), textAlign: 'right' }}><span style={{ cursor: 'help' }} title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span></td>
+                          {branches.map(br => {
+                            const gp = brGross(br)
+                            return <td key={br.id} style={cellStyle(true, gp >= 0 ? '#34d399' : '#ef4444')}>{fmtM(gp)}</td>
+                          })}
+                          <td style={cellStyle(true, totals.grossProfit >= 0 ? '#34d399' : '#ef4444')}>{fmtM(totals.grossProfit)}</td>
+                        </tr>
+                      )
+
+                      // % Gross profit
+                      rows.push(
+                        <tr key="kpi-gross-pct" style={{ background: '#fafafa' }}>
+                          <td style={{ ...cellStyle(true), textAlign: 'right' }}>% רווח נשלט</td>
+                          {branches.map(br => {
+                            const gp = brGross(br)
+                            const gpPct = br.totalRevenue > 0 ? (gp / br.totalRevenue * 100) : 0
+                            return <td key={br.id} style={cellStyle(true, gpPct >= 0 ? '#34d399' : '#ef4444')}>{br.totalRevenue > 0 ? gpPct.toFixed(1) + '%' : '\u2014'}</td>
+                          })}
+                          <td style={cellStyle(true, totals.grossProfit >= 0 ? '#34d399' : '#ef4444')}>
+                            {totals.revenue > 0 ? (totals.grossProfit / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
+                          </td>
+                        </tr>
+                      )
+
+                      // Fixed costs
+                      const opCostRows: { label: string; key: keyof BranchData; color: string }[] = [
+                        { label: 'עלויות קבועות', key: 'fixedCosts', color: '#64748b' },
+                      ]
+                      opCostRows.forEach((row) => {
+                        const totalVal = branches.reduce((s, b) => s + Number(b[row.key]), 0)
                         rows.push(
-                          <TableRow key="kpi-gross-pct" className="bg-slate-50">
-                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% רווח נשלט</TableCell>
-                            {branches.map(br => {
-                              const gp = brGross(br)
-                              const gpPct = br.totalRevenue > 0 ? (gp / br.totalRevenue * 100) : 0
-                              return (
-                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: gpPct >= 0 ? '#34d399' : '#fb7185' }}>
-                                  {br.totalRevenue > 0 ? gpPct.toFixed(1) + '%' : '\u2014'}
-                                </TableCell>
-                              )
-                            })}
-                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.grossProfit >= 0 ? '#34d399' : '#fb7185' }}>
-                              {totals.revenue > 0 ? (totals.grossProfit / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
-                            </TableCell>
-                          </TableRow>
+                          <tr key={row.key}>
+                            <td style={{ ...cellStyle(false), textAlign: 'right' }}>{row.label}</td>
+                            {branches.map(br => (
+                              <td key={br.id} style={cellStyle(false, Number(br[row.key]) === 0 ? '#94a3b8' : row.color)}>
+                                {Number(br[row.key]) === 0 ? '\u2014' : fmtM(Number(br[row.key]))}
+                              </td>
+                            ))}
+                            <td style={cellStyle(true, '#0f172a')}>
+                              {totalVal === 0 ? '\u2014' : fmtM(totalVal)}
+                            </td>
+                          </tr>
                         )
+                      })
 
-                        // Operating cost rows: fixedCosts, overhead
-                        const opCostRows: { label: string; key: keyof BranchData; color: string }[] = [
-                          { label: 'עלויות קבועות', key: 'fixedCosts', color: '#64748b' },
-                        ]
-                        opCostRows.forEach((row, ri) => {
-                          const totalVal = branches.reduce((s, b) => s + Number(b[row.key]), 0)
-                          rows.push(
-                            <TableRow key={row.key} className={ri % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                              <TableCell className="px-3.5 py-2.5 font-medium text-slate-700">{row.label}</TableCell>
-                              {branches.map(br => (
-                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-medium" style={{ color: Number(br[row.key]) === 0 ? '#94a3b8' : row.color }}>
-                                  {Number(br[row.key]) === 0 ? '\u2014' : fmtM(Number(br[row.key]))}
-                                </TableCell>
-                              ))}
-                              <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
-                                {totalVal === 0 ? '\u2014' : fmtM(totalVal)}
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })
-
-                        // Overhead row
-                        if (overheadPct > 0) {
-                          rows.push(
-                            <TableRow key="overhead" className="bg-slate-50/50">
-                              <TableCell className="px-3.5 py-2.5 font-medium text-slate-700">העמסת מטה {overheadPct}%</TableCell>
-                              {branches.map(br => (
-                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-medium text-slate-500">
-                                  {fmtM(brOH(br))}
-                                </TableCell>
-                              ))}
-                              <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
-                                {fmtM(totals.overhead)}
-                              </TableCell>
-                            </TableRow>
-                          )
-                        }
-
-                        // Operating profit row
+                      // Overhead
+                      if (overheadPct > 0) {
                         rows.push(
-                          <TableRow key="operatingProfit" className="bg-slate-50 border-t border-slate-200">
-                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">רווח תפעולי</TableCell>
-                            {branches.map(br => {
-                              const op = brOP(br)
-                              return (
-                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: op >= 0 ? '#34d399' : '#fb7185' }}>
-                                  {fmtM(op)}
-                                </TableCell>
-                              )
-                            })}
-                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.operatingProfit >= 0 ? '#34d399' : '#fb7185' }}>
-                              {fmtM(totals.operatingProfit)}
-                            </TableCell>
-                          </TableRow>
+                          <tr key="overhead">
+                            <td style={{ ...cellStyle(false), textAlign: 'right' }}>העמסת מטה {overheadPct}%</td>
+                            {branches.map(br => (
+                              <td key={br.id} style={cellStyle(false, '#94a3b8')}>{fmtM(brOH(br))}</td>
+                            ))}
+                            <td style={cellStyle(true, '#0f172a')}>{fmtM(totals.overhead)}</td>
+                          </tr>
                         )
+                      }
 
-                        // KPI % rows with targets
-                        const avgLaborTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'labor_pct'), 0) / branches.length : 0
-                        const avgWasteTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'waste_pct'), 0) / branches.length : 3
+                      // Operating profit
+                      rows.push(
+                        <tr key="operatingProfit" style={{ background: '#fafafa' }}>
+                          <td style={{ ...cellStyle(true), textAlign: 'right' }}>רווח תפעולי</td>
+                          {branches.map(br => {
+                            const op = brOP(br)
+                            return <td key={br.id} style={cellStyle(true, op >= 0 ? '#34d399' : '#ef4444')}>{fmtM(op)}</td>
+                          })}
+                          <td style={cellStyle(true, totals.operatingProfit >= 0 ? '#34d399' : '#ef4444')}>{fmtM(totals.operatingProfit)}</td>
+                        </tr>
+                      )
 
-                        rows.push(
-                          <TableRow key="kpi-labor" className="border-t-2 border-slate-200 bg-slate-50">
-                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% לייבור</TableCell>
-                            {branches.map(br => {
-                              const target = getTarget(br.id, 'labor_pct')
-                              return (
-                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: target > 0 ? (br.laborPct <= target ? '#34d399' : '#fb7185') : '#334155' }}>
-                                  {br.totalRevenue > 0 ? <>{br.laborPct.toFixed(1)}% {target > 0 && <span className="text-[10px] text-slate-400 font-normal">(יעד {target}%)</span>}</> : '\u2014'}
-                                </TableCell>
-                              )
-                            })}
-                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: avgLaborTarget > 0 ? (totalLaborPct <= avgLaborTarget ? '#34d399' : '#fb7185') : '#334155' }}>
-                              {totalLaborPct.toFixed(1)}%
-                            </TableCell>
-                          </TableRow>
-                        )
+                      // KPI % rows
+                      const avgLaborTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'labor_pct'), 0) / branches.length : 0
+                      const avgWasteTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'waste_pct'), 0) / branches.length : 3
 
-                        rows.push(
-                          <TableRow key="kpi-waste" className="bg-slate-50">
-                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% פחת</TableCell>
-                            {branches.map(br => {
-                              const target = getTarget(br.id, 'waste_pct')
-                              return (
-                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: br.wastePct <= target ? '#34d399' : '#fb7185' }}>
-                                  {br.totalRevenue > 0 ? <>{br.wastePct.toFixed(1)}% <span className="text-[10px] text-slate-400 font-normal">(יעד {target}%)</span></> : '\u2014'}
-                                </TableCell>
-                              )
-                            })}
-                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totalWastePct <= avgWasteTarget ? '#34d399' : '#fb7185' }}>
-                              {totalWastePct.toFixed(1)}%
-                            </TableCell>
-                          </TableRow>
-                        )
+                      rows.push(
+                        <tr key="kpi-labor">
+                          <td style={{ ...cellStyle(true), textAlign: 'right' }}>% לייבור</td>
+                          {branches.map(br => {
+                            const target = getTarget(br.id, 'labor_pct')
+                            return (
+                              <td key={br.id} style={cellStyle(true, target > 0 ? (br.laborPct <= target ? '#34d399' : '#ef4444') : '#374151')}>
+                                {br.totalRevenue > 0 ? <>{br.laborPct.toFixed(1)}% {target > 0 && <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>(יעד {target}%)</span>}</> : '\u2014'}
+                              </td>
+                            )
+                          })}
+                          <td style={cellStyle(true, avgLaborTarget > 0 ? (totalLaborPct <= avgLaborTarget ? '#34d399' : '#ef4444') : '#374151')}>
+                            {totalLaborPct.toFixed(1)}%
+                          </td>
+                        </tr>
+                      )
 
-                        rows.push(
-                          <TableRow key="kpi-op-pct" className="bg-slate-50">
-                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">% רווח תפעולי</TableCell>
-                            {branches.map(br => {
-                              const opPct = br.totalRevenue > 0 ? (brOP(br) / br.totalRevenue * 100) : 0
-                              return (
-                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: opPct >= 0 ? '#34d399' : '#fb7185' }}>
-                                  {br.totalRevenue > 0 ? opPct.toFixed(1) + '%' : '\u2014'}
-                                </TableCell>
-                              )
-                            })}
-                            <TableCell className="px-3.5 py-2.5 text-center font-bold" style={{ color: totals.revenue > 0 ? ((totals.operatingProfit / totals.revenue * 100) >= 0 ? '#34d399' : '#fb7185') : '#94a3b8' }}>
-                              {totals.revenue > 0 ? (totals.operatingProfit / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
-                            </TableCell>
-                          </TableRow>
-                        )
+                      rows.push(
+                        <tr key="kpi-waste">
+                          <td style={{ ...cellStyle(true), textAlign: 'right' }}>% פחת</td>
+                          {branches.map(br => {
+                            const target = getTarget(br.id, 'waste_pct')
+                            return (
+                              <td key={br.id} style={cellStyle(true, br.wastePct <= target ? '#34d399' : '#ef4444')}>
+                                {br.totalRevenue > 0 ? <>{br.wastePct.toFixed(1)}% <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>(יעד {target}%)</span></> : '\u2014'}
+                              </td>
+                            )
+                          })}
+                          <td style={cellStyle(true, totalWastePct <= avgWasteTarget ? '#34d399' : '#ef4444')}>
+                            {totalWastePct.toFixed(1)}%
+                          </td>
+                        </tr>
+                      )
 
-                        // Revenue target row
-                        rows.push(
-                          <TableRow key="kpi-revenue" className="border-t-2 border-indigo-200 bg-indigo-50/30">
-                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">יעד הכנסות</TableCell>
-                            {branches.map(br => {
-                              const target = getTarget(br.id, 'revenue_target')
-                              const hit = target > 0 && br.totalRevenue >= target
-                              return (
-                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: target === 0 ? '#94a3b8' : hit ? '#34d399' : '#fb7185' }}>
-                                  {target > 0 ? <>{fmtM(br.totalRevenue)} <span className="text-[10px] text-slate-400 font-normal">/ {fmtM(target)}</span></> : '\u2014'}
-                                </TableCell>
-                              )
-                            })}
-                            <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
-                              {fmtM(totals.revenue)}
-                            </TableCell>
-                          </TableRow>
-                        )
+                      rows.push(
+                        <tr key="kpi-op-pct">
+                          <td style={{ ...cellStyle(true), textAlign: 'right' }}>% רווח תפעולי</td>
+                          {branches.map(br => {
+                            const opPct = br.totalRevenue > 0 ? (brOP(br) / br.totalRevenue * 100) : 0
+                            return <td key={br.id} style={cellStyle(true, opPct >= 0 ? '#34d399' : '#ef4444')}>{br.totalRevenue > 0 ? opPct.toFixed(1) + '%' : '\u2014'}</td>
+                          })}
+                          <td style={cellStyle(true, totals.revenue > 0 ? ((totals.operatingProfit / totals.revenue * 100) >= 0 ? '#34d399' : '#ef4444') : '#94a3b8')}>
+                            {totals.revenue > 0 ? (totals.operatingProfit / totals.revenue * 100).toFixed(1) + '%' : '\u2014'}
+                          </td>
+                        </tr>
+                      )
 
-                        // Average basket row
-                        rows.push(
-                          <TableRow key="kpi-basket" className="bg-indigo-50/30">
-                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">סל ממוצע</TableCell>
-                            {branches.map(br => {
-                              const target = getTarget(br.id, 'basket_target')
-                              const hit = target > 0 && br.avgBasket >= target
-                              return (
-                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: target === 0 ? '#94a3b8' : hit ? '#34d399' : '#fb7185' }}>
-                                  {br.avgBasket > 0 ? <>₪{Math.round(br.avgBasket)} <span className="text-[10px] text-slate-400 font-normal">(יעד ₪{target})</span></> : '\u2014'}
-                                </TableCell>
-                              )
-                            })}
-                            <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
-                              {(() => { const t = branches.reduce((s, b) => s + b.totalTransactions, 0); const r = branches.reduce((s, b) => s + b.revCashier, 0); return t > 0 ? '₪' + Math.round(r / t) : '\u2014' })()}
-                            </TableCell>
-                          </TableRow>
-                        )
+                      // Revenue target
+                      rows.push(
+                        <tr key="kpi-revenue">
+                          <td style={{ ...cellStyle(true), textAlign: 'right' }}>יעד הכנסות</td>
+                          {branches.map(br => {
+                            const target = getTarget(br.id, 'revenue_target')
+                            const hit = target > 0 && br.totalRevenue >= target
+                            return (
+                              <td key={br.id} style={cellStyle(true, target === 0 ? '#94a3b8' : hit ? '#34d399' : '#ef4444')}>
+                                {target > 0 ? <>{fmtM(br.totalRevenue)} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>/ {fmtM(target)}</span></> : '\u2014'}
+                              </td>
+                            )
+                          })}
+                          <td style={cellStyle(true, '#0f172a')}>{fmtM(totals.revenue)}</td>
+                        </tr>
+                      )
 
-                        // Daily transactions row
-                        rows.push(
-                          <TableRow key="kpi-transactions" className="bg-indigo-50/30">
-                            <TableCell className="px-3.5 py-2.5 font-bold text-slate-700">עסקאות יומי (ממוצע)</TableCell>
-                            {branches.map(br => {
-                              const target = getTarget(br.id, 'transaction_target')
-                              const hit = target > 0 && br.avgDailyTransactions >= target
-                              return (
-                                <TableCell key={br.id} className="px-3.5 py-2.5 text-center font-bold" style={{ color: target === 0 ? '#94a3b8' : hit ? '#34d399' : '#fb7185' }}>
-                                  {br.avgDailyTransactions > 0 ? <>{Math.round(br.avgDailyTransactions)} <span className="text-[10px] text-slate-400 font-normal">(יעד {target})</span></> : '\u2014'}
-                                </TableCell>
-                              )
-                            })}
-                            <TableCell className="px-3.5 py-2.5 text-center font-bold text-slate-900">
-                              {Math.round(branches.reduce((s, b) => s + b.avgDailyTransactions, 0))}
-                            </TableCell>
-                          </TableRow>
-                        )
+                      // Average basket
+                      rows.push(
+                        <tr key="kpi-basket">
+                          <td style={{ ...cellStyle(true), textAlign: 'right' }}>סל ממוצע</td>
+                          {branches.map(br => {
+                            const target = getTarget(br.id, 'basket_target')
+                            const hit = target > 0 && br.avgBasket >= target
+                            return (
+                              <td key={br.id} style={cellStyle(true, target === 0 ? '#94a3b8' : hit ? '#34d399' : '#ef4444')}>
+                                {br.avgBasket > 0 ? <>{'\u20AA'}{Math.round(br.avgBasket)} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>(יעד {'\u20AA'}{target})</span></> : '\u2014'}
+                              </td>
+                            )
+                          })}
+                          <td style={cellStyle(true, '#0f172a')}>
+                            {(() => { const t = branches.reduce((s, b) => s + b.totalTransactions, 0); const r = branches.reduce((s, b) => s + b.revCashier, 0); return t > 0 ? '\u20AA' + Math.round(r / t) : '\u2014' })()}
+                          </td>
+                        </tr>
+                      )
 
-                        return rows
-                      })()}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+                      // Daily transactions
+                      rows.push(
+                        <tr key="kpi-transactions">
+                          <td style={{ ...cellStyle(true), textAlign: 'right' }}>עסקאות יומי (ממוצע)</td>
+                          {branches.map(br => {
+                            const target = getTarget(br.id, 'transaction_target')
+                            const hit = target > 0 && br.avgDailyTransactions >= target
+                            return (
+                              <td key={br.id} style={cellStyle(true, target === 0 ? '#94a3b8' : hit ? '#34d399' : '#ef4444')}>
+                                {br.avgDailyTransactions > 0 ? <>{Math.round(br.avgDailyTransactions)} <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>(יעד {target})</span></> : '\u2014'}
+                              </td>
+                            )
+                          })}
+                          <td style={cellStyle(true, '#0f172a')}>
+                            {Math.round(branches.reduce((s, b) => s + b.avgDailyTransactions, 0))}
+                          </td>
+                        </tr>
+                      )
+
+                      return rows
+                    })()}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </motion.div>
 

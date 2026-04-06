@@ -3,10 +3,7 @@ import { motion } from 'framer-motion'
 import { supabase, fetchBranchRevenueTrend, BranchRevenueTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { ArrowRight, Plus, Pencil, Trash2, Search, X, ShoppingBag, CreditCard, Monitor, Upload, FileText, Check, AlertCircle, HelpCircle } from 'lucide-react'
-import { RevenueIcon } from '@/components/icons'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { parseCashOnTabPDF, CashOnTabRow } from '../lib/parseCashOnTab'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
@@ -249,79 +246,82 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   }
 
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      {/* כותרת + 4 כרטיסי סיכום */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div style={{ width: '38px', height: '38px', background: branchColor + '20', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <RevenueIcon size={18} color={branchColor} />
-        </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>הכנסות — {branchName}</h1>
-          <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>קופה · אתר · הקפה · ללא מע״מ</p>
-        </div>
-
-        {/* PeriodPicker + 4 כרטיסי סיכום בכותרת */}
-        <div style={{ marginRight: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
-            <button onClick={() => { setPdfSheetOpen(true); setPdfRows([]); setPdfResult(null) }}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-              <Upload size={15} /> העלאת PDF קופה
-            </button>
-            <div style={{ position: 'relative' }}>
-              <button onClick={() => setHelpOpen(p => !p)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
-                <HelpCircle size={18} color="#94a3b8" />
-              </button>
-              {helpOpen && (
-                <>
-                  <div onClick={() => setHelpOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-                  <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: '8px', width: '320px', background: 'white', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0', padding: '16px', zIndex: 50, direction: 'rtl' }}>
-                    <div style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a', marginBottom: '12px' }}>איך להוריד את הקובץ מ-CashOnTab?</div>
-                    {[
-                      'היכנס למערכת CashOnTab של הסניף',
-                      'בתפריט הימני לחץ על "דוחות מכירות"',
-                      'בשדה "מחזור מכירות" בחר "דוח מכירות יומי"',
-                      'ב"רשימת קופות" — סמן את כל הקופות של הסניף',
-                      'בחר את טווח התאריכים הרצוי',
-                      'ב"בחר פורמט" בחר PDF',
-                      'לחץ "הפק דו״ח" ושמור את הקובץ',
-                      'חזור לכאן והעלה את הקובץ',
-                    ].map((step, i) => (
-                      <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px', fontSize: '13px', color: '#374151', lineHeight: '1.5' }}>
-                        <span style={{ background: '#818cf8', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0, marginTop: '1px' }}>{i + 1}</span>
-                        <span>{step}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+      {/* Header */}
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: '12px' }}>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>הכנסות</h1>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
           </div>
-          <PeriodPicker period={period} onChange={setPeriod} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
+              <button onClick={() => { setPdfSheetOpen(true); setPdfRows([]); setPdfResult(null) }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                <Upload size={15} /> העלאת PDF קופה
+              </button>
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setHelpOpen(p => !p)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
+                  <HelpCircle size={18} color="#94a3b8" />
+                </button>
+                {helpOpen && (
+                  <>
+                    <div onClick={() => setHelpOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                    <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: '8px', width: '320px', background: 'white', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0', padding: '16px', zIndex: 50, direction: 'rtl' }}>
+                      <div style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a', marginBottom: '12px' }}>איך להוריד את הקובץ מ-CashOnTab?</div>
+                      {[
+                        'היכנס למערכת CashOnTab של הסניף',
+                        'בתפריט הימני לחץ על "דוחות מכירות"',
+                        'בשדה "מחזור מכירות" בחר "דוח מכירות יומי"',
+                        'ב"רשימת קופות" — סמן את כל הקופות של הסניף',
+                        'בחר את טווח התאריכים הרצוי',
+                        'ב"בחר פורמט" בחר PDF',
+                        'לחץ "הפק דו״ח" ושמור את הקובץ',
+                        'חזור לכאן והעלה את הקובץ',
+                      ].map((step, i) => (
+                        <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px', fontSize: '13px', color: '#374151', lineHeight: '1.5' }}>
+                          <span style={{ background: '#6366f1', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0, marginTop: '1px' }}>{i + 1}</span>
+                          <span>{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <PeriodPicker period={period} onChange={setPeriod} />
+            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
+              <ArrowRight size={14} style={{ verticalAlign: 'middle', marginLeft: 4 }} />
+              חזרה
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI summary cards */}
+      <div style={{ padding: '0 20px', maxWidth: '1000px', margin: '0 auto 16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
           {[
             { label: 'קופה',  val: totalCashier, color: '#818cf8' },
             { label: 'אתר',   val: totalWebsite, color: '#c084fc' },
             { label: 'הקפה',  val: totalCredit,  color: '#fbbf24' },
-            { label: 'סה"כ',  val: totalRevenue, color: branchColor },
+            { label: 'סה"כ',  val: totalRevenue, color: '#0f172a' },
           ].map(s => (
-            <div key={s.label} style={{ background: s.color + '12', border: `1.5px solid ${s.color}30`, borderRadius: '10px', padding: '6px 14px', textAlign: 'center' as const, minWidth: '80px' }}>
-              <div style={{ fontSize: '15px', fontWeight: '800', color: s.color }}>₪{Math.round(s.val).toLocaleString()}</div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>{s.label}</div>
+            <div key={s.label} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px', textAlign: 'center' as const }}>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: s.color }}>₪{Math.round(s.val).toLocaleString()}</div>
+              <div style={{ fontSize: '12px', color: '#94a3b8' }}>{s.label}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* טאבים — 3 נפרדים */}
-      <div style={{ display: 'flex', padding: '0 32px', background: 'white', borderBottom: '1px solid #e2e8f0' }}>
+      {/* Underline tabs */}
+      <div style={{ display: 'flex', padding: '0 20px', maxWidth: '1000px', margin: '0 auto', borderBottom: '1px solid #f1f5f9' }}>
         {(Object.entries(SOURCE_CONFIG) as [Source, any][]).map(([key, c]) => (
           <button key={key} onClick={() => setTab(key)}
-            style={{ padding: '13px 22px', background: 'none', border: 'none', borderBottom: tab === key ? `3px solid ${c.color}` : '3px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: tab === key ? '700' : '500', color: tab === key ? c.color : '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            style={{ padding: '12px 22px', background: 'none', border: 'none', borderBottom: tab === key ? '2px solid #0f172a' : '2px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: tab === key ? '700' : '500', color: tab === key ? '#0f172a' : '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <c.Icon size={15} />{c.label}
           </button>
         ))}
@@ -332,7 +332,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         )}
       </div>
 
-      <div className="page-container" style={{ padding: '20px 32px', maxWidth: '1000px', margin: '0 auto' }}>
+      <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto' }}>
 
         {/* חיפוש */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
@@ -348,8 +348,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
         {/* טופס הזנה */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
-        <Card className="shadow-sm mb-5" style={{ borderTop: `3px solid ${cfg.color}` }}>
-          <CardContent className="p-6">
+        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px', marginBottom: 16 }}>
           <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת {cfg.label}</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
 
@@ -400,19 +399,17 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
           <button onClick={addEntry}
             disabled={loading || !amount || (tab === 'credit' && !customer)}
-            style={{ background: loading || !amount || (tab === 'credit' && !customer) ? '#e2e8f0' : cfg.color, color: loading || !amount || (tab === 'credit' && !customer) ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            style={{ background: loading || !amount || (tab === 'credit' && !customer) ? '#e2e8f0' : '#6366f1', color: loading || !amount || (tab === 'credit' && !customer) ? '#94a3b8' : 'white', border: 'none', borderRadius: 8, padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Plus size={18} />הוסף
           </button>
-          </CardContent>
-        </Card>
+        </div>
         </motion.div>
 
         {/* טבלת רשומות */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
         <div className="table-scroll">
-        <Card className="shadow-sm mb-4">
-          <CardContent className="p-0">
-          <div style={{ display: 'grid', gridTemplateColumns: tab === 'credit' ? '110px 1fr 110px 130px 36px 36px' : '110px 1fr 80px 130px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: tab === 'credit' ? '110px 1fr 110px 130px 36px 36px' : '110px 1fr 80px 130px 36px 36px', padding: '10px 20px', borderBottom: '1px solid #f1f5f9', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
             <span>תאריך</span>
             <span>{tab === 'credit' ? 'לקוח' : 'הערות'}</span>
             <span style={{ textAlign: 'center' }}>{tab === 'credit' ? 'תעודה' : 'עסקאות'}</span>
@@ -423,16 +420,18 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
           {filtered.length === 0 ? (
             <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין רשומות לחודש זה</div>
           ) : filtered.map((entry, i) => (
-            <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: tab === 'credit' ? '110px 1fr 110px 130px 36px 36px' : '110px 1fr 80px 130px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < filtered.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+            <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: tab === 'credit' ? '110px 1fr 110px 130px 36px 36px' : '110px 1fr 80px 130px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid #f8fafc' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
               {editId === entry.id ? (
                 <>
-                  <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
+                  <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid #6366f1', borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
                   {tab === 'credit'
-                    ? <AutocompleteInput value={editData.customer || ''} onChange={v => setEditData({ ...editData, customer: v })} suggestions={creditCustomers} placeholder="לקוח" color={cfg.color} />
-                    : <input type="text" value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 8px', fontSize: '13px', fontFamily: 'inherit' }} />
+                    ? <AutocompleteInput value={editData.customer || ''} onChange={v => setEditData({ ...editData, customer: v })} suggestions={creditCustomers} placeholder="לקוח" color="#6366f1" />
+                    : <input type="text" value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} style={{ border: '1px solid #6366f1', borderRadius: '6px', padding: '4px 8px', fontSize: '13px', fontFamily: 'inherit' }} />
                   }
-                  <input type={tab === 'credit' ? 'text' : 'number'} value={tab === 'credit' ? (editData.doc_number || '') : (editData.transaction_count || '')} onChange={e => setEditData({ ...editData, ...(tab === 'credit' ? { doc_number: e.target.value } : { transaction_count: parseInt(e.target.value) }) })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 8px', fontSize: '12px', textAlign: 'center' as const }} />
-                  <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
+                  <input type={tab === 'credit' ? 'text' : 'number'} value={tab === 'credit' ? (editData.doc_number || '') : (editData.transaction_count || '')} onChange={e => setEditData({ ...editData, ...(tab === 'credit' ? { doc_number: e.target.value } : { transaction_count: parseInt(e.target.value) }) })} style={{ border: '1px solid #6366f1', borderRadius: '6px', padding: '4px 8px', fontSize: '12px', textAlign: 'center' as const }} />
+                  <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid #6366f1', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
                   <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                   <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                 </>
@@ -441,7 +440,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                   <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(entry.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
                   <div><div style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{tab === 'credit' ? (entry.customer || '—') : (entry.notes || '—')}</div></div>
                   <span style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'center' }}>{tab === 'credit' ? (entry.doc_number || '—') : (entry.transaction_count || '—')}</span>
-                  <span style={{ fontWeight: '800', color: cfg.color, fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString()}</span>
+                  <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>₪{Number(entry.amount).toLocaleString()}</span>
                   <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
                   <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
                 </>
@@ -450,13 +449,12 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
           ))}
 
           {filtered.length > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', background: cfg.bg, borderTop: `2px solid ${cfg.color}33`, borderRadius: '0 0 20px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid #f1f5f9' }}>
               <span style={{ fontWeight: '700', color: '#374151', fontSize: '14px' }}>סה"כ — {filtered.length} רשומות</span>
-              <span style={{ fontWeight: '800', color: cfg.color, fontSize: '18px' }}>₪{tabTotal.toLocaleString()}</span>
+              <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '18px' }}>₪{tabTotal.toLocaleString()}</span>
             </div>
           )}
-          </CardContent>
-        </Card>
+        </div>
         </div>
         </motion.div>
 
@@ -464,32 +462,34 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         {dailySummary.length > 0 && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
           <div className="table-scroll">
-          <Card className="shadow-sm">
-            <CardContent className="p-6">
-            <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>📅 סיכום יומי — כל המקורות</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr 110px 70px', padding: '9px 18px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ padding: '16px 18px 0' }}>
+              <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>סיכום יומי — כל המקורות</h3>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr 110px 70px', padding: '9px 18px', borderBottom: '1px solid #f1f5f9', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
               <span>תאריך</span><span>קופה</span><span>אתר</span><span>הקפה</span><span>סה"כ</span><span style={{ textAlign: 'center' }}>עסקאות</span>
             </div>
             {dailySummary.map((day: any, i: number) => (
-              <div key={day.date} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr 110px 70px', padding: '11px 18px', borderBottom: i < dailySummary.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa', alignItems: 'center' }}>
+              <div key={day.date} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr 110px 70px', padding: '11px 18px', borderBottom: '1px solid #f8fafc', alignItems: 'center' }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
                 <span style={{ fontSize: '13px', color: '#374151', fontWeight: '600' }}>{new Date(day.date + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })}</span>
                 <span style={{ color: '#818cf8', fontWeight: '600', fontSize: '13px' }}>{day.cashier > 0 ? '₪' + day.cashier.toLocaleString() : '—'}</span>
                 <span style={{ color: '#c084fc', fontWeight: '600', fontSize: '13px' }}>{day.website > 0 ? '₪' + day.website.toLocaleString() : '—'}</span>
                 <span style={{ color: '#fbbf24', fontWeight: '600', fontSize: '13px' }}>{day.credit > 0 ? '₪' + day.credit.toLocaleString() : '—'}</span>
-                <span style={{ fontWeight: '800', color: branchColor, fontSize: '14px' }}>₪{day.total.toLocaleString()}</span>
+                <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>₪{day.total.toLocaleString()}</span>
                 <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{day.transactions || '—'}</span>
               </div>
             ))}
-            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr 110px 70px', padding: '12px 18px', background: branchColor + '15', borderTop: `2px solid ${branchColor}33`, borderRadius: '0 0 20px 20px', fontWeight: '800' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr 110px 70px', padding: '12px 18px', borderTop: '1px solid #f1f5f9', fontWeight: '700' }}>
               <span style={{ color: '#374151', fontSize: '13px' }}>סה"כ</span>
               <span style={{ color: '#818cf8' }}>₪{totalCashier.toLocaleString()}</span>
               <span style={{ color: '#c084fc' }}>₪{totalWebsite.toLocaleString()}</span>
               <span style={{ color: '#fbbf24' }}>₪{totalCredit.toLocaleString()}</span>
-              <span style={{ color: branchColor, fontSize: '15px' }}>₪{totalRevenue.toLocaleString()}</span>
+              <span style={{ color: '#0f172a', fontSize: '15px' }}>₪{totalRevenue.toLocaleString()}</span>
               <span style={{ textAlign: 'center', color: '#64748b' }}>{totalTx || '—'}</span>
             </div>
-            </CardContent>
-          </Card>
+          </div>
           </div>
           </motion.div>
         )}
@@ -497,8 +497,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         {/* מגמת 6 חודשים */}
         {trendData.length > 0 && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-          <Card className="shadow-sm mt-4">
-            <CardContent className="p-6">
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px', marginTop: 16 }}>
               <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>מגמת 6 חודשים — הכנסות</h3>
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={trendData}>
@@ -513,8 +512,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                   <Line type="monotone" dataKey="total" name="סה״כ" stroke={branchColor} strokeWidth={2.5} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
+          </div>
           </motion.div>
         )}
 

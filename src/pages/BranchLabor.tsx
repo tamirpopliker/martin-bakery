@@ -3,10 +3,7 @@ import { motion } from 'framer-motion'
 import { supabase, fetchBranchLaborTrend, BranchLaborTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { ArrowRight, Plus, Pencil, Trash2, CheckCircle, AlertTriangle, FileText, Eye, HelpCircle, BarChart3 } from 'lucide-react'
-import { LaborIcon } from '@/components/icons'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts'
 import { parseWorkingHoursPDF } from '../lib/parseWorkingHours'
 
@@ -711,59 +708,59 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   const statusBorder = uploadStatus === 'error' ? '#fecaca' : '#bbf7d0'
 
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      {/* כותרת */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div style={{ width: '40px', height: '40px', background: branchColor + '20', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <LaborIcon size={20} color={branchColor} />
-        </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>לייבור — {branchName}</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>העלאת CashOnTab · הזנה ידנית · עלות מעסיק ×1.3</p>
-        </div>
-        <div style={{ marginRight: 'auto', display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <PeriodPicker period={period} onChange={setPeriod} />
-          <div style={{ background: kpiOk ? '#f0fdf4' : '#fef2f2', border: `1px solid ${kpiOk ? '#bbf7d0' : '#fecaca'}`, borderRadius: '10px', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {kpiOk ? <CheckCircle size={16} color="#34d399" /> : <AlertTriangle size={16} color="#fb7185" />}
-            <div>
-              <div style={{ fontSize: '15px', fontWeight: '800', color: kpiOk ? '#34d399' : '#fb7185' }}>{laborPct.toFixed(1)}%</div>
-              <div style={{ fontSize: '10px', color: '#64748b' }}>לייבור/הכנסות{laborTargetPct > 0 ? ` · יעד ${laborTargetPct}%` : ''}</div>
-            </div>
+      {/* Header */}
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: '12px' }}>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>לייבור</h1>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
           </div>
-          <div style={{ background: branchColor + '15', border: `1px solid ${branchColor}33`, borderRadius: '10px', padding: '8px 14px', textAlign: 'center' }}>
-            <div style={{ fontSize: '16px', fontWeight: '800', color: branchColor }}>₪{Math.round(totalEmployer).toLocaleString()}</div>
-            <div style={{ fontSize: '11px', color: '#64748b' }}>עלות מעסיק</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const }}>
+            <PeriodPicker period={period} onChange={setPeriod} />
+            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
+              <ArrowRight size={14} style={{ verticalAlign: 'middle', marginLeft: 4 }} />
+              חזרה
+            </button>
           </div>
         </div>
       </div>
 
-      {/* טאבים */}
-      <div className="flex px-8 bg-white border-b border-slate-200">
+      {/* KPI bar */}
+      <div style={{ padding: '0 20px', maxWidth: '1000px', margin: '0 auto 16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px', textAlign: 'center' as const }}>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: kpiOk ? '#34d399' : '#fb7185' }}>{laborPct.toFixed(1)}%</div>
+            <div style={{ fontSize: '12px', color: '#94a3b8' }}>לייבור/הכנסות{laborTargetPct > 0 ? ` · יעד ${laborTargetPct}%` : ''}</div>
+          </div>
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px', textAlign: 'center' as const }}>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a' }}>₪{Math.round(totalEmployer).toLocaleString()}</div>
+            <div style={{ fontSize: '12px', color: '#94a3b8' }}>עלות מעסיק</div>
+          </div>
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px', textAlign: 'center' as const }}>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a' }}>₪{Math.round(totalGross).toLocaleString()}</div>
+            <div style={{ fontSize: '12px', color: '#94a3b8' }}>ברוטו</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Underline tabs */}
+      <div style={{ display: 'flex', padding: '0 20px', maxWidth: '1000px', margin: '0 auto', borderBottom: '1px solid #f1f5f9' }}>
         {(['upload','manual','history','daily_report'] as const).map(key => (
           <button key={key} onClick={() => setTab(key)}
-            className={`px-5 py-3.5 bg-transparent border-0 border-b-[3px] cursor-pointer text-sm transition-colors ${
-              tab === key
-                ? 'font-bold border-current'
-                : 'font-medium border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-            style={{ color: tab === key ? branchColor : undefined }}>
+            style={{ padding: '12px 20px', background: 'none', border: 'none', borderBottom: tab === key ? '2px solid #0f172a' : '2px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: tab === key ? '700' : '500', color: tab === key ? '#0f172a' : '#94a3b8' }}>
             {key === 'upload' ? 'העלאת CashOnTab' : key === 'manual' ? 'הזנה ידנית' : key === 'history' ? 'היסטוריה' : 'דוח יומי'}
           </button>
         ))}
       </div>
 
-      <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1000px', margin: '0 auto' }}>
+      <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto' }}>
 
         {/* ══ העלאת PDF ════════════════════════════════════════════════════ */}
         {tab === 'upload' && (
           <>
-            <Card className="shadow-sm mb-5">
-              <CardContent className="p-6">
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px', marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                   <h2 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#374151' }}>העלאת דוח שעות CashOnTab</h2>
                   <div style={{ position: 'relative' }}>
@@ -848,8 +845,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+            </div>
 
             {/* ── טבלת אישור ── */}
             {uploadStatus === 'confirm' && parsedRows.length > 0 && (() => {
@@ -874,8 +870,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
               return (
               <motion.div variants={fadeIn} initial="hidden" animate="visible">
                 <div className="table-scroll">
-                  <Card className="shadow-sm">
-                    <CardContent className="p-6">
+                  <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                         <div>
                           <h3 style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>
@@ -964,40 +959,36 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                       </div>
 
                       <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                        <Button variant="ghost" onClick={() => { setParsedRows([]); setUploadStatus('idle'); setUploadMsg('') }}
-                          className="rounded-xl px-5 text-sm font-semibold text-slate-500">
+                        <button onClick={() => { setParsedRows([]); setUploadStatus('idle'); setUploadMsg('') }}
+                          style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 18px', fontSize: '14px', fontWeight: '600', color: '#64748b', cursor: 'pointer' }}>
                           ביטול
-                        </Button>
+                        </button>
                         <button onClick={saveSelected} disabled={loading || parsedRows.filter(r => r.selected).length === 0 || (isDetailedMode && parsedRows.some(r => r.selected && r.hourly_rate <= 0))}
                           style={{ background: (loading || (isDetailedMode && parsedRows.some(r => r.selected && r.hourly_rate <= 0))) ? '#e2e8f0' : '#34d399', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <CheckCircle size={16} />שמור {parsedRows.filter(r => r.selected).length} עובדים
                         </button>
                       </div>
-                    </CardContent>
-                  </Card>
+                  </div>
                 </div>
               </motion.div>
               ) })()}
 
             {uploadStatus === 'done' && (
-              <Card className="shadow-sm">
-                <CardContent className="p-10 text-center">
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '40px', textAlign: 'center' }}>
                   <CheckCircle size={44} color="#34d399" style={{ marginBottom: '10px' }} />
                   <h3 style={{ margin: '0 0 8px', color: '#0f172a' }}>{uploadMsg}</h3>
                   <button onClick={() => { setUploadStatus('idle'); setUploadMsg(''); setTab('history') }}
-                    style={{ background: branchColor, color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', marginTop: '10px' }}>
+                    style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', marginTop: '10px' }}>
                     ראה היסטוריה
                   </button>
-                </CardContent>
-              </Card>
+              </div>
             )}
           </>
         )}
 
         {/* ══ הזנה ידנית ══════════════════════════════════════════════════ */}
         {tab === 'manual' && (
-          <Card className="shadow-sm">
-            <CardContent className="p-6">
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px' }}>
               <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת לייבור ידני</h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column' as const }}>
@@ -1030,11 +1021,10 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                 </div>
               )}
               <button onClick={addManual} disabled={loading || !manName || !manGross}
-                style={{ background: loading || !manName || !manGross ? '#e2e8f0' : branchColor, color: loading || !manName || !manGross ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                style={{ background: loading || !manName || !manGross ? '#e2e8f0' : '#6366f1', color: loading || !manName || !manGross ? '#94a3b8' : 'white', border: 'none', borderRadius: 8, padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Plus size={18} />הוסף
               </button>
-            </CardContent>
-          </Card>
+          </div>
         )}
 
         {/* ══ היסטוריה ════════════════════════════════════════════════════ */}
@@ -1049,9 +1039,8 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
             </div>
             <motion.div variants={fadeIn} initial="hidden" animate="visible">
               <div className="table-scroll">
-                <Card className="shadow-sm">
-                  <CardContent className="p-0">
-                    <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', padding: '10px 20px', borderBottom: '1px solid #f1f5f9', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
                       <span>תאריך</span><span>עובד</span>
                       <span style={{ textAlign: 'center' }}>שעות</span>
                       <span>ברוטו</span><span>עלות מעסיק</span>
@@ -1060,7 +1049,10 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                     {entries.length === 0 ? (
                       <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין רשומות לחודש זה</div>
                     ) : entries.map((entry, i) => (
-                      <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < entries.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                      <div key={entry.id}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+                        style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid #f8fafc' }}>
                         {editId === entry.id ? (
                           <>
                             <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
@@ -1088,17 +1080,16 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                       </div>
                     ))}
                     {entries.length > 0 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', padding: '13px 20px', background: branchColor + '15', borderTop: `2px solid ${branchColor}33`, borderRadius: '0 0 20px 20px', fontWeight: '700' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 70px 110px 120px 36px 36px', padding: '13px 20px', borderTop: '1px solid #f1f5f9', fontWeight: '700' }}>
                         <span style={{ color: '#374151', fontSize: '13px' }}>סה"כ</span>
                         <span style={{ color: '#64748b', fontSize: '13px' }}>{entries.length} רשומות</span>
                         <span style={{ textAlign: 'center', color: '#64748b', fontSize: '13px' }}>{totalHours.toFixed(1)}</span>
-                        <span style={{ color: branchColor }}>₪{Math.round(totalGross).toLocaleString()}</span>
+                        <span style={{ color: '#0f172a' }}>₪{Math.round(totalGross).toLocaleString()}</span>
                         <span style={{ color: '#fb7185' }}>₪{Math.round(totalEmployer).toLocaleString()}</span>
                         <span /><span />
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                </div>
               </div>
             </motion.div>
           </>
@@ -1114,31 +1105,31 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
             ) : (
               <>
                 {/* Summary cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                   {[
-                    { label: 'עלות גולמית', value: dailyData.reduce((s, d) => s + d.gross, 0), color: branchColor },
+                    { label: 'עלות גולמית', value: dailyData.reduce((s, d) => s + d.gross, 0), color: '#0f172a' },
                     { label: 'עלות מעסיק', value: dailyData.reduce((s, d) => s + d.employer, 0), color: '#fb7185' },
                     { label: 'ממוצע יומי (מעסיק)', value: dailyData.reduce((s, d) => s + d.employer, 0) / dailyData.length, color: '#818cf8' },
                   ].map(c => (
-                    <Card key={c.label} className="shadow-sm">
-                      <CardContent className="p-4 text-center">
-                        <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>{c.label}</div>
-                        <div style={{ fontSize: '20px', fontWeight: '800', color: c.color }}>₪{Math.round(c.value).toLocaleString()}</div>
-                      </CardContent>
-                    </Card>
+                    <div key={c.label} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>{c.label}</div>
+                        <div style={{ fontSize: '24px', fontWeight: '700', color: c.color }}>₪{Math.round(c.value).toLocaleString()}</div>
+                    </div>
                   ))}
                 </div>
 
                 {/* Daily table */}
-                <Card className="shadow-sm mb-4">
-                  <CardContent className="p-0">
-                    <div style={{ display: 'grid', gridTemplateColumns: '100px 60px 70px 70px 70px 100px 110px', padding: '10px 16px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '100px 60px 70px 70px 70px 100px 110px', padding: '10px 16px', borderBottom: '1px solid #f1f5f9', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
                       <span>תאריך</span><span style={{ textAlign: 'center' }}>עובדים</span>
                       <span style={{ textAlign: 'center' }}>100%</span><span style={{ textAlign: 'center' }}>125%</span><span style={{ textAlign: 'center' }}>150%</span>
                       <span style={{ textAlign: 'left' }}>גולמי</span><span style={{ textAlign: 'left' }}>מעסיק</span>
                     </div>
                     {dailyData.map((d, i) => (
-                      <div key={d.date} style={{ display: 'grid', gridTemplateColumns: '100px 60px 70px 70px 70px 100px 110px', padding: '10px 16px', borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? 'white' : '#fafafa', alignItems: 'center', fontSize: '13px' }}>
+                      <div key={d.date}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+                        style={{ display: 'grid', gridTemplateColumns: '100px 60px 70px 70px 70px 100px 110px', padding: '10px 16px', borderBottom: '1px solid #f8fafc', alignItems: 'center', fontSize: '13px' }}>
                         <span style={{ color: '#374151', fontWeight: '600' }}>{new Date(d.date + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })}</span>
                         <span style={{ textAlign: 'center', color: '#64748b' }}>{d.employees}</span>
                         <span style={{ textAlign: 'center', color: '#64748b' }}>{d.hours100 > 0 ? d.hours100.toFixed(1) : '—'}</span>
@@ -1148,17 +1139,16 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                         <span style={{ fontWeight: '700', color: '#fb7185' }}>₪{Math.round(d.employer).toLocaleString()}</span>
                       </div>
                     ))}
-                    <div style={{ display: 'grid', gridTemplateColumns: '100px 60px 70px 70px 70px 100px 110px', padding: '12px 16px', background: branchColor + '15', borderTop: `2px solid ${branchColor}33`, borderRadius: '0 0 10px 10px', fontWeight: '700', fontSize: '13px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '100px 60px 70px 70px 70px 100px 110px', padding: '12px 16px', borderTop: '1px solid #f1f5f9', fontWeight: '700', fontSize: '13px' }}>
                       <span style={{ color: '#374151' }}>סה"כ</span>
                       <span style={{ textAlign: 'center', color: '#64748b' }}>{dailyData.reduce((s, d) => s + d.employees, 0)}</span>
                       <span style={{ textAlign: 'center', color: '#64748b' }}>{dailyData.reduce((s, d) => s + d.hours100, 0).toFixed(1)}</span>
                       <span style={{ textAlign: 'center', color: '#64748b' }}>{dailyData.reduce((s, d) => s + d.hours125, 0).toFixed(1)}</span>
                       <span style={{ textAlign: 'center', color: '#64748b' }}>{dailyData.reduce((s, d) => s + d.hours150, 0).toFixed(1)}</span>
-                      <span style={{ color: branchColor }}>₪{Math.round(dailyData.reduce((s, d) => s + d.gross, 0)).toLocaleString()}</span>
+                      <span style={{ color: '#0f172a' }}>₪{Math.round(dailyData.reduce((s, d) => s + d.gross, 0)).toLocaleString()}</span>
                       <span style={{ color: '#fb7185' }}>₪{Math.round(dailyData.reduce((s, d) => s + d.employer, 0)).toLocaleString()}</span>
                     </div>
-                  </CardContent>
-                </Card>
+                </div>
 
                 {/* Chart */}
                 <Card className="shadow-sm">

@@ -2,12 +2,10 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
-import { ArrowRight, Settings, Save, Plus, Pencil, Trash2, Users, Target, DollarSign, Database } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { ArrowRight, Save, Plus, Pencil, Trash2 } from 'lucide-react'
 import DataImport from './DataImport'
 
-// ─── טיפוסים ────────────────────────────────────────────────────────────────
+// ─── types ────────────────────────────────────────────────────────────────
 interface Props {
   branchId: number
   branchName: string
@@ -47,7 +45,7 @@ function fmtM(n: number) { return '₪' + Math.round(n || 0).toLocaleString() }
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
-// ─── קומפוננטה ────────────────────────────────────────────────────────────────
+// ─── component ────────────────────────────────────────────────────────────────
 export default function BranchSettings({ branchId, branchName, branchColor, onBack }: Props) {
   const { appUser } = useAppUser()
   const isAdmin = appUser?.role === 'admin'
@@ -62,7 +60,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
   const [kpi, setKpi] = useState<BranchKpi>({ branch_id: branchId, labor_pct: 0, waste_pct: 3, revenue_target: 0, basket_target: 0, transaction_target: 0 })
   const [kpiSaved, setKpiSaved] = useState(false)
 
-  // ── עלויות קבועות ──
+  // ── fixed costs ──
   const [costs, setCosts]             = useState<FixedCost[]>([])
   const [costMonth, setCostMonth]     = useState(new Date().toISOString().slice(0, 7))
   const [newCostName, setNewCostName] = useState('')
@@ -71,7 +69,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
   const [editCostData, setEditCostData] = useState<Partial<FixedCost>>({})
   const [loadingCost, setLoadingCost] = useState(false)
 
-  // ── עובדים ──
+  // ── employees ──
   const [employees, setEmployees] = useState<BranchEmployee[]>([])
   const [newEmpName, setNewEmpName] = useState('')
   const [editEmpId, setEditEmpId] = useState<number | null>(null)
@@ -80,7 +78,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
 
   const entityType = `branch_${branchId}`
 
-  // ─── שליפות ──────────────────────────────────────────────────────────────
+  // ─── fetches ──────────────────────────────────────────────────────────────
   async function fetchKpi() {
     const { data } = await supabase.from('branch_kpi_targets').select('*').eq('branch_id', branchId).maybeSingle()
     if (data) setKpi(data)
@@ -112,7 +110,6 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
       .select().single()
     if (error) {
       console.error('saveKpi error:', error)
-      // Fallback: try update then insert
       if (kpi.id) {
         await supabase.from('branch_kpi_targets').update({
           labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct, revenue_target: kpi.revenue_target,
@@ -129,7 +126,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
     setTimeout(() => setKpiSaved(false), 2000)
   }
 
-  // ─── עלויות קבועות CRUD ───────────────────────────────────────────────────
+  // ─── fixed costs CRUD ───────────────────────────────────────────────────
   async function addCost() {
     if (!newCostName || !newCostAmt) return
     setLoadingCost(true)
@@ -166,7 +163,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
     setLoadingCost(false)
   }
 
-  // ─── עובדים CRUD ──────────────────────────────────────────────────────────
+  // ─── employees CRUD ──────────────────────────────────────────────────────
   async function addEmployee() {
     const name = newEmpName.trim()
     if (!name) return
@@ -193,301 +190,282 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
     await fetchEmployees()
   }
 
-  // ─── חישובים ──────────────────────────────────────────────────────────────
+  // ─── calculations ──────────────────────────────────────────────────────
   const totalCosts = costs.reduce((s, c) => s + Number(c.amount), 0)
   const activeEmps = employees.filter(e => e.active)
 
-  // ─── סגנונות ──────────────────────────────────────────────────────────────
+  // ─── styles ──────────────────────────────────────────────────────────────
   const S = {
-    label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
-    input: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
+    label: { fontSize: 13, fontWeight: 600 as const, color: '#64748b', marginBottom: 6, display: 'block' as const },
+    input: { border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const, background: 'white' },
   }
 
-  return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+  const tabItems: { key: Tab; label: string }[] = [
+    { key: 'kpi', label: 'יעדי KPI' },
+    { key: 'costs', label: 'עלויות קבועות' },
+    { key: 'employees', label: 'עובדים' },
+    { key: 'import', label: 'ייבוא נתונים' },
+  ]
 
-      {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div style={{ width: '40px', height: '40px', background: branchColor + '20', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Settings size={20} color={branchColor} />
-        </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>הגדרות סניף — {branchName}</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>יעדי KPI · עלויות קבועות · עובדים</p>
+  return (
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
+
+      {/* Header */}
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>הגדרות סניף</h1>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
+          </div>
+          <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ArrowRight size={14} /> חזרה</span>
+          </button>
         </div>
       </div>
 
-      {/* ─── טאבים ───────────────────────────────────────────────────────── */}
-      <div className="flex px-8 bg-white border-b border-slate-200">
-        {([
-          ['kpi',       '🎯 יעדי KPI',       Target],
-          ['costs',     '💰 עלויות קבועות',  DollarSign],
-          ['employees', '👷 עובדים',          Users],
-          ['import',    '📥 ייבוא נתונים',  Database],
-        ] as const).filter(([key]) => allowedTabs.includes(key as Tab)).map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key as Tab)}
-            className={`py-3.5 px-5 bg-transparent border-none cursor-pointer text-sm ${tab === key ? 'font-bold' : 'font-medium'}`}
-            style={{ borderBottom: tab === key ? `3px solid ${branchColor}` : '3px solid transparent', color: tab === key ? branchColor : '#64748b' }}>
-            {label}
+      {/* Tabs */}
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '0 20px', display: 'flex', gap: 0 }}>
+        {tabItems.filter(t => allowedTabs.includes(t.key)).map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            style={{ background: 'none', border: 'none', borderBottom: tab === t.key ? '2px solid #6366f1' : '2px solid transparent', padding: '12px 16px', fontSize: 13, fontWeight: tab === t.key ? 700 : 500, color: tab === t.key ? '#6366f1' : '#64748b', cursor: 'pointer' }}>
+            {t.label}
           </button>
         ))}
       </div>
 
-      <div className="page-container" style={{ padding: '28px 32px', maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ padding: '20px', maxWidth: 800, margin: '0 auto' }}>
 
-        {/* ── restricted tab guard ── */}
+        {/* restricted tab guard */}
         {!allowedTabs.includes(tab) && (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <p style={{ fontSize: '18px', fontWeight: '700', color: '#ef4444', marginBottom: '16px' }}>אין לך הרשאה</p>
-            <Button variant="outline" onClick={() => setTab('employees')} className="gap-2">
-              <ArrowRight size={18} />
-              חזרה לעובדים
-            </Button>
+            <p style={{ fontSize: 16, fontWeight: 700, color: '#ef4444', marginBottom: 16 }}>אין לך הרשאה</p>
+            <button onClick={() => setTab('employees')} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 16px', fontSize: 13, color: '#64748b', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <ArrowRight size={14} /> חזרה לעובדים
+            </button>
           </div>
         )}
 
-        {/* ══ יעדי KPI ════════════════════════════════════════════════════ */}
+        {/* KPI Targets */}
         {tab === 'kpi' && allowedTabs.includes('kpi') && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px', background: '#f8fafc', borderRadius: '10px', padding: '12px 16px' }}>
-              💡 יעדים ניתנים לעדכון — יש להגדיר יעד לייבור לכל סניף, ברירת מחדל פחת 3%
+            <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 20, background: 'white', borderRadius: 12, padding: '12px 16px', border: '1px solid #f1f5f9' }}>
+              יעדים ניתנים לעדכון - יש להגדיר יעד לייבור לכל סניף, ברירת מחדל פחת 3%
             </div>
 
-            <Card className="shadow-sm" style={{ marginBottom: '20px', borderTop: `4px solid ${branchColor}` }}>
-              <CardContent className="p-6">
-                <h3 style={{ margin: '0 0 22px', fontSize: '16px', fontWeight: '800', color: branchColor }}>יעדי KPI — {branchName}</h3>
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 24, marginBottom: 20 }}>
+              <h3 style={{ margin: '0 0 22px', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>יעדי KPI - {branchName}</h3>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
-                  {/* לייבור */}
-                  <div>
-                    <label style={S.label}>יעד % לייבור מהכנסות</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <input type="number" min={0} max={100} step={0.5}
-                        value={kpi.labor_pct}
-                        onChange={e => setKpi(p => ({ ...p, labor_pct: parseFloat(e.target.value) || 0 }))}
-                        style={{ ...S.input, width: '100px', textAlign: 'center' as const }} />
-                      <span style={{ fontSize: '14px', color: '#64748b' }}>%</span>
-                    </div>
-                    <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '4px' }}>נמוך = טוב</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
+                <div>
+                  <label style={S.label}>יעד % לייבור מהכנסות</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input type="number" min={0} max={100} step={0.5}
+                      value={kpi.labor_pct}
+                      onChange={e => setKpi(p => ({ ...p, labor_pct: parseFloat(e.target.value) || 0 }))}
+                      style={{ ...S.input, width: 100, textAlign: 'center' as const }} />
+                    <span style={{ fontSize: 14, color: '#64748b' }}>%</span>
                   </div>
-
-                  {/* פחת */}
-                  <div>
-                    <label style={S.label}>יעד % פחת מהכנסות</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <input type="number" min={0} max={100} step={0.5}
-                        value={kpi.waste_pct}
-                        onChange={e => setKpi(p => ({ ...p, waste_pct: parseFloat(e.target.value) || 0 }))}
-                        style={{ ...S.input, width: '100px', textAlign: 'center' as const }} />
-                      <span style={{ fontSize: '14px', color: '#64748b' }}>%</span>
-                    </div>
-                    <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '4px' }}>נמוך = טוב</span>
-                  </div>
-
-                  {/* יעד הכנסות */}
-                  <div>
-                    <label style={S.label}>יעד הכנסות חודשי (₪)</label>
-                    <input type="number" min={0} step={1000}
-                      value={kpi.revenue_target}
-                      onChange={e => setKpi(p => ({ ...p, revenue_target: parseFloat(e.target.value) || 0 }))}
-                      style={{ ...S.input, width: '160px', textAlign: 'right' as const }} />
-                    <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '4px' }}>גבוה = טוב</span>
-                  </div>
-
-                  {/* יעד סל ממוצע */}
-                  <div>
-                    <label style={S.label}>יעד סל ממוצע (₪)</label>
-                    <input type="number" min={0} step={1}
-                      value={kpi.basket_target}
-                      onChange={e => setKpi(p => ({ ...p, basket_target: parseFloat(e.target.value) || 0 }))}
-                      style={{ ...S.input, width: '120px', textAlign: 'right' as const }} />
-                    <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '4px' }}>גבוה = טוב</span>
-                  </div>
-
-                  {/* יעד עסקאות */}
-                  <div>
-                    <label style={S.label}>יעד עסקאות יומי</label>
-                    <input type="number" min={0} step={1}
-                      value={kpi.transaction_target}
-                      onChange={e => setKpi(p => ({ ...p, transaction_target: parseInt(e.target.value) || 0 }))}
-                      style={{ ...S.input, width: '120px', textAlign: 'right' as const }} />
-                    <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '4px' }}>גבוה = טוב</span>
-                  </div>
+                  <span style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginTop: 4 }}>נמוך = טוב</span>
                 </div>
-              </CardContent>
-            </Card>
+
+                <div>
+                  <label style={S.label}>יעד % פחת מהכנסות</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input type="number" min={0} max={100} step={0.5}
+                      value={kpi.waste_pct}
+                      onChange={e => setKpi(p => ({ ...p, waste_pct: parseFloat(e.target.value) || 0 }))}
+                      style={{ ...S.input, width: 100, textAlign: 'center' as const }} />
+                    <span style={{ fontSize: 14, color: '#64748b' }}>%</span>
+                  </div>
+                  <span style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginTop: 4 }}>נמוך = טוב</span>
+                </div>
+
+                <div>
+                  <label style={S.label}>יעד הכנסות חודשי (₪)</label>
+                  <input type="number" min={0} step={1000}
+                    value={kpi.revenue_target}
+                    onChange={e => setKpi(p => ({ ...p, revenue_target: parseFloat(e.target.value) || 0 }))}
+                    style={{ ...S.input, width: 160, textAlign: 'right' as const }} />
+                  <span style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginTop: 4 }}>גבוה = טוב</span>
+                </div>
+
+                <div>
+                  <label style={S.label}>יעד סל ממוצע (₪)</label>
+                  <input type="number" min={0} step={1}
+                    value={kpi.basket_target}
+                    onChange={e => setKpi(p => ({ ...p, basket_target: parseFloat(e.target.value) || 0 }))}
+                    style={{ ...S.input, width: 120, textAlign: 'right' as const }} />
+                  <span style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginTop: 4 }}>גבוה = טוב</span>
+                </div>
+
+                <div>
+                  <label style={S.label}>יעד עסקאות יומי</label>
+                  <input type="number" min={0} step={1}
+                    value={kpi.transaction_target}
+                    onChange={e => setKpi(p => ({ ...p, transaction_target: parseInt(e.target.value) || 0 }))}
+                    style={{ ...S.input, width: 120, textAlign: 'right' as const }} />
+                  <span style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginTop: 4 }}>גבוה = טוב</span>
+                </div>
+              </div>
+            </div>
 
             <button onClick={saveKpi}
-              style={{ background: kpiSaved ? '#34d399' : branchColor, color: 'white', border: 'none', borderRadius: '10px', padding: '12px 32px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Save size={18} />{kpiSaved ? '✓ נשמר!' : 'שמור יעדים'}
+              style={{ background: kpiSaved ? '#34d399' : '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '10px 28px', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Save size={16} />{kpiSaved ? 'נשמר!' : 'שמור יעדים'}
             </button>
           </motion.div>
         )}
 
-        {/* ══ עלויות קבועות ════════════════════════════════════════════════ */}
+        {/* Fixed Costs */}
         {tab === 'costs' && allowedTabs.includes('costs') && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
               <input type="month" value={costMonth} onChange={e => setCostMonth(e.target.value)}
-                style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '8px 14px', fontSize: '14px', background: 'white', fontFamily: 'inherit' }} />
+                style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 14px', fontSize: 14, background: 'white', fontFamily: 'inherit' }} />
               <button onClick={copyFromPrev}
-                style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', padding: '9px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-                📋 העתק מחודש קודם
+                style={{ background: 'none', border: '1px solid #e2e8f0', color: '#64748b', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                העתק מחודש קודם
               </button>
-              <div style={{ marginRight: 'auto', fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>
+              <div style={{ marginRight: 'auto', fontWeight: 700, fontSize: 15, color: '#0f172a' }}>
                 סה"כ: {fmtM(totalCosts)}
               </div>
             </div>
 
-            {/* הוספה מהירה */}
-            <Card className="shadow-sm" style={{ marginBottom: '20px' }}>
-              <CardContent className="p-6">
-                <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת עלות קבועה</h2>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, marginBottom: '14px' }}>
-                  {DEFAULT_FIXED_COSTS.map(name => (
-                    <button key={name} onClick={() => setNewCostName(name)}
-                      style={{ background: newCostName === name ? branchColor : '#f1f5f9', color: newCostName === name ? 'white' : '#64748b', border: 'none', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                      {name}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-                  <div style={{ flex: 2, display: 'flex', flexDirection: 'column' as const }}>
-                    <label style={S.label}>שם הסעיף</label>
-                    <input type="text" placeholder="שם עלות..." value={newCostName}
-                      onChange={e => setNewCostName(e.target.value)} style={S.input} />
-                  </div>
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const }}>
-                    <label style={S.label}>סכום חודשי (₪)</label>
-                    <input type="number" placeholder="0" value={newCostAmt}
-                      onChange={e => setNewCostAmt(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && addCost()}
-                      style={{ ...S.input, textAlign: 'right' as const }} />
-                  </div>
-                  <button onClick={addCost} disabled={loadingCost || !newCostName || !newCostAmt}
-                    style={{ background: loadingCost || !newCostName || !newCostAmt ? '#e2e8f0' : branchColor, color: loadingCost || !newCostName || !newCostAmt ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' as const }}>
-                    <Plus size={16} />הוסף
+            {/* Add cost */}
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 24, marginBottom: 20 }}>
+              <h2 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>הוספת עלות קבועה</h2>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginBottom: 14 }}>
+                {DEFAULT_FIXED_COSTS.map(name => (
+                  <button key={name} onClick={() => setNewCostName(name)}
+                    style={{ background: newCostName === name ? '#6366f1' : '#f1f5f9', color: newCostName === name ? 'white' : '#64748b', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {name}
                   </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+                <div style={{ flex: 2, display: 'flex', flexDirection: 'column' as const }}>
+                  <label style={S.label}>שם הסעיף</label>
+                  <input type="text" placeholder="שם עלות..." value={newCostName}
+                    onChange={e => setNewCostName(e.target.value)} style={S.input} />
                 </div>
-              </CardContent>
-            </Card>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' as const }}>
+                  <label style={S.label}>סכום חודשי (₪)</label>
+                  <input type="number" placeholder="0" value={newCostAmt}
+                    onChange={e => setNewCostAmt(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addCost()}
+                    style={{ ...S.input, textAlign: 'right' as const }} />
+                </div>
+                <button onClick={addCost} disabled={loadingCost || !newCostName || !newCostAmt}
+                  style={{ background: loadingCost || !newCostName || !newCostAmt ? '#e2e8f0' : '#6366f1', color: loadingCost || !newCostName || !newCostAmt ? '#94a3b8' : 'white', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' as const }}>
+                  <Plus size={16} />הוסף
+                </button>
+              </div>
+            </div>
 
-            {/* רשימה */}
-            <div className="table-scroll">
-              <Card className="shadow-sm">
-                <CardContent className="p-0">
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
-                    <span>סעיף</span><span style={{ textAlign: 'center' }}>סכום חודשי</span><span /><span />
-                  </div>
+            {/* Costs list */}
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 36px 36px', padding: '10px 20px', fontSize: 11, fontWeight: 600, color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>
+                <span>סעיף</span><span style={{ textAlign: 'center' }}>סכום חודשי</span><span /><span />
+              </div>
 
-                  {costs.length === 0 ? (
-                    <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
-                      אין עלויות לחודש זה — הוסף או העתק מחודש קודם
-                    </div>
-                  ) : costs.map((cost, i) => (
-                    <div key={cost.id} style={{ display: 'grid', gridTemplateColumns: '1fr 150px 36px 36px', alignItems: 'center', padding: '13px 20px', borderBottom: i < costs.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                      {editCostId === cost.id ? (
-                        <>
-                          <input type="text" value={editCostData.name || ''} onChange={e => setEditCostData({ ...editCostData, name: e.target.value })} autoFocus style={{ border: '1.5px solid ' + branchColor, borderRadius: '8px', padding: '6px 10px', fontSize: '14px', fontFamily: 'inherit' }} />
-                          <input type="number" value={editCostData.amount || ''} onChange={e => setEditCostData({ ...editCostData, amount: parseFloat(e.target.value) })} style={{ border: '1.5px solid ' + branchColor, borderRadius: '8px', padding: '6px 10px', fontSize: '14px', textAlign: 'center' as const }} />
-                          <button onClick={() => saveCost(cost.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
-                          <button onClick={() => setEditCostId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
-                        </>
-                      ) : (
-                        <>
-                          <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{cost.name}</span>
-                          <span style={{ textAlign: 'center', fontWeight: '700', color: '#0f172a', fontSize: '15px' }}>{fmtM(cost.amount)}</span>
-                          <button onClick={() => { setEditCostId(cost.id); setEditCostData(cost) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                          <button onClick={() => deleteCost(cost.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
-                        </>
-                      )}
-                    </div>
-                  ))}
-
-                  {costs.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 36px 36px', padding: '14px 20px', background: branchColor + '15', borderTop: `2px solid ${branchColor}33`, borderRadius: '0 0 20px 20px', fontWeight: '700' }}>
-                      <span style={{ color: '#374151' }}>סה"כ — {costs.length} סעיפים</span>
-                      <span style={{ textAlign: 'center', fontSize: '17px', color: branchColor }}>{fmtM(totalCosts)}</span>
-                      <span /><span />
-                    </div>
+              {costs.length === 0 ? (
+                <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
+                  אין עלויות לחודש זה - הוסף או העתק מחודש קודם
+                </div>
+              ) : costs.map((cost, i) => (
+                <div key={cost.id} style={{ display: 'grid', gridTemplateColumns: '1fr 150px 36px 36px', alignItems: 'center', padding: '13px 20px', borderBottom: '1px solid #f8fafc' }}>
+                  {editCostId === cost.id ? (
+                    <>
+                      <input type="text" value={editCostData.name || ''} onChange={e => setEditCostData({ ...editCostData, name: e.target.value })} autoFocus style={{ border: '1px solid #6366f1', borderRadius: 8, padding: '6px 10px', fontSize: 14, fontFamily: 'inherit' }} />
+                      <input type="number" value={editCostData.amount || ''} onChange={e => setEditCostData({ ...editCostData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid #6366f1', borderRadius: 8, padding: '6px 10px', fontSize: 14, textAlign: 'center' as const }} />
+                      <button onClick={() => saveCost(cost.id)} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>&#10003;</button>
+                      <button onClick={() => setEditCostId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}>&#10005;</button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontWeight: 600, color: '#374151', fontSize: 14 }}>{cost.name}</span>
+                      <span style={{ textAlign: 'center', fontWeight: 700, color: '#0f172a', fontSize: 15 }}>{fmtM(cost.amount)}</span>
+                      <button onClick={() => { setEditCostId(cost.id); setEditCostData(cost) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Pencil size={14} color="#94a3b8" /></button>
+                      <button onClick={() => deleteCost(cost.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Trash2 size={14} color="#ef4444" /></button>
+                    </>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              ))}
+
+              {costs.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 36px 36px', padding: '14px 20px', background: '#fafafa', borderTop: '1px solid #f1f5f9', fontWeight: 700 }}>
+                  <span style={{ color: '#374151' }}>סה"כ - {costs.length} סעיפים</span>
+                  <span style={{ textAlign: 'center', fontSize: 15, color: '#0f172a' }}>{fmtM(totalCosts)}</span>
+                  <span /><span />
+                </div>
+              )}
             </div>
           </motion.div>
         )}
 
-        {/* ══ עובדים ════════════════════════════════════════════════════════ */}
+        {/* Employees */}
         {tab === 'employees' && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '16px', background: '#f8fafc', borderRadius: '10px', padding: '12px 16px' }}>
-              💡 רשימת עובדים קבועים — משמשת לאוטוקומפליט בהזנת לייבור
+            <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16, background: 'white', borderRadius: 12, padding: '12px 16px', border: '1px solid #f1f5f9' }}>
+              רשימת עובדים קבועים - משמשת לאוטוקומפליט בהזנת לייבור
             </div>
 
-            {/* הוספה */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+            {/* Add employee */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               <input type="text" placeholder="שם עובד חדש..." value={newEmpName}
                 onChange={e => setNewEmpName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && addEmployee()}
                 style={{ ...S.input, flex: 1 }} />
               <button onClick={addEmployee} disabled={loadingEmp || !newEmpName.trim()}
-                style={{ background: loadingEmp || !newEmpName.trim() ? '#e2e8f0' : branchColor, color: loadingEmp || !newEmpName.trim() ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' as const }}>
+                style={{ background: loadingEmp || !newEmpName.trim() ? '#e2e8f0' : '#6366f1', color: loadingEmp || !newEmpName.trim() ? '#94a3b8' : 'white', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' as const }}>
                 <Plus size={16} />הוסף עובד
               </button>
             </div>
 
-            {/* רשימה */}
-            <div className="table-scroll">
-              <Card className="shadow-sm">
-                <CardContent className="p-0">
-                  <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
-                    <span>#</span><span>שם</span><span style={{ textAlign: 'center' }}>סטטוס</span><span /><span />
-                  </div>
+            {/* Employee list */}
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 36px 36px', padding: '10px 20px', fontSize: 11, fontWeight: 600, color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>
+                <span>#</span><span>שם</span><span style={{ textAlign: 'center' }}>סטטוס</span><span /><span />
+              </div>
 
-                  {employees.length === 0 ? (
-                    <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>לא הוגדרו עובדים</div>
-                  ) : employees.map((emp, i) => (
-                    <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < employees.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa', opacity: emp.active ? 1 : 0.5 }}>
-                      {editEmpId === emp.id ? (
-                        <>
-                          <span style={{ fontSize: '12px', color: '#64748b' }}>{i + 1}</span>
-                          <input type="text" value={editEmpData.name || ''} onChange={e => setEditEmpData({ ...editEmpData, name: e.target.value })}
-                            autoFocus style={{ border: '1.5px solid ' + branchColor, borderRadius: '8px', padding: '6px 10px', fontSize: '14px', fontFamily: 'inherit' }} />
-                          <span />
-                          <button onClick={() => saveEmployee(emp.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
-                          <button onClick={() => setEditEmpId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
-                        </>
-                      ) : (
-                        <>
-                          <span style={{ width: '28px', height: '28px', background: branchColor + '15', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700', color: branchColor }}>{i + 1}</span>
-                          <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{emp.name}</span>
-                          <button onClick={() => toggleActive(emp)}
-                            style={{ background: emp.active ? '#f0fdf4' : '#fff1f2', color: emp.active ? '#34d399' : '#fb7185', border: 'none', borderRadius: '20px', padding: '3px 10px', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}>
-                            {emp.active ? 'פעיל' : 'לא פעיל'}
-                          </button>
-                          <button onClick={() => { setEditEmpId(emp.id); setEditEmpData(emp) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                          <button onClick={() => deleteEmployee(emp.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
-                        </>
-                      )}
-                    </div>
-                  ))}
-
-                  {employees.length > 0 && (
-                    <div style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderRadius: '0 0 20px 20px', fontSize: '13px', color: '#64748b', fontWeight: '600' }}>
-                      {activeEmps.length} פעילים מתוך {employees.length} עובדים
-                    </div>
+              {employees.length === 0 ? (
+                <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>לא הוגדרו עובדים</div>
+              ) : employees.map((emp, i) => (
+                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid #f8fafc', opacity: emp.active ? 1 : 0.5 }}>
+                  {editEmpId === emp.id ? (
+                    <>
+                      <span style={{ fontSize: 12, color: '#64748b' }}>{i + 1}</span>
+                      <input type="text" value={editEmpData.name || ''} onChange={e => setEditEmpData({ ...editEmpData, name: e.target.value })}
+                        autoFocus style={{ border: '1px solid #6366f1', borderRadius: 8, padding: '6px 10px', fontSize: 14, fontFamily: 'inherit' }} />
+                      <span />
+                      <button onClick={() => saveEmployee(emp.id)} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>&#10003;</button>
+                      <button onClick={() => setEditEmpId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}>&#10005;</button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ width: 28, height: 28, background: '#f1f5f9', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#64748b' }}>{i + 1}</span>
+                      <span style={{ fontWeight: 600, color: '#374151', fontSize: 14 }}>{emp.name}</span>
+                      <button onClick={() => toggleActive(emp)}
+                        style={{ background: emp.active ? '#f0fdf4' : '#fef2f2', color: emp.active ? '#34d399' : '#ef4444', border: 'none', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                        {emp.active ? 'פעיל' : 'לא פעיל'}
+                      </button>
+                      <button onClick={() => { setEditEmpId(emp.id); setEditEmpData(emp) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Pencil size={14} color="#94a3b8" /></button>
+                      <button onClick={() => deleteEmployee(emp.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Trash2 size={14} color="#ef4444" /></button>
+                    </>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              ))}
+
+              {employees.length > 0 && (
+                <div style={{ padding: '12px 20px', background: '#fafafa', borderTop: '1px solid #f1f5f9', fontSize: 13, color: '#64748b', fontWeight: 600 }}>
+                  {activeEmps.length} פעילים מתוך {employees.length} עובדים
+                </div>
+              )}
             </div>
           </motion.div>
         )}
 
-        {/* ══ ייבוא נתונים ═══════════════════════════════════════════════ */}
+        {/* Data Import */}
         {tab === 'import' && allowedTabs.includes('import') && (
           <DataImport onBack={() => setTab('kpi')} />
         )}

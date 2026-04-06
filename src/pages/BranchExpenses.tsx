@@ -3,10 +3,7 @@ import { motion } from 'framer-motion'
 import { supabase, fetchBranchExpensesTrend, BranchExpensesTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { ArrowRight, Plus, Pencil, Trash2, Search, X, Factory, AlertTriangle, Info } from 'lucide-react'
-import { FixedCostIcon } from '@/components/icons'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface Props {
@@ -205,11 +202,13 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
   function renderEntryRow(entry: Entry, i: number, list: Entry[], isInternal: boolean) {
     const tc = TYPE_CONFIG[entry.expense_type]
     return (
-      <div key={entry.id} style={{
+      <div key={entry.id}
+        onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+        onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+        style={{
         display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center',
         padding: '12px 20px',
-        borderBottom: i < list.length - 1 ? '1px solid #f1f5f9' : 'none',
-        background: i % 2 === 0 ? 'white' : '#fafafa',
+        borderBottom: '1px solid #f8fafc',
         borderRight: isInternal ? '3px solid #a78bfa' : 'none',
       }}>
         {editId === entry.id && !isInternal ? (
@@ -262,39 +261,38 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
   }
 
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
-      {/* כותרת */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div style={{ width: '40px', height: '40px', background: branchColor + '20', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <FixedCostIcon size={20} color={branchColor} />
-        </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>הוצאות — {branchName}</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>ספקים · תיקונים · תשתיות · משלוחים</p>
-        </div>
-        <div style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <PeriodPicker period={period} onChange={setPeriod} />
-          <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '10px', padding: '8px 18px' }}>
-            <span style={{ fontSize: '18px', fontWeight: '800', color: '#fb7185' }}>₪{totalAll.toLocaleString()}</span>
-            <span style={{ fontSize: '12px', color: '#64748b', marginRight: '6px' }}>סה"כ</span>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
+      {/* Header */}
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: '12px' }}>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>הוצאות</h1>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const }}>
+            <PeriodPicker period={period} onChange={setPeriod} />
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '8px 18px', textAlign: 'center' as const }}>
+              <div style={{ fontSize: '20px', fontWeight: '700', color: '#fb7185' }}>₪{totalAll.toLocaleString()}</div>
+              <div style={{ fontSize: '12px', color: '#94a3b8' }}>סה"כ</div>
+            </div>
+            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
+              <ArrowRight size={14} style={{ verticalAlign: 'middle', marginLeft: 4 }} />
+              חזרה
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1000px', margin: '0 auto' }}>
+      <div style={{ padding: '0 20px 24px', maxWidth: '1000px', margin: '0 auto' }}>
 
-        {/* סיכום לפי סוג */}
+        {/* סיכום לפי סוג — clean gray pills */}
         {byType.length > 0 && (
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' as const, marginBottom: '20px' }}>
             {byType.map(t => (
               <button key={t.key} onClick={() => setTypeFilter(typeFilter === t.key ? 'all' : t.key)}
-                style={{ background: typeFilter === t.key ? t.color : t.bg, border: `1.5px solid ${t.color}33`, borderRadius: '12px', padding: '10px 16px', cursor: 'pointer', textAlign: 'right' as const, transition: 'all 0.15s' }}>
-                <div style={{ fontSize: '16px', fontWeight: '800', color: typeFilter === t.key ? 'white' : t.color }}>₪{t.total.toLocaleString()}</div>
-                <div style={{ fontSize: '11px', color: typeFilter === t.key ? 'rgba(255,255,255,0.8)' : '#64748b' }}>{t.label}</div>
+                style={{ background: typeFilter === t.key ? '#f1f5f9' : 'white', border: '1px solid #e2e8f0', borderRadius: 20, padding: '8px 16px', cursor: 'pointer', textAlign: 'right' as const, transition: 'all 0.15s' }}>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: typeFilter === t.key ? '#0f172a' : '#64748b' }}>₪{t.total.toLocaleString()}</div>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t.label}</div>
               </button>
             ))}
           </div>
@@ -303,8 +301,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
         {/* Factory warning dialog */}
         {showFactoryWarning && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }}>
-            <Card className="shadow-xl" style={{ maxWidth: '440px', width: '90%' }}>
-              <CardContent className="p-6" style={{ textAlign: 'center' }}>
+            <div style={{ maxWidth: '440px', width: '90%', background: 'white', borderRadius: 12, boxShadow: '0 10px 40px rgba(0,0,0,0.15)', padding: '24px', textAlign: 'center' }}>
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
                   <div style={{ background: '#fef3c7', borderRadius: '50%', padding: '12px' }}>
                     <AlertTriangle size={28} color="#f59e0b" />
@@ -317,24 +314,21 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
                   אם כן — אשר את ההזמנה בדף ההזמנות במקום להזין ידנית.
                 </p>
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                  <Button variant="outline" onClick={() => { setShowFactoryWarning(false); onBack() }}
-                    className="rounded-xl gap-2 px-5 text-[14px] font-bold"
-                    style={{ borderColor: '#7c3aed', color: '#7c3aed' }}>
+                  <button onClick={() => { setShowFactoryWarning(false); onBack() }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #e2e8f0', background: 'none', borderRadius: 8, padding: '8px 18px', fontSize: '14px', fontWeight: '700', color: '#7c3aed', cursor: 'pointer' }}>
                     <Factory size={16} />
                     כן, עבור להזמנות
-                  </Button>
-                  <Button onClick={() => { setShowFactoryWarning(false); addEntry() }}
-                    className="rounded-xl px-5 text-[14px] font-bold"
-                    style={{ background: '#64748b', color: 'white' }}>
+                  </button>
+                  <button onClick={() => { setShowFactoryWarning(false); addEntry() }}
+                    style={{ background: '#64748b', color: 'white', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
                     לא, ספק חיצוני
-                  </Button>
+                  </button>
                 </div>
-              </CardContent>
-            </Card>
+            </div>
           </div>
         )}
 
-        {/* Info banner */}
+        {/* Info banner — kept as-is per instructions */}
         <div className="bg-indigo-600 rounded-xl p-4 mb-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className="text-2xl">💡</span>
@@ -353,8 +347,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
 
         {/* טופס הוספה */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
-        <Card className="shadow-sm mb-5">
-          <CardContent className="p-6">
+        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px', marginBottom: 16 }}>
           <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת הוצאה</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: '12px', marginBottom: '14px' }}>
 
@@ -395,20 +388,19 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
           </div>
 
           <button onClick={handleAddEntry} disabled={!canAdd}
-            style={{ background: canAdd ? branchColor : '#e2e8f0', color: canAdd ? 'white' : '#94a3b8', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: canAdd ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            style={{ background: canAdd ? '#6366f1' : '#e2e8f0', color: canAdd ? 'white' : '#94a3b8', border: 'none', borderRadius: 8, padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: canAdd ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Plus size={18} />הוסף הוצאה
           </button>
-          </CardContent>
-        </Card>
+        </div>
         </motion.div>
 
-        {/* פילטרים */}
+        {/* פילטרים — clean gray pills */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' as const }}>
-            <button onClick={() => setTypeFilter('all')} style={{ background: typeFilter === 'all' ? branchColor : '#f1f5f9', color: typeFilter === 'all' ? 'white' : '#64748b', border: 'none', borderRadius: '8px', padding: '6px 12px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>הכל</button>
+            <button onClick={() => setTypeFilter('all')} style={{ background: typeFilter === 'all' ? '#f1f5f9' : 'white', color: typeFilter === 'all' ? '#0f172a' : '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 20, padding: '6px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>הכל</button>
             {Object.entries(TYPE_CONFIG).map(([k, v]) => (
               <button key={k} onClick={() => setTypeFilter(k as ExpenseType)}
-                style={{ background: typeFilter === k ? v.color : '#f1f5f9', color: typeFilter === k ? 'white' : '#64748b', border: 'none', borderRadius: '8px', padding: '6px 12px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
+                style={{ background: typeFilter === k ? '#f1f5f9' : 'white', color: typeFilter === k ? '#0f172a' : '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 20, padding: '6px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}>
                 {v.label}
               </button>
             ))}
@@ -425,7 +417,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
         {bySupplier.length > 0 && (
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, marginBottom: '14px' }}>
             {bySupplier.map((s) => (
-              <div key={s.name} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '6px 12px', fontSize: '12px' }}>
+              <div key={s.name} style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: '10px', padding: '6px 12px', fontSize: '12px' }}>
                 <span style={{ fontWeight: '600', color: '#374151' }}>{s.name}</span>
                 <span style={{ color: '#fb7185', fontWeight: '700', marginRight: '6px' }}>₪{s.total.toLocaleString()}</span>
                 <span style={{ color: '#94a3b8' }}>({s.count})</span>
@@ -438,26 +430,24 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
         {showSuppliersSplit && internalEntries.length > 0 && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible" style={{ marginBottom: '16px' }}>
           <div className="table-scroll">
-          <Card className="shadow-sm" style={{ borderRight: '3px solid #a78bfa' }}>
-            <CardContent className="p-0">
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, borderRight: '3px solid #a78bfa', overflow: 'hidden' }}>
               {/* Section header */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: '#f5f3ff', borderBottom: '1px solid #e9e5ff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid #f1f5f9' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Factory size={16} color="#7c3aed" />
                   <span style={{ fontSize: '14px', fontWeight: '700', color: '#7c3aed' }}>רכישות מהמפעל</span>
                   <span style={{ fontSize: '11px', background: '#ede9fe', color: '#7c3aed', padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>{internalEntries.length} רשומות</span>
                 </div>
-                <span style={{ fontSize: '16px', fontWeight: '800', color: '#7c3aed' }}>סה"כ רכישות מפעל: ₪{internalTotal.toLocaleString()}</span>
+                <span style={{ fontSize: '16px', fontWeight: '700', color: '#7c3aed' }}>סה"כ רכישות מפעל: ₪{internalTotal.toLocaleString()}</span>
               </div>
 
               {/* Column headers */}
-              <div style={{ display: 'grid', gridTemplateColumns: gridCols, padding: '10px 20px', background: '#faf8ff', borderBottom: '1px solid #e9e5ff', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols, padding: '10px 20px', borderBottom: '1px solid #f1f5f9', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
                 <span>תאריך</span><span>סוג</span><span>ספק</span><span>מסמך</span><span style={{ textAlign: 'left' }}>סכום</span><span /><span />
               </div>
 
               {internalEntries.map((entry, i) => renderEntryRow(entry, i, internalEntries, true))}
-            </CardContent>
-          </Card>
+          </div>
           </div>
           </motion.div>
         )}
@@ -465,16 +455,15 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
         {/* טבלה — external / other entries */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
         <div className="table-scroll">
-        <Card className="shadow-sm">
-          <CardContent className="p-0">
+        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden' }}>
           {/* Section header when split is active */}
           {showSuppliersSplit && internalEntries.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9' }}>
               <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>ספקים חיצוניים והוצאות נוספות</span>
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: gridCols, padding: '10px 20px', background: '#f8fafc', borderRadius: internalEntries.length > 0 ? '0' : '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: gridCols, padding: '10px 20px', borderBottom: '1px solid #f1f5f9', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
             <span>תאריך</span><span>סוג</span><span>ספק</span><span>מסמך</span><span style={{ textAlign: 'left' }}>סכום</span><span /><span />
           </div>
 
@@ -485,21 +474,19 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
           ) : externalAndOtherEntries.map((entry, i) => renderEntryRow(entry, i, externalAndOtherEntries, false))}
 
           {filtered.length > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', background: '#fff1f2', borderTop: '2px solid #fecdd3', borderRadius: '0 0 20px 20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid #f1f5f9' }}>
               <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>סה"כ — {filtered.length} רשומות</span>
-              <span style={{ fontSize: '20px', fontWeight: '800', color: '#fb7185' }}>₪{total.toLocaleString()}</span>
+              <span style={{ fontSize: '20px', fontWeight: '700', color: '#fb7185' }}>₪{total.toLocaleString()}</span>
             </div>
           )}
-          </CardContent>
-        </Card>
+        </div>
         </div>
         </motion.div>
 
         {/* מגמת 6 חודשים */}
         {trendData.length > 0 && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-          <Card className="shadow-sm mt-4">
-            <CardContent className="p-6">
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px', marginTop: 16 }}>
               <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>מגמת 6 חודשים — הוצאות</h3>
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={trendData}>
@@ -517,8 +504,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
                   <Line yAxisId="pct" type="monotone" dataKey="pctOfRevenue" name="% מהכנסות" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 4 }} strokeDasharray="5 3" />
                 </LineChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
+          </div>
           </motion.div>
         )}
       </div>
