@@ -200,65 +200,73 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
                 if (viewFilter === 'problems' && !hasProblems) return null
 
                 return (
-                  <div key={date} style={{ marginBottom: 16 }}>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>
+                  <div key={date} style={{ marginBottom: 20 }}>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 10 }}>
                       {dayName} {date.split('-').reverse().slice(0, 2).join('/')}
                     </h3>
                     {shiftsForDay.map(shift => {
                       const summary = getShiftSummary(shift.id, date)
                       const coverage = summary.required > 0 ? summary.available / summary.required : 1
-                      const coverageColor = coverage >= 1 ? '#10b981' : coverage >= 0.5 ? '#f59e0b' : '#ef4444'
 
                       // If filter is 'problems' and coverage >= 1, skip
                       if (viewFilter === 'problems' && coverage >= 1) return null
 
                       return (
-                        <div key={shift.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 14, marginBottom: 8 }}>
-                          {/* Header: shift name + badge */}
-                          <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
-                            <span style={{ fontWeight: 600, fontSize: 13 }}>{shift.name} {shift.start_time?.slice(0, 5)}–{shift.end_time?.slice(0, 5)}</span>
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: coverage >= 1 ? '#ecfdf5' : '#fef2f2', color: coverageColor }}>
+                        <div key={shift.id} style={{
+                          background: 'white',
+                          border: coverage < 1 ? '1px solid #fecaca' : '1px solid #f1f5f9',
+                          borderRadius: 12,
+                          padding: 16,
+                          marginBottom: 10,
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                        }}>
+                          {/* Header: shift name bold + hours gray (same line) */}
+                          <div className="flex items-center gap-2" style={{ marginBottom: 12 }}>
+                            <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{shift.name}</span>
+                            <span style={{ fontSize: 12, color: '#94a3b8' }}>{shift.start_time?.slice(0, 5)}–{shift.end_time?.slice(0, 5)}</span>
+                            <span style={{ marginRight: 'auto', fontSize: 13, color: '#64748b' }}>
                               {summary.available}/{summary.required} זמינים
                             </span>
                           </div>
 
-                          {/* Progress bar */}
-                          <div style={{ height: 6, background: '#f1f5f9', borderRadius: 3, marginBottom: 10 }}>
-                            <div style={{ height: '100%', width: `${Math.min(coverage * 100, 100)}%`, background: coverageColor, borderRadius: 3, transition: 'width 0.3s' }} />
-                          </div>
-
-                          {/* Employee badges by availability */}
-                          <div style={{ fontSize: 12 }}>
+                          {/* Employee list by availability - dots + names */}
+                          <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
                             {summary.availableEmps.length > 0 && (
-                              <div className="flex flex-wrap gap-1 items-center" style={{ marginBottom: 4 }}>
-                                <span style={{ color: '#10b981', marginLeft: 4 }}>✅</span>
-                                {summary.availableEmps.map(name => (
-                                  <span key={name} style={{ background: '#ecfdf5', color: '#065f46', padding: '2px 8px', borderRadius: 6, fontSize: 11 }}>{name}</span>
-                                ))}
+                              <div className="flex flex-wrap gap-2 items-center">
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block', flexShrink: 0 }} />
+                                <span style={{ color: '#475569' }}>{summary.availableEmps.length}</span>
+                                <span style={{ color: '#94a3b8', fontSize: 12 }}>{summary.availableEmps.join(', ')}</span>
                               </div>
                             )}
                             {summary.preferNotEmps.length > 0 && (
-                              <div className="flex flex-wrap gap-1 items-center" style={{ marginBottom: 4 }}>
-                                <span style={{ color: '#f59e0b', marginLeft: 4 }}>⚠️</span>
-                                {summary.preferNotEmps.map(name => (
-                                  <span key={name} style={{ background: '#fffbeb', color: '#92400e', padding: '2px 8px', borderRadius: 6, fontSize: 11 }}>{name}</span>
-                                ))}
+                              <div className="flex flex-wrap gap-2 items-center">
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', display: 'inline-block', flexShrink: 0 }} />
+                                <span style={{ color: '#475569' }}>{summary.preferNotEmps.length}</span>
+                                <span style={{ color: '#94a3b8', fontSize: 12 }}>{summary.preferNotEmps.join(', ')}</span>
                               </div>
                             )}
                             {summary.unavailableEmps.length > 0 && (
-                              <div className="flex flex-wrap gap-1 items-center">
-                                <span style={{ color: '#ef4444', marginLeft: 4 }}>❌</span>
-                                {summary.unavailableEmps.map(name => (
-                                  <span key={name} style={{ background: '#fef2f2', color: '#991b1b', padding: '2px 8px', borderRadius: 6, fontSize: 11 }}>{name}</span>
-                                ))}
+                              <div className="flex flex-wrap gap-2 items-center">
+                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block', flexShrink: 0 }} />
+                                <span style={{ color: '#475569' }}>{summary.unavailableEmps.length}</span>
+                                <span style={{ color: '#94a3b8', fontSize: 12 }}>{summary.unavailableEmps.join(', ')}</span>
                               </div>
                             )}
                           </div>
 
-                          {/* Warning if understaffed */}
+                          {/* Warning if understaffed - border-red-200 only, no red background */}
                           {coverage < 1 && (
-                            <div style={{ marginTop: 8, fontSize: 11, color: '#ef4444', fontWeight: 600 }}>
-                              ⚠️ חסרים {summary.required - summary.available} עובדים
+                            <div style={{
+                              marginTop: 10,
+                              fontSize: 12,
+                              color: '#ef4444',
+                              fontWeight: 600,
+                              padding: '6px 10px',
+                              border: '1px solid #fecaca',
+                              borderRadius: 8,
+                              background: 'white',
+                            }}>
+                              חסרים {summary.required - summary.available} עובדים
                             </div>
                           )}
                         </div>
@@ -284,15 +292,20 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
                   }
                 }
                 return (
-                  <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, marginTop: 16 }}>
-                    <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>סיכום שבועי</h3>
-                    <div className="flex gap-4" style={{ fontSize: 13, marginBottom: 8 }}>
-                      <span>סה&quot;כ {totalShifts} משמרות</span>
-                      <span style={{ color: '#10b981' }}>✅ {fullShifts} מכוסות</span>
-                      {problemShifts > 0 && <span style={{ color: '#ef4444' }}>⚠️ {problemShifts} עם מחסור</span>}
+                  <div style={{
+                    background: 'white',
+                    border: '1px solid #f1f5f9',
+                    borderRadius: 12,
+                    padding: 18,
+                    marginTop: 20,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                  }}>
+                    <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>סיכום שבועי</h3>
+                    <div style={{ fontSize: 14, color: '#475569' }}>
+                      {totalShifts} משמרות · {fullShifts} מלאות{problemShifts > 0 ? ` · ${problemShifts} חסרות` : ''}
                     </div>
                     {problems.length > 0 && (
-                      <div style={{ fontSize: 11, color: '#64748b' }}>
+                      <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 10 }}>
                         {problems.map(p => <div key={p}>• {p}</div>)}
                       </div>
                     )}
@@ -306,25 +319,41 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
                 if (trainees.length === 0 && mentors.length === 0) return null
 
                 return (
-                  <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, marginTop: 12 }}>
-                    <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>חונכות והכשרה</h3>
-                    <div className="flex gap-4" style={{ fontSize: 13 }}>
-                      <span>📚 מתלמדים: {trainees.length}</span>
-                      <span>⭐ חונכים: {mentors.length}</span>
+                  <div style={{
+                    background: 'white',
+                    border: '1px solid #f1f5f9',
+                    borderRadius: 12,
+                    padding: 18,
+                    marginTop: 12,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                  }}>
+                    <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 10 }}>חונכות והכשרה</h3>
+                    <div style={{ fontSize: 13, color: '#475569', display: 'flex', gap: 16 }}>
+                      <span>מתלמדים: {trainees.length}</span>
+                      <span>חונכים: {mentors.length}</span>
                     </div>
                     {trainees.length > mentors.length && (
-                      <div style={{ marginTop: 8, fontSize: 12, color: '#ef4444', fontWeight: 600, background: '#fef2f2', padding: '6px 12px', borderRadius: 8 }}>
-                        ⚠️ חסרים חונכים — {trainees.length} מתלמדים מול {mentors.length} חונכים
+                      <div style={{
+                        marginTop: 10,
+                        fontSize: 12,
+                        color: '#ef4444',
+                        fontWeight: 600,
+                        padding: '6px 10px',
+                        border: '1px solid #fecaca',
+                        borderRadius: 8,
+                        background: 'white',
+                      }}>
+                        חסרים חונכים — {trainees.length} מתלמדים מול {mentors.length} חונכים
                       </div>
                     )}
                     {trainees.length > 0 && (
-                      <div style={{ marginTop: 8, fontSize: 12, color: '#64748b' }}>
-                        <strong>מתלמדים:</strong> {trainees.map(t => t.name).join(', ')}
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>
+                        <strong style={{ color: '#64748b' }}>מתלמדים:</strong> {trainees.map(t => t.name).join(', ')}
                       </div>
                     )}
                     {mentors.length > 0 && (
-                      <div style={{ marginTop: 4, fontSize: 12, color: '#64748b' }}>
-                        <strong>חונכים:</strong> {mentors.map(m => m.name).join(', ')}
+                      <div style={{ marginTop: 4, fontSize: 12, color: '#94a3b8' }}>
+                        <strong style={{ color: '#64748b' }}>חונכים:</strong> {mentors.map(m => m.name).join(', ')}
                       </div>
                     )}
                   </div>

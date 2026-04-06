@@ -79,55 +79,70 @@ export default function EmployeeHome({ onNavigate }: Props) {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
-      <div style={{ maxWidth: 480, margin: '0 auto', padding: '24px 16px' }}>
+      <div style={{ maxWidth: 480, margin: '0 auto', padding: '28px 16px' }}>
 
-        {/* Header */}
-        <motion.div variants={fadeIn} initial="hidden" animate="visible" style={{ marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#0d6165', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ color: 'white', fontSize: 20, fontWeight: 900, fontFamily: 'serif' }}>מ</span>
-            </div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-              שלום {appUser?.name || 'עובד'} 👋
-            </h1>
-          </div>
-          <p style={{ fontSize: 14, color: '#94a3b8', margin: '4px 0 0' }}>
+        {/* Header - greeting */}
+        <motion.div variants={fadeIn} initial="hidden" animate="visible" style={{ marginBottom: 24 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+            שלום {appUser?.name || 'עובד'}
+          </h1>
+          <p style={{ fontSize: 13, color: '#94a3b8', margin: '4px 0 0' }}>
             סניף {branchName} · {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </motion.div>
 
         {/* Weekly status card */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.1 }}
-          style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 16, padding: 16, marginBottom: 16 }}>
-          <div className="flex items-center gap-2" style={{ marginBottom: 8 }}>
-            <span style={{ fontSize: 18 }}>📅</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#3730a3' }}>הסידור שלך השבוע</span>
-          </div>
+          style={{
+            background: 'white',
+            border: '1px solid #e0e7ff',
+            borderRadius: 12,
+            padding: 16,
+            marginBottom: 20,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>הסידור שלך השבוע</div>
           {nextWeekCount > 0 ? (
-            <p style={{ fontSize: 13, color: '#4338ca', margin: 0 }}>
+            <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
               {nextWeekCount} משמרות מתוכננות לשבוע הקרוב
             </p>
           ) : (
-            <p style={{ fontSize: 13, color: '#6366f1', margin: 0 }}>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>
               הסידור לשבוע זה טרם פורסם
             </p>
           )}
         </motion.div>
 
         {/* Main action cards */}
-        <div className="grid grid-cols-2 gap-3" style={{ marginBottom: 16 }}>
+        <div className="grid grid-cols-2 gap-3" style={{ marginBottom: 20 }}>
           <motion.button variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.2 }}
             onClick={() => handleNavigate('my-schedule')}
-            style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 16, padding: '24px 16px', textAlign: 'center', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>📅</div>
+            style={{
+              background: 'white',
+              border: '1px solid #f1f5f9',
+              borderRadius: 12,
+              padding: '24px 16px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            }}>
+            <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.8 }}>📅</div>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>הסידור שלי</div>
             <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>משמרות · תפקידים</div>
           </motion.button>
 
           <motion.button variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.25 }}
             onClick={() => handleNavigate('employee-constraints')}
-            style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 16, padding: '24px 16px', textAlign: 'center', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>🙋</div>
+            style={{
+              background: 'white',
+              border: '1px solid #f1f5f9',
+              borderRadius: 12,
+              padding: '24px 16px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            }}>
+            <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.8 }}>🙋</div>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>הזמינות שלי</div>
             <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>אילוצים · שבועי</div>
           </motion.button>
@@ -135,7 +150,15 @@ export default function EmployeeHome({ onNavigate }: Props) {
 
         {/* Profile card (coming soon) */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.3 }}
-          style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: '14px 16px', marginBottom: 24, opacity: 0.6 }}
+          style={{
+            background: 'white',
+            border: '1px solid #f1f5f9',
+            borderRadius: 12,
+            padding: '14px 16px',
+            marginBottom: 28,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            opacity: 0.6,
+          }}
           className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span style={{ fontSize: 20 }}>👤</span>
@@ -144,7 +167,7 @@ export default function EmployeeHome({ onNavigate }: Props) {
               <div style={{ fontSize: 11, color: '#94a3b8' }}>פרטים אישיים</div>
             </div>
           </div>
-          <span style={{ fontSize: 10, background: '#f1f5f9', padding: '2px 8px', borderRadius: 6, color: '#94a3b8' }}>בקרוב</span>
+          <span style={{ fontSize: 10, background: '#f8fafc', padding: '2px 8px', borderRadius: 6, color: '#94a3b8', border: '1px solid #f1f5f9' }}>בקרוב</span>
         </motion.div>
 
         {/* Logout */}

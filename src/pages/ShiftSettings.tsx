@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { ArrowRight, Plus, Trash2, Pencil, X, Check, AlertCircle } from 'lucide-react'
+import { ArrowRight, Plus, X, Check, AlertCircle } from 'lucide-react'
 
 interface Props {
   branchId: number
@@ -78,9 +76,17 @@ const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמיש
 
 const ROLE_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#ec4899']
 
+const card: React.CSSProperties = {
+  background: '#fff',
+  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+  borderRadius: '12px',
+  border: '1px solid #f1f5f9',
+  padding: '20px',
+}
+
 const S = {
-  label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', display: 'block', marginBottom: '6px' },
-  input: { width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box' as const, fontFamily: 'inherit' },
+  label: { fontSize: '13px', fontWeight: '500' as const, color: '#64748b', display: 'block', marginBottom: '6px' },
+  input: { width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '9px 12px', fontSize: '14px', boxSizing: 'border-box' as const, fontFamily: 'inherit', outline: 'none', background: '#fff' },
 }
 
 export default function ShiftSettings({ branchId, branchName, branchColor, onBack }: Props) {
@@ -96,29 +102,34 @@ export default function ShiftSettings({ branchId, branchName, branchColor, onBac
 
   return (
     <motion.div dir="rtl" initial="hidden" animate="visible" variants={fadeIn}
-      style={{ padding: '16px', maxWidth: '900px', margin: '0 auto' }}>
+      style={{ padding: '24px 16px', maxWidth: '900px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowRight style={{ width: '18px', height: '18px' }} />
-        </Button>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', margin: 0 }}>הגדרות משמרות</h1>
-          <span style={{ fontSize: '13px', color: '#64748b' }}>{branchName}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px' }}>
+        <button onClick={onBack}
+          style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+          <ArrowRight style={{ width: '18px', height: '18px', color: '#64748b' }} />
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: branchColor }} />
+          <div>
+            <h1 style={{ fontSize: '20px', fontWeight: '700', margin: 0, color: '#1e293b' }}>הגדרות משמרות</h1>
+            <span style={{ fontSize: '13px', color: '#94a3b8' }}>{branchName}</span>
+          </div>
         </div>
-        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: branchColor, marginRight: '4px' }} />
       </div>
 
       {/* Tab navigation */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '0', marginBottom: '24px', borderBottom: '1px solid #f1f5f9' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{
-              padding: '8px 18px', borderRadius: '10px', border: 'none', cursor: 'pointer',
-              fontSize: '14px', fontWeight: '600', fontFamily: 'inherit',
-              background: tab === t.key ? branchColor : '#f1f5f9',
-              color: tab === t.key ? '#fff' : '#475569',
+              padding: '10px 20px', border: 'none', cursor: 'pointer',
+              fontSize: '14px', fontWeight: '500', fontFamily: 'inherit',
+              background: 'transparent',
+              color: tab === t.key ? '#6366f1' : '#94a3b8',
+              borderBottom: tab === t.key ? '2px solid #6366f1' : '2px solid transparent',
               transition: 'all 0.2s',
+              marginBottom: '-1px',
             }}>
             {t.label}
           </button>
@@ -164,55 +175,66 @@ function RolesTab({ branchId }: { branchId: number }) {
     fetchRoles()
   }
 
-  if (loading) return <p style={{ textAlign: 'center', color: '#94a3b8' }}>טוען...</p>
+  if (loading) return <p style={{ textAlign: 'center', color: '#94a3b8', padding: '32px 0' }}>טוען...</p>
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeIn}>
-      {/* Add form */}
-      <Card style={{ marginBottom: '16px' }}>
-        <CardContent style={{ padding: '16px' }}>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: '160px' }}>
-              <label style={S.label}>שם תפקיד</label>
-              <input style={S.input} value={newName} onChange={e => setNewName(e.target.value)}
-                placeholder="לדוגמה: קופאי" onKeyDown={e => e.key === 'Enter' && addRole()} />
-            </div>
-            <div>
-              <label style={S.label}>צבע</label>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {ROLE_COLORS.map(c => (
-                  <button key={c} onClick={() => setNewColor(c)}
-                    style={{
-                      width: '30px', height: '30px', borderRadius: '50%', background: c, border: newColor === c ? '3px solid #1e293b' : '3px solid transparent',
-                      cursor: 'pointer', transition: 'border 0.15s',
-                    }} />
-                ))}
-              </div>
-            </div>
-            <Button onClick={addRole} style={{ gap: '6px' }}>
-              <Plus style={{ width: '16px', height: '16px' }} /> הוסף
-            </Button>
+      <div style={card}>
+        {/* Add form */}
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: roles.length > 0 ? '24px' : '0', paddingBottom: roles.length > 0 ? '20px' : '0', borderBottom: roles.length > 0 ? '1px solid #f1f5f9' : 'none' }}>
+          <div style={{ flex: 1, minWidth: '160px' }}>
+            <label style={S.label}>שם תפקיד</label>
+            <input style={S.input} value={newName} onChange={e => setNewName(e.target.value)}
+              placeholder="לדוגמה: קופאי" onKeyDown={e => e.key === 'Enter' && addRole()} />
           </div>
-        </CardContent>
-      </Card>
+          <div>
+            <label style={S.label}>צבע</label>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {ROLE_COLORS.map(c => (
+                <button key={c} onClick={() => setNewColor(c)}
+                  style={{
+                    width: '24px', height: '24px', borderRadius: '50%', background: c,
+                    border: newColor === c ? '2.5px solid #1e293b' : '2.5px solid transparent',
+                    cursor: 'pointer', transition: 'border 0.15s',
+                  }} />
+              ))}
+            </div>
+          </div>
+          <button onClick={addRole}
+            style={{
+              background: 'transparent', border: '1px solid #6366f1', borderRadius: '8px',
+              padding: '8px 16px', fontSize: '13px', fontWeight: '500', fontFamily: 'inherit',
+              color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+            }}>
+            <Plus style={{ width: '14px', height: '14px' }} /> הוסף
+          </button>
+        </div>
 
-      {/* Roles list */}
-      {roles.length === 0 && <p style={{ textAlign: 'center', color: '#94a3b8', marginTop: '24px' }}>אין תפקידים עדיין</p>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {roles.map(role => (
-          <Card key={role.id}>
-            <CardContent style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {/* Roles list */}
+        {roles.length === 0 && <p style={{ textAlign: 'center', color: '#94a3b8', padding: '16px 0', margin: 0 }}>אין תפקידים עדיין</p>}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {roles.map((role, i) => (
+            <div key={role.id}
+              className="role-row"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '12px 4px',
+                borderBottom: i < roles.length - 1 ? '1px solid #f8fafc' : 'none',
+              }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: role.color }} />
-                <span style={{ fontSize: '15px', fontWeight: '600' }}>{role.name}</span>
+                <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: role.color, flexShrink: 0 }} />
+                <span style={{ fontSize: '14px', fontWeight: '500', color: '#334155' }}>{role.name}</span>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => deleteRole(role.id)}
-                style={{ color: '#ef4444' }}>
-                <Trash2 style={{ width: '16px', height: '16px' }} />
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+              <button onClick={() => deleteRole(role.id)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#cbd5e1', fontSize: '16px', padding: '4px 8px', lineHeight: 1,
+                }}>
+                <X style={{ width: '14px', height: '14px' }} />
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </motion.div>
   )
@@ -280,73 +302,87 @@ function ShiftsTab({ branchId }: { branchId: number }) {
     fetchShifts()
   }
 
-  if (loading) return <p style={{ textAlign: 'center', color: '#94a3b8' }}>טוען...</p>
+  if (loading) return <p style={{ textAlign: 'center', color: '#94a3b8', padding: '32px 0' }}>טוען...</p>
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeIn}>
-      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '16px' }}>
-        <Button onClick={openAdd} style={{ gap: '6px' }}>
-          <Plus style={{ width: '16px', height: '16px' }} /> הוסף משמרת
-        </Button>
-      </div>
+      <div style={card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <span style={{ fontSize: '15px', fontWeight: '600', color: '#334155' }}>רשימת משמרות</span>
+          <button onClick={openAdd}
+            style={{
+              background: 'transparent', border: '1px solid #6366f1', borderRadius: '8px',
+              padding: '7px 14px', fontSize: '13px', fontWeight: '500', fontFamily: 'inherit',
+              color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+            }}>
+            <Plus style={{ width: '14px', height: '14px' }} /> הוסף משמרת
+          </button>
+        </div>
 
-      {shifts.length === 0 && <p style={{ textAlign: 'center', color: '#94a3b8' }}>אין משמרות עדיין</p>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {shifts.map(shift => (
-          <Card key={shift.id}>
-            <CardContent style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+        {shifts.length === 0 && <p style={{ textAlign: 'center', color: '#94a3b8', padding: '16px 0', margin: 0 }}>אין משמרות עדיין</p>}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {shifts.map((shift, i) => (
+            <div key={shift.id} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px',
+              padding: '14px 4px',
+              borderBottom: i < shifts.length - 1 ? '1px solid #f8fafc' : 'none',
+            }}>
               <div>
-                <span style={{ fontSize: '15px', fontWeight: '600' }}>{shift.name}</span>
-                <span style={{ fontSize: '13px', color: '#64748b', marginRight: '12px' }}>
-                  {shift.start_time?.slice(0, 5)} - {shift.end_time?.slice(0, 5)}
-                </span>
-                <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#334155' }}>{shift.name}</span>
+                  <span style={{ fontSize: '13px', color: '#94a3b8' }}>
+                    {shift.start_time?.slice(0, 5)} - {shift.end_time?.slice(0, 5)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '4px', marginTop: '8px', flexWrap: 'wrap' }}>
                   {shift.days_of_week?.map(d => (
                     <span key={d} style={{
                       fontSize: '11px', padding: '2px 8px', borderRadius: '6px',
-                      background: '#e0e7ff', color: '#4338ca', fontWeight: '600',
+                      background: '#f1f5f9', color: '#64748b', fontWeight: '500',
                     }}>
                       {DAY_NAMES[d]}
                     </span>
                   ))}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '4px' }}>
-                <Button variant="ghost" size="sm" onClick={() => openEdit(shift)}>
-                  <Pencil style={{ width: '16px', height: '16px' }} />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => deleteShift(shift.id)} style={{ color: '#ef4444' }}>
-                  <Trash2 style={{ width: '16px', height: '16px' }} />
-                </Button>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <button onClick={() => openEdit(shift)}
+                  style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', color: '#64748b', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  ערוך
+                </button>
+                <button onClick={() => deleteShift(shift.id)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', padding: '4px 6px' }}>
+                  <X style={{ width: '14px', height: '14px' }} />
+                </button>
               </div>
-            </CardContent>
-          </Card>
-        ))}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Add/Edit Dialog */}
       {dialogOpen && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50,
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 50,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
         }} onClick={() => setDialogOpen(false)}>
           <div dir="rtl" onClick={e => e.stopPropagation()}
             style={{
-              background: '#fff', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '420px',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+              background: '#fff', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '420px',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.08)', border: '1px solid #f1f5f9',
             }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>{editId ? 'עריכת משמרת' : 'משמרת חדשה'}</h2>
-              <button onClick={() => setDialogOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X style={{ width: '20px', height: '20px', color: '#94a3b8' }} />
+              <h2 style={{ fontSize: '16px', fontWeight: '600', margin: 0, color: '#1e293b' }}>{editId ? 'עריכת משמרת' : 'משמרת חדשה'}</h2>
+              <button onClick={() => setDialogOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
+                <X style={{ width: '18px', height: '18px', color: '#94a3b8' }} />
               </button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <label style={S.label}>שם משמרת</label>
                 <input style={S.input} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="לדוגמה: בוקר" />
               </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
+              <div style={{ display: 'flex', gap: '12px' }}>
                 <div style={{ flex: 1 }}>
                   <label style={S.label}>שעת התחלה</label>
                   <input style={S.input} type="time" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} />
@@ -363,9 +399,9 @@ function ShiftsTab({ branchId }: { branchId: number }) {
                     <button key={i} onClick={() => toggleDay(i)}
                       style={{
                         padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                        fontSize: '13px', fontWeight: '600', fontFamily: 'inherit',
+                        fontSize: '13px', fontWeight: '500', fontFamily: 'inherit',
                         background: form.days_of_week.includes(i) ? '#6366f1' : '#f1f5f9',
-                        color: form.days_of_week.includes(i) ? '#fff' : '#475569',
+                        color: form.days_of_week.includes(i) ? '#fff' : '#64748b',
                         transition: 'all 0.15s',
                       }}>
                       {name}
@@ -373,10 +409,15 @@ function ShiftsTab({ branchId }: { branchId: number }) {
                   ))}
                 </div>
               </div>
-              <Button onClick={handleSave} style={{ marginTop: '8px' }}>
-                <Check style={{ width: '16px', height: '16px', marginLeft: '6px' }} />
+              <button onClick={handleSave}
+                style={{
+                  marginTop: '4px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: '8px',
+                  padding: '10px 20px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                }}>
+                <Check style={{ width: '16px', height: '16px' }} />
                 {editId ? 'שמור שינויים' : 'הוסף משמרת'}
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -437,54 +478,54 @@ function StaffingTab({ branchId }: { branchId: number }) {
 
   const totalRequired = requirements.reduce((sum, r) => sum + (r.required_count || 0), 0)
 
-  if (loading) return <p style={{ textAlign: 'center', color: '#94a3b8' }}>טוען...</p>
+  if (loading) return <p style={{ textAlign: 'center', color: '#94a3b8', padding: '32px 0' }}>טוען...</p>
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeIn}>
-      <Card style={{ marginBottom: '16px' }}>
-        <CardContent style={{ padding: '16px' }}>
-          <label style={S.label}>בחר משמרת</label>
-          <select style={{ ...S.input, cursor: 'pointer' }} value={selectedShiftId ?? ''}
-            onChange={e => setSelectedShiftId(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">-- בחר משמרת --</option>
-            {shifts.map(s => (
-              <option key={s.id} value={s.id}>{s.name} ({s.start_time?.slice(0, 5)} - {s.end_time?.slice(0, 5)})</option>
-            ))}
-          </select>
-        </CardContent>
-      </Card>
+      <div style={card}>
+        <label style={S.label}>בחר משמרת</label>
+        <select style={{ ...S.input, cursor: 'pointer' }} value={selectedShiftId ?? ''}
+          onChange={e => setSelectedShiftId(e.target.value ? Number(e.target.value) : null)}>
+          <option value="">-- בחר משמרת --</option>
+          {shifts.map(s => (
+            <option key={s.id} value={s.id}>{s.name} ({s.start_time?.slice(0, 5)} - {s.end_time?.slice(0, 5)})</option>
+          ))}
+        </select>
 
-      {selectedShiftId && roles.length > 0 && (
-        <Card>
-          <CardContent style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {roles.map(role => (
-                <div key={role.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+        {selectedShiftId && roles.length > 0 && (
+          <div style={{ marginTop: '24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {roles.map((role, i) => (
+                <div key={role.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
+                  padding: '12px 0',
+                  borderBottom: i < roles.length - 1 ? '1px solid #f8fafc' : 'none',
+                }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: role.color }} />
-                    <span style={{ fontSize: '14px', fontWeight: '600' }}>{role.name}</span>
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: role.color }} />
+                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#334155' }}>{role.name}</span>
                   </div>
                   <input type="number" min={0} value={getCount(role.id)}
                     onChange={e => updateCount(role.id, parseInt(e.target.value) || 0)}
-                    style={{ ...S.input, width: '80px', textAlign: 'center' }} />
+                    style={{ ...S.input, width: '72px', textAlign: 'center', padding: '7px 8px' }} />
                 </div>
               ))}
             </div>
             <div style={{
-              marginTop: '16px', padding: '12px', borderRadius: '10px',
-              background: '#f0fdf4', border: '1px solid #bbf7d0', fontSize: '14px', fontWeight: '600', color: '#16a34a',
+              marginTop: '20px', padding: '12px 16px', borderRadius: '8px',
+              background: '#f8fafc', border: '1px solid #f1f5f9', fontSize: '14px', fontWeight: '500', color: '#64748b',
             }}>
               סה&quot;כ {totalRequired} עובדים נדרשים במשמרת זו
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
 
-      {selectedShiftId && roles.length === 0 && (
-        <p style={{ textAlign: 'center', color: '#94a3b8', marginTop: '16px' }}>
-          אין תפקידים מוגדרים. הגדר תפקידים בלשונית &quot;תפקידים&quot; תחילה.
-        </p>
-      )}
+        {selectedShiftId && roles.length === 0 && (
+          <p style={{ textAlign: 'center', color: '#94a3b8', marginTop: '20px' }}>
+            אין תפקידים מוגדרים. הגדר תפקידים בלשונית &quot;תפקידים&quot; תחילה.
+          </p>
+        )}
+      </div>
     </motion.div>
   )
 }
@@ -588,7 +629,7 @@ function EmployeesTab({ branchId }: { branchId: number }) {
     setIsSaving(false)
   }
 
-  if (loading) return <p style={{ textAlign: 'center', color: '#94a3b8' }}>טוען...</p>
+  if (loading) return <p style={{ textAlign: 'center', color: '#94a3b8', padding: '32px 0' }}>טוען...</p>
 
   if (employees.length === 0 || roles.length === 0) {
     return (
@@ -614,20 +655,20 @@ function EmployeesTab({ branchId }: { branchId: number }) {
           </button>
         </div>
       )}
-      <Card>
-        <CardContent style={{ padding: '16px', overflowX: 'auto' }}>
+      <div style={card}>
+        <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'right', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>עובד</th>
-                <th style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '2px solid #e2e8f0', fontWeight: '700', fontSize: '12px' }}>עדיפות</th>
-                <th style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '2px solid #e2e8f0', fontWeight: '700', fontSize: '12px' }}>הכשרה</th>
-                <th style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '2px solid #e2e8f0', fontWeight: '700', fontSize: '12px' }}>מינ׳ משמרות</th>
+                <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '13px' }}>עובד</th>
+                <th style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '12px' }}>עדיפות</th>
+                <th style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '12px' }}>הכשרה</th>
+                <th style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '12px' }}>מינ׳ משמרות</th>
                 {roles.map(role => (
-                  <th key={role.id} style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '2px solid #e2e8f0' }}>
+                  <th key={role.id} style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f1f5f9' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: role.color }} />
-                      <span style={{ fontSize: '12px', fontWeight: '600' }}>{role.name}</span>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: role.color }} />
+                      <span style={{ fontSize: '11px', fontWeight: '500', color: '#64748b' }}>{role.name}</span>
                     </div>
                   </th>
                 ))}
@@ -637,49 +678,49 @@ function EmployeesTab({ branchId }: { branchId: number }) {
               {employees.map(emp => {
                 const noRoles = empRoleCount(emp.id) === 0
                 return (
-                  <tr key={emp.id} style={{ background: noRoles ? '#fef2f2' : undefined }}>
-                    <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: '500' }}>
+                  <tr key={emp.id}>
+                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #f8fafc', fontWeight: '500', color: '#334155' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {emp.name}
                         {noRoles && (
                           <span style={{
                             fontSize: '11px', padding: '2px 8px', borderRadius: '6px',
-                            background: '#fecaca', color: '#dc2626', fontWeight: '600',
+                            background: '#f1f5f9', color: '#94a3b8', fontWeight: '500',
                             display: 'inline-flex', alignItems: 'center', gap: '4px',
                           }}>
-                            <AlertCircle style={{ width: '12px', height: '12px' }} />
+                            <AlertCircle style={{ width: '11px', height: '11px' }} />
                             ללא תפקיד
                           </span>
                         )}
                       </div>
                     </td>
-                    <td style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f8fafc' }}>
                       <select
                         value={emp.priority || 2}
                         onChange={(e) => {
                           updateEmpField(emp.id, 'priority', Number(e.target.value))
                         }}
-                        style={{ fontSize: '13px', padding: '4px 6px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontFamily: 'inherit', cursor: 'pointer' }}
+                        style={{ fontSize: '12px', padding: '4px 6px', borderRadius: '6px', border: '1px solid #e2e8f0', fontFamily: 'inherit', cursor: 'pointer', background: '#fff' }}
                       >
                         <option value={1}>&#x1F947; עדיפות גבוהה</option>
                         <option value={2}>&#x1F464; רגיל</option>
                         <option value={3}>&#x1F504; גמיש</option>
                       </select>
                     </td>
-                    <td style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f8fafc' }}>
                       <select
                         value={emp.training_status || 'independent'}
                         onChange={(e) => {
                           updateEmpField(emp.id, 'training_status', e.target.value)
                         }}
-                        style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0', background: 'white' }}
+                        style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0', background: 'white', fontFamily: 'inherit', cursor: 'pointer' }}
                       >
                         <option value="independent">{'\uD83D\uDFE2'} עצמאי</option>
                         <option value="trainee">{'\uD83D\uDCDA'} מתלמד</option>
                         <option value="mentor">{'\u2B50'} חונך</option>
                       </select>
                     </td>
-                    <td style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f8fafc' }}>
                       <input
                         type="number"
                         min={0}
@@ -688,14 +729,14 @@ function EmployeesTab({ branchId }: { branchId: number }) {
                         onChange={(e) => {
                           updateEmpField(emp.id, 'min_shifts_per_week', Number(e.target.value))
                         }}
-                        style={{ width: '60px', textAlign: 'center', fontSize: '14px', padding: '4px 6px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontFamily: 'inherit' }}
+                        style={{ width: '56px', textAlign: 'center', fontSize: '13px', padding: '4px 6px', borderRadius: '6px', border: '1px solid #e2e8f0', fontFamily: 'inherit', background: '#fff' }}
                       />
                     </td>
                     {roles.map(role => (
-                      <td key={role.id} style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '1px solid #f1f5f9' }}>
+                      <td key={role.id} style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f8fafc' }}>
                         <input type="checkbox" checked={hasAssignment(emp.id, role.id)}
                           onChange={() => toggleAssignment(emp.id, role.id)}
-                          style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: role.color }} />
+                          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: role.color }} />
                       </td>
                     ))}
                   </tr>
@@ -703,8 +744,8 @@ function EmployeesTab({ branchId }: { branchId: number }) {
               })}
             </tbody>
           </table>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </motion.div>
   )
 }
@@ -792,171 +833,201 @@ function HolidaysTab({ branchId }: { branchId: number }) {
   }
 
   const typeBadge = (type: string) => {
-    const map: Record<string, { label: string; bg: string; color: string }> = {
-      holiday: { label: '🕎 חג', bg: '#fef3c7', color: '#92400e' },
-      high_demand: { label: '📈 עומס גבוה', bg: '#fce7f3', color: '#9d174d' },
-      low_demand: { label: '📉 עומס נמוך', bg: '#d1fae5', color: '#065f46' },
-      blocked: { label: '🚫 חסום', bg: '#fef2f2', color: '#991b1b' },
+    const map: Record<string, { label: string }> = {
+      holiday: { label: 'חג' },
+      high_demand: { label: 'עומס גבוה' },
+      low_demand: { label: 'עומס נמוך' },
+      blocked: { label: 'חסום' },
     }
     const t = map[type] || map.holiday
     return (
-      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: t.bg, color: t.color, fontWeight: '600' }}>
+      <span style={{ fontSize: '11px', padding: '2px 10px', borderRadius: '6px', background: '#f1f5f9', color: '#64748b', fontWeight: '500' }}>
         {t.label}
       </span>
     )
   }
 
-  if (loading) return <p style={{ textAlign: 'center', color: '#94a3b8' }}>טוען...</p>
+  if (loading) return <p style={{ textAlign: 'center', color: '#94a3b8', padding: '32px 0' }}>טוען...</p>
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeIn}>
       {/* Section 1: Load holidays from Hebrew calendar */}
-      <Card style={{ marginBottom: '16px' }}>
-        <CardContent style={{ padding: '16px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '700', margin: '0 0 12px 0' }}>טען חגים אוטומטית</h3>
-          <Button onClick={loadHebcalHolidays} disabled={hebcalLoading} style={{ gap: '6px' }}>
-            {hebcalLoading ? 'טוען...' : 'טען חגים מהלוח העברי 🕎'}
-          </Button>
+      <div style={{ ...card, marginBottom: '16px' }}>
+        <h3 style={{ fontSize: '15px', fontWeight: '600', margin: '0 0 14px 0', color: '#334155' }}>טען חגים אוטומטית</h3>
+        <button onClick={loadHebcalHolidays} disabled={hebcalLoading}
+          style={{
+            background: 'transparent', border: '1px solid #e2e8f0', borderRadius: '8px',
+            padding: '8px 16px', fontSize: '13px', fontWeight: '500', fontFamily: 'inherit',
+            color: '#475569', cursor: hebcalLoading ? 'wait' : 'pointer',
+          }}>
+          {hebcalLoading ? 'טוען...' : 'טען חגים מהלוח העברי'}
+        </button>
 
-          {hebcalItems.length > 0 && (
-            <div style={{ marginTop: '12px' }}>
-              <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px' }}>
-                {hebcalItems.map((item, i) => (
-                  <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
-                    <input type="checkbox" checked={item.selected}
-                      onChange={() => setHebcalItems(prev => prev.map((h, j) => j === i ? { ...h, selected: !h.selected } : h))}
-                      style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
-                    <span style={{ fontSize: '14px', fontWeight: '500' }}>{item.title}</span>
-                    {item.hebrew && <span style={{ fontSize: '12px', color: '#64748b' }}>({item.hebrew})</span>}
-                    <span style={{ fontSize: '12px', color: '#94a3b8', marginRight: 'auto', direction: 'ltr' }}>{item.date}</span>
-                  </label>
-                ))}
-              </div>
-              <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
-                <Button onClick={addSelectedHolidays} style={{ gap: '6px' }}>
-                  <Plus style={{ width: '16px', height: '16px' }} /> הוסף נבחרים ({hebcalItems.filter(h => h.selected).length})
-                </Button>
-                <Button variant="ghost" onClick={() => setHebcalItems([])}>ביטול</Button>
-              </div>
+        {hebcalItems.length > 0 && (
+          <div style={{ marginTop: '16px' }}>
+            <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #f1f5f9', borderRadius: '8px' }}>
+              {hebcalItems.map((item, i) => (
+                <label key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', cursor: 'pointer',
+                  borderBottom: i < hebcalItems.length - 1 ? '1px solid #f8fafc' : 'none',
+                }}>
+                  <input type="checkbox" checked={item.selected}
+                    onChange={() => setHebcalItems(prev => prev.map((h, j) => j === i ? { ...h, selected: !h.selected } : h))}
+                    style={{ width: '15px', height: '15px', cursor: 'pointer' }} />
+                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#334155' }}>{item.title}</span>
+                  {item.hebrew && <span style={{ fontSize: '12px', color: '#94a3b8' }}>({item.hebrew})</span>}
+                  <span style={{ fontSize: '12px', color: '#cbd5e1', marginRight: 'auto', direction: 'ltr' }}>{item.date}</span>
+                </label>
+              ))}
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+              <button onClick={addSelectedHolidays}
+                style={{
+                  background: 'transparent', border: '1px solid #6366f1', borderRadius: '8px',
+                  padding: '7px 14px', fontSize: '13px', fontWeight: '500', fontFamily: 'inherit',
+                  color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+                }}>
+                <Plus style={{ width: '14px', height: '14px' }} /> הוסף נבחרים ({hebcalItems.filter(h => h.selected).length})
+              </button>
+              <button onClick={() => setHebcalItems([])}
+                style={{
+                  background: 'transparent', border: '1px solid #e2e8f0', borderRadius: '8px',
+                  padding: '7px 14px', fontSize: '13px', fontWeight: '500', fontFamily: 'inherit',
+                  color: '#64748b', cursor: 'pointer',
+                }}>
+                ביטול
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Section 2: Special Days */}
-      <Card>
-        <CardContent style={{ padding: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>ימים מיוחדים</h3>
-            <Button onClick={() => setShowAddForm(!showAddForm)} style={{ gap: '6px' }}>
-              <Plus style={{ width: '16px', height: '16px' }} /> הוסף יום מיוחד
-            </Button>
-          </div>
-
-          {showAddForm && (
-            <div style={{
-              padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: '14px',
-              display: 'flex', flexDirection: 'column', gap: '10px',
+      <div style={card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: '600', margin: 0, color: '#334155' }}>ימים מיוחדים</h3>
+          <button onClick={() => setShowAddForm(!showAddForm)}
+            style={{
+              background: 'transparent', border: '1px solid #6366f1', borderRadius: '8px',
+              padding: '7px 14px', fontSize: '13px', fontWeight: '500', fontFamily: 'inherit',
+              color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
             }}>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: '140px' }}>
-                  <label style={S.label}>תאריך</label>
-                  <input type="date" style={S.input} value={addForm.date}
-                    onChange={e => setAddForm({ ...addForm, date: e.target.value })} />
-                </div>
-                <div style={{ flex: 1, minWidth: '140px' }}>
-                  <label style={S.label}>שם</label>
-                  <input style={S.input} value={addForm.name}
-                    onChange={e => setAddForm({ ...addForm, name: e.target.value })}
-                    placeholder="לדוגמה: ערב פסח" />
-                </div>
+            <Plus style={{ width: '14px', height: '14px' }} /> הוסף יום מיוחד
+          </button>
+        </div>
+
+        {showAddForm && (
+          <div style={{
+            padding: '16px', borderRadius: '10px', background: '#fafbfc', border: '1px solid #f1f5f9', marginBottom: '16px',
+            display: 'flex', flexDirection: 'column', gap: '12px',
+          }}>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label style={S.label}>תאריך</label>
+                <input type="date" style={S.input} value={addForm.date}
+                  onChange={e => setAddForm({ ...addForm, date: e.target.value })} />
               </div>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: '140px' }}>
-                  <label style={S.label}>סוג</label>
-                  <select style={{ ...S.input, cursor: 'pointer' }} value={addForm.type}
-                    onChange={e => setAddForm({ ...addForm, type: e.target.value })}>
-                    <option value="holiday">חג 🕎</option>
-                    <option value="high_demand">עומס גבוה 📈</option>
-                    <option value="low_demand">עומס נמוך 📉</option>
-                    <option value="blocked">🚫 יום חסום</option>
-                  </select>
-                </div>
-                <div style={{ flex: 1, minWidth: '140px' }}>
-                  <label style={S.label}>מכפיל כוח אדם</label>
-                  <input type="number" min={0.5} max={2.0} step={0.1} style={S.input}
-                    value={addForm.staffing_multiplier}
-                    onChange={e => setAddForm({ ...addForm, staffing_multiplier: Number(e.target.value) })} />
-                </div>
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label style={S.label}>שם</label>
+                <input style={S.input} value={addForm.name}
+                  onChange={e => setAddForm({ ...addForm, name: e.target.value })}
+                  placeholder="לדוגמה: ערב פסח" />
               </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>תבנית משמרות</label>
-                <select value={newShiftPattern} onChange={e => setNewShiftPattern(e.target.value)}
-                  style={{ width: '100%', padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13 }}>
-                  <option value="regular">📅 רגיל — כל המשמרות</option>
-                  <option value="friday">🕍 ערב חג — כמו שישי</option>
-                  <option value="closed">🔒 סגור — אין משמרות</option>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label style={S.label}>סוג</label>
+                <select style={{ ...S.input, cursor: 'pointer' }} value={addForm.type}
+                  onChange={e => setAddForm({ ...addForm, type: e.target.value })}>
+                  <option value="holiday">חג</option>
+                  <option value="high_demand">עומס גבוה</option>
+                  <option value="low_demand">עומס נמוך</option>
+                  <option value="blocked">יום חסום</option>
                 </select>
               </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <Button onClick={addSpecialDay} style={{ gap: '6px' }}>
-                  <Check style={{ width: '16px', height: '16px' }} /> הוסף
-                </Button>
-                <Button variant="ghost" onClick={() => setShowAddForm(false)}>
-                  <X style={{ width: '16px', height: '16px' }} /> ביטול
-                </Button>
+              <div style={{ flex: 1, minWidth: '140px' }}>
+                <label style={S.label}>מכפיל כוח אדם</label>
+                <input type="number" min={0.5} max={2.0} step={0.1} style={S.input}
+                  value={addForm.staffing_multiplier}
+                  onChange={e => setAddForm({ ...addForm, staffing_multiplier: Number(e.target.value) })} />
               </div>
             </div>
-          )}
-
-          {specialDays.length === 0 && !showAddForm && (
-            <p style={{ textAlign: 'center', color: '#94a3b8', marginTop: '16px' }}>אין ימים מיוחדים</p>
-          )}
-
-          {specialDays.length > 0 && (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'right', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>תאריך</th>
-                    <th style={{ textAlign: 'right', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>שם</th>
-                    <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>סוג</th>
-                    <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>תבנית</th>
-                    <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>מכפיל</th>
-                    <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {specialDays.map(day => (
-                    <tr key={day.id}>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', direction: 'ltr', textAlign: 'right' }}>{day.date}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: '500' }}>{day.name}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>{typeBadge(day.type)}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
-                        <select value={day.shift_pattern || 'regular'}
-                          onChange={e => updateShiftPattern(day.id, e.target.value)}
-                          style={{ fontSize: 11, padding: '3px 6px', borderRadius: 6, border: '1px solid #e2e8f0', cursor: 'pointer',
-                            background: day.shift_pattern === 'closed' ? '#fef2f2' : day.shift_pattern === 'friday' ? '#f3e8ff' : '#f8fafc',
-                            color: day.shift_pattern === 'closed' ? '#991b1b' : day.shift_pattern === 'friday' ? '#7c3aed' : '#64748b' }}>
-                          <option value="regular">📅 רגיל</option>
-                          <option value="friday">🕍 ערב חג</option>
-                          <option value="closed">🔒 סגור</option>
-                        </select>
-                      </td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center', fontWeight: '600' }}>x{day.staffing_multiplier}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
-                        <Button variant="ghost" size="sm" onClick={() => deleteSpecialDay(day.id)} style={{ color: '#ef4444' }}>
-                          <Trash2 style={{ width: '16px', height: '16px' }} />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div>
+              <label style={S.label}>תבנית משמרות</label>
+              <select value={newShiftPattern} onChange={e => setNewShiftPattern(e.target.value)}
+                style={{ ...S.input, cursor: 'pointer' }}>
+                <option value="regular">רגיל — כל המשמרות</option>
+                <option value="friday">ערב חג — כמו שישי</option>
+                <option value="closed">סגור — אין משמרות</option>
+              </select>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <button onClick={addSpecialDay}
+                style={{
+                  background: '#6366f1', color: '#fff', border: 'none', borderRadius: '8px',
+                  padding: '8px 16px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', gap: '4px',
+                }}>
+                <Check style={{ width: '14px', height: '14px' }} /> הוסף
+              </button>
+              <button onClick={() => setShowAddForm(false)}
+                style={{
+                  background: 'transparent', border: '1px solid #e2e8f0', borderRadius: '8px',
+                  padding: '8px 16px', fontSize: '13px', fontWeight: '500', fontFamily: 'inherit',
+                  color: '#64748b', cursor: 'pointer',
+                }}>
+                ביטול
+              </button>
+            </div>
+          </div>
+        )}
+
+        {specialDays.length === 0 && !showAddForm && (
+          <p style={{ textAlign: 'center', color: '#94a3b8', padding: '16px 0', margin: 0 }}>אין ימים מיוחדים</p>
+        )}
+
+        {specialDays.length > 0 && (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '13px' }}>תאריך</th>
+                  <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '13px' }}>שם</th>
+                  <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '13px' }}>סוג</th>
+                  <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '13px' }}>תבנית</th>
+                  <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '13px' }}>מכפיל</th>
+                  <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '13px' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {specialDays.map(day => (
+                  <tr key={day.id}>
+                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #f8fafc', direction: 'ltr', textAlign: 'right', color: '#64748b', fontSize: '13px' }}>{day.date}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #f8fafc', fontWeight: '500', color: '#334155' }}>{day.name}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #f8fafc', textAlign: 'center' }}>{typeBadge(day.type)}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #f8fafc', textAlign: 'center' }}>
+                      <select value={day.shift_pattern || 'regular'}
+                        onChange={e => updateShiftPattern(day.id, e.target.value)}
+                        style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, border: '1px solid #e2e8f0', cursor: 'pointer', background: '#fff', fontFamily: 'inherit', color: '#475569' }}>
+                        <option value="regular">רגיל</option>
+                        <option value="friday">ערב חג</option>
+                        <option value="closed">סגור</option>
+                      </select>
+                    </td>
+                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #f8fafc', textAlign: 'center', fontWeight: '500', color: '#64748b' }}>x{day.staffing_multiplier}</td>
+                    <td style={{ padding: '10px 12px', borderBottom: '1px solid #f8fafc', textAlign: 'center' }}>
+                      <button onClick={() => deleteSpecialDay(day.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', padding: '4px' }}>
+                        <X style={{ width: '14px', height: '14px' }} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </motion.div>
   )
 }

@@ -1,12 +1,6 @@
-import { motion } from 'framer-motion'
 import { Users, CalendarCheck, History, Clock, ClipboardList, Calendar, Settings, Mail, ArrowRight } from 'lucide-react'
 import { useAppUser } from '../lib/UserContext'
 import { Button } from '@/components/ui/button'
-
-const fadeIn = (delay = 0) => ({
-  hidden: { opacity: 0, y: 18 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.35, delay } },
-})
 
 interface Props {
   branchId: number
@@ -49,42 +43,43 @@ export default function BranchTeam({ branchName, branchColor, onBack, onNavigate
   const { appUser } = useAppUser()
   const isManagerOrAdmin = appUser?.role === 'admin' || appUser?.role === 'branch'
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6" dir="rtl">
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
       {/* Header */}
-      <motion.div variants={fadeIn(0)} initial="hidden" animate="visible" className="flex items-center gap-3 mb-6">
+      <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: 16, borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
         <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2 px-4 text-[15px] font-bold text-slate-500 hover:text-slate-900">
           <ArrowRight size={18} /> חזרה
         </Button>
-        <div className="flex-1 text-center">
-          <h1 className="text-xl font-bold text-slate-800">ניהול צוות — {branchName}</h1>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1e293b' }}>ניהול צוות — {branchName}</h1>
         </div>
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: branchColor }}>
-          <Users size={20} className="text-white" />
-        </div>
-      </motion.div>
+      </div>
 
       {/* Category cards */}
-      {categories.map(cat => (
-        <div key={cat.title} style={{ marginBottom: 20 }}>
-          <div className="flex items-center gap-2" style={{ marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #e2e8f0' }}>
-            <cat.icon size={16} style={{ color: '#94a3b8' }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>{cat.title}</span>
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 16px' }}>
+        {categories.map(cat => (
+          <div key={cat.title} style={{ marginBottom: 28 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', borderBottom: '1px solid #f1f5f9', paddingBottom: 8, marginBottom: 12 }}>
+              {cat.title}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3" style={{ gap: 12 }}>
+              {cat.items.map(item => (
+                <button key={item.page + item.label} onClick={() => onNavigate(item.page)}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#c7d2fe' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#f1f5f9' }}
+                  style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px', textAlign: 'right', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', transition: 'all 0.18s', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <item.Icon size={18} color="#6366f1" strokeWidth={1.5} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>{item.label}</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{item.subtitle}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {cat.items.map(item => (
-              <button key={item.page + item.label} onClick={() => onNavigate(item.page)}
-                style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 14px', textAlign: 'right', cursor: 'pointer' }}
-                className="hover:shadow-sm transition-shadow">
-                <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
-                  <item.Icon size={16} style={{ color: branchColor }} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{item.label}</span>
-                </div>
-                <span style={{ fontSize: 11, color: '#94a3b8' }}>{item.subtitle}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }

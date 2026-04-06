@@ -64,23 +64,23 @@ interface MenuItem {
   subtitle: string
   Icon: any
   ready: boolean
-  cardBg: string
-  cardBorder: string
+  cardBg?: string
+  cardBorder?: string
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { page: 'dashboard', label: 'דשבורד סניף',   subtitle: 'KPI · הכנסות · הוצאות · גרפים', Icon: BarChart2, ready: true, cardBg: '#eff6ff', cardBorder: '#93c5fd' },
-  { page: 'revenue',   label: 'הכנסות',        subtitle: 'קופה · אתר · הקפה',        Icon: ShoppingBag, ready: true, cardBg: '#f0fdf4', cardBorder: '#bbf7d0' },
-  { page: 'expenses',  label: 'הוצאות',         subtitle: 'ספקים · תיקונים · תשתיות', Icon: Receipt,     ready: true, cardBg: '#fef2f2', cardBorder: '#fecaca' },
-  { page: 'labor',     label: 'לייבור',          subtitle: 'שעות · עלות מעסיק',         Icon: Users,       ready: true, cardBg: '#fffbeb', cardBorder: '#fde68a' },
-  { page: 'branch-team', label: 'ניהול צוות',       subtitle: 'סידור עבודה · משימות · עובדים', Icon: Users,       ready: true, cardBg: '#f0f9ff', cardBorder: '#bae6fd' },
-  { page: 'waste',     label: 'פחת',             subtitle: 'סחורה · חומרי גלם',         Icon: Trash2,      ready: true, cardBg: '#fdf2f8', cardBorder: '#fbcfe8' },
-  { page: 'suppliers', label: 'ספקים',           subtitle: 'ניהול · קטגוריות',           Icon: Building2,   ready: true, cardBg: '#ecfeff', cardBorder: '#a5f3fc' },
-  { page: 'customers', label: 'לקוחות הקפה',    subtitle: 'חובות · תשלומים',            Icon: TrendingUp,  ready: true, cardBg: '#f5f3ff', cardBorder: '#ddd6fe' },
-  { page: 'orders',    label: 'הזמנות מהמפעל',  subtitle: 'אישור · עריכה · חומרי גלם', Icon: Package,     ready: true, cardBg: '#fef3c7', cardBorder: '#fde68a' },
+  { page: 'dashboard', label: 'דשבורד סניף',   subtitle: 'KPI · הכנסות · הוצאות · גרפים', Icon: BarChart2, ready: true },
+  { page: 'revenue',   label: 'הכנסות',        subtitle: 'קופה · אתר · הקפה',        Icon: ShoppingBag, ready: true },
+  { page: 'expenses',  label: 'הוצאות',         subtitle: 'ספקים · תיקונים · תשתיות', Icon: Receipt,     ready: true },
+  { page: 'labor',     label: 'לייבור',          subtitle: 'שעות · עלות מעסיק',         Icon: Users,       ready: true },
+  { page: 'branch-team', label: 'ניהול צוות',       subtitle: 'סידור עבודה · משימות · עובדים', Icon: Users,       ready: true },
+  { page: 'waste',     label: 'פחת',             subtitle: 'סחורה · חומרי גלם',         Icon: Trash2,      ready: true },
+  { page: 'suppliers', label: 'ספקים',           subtitle: 'ניהול · קטגוריות',           Icon: Building2,   ready: true },
+  { page: 'customers', label: 'לקוחות הקפה',    subtitle: 'חובות · תשלומים',            Icon: TrendingUp,  ready: true },
+  { page: 'orders',    label: 'הזמנות מהמפעל',  subtitle: 'אישור · עריכה · חומרי גלם', Icon: Package,     ready: true },
   // BranchPL removed — P&L now integrated in BranchDashboard
-  { page: 'settings',     label: 'הגדרות סניף',    subtitle: 'KPI · עלויות קבועות · עובדים', Icon: Settings,    ready: true, cardBg: '#f8fafc', cardBorder: '#e2e8f0' },
-  { page: 'data_import',  label: 'ייבוא נתונים',   subtitle: 'CSV מ-Base44 · העלאה',         Icon: Upload,      ready: true, cardBg: '#f0f9ff', cardBorder: '#bae6fd' },
+  { page: 'settings',     label: 'הגדרות סניף',    subtitle: 'KPI · עלויות קבועות · עובדים', Icon: Settings,    ready: true },
+  { page: 'data_import',  label: 'ייבוא נתונים',   subtitle: 'CSV מ-Base44 · העלאה',         Icon: Upload,      ready: true },
 ]
 
 export default function BranchHome({ branch, onBack }: Props) {
@@ -190,28 +190,27 @@ export default function BranchHome({ branch, onBack }: Props) {
     </div>
   )
 
+  const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
+      <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: 16, borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
         <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
           <ArrowRight size={22} />
           חזרה
         </Button>
-        <div style={{ width: '44px', height: '44px', background: branch.color, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 4px 14px ${branch.color}55` }}>
-          <Building2 size={22} color="white" />
-        </div>
         <div>
-          <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>סניף {branch.name}</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>ניהול הכנסות · הוצאות · KPI</p>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1e293b' }}>סניף {branch.name}</h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>{today}</p>
         </div>
       </div>
 
       {/* ─── כרטיסי מודולים ──────────────────────────────────────────────── */}
-      <div className="page-container" style={{ padding: '36px', maxWidth: '960px', margin: '0 auto' }}>
+      <div style={{ padding: '36px', maxWidth: '960px', margin: '0 auto' }}>
         <motion.div
-          style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}
           variants={staggerContainer}
           initial="hidden"
           animate="visible"
@@ -231,33 +230,32 @@ export default function BranchHome({ branch, onBack }: Props) {
                   onMouseLeave={() => setHovCard(null)}
                   style={{
                     width: '100%',
-                    background: isHov && item.ready ? branch.color : item.cardBg,
-                    border: `2px solid ${isHov && item.ready ? branch.color : item.cardBorder}`,
-                    borderRadius: '22px', padding: '32px',
-                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '18px',
+                    background: 'white',
+                    border: `1px solid ${isHov && item.ready ? '#c7d2fe' : '#f1f5f9'}`,
+                    borderRadius: 12, padding: '20px',
+                    display: 'flex', alignItems: 'center', gap: 14,
                     cursor: 'pointer', transition: 'all 0.18s',
-                    transform: isHov && item.ready ? 'translateY(-4px)' : 'none',
-                    boxShadow: isHov && item.ready ? `0 16px 40px ${branch.color}35` : '0 2px 8px rgba(0,0,0,0.06)',
+                    boxShadow: isHov && item.ready ? '0 4px 12px rgba(0,0,0,0.06)' : '0 1px 3px rgba(0,0,0,0.04)',
                     textAlign: 'right', opacity: item.ready ? 1 : 0.6,
                     position: 'relative' as const
                   }}
                 >
                   {!item.ready && (
-                    <span style={{ position: 'absolute', top: '14px', left: '14px', background: '#f1f5f9', color: '#94a3b8', fontSize: '11px', padding: '3px 8px', borderRadius: '8px', fontWeight: '600' }}>
+                    <span style={{ position: 'absolute', top: 10, left: 10, background: '#f1f5f9', color: '#94a3b8', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 600 }}>
                       בקרוב
                     </span>
                   )}
                   {item.page === 'orders' && pendingOrders > 0 && (
-                    <span style={{ position: 'absolute', top: '14px', left: '14px', background: '#fb7185', color: 'white', fontSize: '12px', fontWeight: '800', minWidth: '24px', height: '24px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px', boxShadow: '0 2px 8px rgba(251,113,133,0.4)' }}>
+                    <span style={{ position: 'absolute', top: 10, left: 10, background: '#fb7185', color: 'white', fontSize: 12, fontWeight: 800, minWidth: 24, height: 24, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px', boxShadow: '0 2px 8px rgba(251,113,133,0.4)' }}>
                       {pendingOrders}
                     </span>
                   )}
-                  <div style={{ width: '60px', height: '60px', background: isHov && item.ready ? 'rgba(255,255,255,0.22)' : branch.color + '18', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon size={30} color={isHov && item.ready ? 'white' : branch.color} />
+                  <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Icon size={18} color="#6366f1" strokeWidth={1.5} />
                   </div>
                   <div>
-                    <div style={{ fontSize: '19px', fontWeight: '800', color: isHov && item.ready ? 'white' : '#0f172a' }}>{item.label}</div>
-                    <div style={{ fontSize: '14px', color: isHov && item.ready ? 'rgba(255,255,255,0.7)' : '#64748b', marginTop: '5px' }}>{item.subtitle}</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>{item.label}</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{item.subtitle}</div>
                   </div>
                 </button>
               </motion.div>

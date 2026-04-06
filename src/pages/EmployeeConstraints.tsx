@@ -36,11 +36,13 @@ interface EmployeeRoleAssignment {
   role_id: number
 }
 
-const AVAIL_CONFIG: Record<Availability, { label: string; icon: string; color: string; bg: string; border: string }> = {
-  available:    { label: 'פנוי',         icon: '✓', color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
-  prefer_not:   { label: 'מעדיף שלא',   icon: '~', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
-  unavailable:  { label: 'לא יכול',     icon: '✕', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+const AVAIL_CONFIG: Record<Availability, { label: string; icon: string; color: string; border: string }> = {
+  available:    { label: 'פנוי',         icon: '✓', color: '#10b981', border: '#a7f3d0' },
+  prefer_not:   { label: 'מעדיף שלא',   icon: '~', color: '#f59e0b', border: '#fde68a' },
+  unavailable:  { label: 'לא יכול',     icon: '✕', color: '#ef4444', border: '#fecaca' },
 }
+
+const UNSET_BORDER = '#e2e8f0'
 
 const CYCLE_ORDER: Availability[] = ['available', 'prefer_not', 'unavailable']
 
@@ -249,9 +251,24 @@ export default function EmployeeConstraints({ onBack }: Props) {
     )
   }
 
+  // Helper to get cell style for availability
+  function getCellStyle(current: Availability | null): React.CSSProperties {
+    if (!current) {
+      return {
+        border: `1px solid ${UNSET_BORDER}`,
+        background: 'white',
+      }
+    }
+    const ac = AVAIL_CONFIG[current]
+    return {
+      border: `1px solid ${ac.border}`,
+      background: 'white',
+    }
+  }
+
   // ─── Render ────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-b from-indigo-50 to-white" dir="rtl">
+    <div style={{ minHeight: '100vh', background: '#f8fafc' }} dir="rtl">
       <div className="max-w-lg mx-auto px-4 py-6">
         {/* Header */}
         <motion.div variants={fadeIn(0)} initial="hidden" animate="visible" className="flex items-center gap-3 mb-6">
@@ -259,7 +276,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
             <ArrowRight size={16} /> חזרה
           </Button>
           <div className="flex-1 text-center">
-            <h1 className="text-xl font-bold text-slate-800">הזמינות שלי 🙋</h1>
+            <h1 className="text-xl font-bold text-slate-800">הזמינות שלי</h1>
             {branchName && <p className="text-xs text-slate-400 mt-0.5">{branchName}</p>}
           </div>
         </motion.div>
@@ -292,7 +309,6 @@ export default function EmployeeConstraints({ onBack }: Props) {
 
         {noEmployee ? (
           <div className="text-center py-12">
-            <div className="text-4xl mb-4">😕</div>
             <p className="text-slate-500 font-semibold">לא נמצאת כעובד במערכת</p>
             <p className="text-sm text-slate-400 mt-2">פנה למנהל הסניף שלך לקישור החשבון.</p>
           </div>
@@ -301,10 +317,11 @@ export default function EmployeeConstraints({ onBack }: Props) {
           <>
             {/* Legend */}
             <motion.div variants={fadeIn(0.05)} initial="hidden" animate="visible"
-              className="flex justify-center gap-4 mb-5 text-xs">
+              className="flex justify-center gap-5 mb-5 text-xs">
               {Object.entries(AVAIL_CONFIG).map(([, cfg]) => (
-                <span key={cfg.label} className="flex items-center gap-1" style={{ color: cfg.color }}>
-                  <span style={{ fontWeight: '700' }}>{cfg.icon}</span> {cfg.label}
+                <span key={cfg.label} className="flex items-center gap-1.5" style={{ color: cfg.color }}>
+                  <span style={{ fontWeight: '700', fontSize: 11 }}>{cfg.icon}</span>
+                  <span style={{ color: '#64748b' }}>{cfg.label}</span>
                 </span>
               ))}
             </motion.div>
@@ -382,12 +399,25 @@ export default function EmployeeConstraints({ onBack }: Props) {
 
                       {/* Content */}
                       {mIsSat ? (
-                        <div className="bg-slate-50 rounded-xl p-8 text-center" style={{ border: '0.5px solid #e2e8f0' }}>
-                          <div className="text-2xl mb-2">🕊️</div>
+                        <div style={{
+                          background: 'white',
+                          border: '1px solid #f1f5f9',
+                          borderRadius: 12,
+                          padding: 32,
+                          textAlign: 'center',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                        }}>
                           <div className="text-slate-400 font-semibold">שבת — יום מנוחה</div>
                         </div>
                       ) : mShifts.length === 0 ? (
-                        <div className="bg-white rounded-xl p-8 text-center" style={{ border: '0.5px solid #e2e8f0' }}>
+                        <div style={{
+                          background: 'white',
+                          border: '1px solid #f1f5f9',
+                          borderRadius: 12,
+                          padding: 32,
+                          textAlign: 'center',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                        }}>
                           <div className="text-slate-400 text-sm">אין משמרות ביום זה</div>
                         </div>
                       ) : (
@@ -400,10 +430,22 @@ export default function EmployeeConstraints({ onBack }: Props) {
                             const nextAvail = CYCLE_ORDER[(CYCLE_ORDER.indexOf(current) + 1) % 3]
 
                             return (
-                              <div key={shift.id} className="bg-white rounded-xl overflow-hidden" style={{ border: '0.5px solid #e2e8f0' }}>
-                                <div className="px-4 py-2 bg-slate-50 flex items-center justify-between" style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                  <span className="text-sm font-bold text-slate-700">{shift.name}</span>
-                                  <span className="text-xs text-slate-400">{formatTime(shift.start_time)} — {formatTime(shift.end_time)}</span>
+                              <div key={shift.id} style={{
+                                background: 'white',
+                                border: '1px solid #f1f5f9',
+                                borderRadius: 12,
+                                overflow: 'hidden',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                              }}>
+                                <div style={{
+                                  padding: '10px 16px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  borderBottom: '1px solid #f1f5f9',
+                                }}>
+                                  <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{shift.name}</span>
+                                  <span style={{ fontSize: 12, color: '#94a3b8' }}>{formatTime(shift.start_time)} — {formatTime(shift.end_time)}</span>
                                 </div>
                                 <motion.button
                                   whileTap={{ scale: 0.96 }}
@@ -412,7 +454,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
                                   style={{
                                     height: '100px',
                                     border: 'none',
-                                    background: ac.bg,
+                                    background: 'white',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     flexDirection: 'column',
@@ -420,8 +462,8 @@ export default function EmployeeConstraints({ onBack }: Props) {
                                     justifyContent: 'center',
                                     gap: '4px',
                                   }}>
-                                  <span style={{ fontSize: '32px', fontWeight: '800', color: ac.color, lineHeight: 1 }}>{ac.icon}</span>
-                                  <span style={{ fontSize: '14px', fontWeight: '700', color: ac.color }}>{ac.label}</span>
+                                  <span style={{ fontSize: '28px', fontWeight: '800', color: ac.color, lineHeight: 1 }}>{ac.icon}</span>
+                                  <span style={{ fontSize: '13px', fontWeight: '600', color: ac.color }}>{ac.label}</span>
                                   {isSaved && (
                                     <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
                                       style={{ position: 'absolute', top: '8px', left: '8px' }}
@@ -442,21 +484,27 @@ export default function EmployeeConstraints({ onBack }: Props) {
 
               {/* ═══ DESKTOP: Weekly grid table ═══ */}
               <motion.div variants={fadeIn(0.15)} initial="hidden" animate="visible"
-                className="hidden md:block bg-white rounded-xl overflow-hidden" style={{ border: '0.5px solid #e2e8f0' }}>
+                className="hidden md:block" style={{
+                  background: 'white',
+                  borderRadius: 12,
+                  overflow: 'hidden',
+                  border: '1px solid #f1f5f9',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                }}>
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse" style={{ minWidth: '600px' }}>
                     <thead>
-                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                        <th className="px-3 py-2 text-xs font-bold text-slate-500 text-right sticky right-0 bg-slate-50 z-10" style={{ minWidth: '90px' }}>
+                      <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <th className="px-3 py-2 text-xs font-bold text-slate-500 text-right sticky right-0 bg-white z-10" style={{ minWidth: '90px' }}>
                           משמרת
                         </th>
                         {weekDays.map((date, i) => {
                           const isSat = i === 6
                           return (
                             <th key={date} className="px-1 py-2 text-center text-xs font-bold"
-                              style={{ color: isSat ? '#cbd5e1' : '#64748b', background: isSat ? '#f1f5f9' : undefined }}>
+                              style={{ color: isSat ? '#cbd5e1' : '#64748b' }}>
                               <div>{DAY_NAMES_SHORT[i]}</div>
-                              <div className="text-[10px] font-normal">{formatShortDate(date)}</div>
+                              <div className="text-[10px] font-normal" style={{ color: '#94a3b8' }}>{formatShortDate(date)}</div>
                             </th>
                           )
                         })}
@@ -464,7 +512,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
                     </thead>
                     <tbody>
                       {getWeekShifts().map(shift => (
-                        <tr key={shift.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <tr key={shift.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                           <td className="px-3 py-2 text-xs font-semibold text-slate-700 sticky right-0 bg-white z-10">
                             <div>{shift.name}</div>
                             <div className="text-[10px] text-slate-400 font-normal">
@@ -479,7 +527,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
                             if (isSat) {
                               return (
                                 <td key={date} className="p-1">
-                                  <div style={{ height: '64px', borderRadius: '10px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <div style={{ height: '64px', borderRadius: '8px', background: '#fafafa', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <span className="text-[10px] text-slate-300">שבת</span>
                                   </div>
                                 </td>
@@ -489,7 +537,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
                             if (!applies) {
                               return (
                                 <td key={date} className="p-1">
-                                  <div style={{ height: '64px', borderRadius: '10px', background: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <div style={{ height: '64px', borderRadius: '8px', background: '#fafafa', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <span className="text-slate-200">—</span>
                                   </div>
                                 </td>
@@ -510,9 +558,9 @@ export default function EmployeeConstraints({ onBack }: Props) {
                                   className="w-full transition-colors duration-200 relative"
                                   style={{
                                     height: '64px',
-                                    borderRadius: '10px',
-                                    border: `1.5px solid ${ac.border}`,
-                                    background: ac.bg,
+                                    borderRadius: '8px',
+                                    border: `1px solid ${ac.border}`,
+                                    background: 'white',
                                     cursor: 'pointer',
                                     display: 'flex',
                                     flexDirection: 'column',
@@ -520,7 +568,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
                                     justifyContent: 'center',
                                     gap: '2px',
                                   }}>
-                                  <span style={{ fontSize: '20px', fontWeight: '800', color: ac.color, lineHeight: 1 }}>{ac.icon}</span>
+                                  <span style={{ fontSize: '16px', fontWeight: '700', color: ac.color, lineHeight: 1 }}>{ac.icon}</span>
                                   <span style={{ fontSize: '9px', fontWeight: '600', color: ac.color }}>{ac.label}</span>
                                   {isSaved && (
                                     <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
@@ -552,7 +600,13 @@ export default function EmployeeConstraints({ onBack }: Props) {
                 המנהל טרם הגדיר תפקידים לסניף
               </div>
             ) : (
-              <div className="bg-white rounded-xl overflow-hidden" style={{ border: '0.5px solid #e2e8f0' }}>
+              <div style={{
+                background: 'white',
+                borderRadius: 12,
+                overflow: 'hidden',
+                border: '1px solid #f1f5f9',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              }}>
                 {roles.map((role, idx) => {
                   const isAssigned = assignments.some(a => a.role_id === role.id)
                   return (
