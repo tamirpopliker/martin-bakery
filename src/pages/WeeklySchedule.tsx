@@ -55,6 +55,16 @@ interface StaffingRequirement {
 interface BranchEmployee {
   id: number
   name: string
+  priority: number
+  min_shifts_per_week: number
+}
+
+interface SpecialDay {
+  id: number
+  date: string
+  name: string
+  type: string
+  staffing_multiplier: number
 }
 
 interface EmployeeRoleAssignment {
@@ -128,8 +138,11 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
   const [roleAssignments, setRoleAssignments] = useState<EmployeeRoleAssignment[]>([])
   const [constraints, setConstraints] = useState<Constraint[]>([])
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([])
+  const [specialDays, setSpecialDays] = useState<SpecialDay[]>([])
   const [loading, setLoading] = useState(true)
   const [popover, setPopover] = useState<PopoverState | null>(null)
+  const [showAutoDialog, setShowAutoDialog] = useState(false)
+  const [showClearDialog, setShowClearDialog] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
 
   const currentWeekSunday = getSundayOfCurrentWeek()
@@ -148,19 +161,22 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     const dateFrom = weekDates[0]
     const dateTo = weekDates[5]
 
-    const [shiftsRes, rolesRes, staffingRes, empsRes, roleAssignRes, constraintsRes, assignmentsRes] = await Promise.all([
+    const [shiftsRes, rolesRes, staffingRes, empsRes, roleAssignRes, constraintsRes, assignmentsRes, specialDaysRes] = await Promise.all([
       supabase.from('branch_shifts').select('id, name, start_time, end_time, days_of_week')
         .eq('branch_id', branchId).eq('is_active', true).order('start_time'),
       supabase.from('shift_roles').select('id, name, color')
         .eq('branch_id', branchId).eq('is_active', true).order('name'),
       supabase.from('shift_staffing_requirements').select('shift_id, role_id, required_count'),
-      supabase.from('branch_employees').select('id, name')
+      supabase.from('branch_employees').select('id, name, priority, min_shifts_per_week')
         .eq('branch_id', branchId).eq('active', true).order('name'),
       supabase.from('employee_role_assignments').select('employee_id, role_id'),
       supabase.from('schedule_constraints').select('employee_id, date, availability, shift_id')
         .eq('branch_id', branchId).gte('date', dateFrom).lte('date', dateTo),
       supabase.from('shift_assignments').select('id, shift_id, employee_id, role_id, date')
         .eq('branch_id', branchId).gte('date', dateFrom).lte('date', dateTo),
+      supabase.from('special_days').select('*')
+        .or(`branch_id.eq.${branchId},branch_id.is.null`)
+        .gte('date', dateFrom).lte('date', dateTo),
     ])
 
     if (shiftsRes.data) setShifts(shiftsRes.data as BranchShift[])
@@ -170,6 +186,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     if (roleAssignRes.data) setRoleAssignments(roleAssignRes.data as EmployeeRoleAssignment[])
     if (constraintsRes.data) setConstraints(constraintsRes.data as Constraint[])
     if (assignmentsRes.data) setAssignments(assignmentsRes.data as ShiftAssignment[])
+    if (specialDaysRes.data) setSpecialDays(specialDaysRes.data as SpecialDay[])
 
     setLoading(false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -192,13 +209,33 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     return shifts.filter(s => s.days_of_week && s.days_of_week.includes(dayIndex))
   }
 
-  function getRolesForShift(shiftId: number): { roleId: number; roleName: string; roleColor: string; count: number }[] {
-    const reqs = staffingReqs.filter(r => r.shift_id === shiftId)
+  function getAdjustedRequired(shiftId: number, date: string): { roleId: number; count: number }[] {
+    const sd = specialDays.find(s => s.date === date)
+    const multiplier = sd?.staffing_multiplier || 1.0
+    const base = staffingReqs.filter(sr => sr.shift_id === shiftId)
+    return base.map(sr => ({
+      roleId: sr.role_id,
+      count: Math.ceil(sr.required_count * multiplier)
+    }))
+  }
+
+  function getRolesForShift(shiftId: number, date?: string): { roleId: number; roleName: string; roleColor: string; count: number }[] {
+    const adjustedReqs = date ? getAdjustedRequired(shiftId, date) : null
     const result: { roleId: number; roleName: string; roleColor: string; count: number }[] = []
-    for (const req of reqs) {
-      const role = roles.find(r => r.id === req.role_id)
-      if (role && req.required_count > 0) {
-        result.push({ roleId: role.id, roleName: role.name, roleColor: role.color, count: req.required_count })
+    if (adjustedReqs) {
+      for (const req of adjustedReqs) {
+        const role = roles.find(r => r.id === req.roleId)
+        if (role && req.count > 0) {
+          result.push({ roleId: role.id, roleName: role.name, roleColor: role.color, count: req.count })
+        }
+      }
+    } else {
+      const reqs = staffingReqs.filter(r => r.shift_id === shiftId)
+      for (const req of reqs) {
+        const role = roles.find(r => r.id === req.role_id)
+        if (role && req.required_count > 0) {
+          result.push({ roleId: role.id, roleName: role.name, roleColor: role.color, count: req.required_count })
+        }
       }
     }
     return result
@@ -291,7 +328,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
 
   // Shift card summary
   function getShiftCardSummary(shiftId: number, date: string): { filled: number; total: number } {
-    const shiftRoles = getRolesForShift(shiftId)
+    const shiftRoles = getRolesForShift(shiftId, date)
     let total = 0
     let filled = 0
     for (const sr of shiftRoles) {
@@ -329,6 +366,102 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     return { totalShifts, fullShifts, incompleteShifts, unassigned }
   }
 
+  async function runAutoSchedule() {
+    setShowAutoDialog(false)
+
+    // Delete existing assignments for this week
+    await supabase.from('shift_assignments').delete()
+      .eq('branch_id', branchId)
+      .gte('date', weekDates[0])
+      .lte('date', weekDates[5])
+
+    const newAssignments: { branch_id: number; shift_id: number; employee_id: number; role_id: number; date: string }[] = []
+    const empShiftCount: Record<number, number> = {}
+    employees.forEach(e => { empShiftCount[e.id] = 0 })
+    const empDayAssigned: Record<string, boolean> = {}
+
+    for (let dayIdx = 0; dayIdx < 6; dayIdx++) {
+      const date = weekDates[dayIdx]
+      const dayShifts = getShiftsForDay(dayIdx)
+
+      for (const shift of dayShifts) {
+        const adjustedReqs = getAdjustedRequired(shift.id, date)
+
+        for (const req of adjustedReqs) {
+          for (let slot = 0; slot < req.count; slot++) {
+            const eligible = employees.filter(emp => {
+              if (!roleAssignments.some(ra => ra.employee_id === emp.id && ra.role_id === req.roleId)) return false
+              const avail = getEmployeeAvailability(emp.id, date, shift.id)
+              if (avail === 'unavailable') return false
+              const alreadyInShift = newAssignments.some(a =>
+                a.employee_id === emp.id && a.shift_id === shift.id && a.date === date)
+              if (alreadyInShift) return false
+              return true
+            })
+
+            const scored = eligible.map(emp => {
+              let score = 0
+              const avail = getEmployeeAvailability(emp.id, date, shift.id)
+              if (avail === 'available' || avail === null) score += 50
+              else if (avail === 'prefer_not') score += 20
+              const p = emp.priority || 2
+              if (p === 1) score += 40
+              else if (p === 2) score += 20
+              const minReq = emp.min_shifts_per_week || 0
+              if (minReq > 0 && empShiftCount[emp.id] < minReq) score += 30
+              score += Math.max(0, 10 - empShiftCount[emp.id] * 2)
+              if (empDayAssigned[`${emp.id}_${date}`]) score -= 20
+              return { emp, score }
+            })
+
+            scored.sort((a, b) => b.score - a.score)
+
+            if (scored.length > 0 && scored[0].score > 0) {
+              const chosen = scored[0].emp
+              newAssignments.push({
+                branch_id: branchId,
+                shift_id: shift.id,
+                employee_id: chosen.id,
+                role_id: req.roleId,
+                date,
+              })
+              empShiftCount[chosen.id] = (empShiftCount[chosen.id] || 0) + 1
+              empDayAssigned[`${chosen.id}_${date}`] = true
+            }
+          }
+        }
+      }
+    }
+
+    if (newAssignments.length > 0) {
+      await supabase.from('shift_assignments').insert(newAssignments)
+    }
+
+    await loadData()
+
+    let unfilled = 0
+    for (let dayIdx = 0; dayIdx < 6; dayIdx++) {
+      const date = weekDates[dayIdx]
+      for (const shift of getShiftsForDay(dayIdx)) {
+        const reqs = getAdjustedRequired(shift.id, date)
+        const totalReq = reqs.reduce((s, r) => s + r.count, 0)
+        const filled = newAssignments.filter(a => a.shift_id === shift.id && a.date === date).length
+        unfilled += Math.max(0, totalReq - filled)
+      }
+    }
+
+    alert(`\u2705 \u05E9\u05D5\u05D1\u05E6\u05D5 ${newAssignments.length} \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD${unfilled > 0 ? ` | \u26A0\uFE0F \u05E0\u05D5\u05EA\u05E8\u05D5 ${unfilled} \u05EA\u05E4\u05E7\u05D9\u05D3\u05D9\u05DD \u05DC\u05DC\u05D0 \u05DB\u05D9\u05E1\u05D5\u05D9` : ''}`)
+  }
+
+  async function clearWeekAssignments() {
+    setShowClearDialog(false)
+    await supabase.from('shift_assignments').delete()
+      .eq('branch_id', branchId)
+      .gte('date', weekDates[0])
+      .lte('date', weekDates[5])
+    setAssignments([])
+  }
+
   const summary = !loading ? getWeeklySummary() : null
 
   return (
@@ -359,6 +492,16 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
           onClick={() => setWeekStart(prev => addDays(prev, 7))} className="rounded-lg">
           <ChevronLeft size={16} />
         </Button>
+        <Button onClick={() => setShowAutoDialog(true)}
+          style={{ background: '#6366f1', color: 'white' }}
+          className="gap-2">
+          <span>{'\u2728'}</span> {'\u05E9\u05D1\u05E5 \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05EA'}
+        </Button>
+        <Button variant="outline" onClick={() => setShowClearDialog(true)}
+          style={{ borderColor: '#ef4444', color: '#ef4444' }}
+          className="gap-2">
+          {'\u05E0\u05E7\u05D4 \u05E9\u05D9\u05D1\u05D5\u05E5'}
+        </Button>
       </div>
 
       {loading ? (
@@ -374,13 +517,21 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
                   <div className="text-center mb-2">
                     <div className="text-sm font-bold text-slate-700">{DAY_NAMES[dayIdx]}</div>
                     <div className="text-xs text-slate-400">{formatShortDate(addDays(weekStart, dayIdx))}</div>
+                    {(() => {
+                      const sd = specialDays.find(s => s.date === date)
+                      if (!sd) return null
+                      const badge = sd.type === 'holiday' ? { bg: '#ede9fe', color: '#7c3aed', icon: '\u{1F54E}' }
+                        : sd.type === 'high_demand' ? { bg: '#fef2f2', color: '#dc2626', icon: '\u{1F4C8}' }
+                        : { bg: '#eff6ff', color: '#2563eb', icon: '\u{1F4C9}' }
+                      return <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '6px', background: badge.bg, color: badge.color }}>{badge.icon} {sd.name}</span>
+                    })()}
                   </div>
                   <div className="flex flex-col gap-3">
                     {dayShifts.length === 0 && (
                       <div className="text-center text-xs text-slate-300 py-4">{'\u05D0\u05D9\u05DF \u05DE\u05E9\u05DE\u05E8\u05D5\u05EA'}</div>
                     )}
                     {dayShifts.map(shift => {
-                      const shiftRoles = getRolesForShift(shift.id)
+                      const shiftRoles = getRolesForShift(shift.id, date)
                       const cardSummary = getShiftCardSummary(shift.id, date)
                       const isFull = cardSummary.total > 0 && cardSummary.filled >= cardSummary.total
 
@@ -500,6 +651,34 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
             </Card>
           )}
         </>
+      )}
+
+      {/* Auto-schedule dialog */}
+      {showAutoDialog && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowAutoDialog(false)}>
+          <div className="bg-white rounded-xl p-6 max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-2">{'\u05E9\u05D9\u05D1\u05D5\u05E5 \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9'}</h3>
+            <p className="text-sm text-slate-600 mb-4">{'\u05D4\u05D0\u05DD \u05DC\u05E9\u05D1\u05E5 \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05EA \u05D0\u05EA \u05D4\u05E9\u05D1\u05D5\u05E2? \u05E4\u05E2\u05D5\u05DC\u05D4 \u05D6\u05D5 \u05EA\u05D7\u05DC\u05D9\u05E3 \u05E9\u05D9\u05D1\u05D5\u05E6\u05D9\u05DD \u05E7\u05D9\u05D9\u05DE\u05D9\u05DD.'}</p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowAutoDialog(false)}>{'\u05D1\u05D9\u05D8\u05D5\u05DC'}</Button>
+              <Button onClick={runAutoSchedule} style={{ background: '#6366f1', color: 'white' }}>{'\u05E9\u05D1\u05E5'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear dialog */}
+      {showClearDialog && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowClearDialog(false)}>
+          <div className="bg-white rounded-xl p-6 max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-2">{'\u05E0\u05D9\u05E7\u05D5\u05D9 \u05E9\u05D9\u05D1\u05D5\u05E6\u05D9\u05DD'}</h3>
+            <p className="text-sm text-slate-600 mb-4">{'\u05D4\u05D0\u05DD \u05DC\u05DE\u05D7\u05D5\u05E7 \u05D0\u05EA \u05DB\u05DC \u05D4\u05E9\u05D9\u05D1\u05D5\u05E6\u05D9\u05DD \u05DC\u05E9\u05D1\u05D5\u05E2 \u05D6\u05D4?'}</p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowClearDialog(false)}>{'\u05D1\u05D9\u05D8\u05D5\u05DC'}</Button>
+              <Button onClick={clearWeekAssignments} style={{ background: '#ef4444', color: 'white' }}>{'\u05E0\u05E7\u05D4'}</Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Employee selection popover */}

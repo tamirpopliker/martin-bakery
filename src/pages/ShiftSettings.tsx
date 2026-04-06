@@ -41,6 +41,25 @@ interface BranchEmployee {
   id: number
   name: string
   active: boolean
+  priority: number | null
+  min_shifts_per_week: number | null
+}
+
+interface SpecialDay {
+  id: number
+  branch_id: number | null
+  date: string
+  name: string
+  type: string
+  staffing_multiplier: number
+  source: string | null
+}
+
+interface HebcalItem {
+  title: string
+  date: string
+  category: string
+  hebrew?: string
 }
 
 interface EmployeeRoleAssignment {
@@ -49,7 +68,7 @@ interface EmployeeRoleAssignment {
   role_id: number
 }
 
-type Tab = 'roles' | 'shifts' | 'staffing' | 'employees'
+type Tab = 'roles' | 'shifts' | 'staffing' | 'employees' | 'holidays'
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5 } } }
 
@@ -70,6 +89,7 @@ export default function ShiftSettings({ branchId, branchName, branchColor, onBac
     { key: 'shifts', label: 'משמרות' },
     { key: 'staffing', label: 'דרישות כוח אדם' },
     { key: 'employees', label: 'תפקידי עובדים' },
+    { key: 'holidays', label: 'חגים ועומס' },
   ]
 
   return (
@@ -108,6 +128,7 @@ export default function ShiftSettings({ branchId, branchName, branchColor, onBac
       {tab === 'shifts' && <ShiftsTab branchId={branchId} />}
       {tab === 'staffing' && <StaffingTab branchId={branchId} />}
       {tab === 'employees' && <EmployeesTab branchId={branchId} />}
+      {tab === 'holidays' && <HolidaysTab branchId={branchId} />}
     </motion.div>
   )
 }
@@ -476,7 +497,7 @@ function EmployeesTab({ branchId }: { branchId: number }) {
   useEffect(() => {
     async function load() {
       const [empRes, rolesRes, assignRes] = await Promise.all([
-        supabase.from('branch_employees').select('id, name, active').eq('branch_id', branchId).eq('active', true).order('name'),
+        supabase.from('branch_employees').select('id, name, active, priority, min_shifts_per_week').eq('branch_id', branchId).eq('active', true).order('name'),
         supabase.from('shift_roles').select('*').eq('branch_id', branchId).eq('is_active', true).order('name'),
         supabase.from('employee_role_assignments').select('*'),
       ])
@@ -531,6 +552,8 @@ function EmployeesTab({ branchId }: { branchId: number }) {
             <thead>
               <tr>
                 <th style={{ textAlign: 'right', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>עובד</th>
+                <th style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '2px solid #e2e8f0', fontWeight: '700', fontSize: '12px' }}>עדיפות</th>
+                <th style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '2px solid #e2e8f0', fontWeight: '700', fontSize: '12px' }}>מינ׳ משמרות</th>
                 {roles.map(role => (
                   <th key={role.id} style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '2px solid #e2e8f0' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
@@ -561,6 +584,35 @@ function EmployeesTab({ branchId }: { branchId: number }) {
                         )}
                       </div>
                     </td>
+                    <td style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '1px solid #f1f5f9' }}>
+                      <select
+                        value={emp.priority || 2}
+                        onChange={async (e) => {
+                          const priority = Number(e.target.value)
+                          await supabase.from('branch_employees').update({ priority }).eq('id', emp.id)
+                          setEmployees(prev => prev.map(x => x.id === emp.id ? { ...x, priority } : x))
+                        }}
+                        style={{ fontSize: '13px', padding: '4px 6px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontFamily: 'inherit', cursor: 'pointer' }}
+                      >
+                        <option value={1}>&#x1F947; עדיפות גבוהה</option>
+                        <option value={2}>&#x1F464; רגיל</option>
+                        <option value={3}>&#x1F504; גמיש</option>
+                      </select>
+                    </td>
+                    <td style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '1px solid #f1f5f9' }}>
+                      <input
+                        type="number"
+                        min={0}
+                        max={7}
+                        value={emp.min_shifts_per_week || 0}
+                        onChange={async (e) => {
+                          const min_shifts_per_week = Number(e.target.value)
+                          await supabase.from('branch_employees').update({ min_shifts_per_week }).eq('id', emp.id)
+                          setEmployees(prev => prev.map(x => x.id === emp.id ? { ...x, min_shifts_per_week } : x))
+                        }}
+                        style={{ width: '60px', textAlign: 'center', fontSize: '14px', padding: '4px 6px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontFamily: 'inherit' }}
+                      />
+                    </td>
                     {roles.map(role => (
                       <td key={role.id} style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '1px solid #f1f5f9' }}>
                         <input type="checkbox" checked={hasAssignment(emp.id, role.id)}
@@ -573,6 +625,225 @@ function EmployeesTab({ branchId }: { branchId: number }) {
               })}
             </tbody>
           </table>
+        </CardContent>
+      </Card>
+    </motion.div>
+  )
+}
+
+/* ==================== Tab 5: Holidays & Load ==================== */
+function HolidaysTab({ branchId }: { branchId: number }) {
+  const [specialDays, setSpecialDays] = useState<SpecialDay[]>([])
+  const [loading, setLoading] = useState(true)
+  const [hebcalItems, setHebcalItems] = useState<(HebcalItem & { selected: boolean })[]>([])
+  const [hebcalLoading, setHebcalLoading] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [addForm, setAddForm] = useState({ date: '', name: '', type: 'holiday', staffing_multiplier: 1.5 })
+
+  async function fetchSpecialDays() {
+    const { data } = await supabase.from('special_days').select('*')
+      .or(`branch_id.eq.${branchId},branch_id.is.null`)
+      .order('date')
+    if (data) setSpecialDays(data)
+    setLoading(false)
+  }
+
+  useEffect(() => { fetchSpecialDays() }, [branchId])
+
+  async function loadHebcalHolidays() {
+    setHebcalLoading(true)
+    try {
+      const year = new Date().getFullYear()
+      const res = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&month=x&maj=on&min=off&mod=off&nx=off&mf=off&ss=off&i=off&geo=none`)
+      const json = await res.json()
+      const items: HebcalItem[] = (json.items || []).filter((item: HebcalItem) => item.category === 'holiday' && item.date)
+      setHebcalItems(items.map(item => ({ ...item, selected: false })))
+    } catch {
+      alert('שגיאה בטעינת חגים מהלוח העברי')
+    }
+    setHebcalLoading(false)
+  }
+
+  async function addSelectedHolidays() {
+    const selected = hebcalItems.filter(h => h.selected)
+    if (selected.length === 0) return
+    try {
+      const rows = selected.map(h => ({
+        branch_id: branchId,
+        date: h.date,
+        name: h.title,
+        type: 'holiday',
+        source: 'hebcal',
+        staffing_multiplier: 1.5,
+      }))
+      await supabase.from('special_days').insert(rows)
+      setHebcalItems([])
+      fetchSpecialDays()
+    } catch {
+      alert('שגיאה בהוספת חגים')
+    }
+  }
+
+  async function addSpecialDay() {
+    if (!addForm.date || !addForm.name.trim()) return
+    await supabase.from('special_days').insert({
+      branch_id: branchId,
+      date: addForm.date,
+      name: addForm.name.trim(),
+      type: addForm.type,
+      staffing_multiplier: addForm.staffing_multiplier,
+    })
+    setAddForm({ date: '', name: '', type: 'holiday', staffing_multiplier: 1.5 })
+    setShowAddForm(false)
+    fetchSpecialDays()
+  }
+
+  async function deleteSpecialDay(id: number) {
+    await supabase.from('special_days').delete().eq('id', id)
+    fetchSpecialDays()
+  }
+
+  const typeBadge = (type: string) => {
+    const map: Record<string, { label: string; bg: string; color: string }> = {
+      holiday: { label: '🕎 חג', bg: '#fef3c7', color: '#92400e' },
+      high_demand: { label: '📈 עומס גבוה', bg: '#fce7f3', color: '#9d174d' },
+      low_demand: { label: '📉 עומס נמוך', bg: '#d1fae5', color: '#065f46' },
+    }
+    const t = map[type] || map.holiday
+    return (
+      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: t.bg, color: t.color, fontWeight: '600' }}>
+        {t.label}
+      </span>
+    )
+  }
+
+  if (loading) return <p style={{ textAlign: 'center', color: '#94a3b8' }}>טוען...</p>
+
+  return (
+    <motion.div initial="hidden" animate="visible" variants={fadeIn}>
+      {/* Section 1: Load holidays from Hebrew calendar */}
+      <Card style={{ marginBottom: '16px' }}>
+        <CardContent style={{ padding: '16px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: '700', margin: '0 0 12px 0' }}>טען חגים אוטומטית</h3>
+          <Button onClick={loadHebcalHolidays} disabled={hebcalLoading} style={{ gap: '6px' }}>
+            {hebcalLoading ? 'טוען...' : 'טען חגים מהלוח העברי 🕎'}
+          </Button>
+
+          {hebcalItems.length > 0 && (
+            <div style={{ marginTop: '12px' }}>
+              <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px' }}>
+                {hebcalItems.map((item, i) => (
+                  <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+                    <input type="checkbox" checked={item.selected}
+                      onChange={() => setHebcalItems(prev => prev.map((h, j) => j === i ? { ...h, selected: !h.selected } : h))}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+                    <span style={{ fontSize: '14px', fontWeight: '500' }}>{item.title}</span>
+                    {item.hebrew && <span style={{ fontSize: '12px', color: '#64748b' }}>({item.hebrew})</span>}
+                    <span style={{ fontSize: '12px', color: '#94a3b8', marginRight: 'auto', direction: 'ltr' }}>{item.date}</span>
+                  </label>
+                ))}
+              </div>
+              <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
+                <Button onClick={addSelectedHolidays} style={{ gap: '6px' }}>
+                  <Plus style={{ width: '16px', height: '16px' }} /> הוסף נבחרים ({hebcalItems.filter(h => h.selected).length})
+                </Button>
+                <Button variant="ghost" onClick={() => setHebcalItems([])}>ביטול</Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section 2: Special Days */}
+      <Card>
+        <CardContent style={{ padding: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', margin: 0 }}>ימים מיוחדים</h3>
+            <Button onClick={() => setShowAddForm(!showAddForm)} style={{ gap: '6px' }}>
+              <Plus style={{ width: '16px', height: '16px' }} /> הוסף יום מיוחד
+            </Button>
+          </div>
+
+          {showAddForm && (
+            <div style={{
+              padding: '14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: '14px',
+              display: 'flex', flexDirection: 'column', gap: '10px',
+            }}>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '140px' }}>
+                  <label style={S.label}>תאריך</label>
+                  <input type="date" style={S.input} value={addForm.date}
+                    onChange={e => setAddForm({ ...addForm, date: e.target.value })} />
+                </div>
+                <div style={{ flex: 1, minWidth: '140px' }}>
+                  <label style={S.label}>שם</label>
+                  <input style={S.input} value={addForm.name}
+                    onChange={e => setAddForm({ ...addForm, name: e.target.value })}
+                    placeholder="לדוגמה: ערב פסח" />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '140px' }}>
+                  <label style={S.label}>סוג</label>
+                  <select style={{ ...S.input, cursor: 'pointer' }} value={addForm.type}
+                    onChange={e => setAddForm({ ...addForm, type: e.target.value })}>
+                    <option value="holiday">חג 🕎</option>
+                    <option value="high_demand">עומס גבוה 📈</option>
+                    <option value="low_demand">עומס נמוך 📉</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1, minWidth: '140px' }}>
+                  <label style={S.label}>מכפיל כוח אדם</label>
+                  <input type="number" min={0.5} max={2.0} step={0.1} style={S.input}
+                    value={addForm.staffing_multiplier}
+                    onChange={e => setAddForm({ ...addForm, staffing_multiplier: Number(e.target.value) })} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button onClick={addSpecialDay} style={{ gap: '6px' }}>
+                  <Check style={{ width: '16px', height: '16px' }} /> הוסף
+                </Button>
+                <Button variant="ghost" onClick={() => setShowAddForm(false)}>
+                  <X style={{ width: '16px', height: '16px' }} /> ביטול
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {specialDays.length === 0 && !showAddForm && (
+            <p style={{ textAlign: 'center', color: '#94a3b8', marginTop: '16px' }}>אין ימים מיוחדים</p>
+          )}
+
+          {specialDays.length > 0 && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'right', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>תאריך</th>
+                    <th style={{ textAlign: 'right', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>שם</th>
+                    <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>סוג</th>
+                    <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>מכפיל</th>
+                    <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {specialDays.map(day => (
+                    <tr key={day.id}>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', direction: 'ltr', textAlign: 'right' }}>{day.date}</td>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: '500' }}>{day.name}</td>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>{typeBadge(day.type)}</td>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center', fontWeight: '600' }}>x{day.staffing_multiplier}</td>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                        <Button variant="ghost" size="sm" onClick={() => deleteSpecialDay(day.id)} style={{ color: '#ef4444' }}>
+                          <Trash2 style={{ width: '16px', height: '16px' }} />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </motion.div>
