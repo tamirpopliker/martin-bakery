@@ -212,23 +212,7 @@ export function UserProvider({ session, children }: { session: Session; children
     await supabase.auth.signOut()
   }
 
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl',
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '24px', marginBottom: '12px' }}>
-            <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>&#9696;</span>
-          </div>
-          <p style={{ color: '#64748b', fontSize: '16px' }}>טוען...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Auto-retry for pending approval
+  // Auto-retry for pending approval (MUST be before conditional returns)
   useEffect(() => {
     if (!unauthorized || retryCount >= 3) return
     setRetryCountdown(5)
@@ -246,6 +230,22 @@ export function UserProvider({ session, children }: { session: Session; children
     }, 1000)
     return () => clearInterval(interval)
   }, [unauthorized, retryCount])
+
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: '#f1f5f9', fontFamily: "'Segoe UI', Arial, sans-serif", direction: 'rtl',
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '24px', marginBottom: '12px' }}>
+            <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>&#9696;</span>
+          </div>
+          <p style={{ color: '#64748b', fontSize: '16px' }}>טוען...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (unauthorized) {
     const canAutoRetry = retryCount < 3
