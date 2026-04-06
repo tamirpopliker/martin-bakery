@@ -495,6 +495,11 @@ function EmployeesTab({ branchId }: { branchId: number }) {
   const [roles, setRoles] = useState<ShiftRole[]>([])
   const [assignments, setAssignments] = useState<EmployeeRoleAssignment[]>([])
   const [loading, setLoading] = useState(true)
+  const [pendingEmpChanges, setPendingEmpChanges] = useState<Map<number, Record<string, any>>>(new Map())
+  const [pendingRoleAdds, setPendingRoleAdds] = useState<{ empId: number; roleId: number }[]>([])
+  const [pendingRoleDeletes, setPendingRoleDeletes] = useState<number[]>([]) // assignment ids to delete
+  const [isSaving, setIsSaving] = useState(false)
+  const hasPendingChanges = pendingEmpChanges.size > 0 || pendingRoleAdds.length > 0 || pendingRoleDeletes.length > 0
 
   useEffect(() => {
     async function load() {
@@ -519,19 +524,68 @@ function EmployeesTab({ branchId }: { branchId: number }) {
     return assignments.filter(a => a.employee_id === empId).length
   }
 
-  async function toggleAssignment(empId: number, roleId: number) {
+  function toggleAssignment(empId: number, roleId: number) {
     const existing = assignments.find(a => a.employee_id === empId && a.role_id === roleId)
     if (existing) {
-      setAssignments(prev => prev.filter(a => a.id !== existing.id))
-      await supabase.from('employee_role_assignments').delete().eq('id', existing.id)
-    } else {
-      const { data } = await supabase.from('employee_role_assignments')
-        .insert({ employee_id: empId, role_id: roleId })
-        .select()
-      if (data && data[0]) {
-        setAssignments(prev => [...prev, data[0]])
+      // Check if this was a pending add — cancel it instead
+      const pendingIdx = pendingRoleAdds.findIndex(p => p.empId === empId && p.roleId === roleId)
+      if (pendingIdx >= 0) {
+        setPendingRoleAdds(prev => prev.filter((_, i) => i !== pendingIdx))
+      } else {
+        setPendingRoleDeletes(prev => [...prev, existing.id])
       }
+      setAssignments(prev => prev.filter(a => a.id !== existing.id))
+    } else {
+      // Check if this was a pending delete — cancel it
+      const wasDeleted = pendingRoleDeletes.length > 0
+      setPendingRoleAdds(prev => [...prev, { empId, roleId }])
+      setAssignments(prev => [...prev, { id: -(Date.now() + Math.random()), employee_id: empId, role_id: roleId } as EmployeeRoleAssignment])
     }
+  }
+
+  function updateEmpField(empId: number, field: string, value: any) {
+    setPendingEmpChanges(prev => {
+      const next = new Map(prev)
+      const existing = next.get(empId) || {}
+      next.set(empId, { ...existing, [field]: value })
+      return next
+    })
+    setEmployees(prev => prev.map(e => e.id === empId ? { ...e, [field]: value } : e))
+  }
+
+  async function saveAllChanges() {
+    setIsSaving(true)
+    try {
+      // Save employee field changes (priority, training_status, min_shifts)
+      const empUpdates = Array.from(pendingEmpChanges.entries()).map(([id, fields]) =>
+        supabase.from('branch_employees').update(fields).eq('id', id)
+      )
+
+      // Delete role assignments
+      const roleDeletes = pendingRoleDeletes.map(id =>
+        supabase.from('employee_role_assignments').delete().eq('id', id)
+      )
+
+      // Add role assignments
+      const roleAddsData = pendingRoleAdds.map(p => ({ employee_id: p.empId, role_id: p.roleId }))
+      const roleAddPromise = roleAddsData.length > 0
+        ? supabase.from('employee_role_assignments').insert(roleAddsData).select()
+        : Promise.resolve({ data: [] })
+
+      await Promise.all([...empUpdates, ...roleDeletes, roleAddPromise])
+
+      // Reload assignments to get real IDs
+      const { data: freshAssignments } = await supabase.from('employee_role_assignments').select('*')
+      if (freshAssignments) setAssignments(freshAssignments)
+
+      setPendingEmpChanges(new Map())
+      setPendingRoleAdds([])
+      setPendingRoleDeletes([])
+      alert('✅ השינויים נשמרו')
+    } catch (err) {
+      alert('שגיאה בשמירה: ' + String(err))
+    }
+    setIsSaving(false)
   }
 
   if (loading) return <p style={{ textAlign: 'center', color: '#94a3b8' }}>טוען...</p>
@@ -548,6 +602,18 @@ function EmployeesTab({ branchId }: { branchId: number }) {
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeIn}>
+      {hasPendingChanges && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 10, padding: '10px 16px', marginBottom: 10 }}>
+          <span style={{ fontSize: 13, color: '#4338ca', fontWeight: 600 }}>יש שינויים שלא נשמרו</span>
+          <button
+            onClick={saveAllChanges}
+            disabled={isSaving}
+            style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: isSaving ? 'wait' : 'pointer', opacity: isSaving ? 0.7 : 1 }}
+          >
+            {isSaving ? 'שומר...' : '💾 שמור שינויים'}
+          </button>
+        </div>
+      )}
       <Card>
         <CardContent style={{ padding: '16px', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
@@ -590,10 +656,8 @@ function EmployeesTab({ branchId }: { branchId: number }) {
                     <td style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '1px solid #f1f5f9' }}>
                       <select
                         value={emp.priority || 2}
-                        onChange={async (e) => {
-                          const priority = Number(e.target.value)
-                          await supabase.from('branch_employees').update({ priority }).eq('id', emp.id)
-                          setEmployees(prev => prev.map(x => x.id === emp.id ? { ...x, priority } : x))
+                        onChange={(e) => {
+                          updateEmpField(emp.id, 'priority', Number(e.target.value))
                         }}
                         style={{ fontSize: '13px', padding: '4px 6px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontFamily: 'inherit', cursor: 'pointer' }}
                       >
@@ -605,10 +669,8 @@ function EmployeesTab({ branchId }: { branchId: number }) {
                     <td style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '1px solid #f1f5f9' }}>
                       <select
                         value={emp.training_status || 'independent'}
-                        onChange={async (e) => {
-                          const training_status = e.target.value
-                          await supabase.from('branch_employees').update({ training_status }).eq('id', emp.id)
-                          setEmployees(prev => prev.map(x => x.id === emp.id ? { ...x, training_status } : x))
+                        onChange={(e) => {
+                          updateEmpField(emp.id, 'training_status', e.target.value)
                         }}
                         style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0', background: 'white' }}
                       >
@@ -623,10 +685,8 @@ function EmployeesTab({ branchId }: { branchId: number }) {
                         min={0}
                         max={7}
                         value={emp.min_shifts_per_week || 0}
-                        onChange={async (e) => {
-                          const min_shifts_per_week = Number(e.target.value)
-                          await supabase.from('branch_employees').update({ min_shifts_per_week }).eq('id', emp.id)
-                          setEmployees(prev => prev.map(x => x.id === emp.id ? { ...x, min_shifts_per_week } : x))
+                        onChange={(e) => {
+                          updateEmpField(emp.id, 'min_shifts_per_week', Number(e.target.value))
                         }}
                         style={{ width: '60px', textAlign: 'center', fontSize: '14px', padding: '4px 6px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontFamily: 'inherit' }}
                       />
