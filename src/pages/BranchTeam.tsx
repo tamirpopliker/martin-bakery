@@ -20,7 +20,7 @@ const cards = [
   { page: 'employees', label: 'עובדים', emoji: '👤', subtitle: 'תעריפים · פרטי עובד', Icon: Users, ready: true, adminOnly: false },
   { page: 'manager-constraints', label: 'זמינות הצוות', emoji: '📋', subtitle: 'אילוצים · זמינות · שבועי', Icon: ClipboardList, ready: true, adminOnly: false },
   { page: 'shift-settings', label: 'הגדרות משמרות', emoji: '⚙️', subtitle: 'תפקידים · משמרות · דרישות', Icon: Settings, ready: true, adminOnly: true },
-  { page: 'branch-schedule', label: 'סידור עבודה', emoji: '📅', subtitle: 'משמרות · שבועי · פרסום', Icon: Calendar, ready: false, adminOnly: false },
+  { page: 'weekly-schedule', label: 'סידור עבודה', emoji: '📅', subtitle: 'שיבוץ שבועי · משמרות', Icon: Calendar, ready: true, adminOnly: false },
   { page: 'branch-tasks', label: 'משימות', emoji: '✅', subtitle: 'יומיות · שיוך · מעקב', Icon: CheckSquare, ready: false, adminOnly: false },
 ]
 
