@@ -687,15 +687,21 @@ function HolidaysTab({ branchId }: { branchId: number }) {
     }
   }
 
+  async function updateShiftPattern(id: number, val: string) {
+    await supabase.from('special_days').update({ shift_pattern: val }).eq('id', id)
+    setSpecialDays(prev => prev.map(d => d.id === id ? { ...d, shift_pattern: val } : d))
+  }
+
   async function addSpecialDay() {
     if (!addForm.date || !addForm.name.trim()) return
+    const pattern = addForm.type === 'blocked' ? 'closed' : newShiftPattern
     await supabase.from('special_days').insert({
       branch_id: branchId,
       date: addForm.date,
       name: addForm.name.trim(),
       type: addForm.type,
-      staffing_multiplier: addForm.staffing_multiplier,
-      shift_pattern: newShiftPattern,
+      staffing_multiplier: addForm.type === 'blocked' ? 0 : addForm.staffing_multiplier,
+      shift_pattern: pattern,
     })
     setAddForm({ date: '', name: '', type: 'holiday', staffing_multiplier: 1.5 })
     setNewShiftPattern('regular')
@@ -713,6 +719,7 @@ function HolidaysTab({ branchId }: { branchId: number }) {
       holiday: { label: '🕎 חג', bg: '#fef3c7', color: '#92400e' },
       high_demand: { label: '📈 עומס גבוה', bg: '#fce7f3', color: '#9d174d' },
       low_demand: { label: '📉 עומס נמוך', bg: '#d1fae5', color: '#065f46' },
+      blocked: { label: '🚫 חסום', bg: '#fef2f2', color: '#991b1b' },
     }
     const t = map[type] || map.holiday
     return (
@@ -795,6 +802,7 @@ function HolidaysTab({ branchId }: { branchId: number }) {
                     <option value="holiday">חג 🕎</option>
                     <option value="high_demand">עומס גבוה 📈</option>
                     <option value="low_demand">עומס נמוך 📉</option>
+                    <option value="blocked">🚫 יום חסום</option>
                   </select>
                 </div>
                 <div style={{ flex: 1, minWidth: '140px' }}>
@@ -848,13 +856,15 @@ function HolidaysTab({ branchId }: { branchId: number }) {
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', fontWeight: '500' }}>{day.name}</td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>{typeBadge(day.type)}</td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
-                        <span style={{
-                          fontSize: 10, padding: '2px 8px', borderRadius: 6,
-                          background: day.shift_pattern === 'closed' ? '#fef2f2' : day.shift_pattern === 'friday' ? '#f3e8ff' : '#f1f5f9',
-                          color: day.shift_pattern === 'closed' ? '#991b1b' : day.shift_pattern === 'friday' ? '#7c3aed' : '#64748b'
-                        }}>
-                          {day.shift_pattern === 'closed' ? '🔒 סגור' : day.shift_pattern === 'friday' ? '🕍 כמו שישי' : '📅 רגיל'}
-                        </span>
+                        <select value={day.shift_pattern || 'regular'}
+                          onChange={e => updateShiftPattern(day.id, e.target.value)}
+                          style={{ fontSize: 11, padding: '3px 6px', borderRadius: 6, border: '1px solid #e2e8f0', cursor: 'pointer',
+                            background: day.shift_pattern === 'closed' ? '#fef2f2' : day.shift_pattern === 'friday' ? '#f3e8ff' : '#f8fafc',
+                            color: day.shift_pattern === 'closed' ? '#991b1b' : day.shift_pattern === 'friday' ? '#7c3aed' : '#64748b' }}>
+                          <option value="regular">📅 רגיל</option>
+                          <option value="friday">🕍 ערב חג</option>
+                          <option value="closed">🔒 סגור</option>
+                        </select>
                       </td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center', fontWeight: '600' }}>x{day.staffing_multiplier}</td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
