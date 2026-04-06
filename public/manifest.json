@@ -1,12 +1,12 @@
 {
-  "name": "מאפיית מרטין",
+  "name": "מרטין — מערכת ניהול",
   "short_name": "מרטין",
   "description": "מערכת ניהול קונדיטוריה",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#ffffff",
-  "theme_color": "#818cf8",
+  "background_color": "#f8fafc",
+  "theme_color": "#0d6165",
   "lang": "he",
   "dir": "rtl",
   "icons": [

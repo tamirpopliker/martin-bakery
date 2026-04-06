@@ -329,8 +329,8 @@ export default function Home() {
           className="mb-4 flex items-center justify-between flex-wrap gap-2.5"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-[42px] h-[42px] bg-gradient-to-br from-indigo-400 to-purple-500 rounded-[14px] flex items-center justify-center shadow-lg shadow-indigo-400/30">
-              <Croissant size={22} color="white" />
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#0d6165', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ color: 'white', fontSize: 20, fontWeight: 900, fontFamily: 'serif' }}>מ</span>
             </div>
             <div>
               <h1 className="text-xl font-extrabold text-slate-900 m-0">שלום, {appUser?.name || 'משתמש'}</h1>

@@ -151,7 +151,8 @@ serve(async (req) => {
       const html = `
         <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; background: #f8fafc; border-radius: 12px;">
           <div style="text-align: center; margin-bottom: 24px;">
-            <h1 style="color: #0f172a; font-size: 22px; margin: 0;">קונדיטוריית מרטין 🧁</h1>
+            <h1 style="color: #0d6165; font-size: 36px; margin: 0; font-family: serif; font-weight: 900; letter-spacing: 2px;">מרטין</h1>
+            <p style="color: #0d6165; font-size: 12px; margin: 4px 0 0; letter-spacing: 3px;">קונדיטוריה ובית מאפה · 1964</p>
           </div>
           <div style="background: white; border-radius: 10px; padding: 24px; border: 1px solid #e2e8f0;">
             <p style="color: #0f172a; font-size: 16px; margin: 0 0 8px;">שלום ${employee.name}!</p>

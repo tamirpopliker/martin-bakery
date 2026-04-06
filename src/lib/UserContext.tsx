@@ -258,7 +258,8 @@ export function UserProvider({ session, children }: { session: Session; children
           background: 'white', borderRadius: '20px', padding: '48px', textAlign: 'center',
           boxShadow: '0 4px 20px rgba(0,0,0,0.08)', maxWidth: '420px',
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>{canAutoRetry ? '⏳' : '🔒'}</div>
+          <div style={{ fontSize: 36, fontWeight: 900, color: '#0d6165', fontFamily: 'serif', marginBottom: 12 }}>מרטין</div>
+          <p style={{ fontSize: 12, color: '#0d6165', letterSpacing: 3, marginBottom: 24 }}>קונדיטוריה ובית מאפה · 1964</p>
           <h2 style={{ margin: '0 0 8px', color: '#0f172a', fontSize: '22px' }}>
             {canAutoRetry ? 'ממתין לאישור...' : 'המשתמש טרם אושר'}
           </h2>

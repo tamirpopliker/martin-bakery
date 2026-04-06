@@ -83,9 +83,14 @@ export default function EmployeeHome({ onNavigate }: Props) {
 
         {/* Header */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible" style={{ marginBottom: 20 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-            שלום {appUser?.name || 'עובד'} 👋
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#0d6165', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ color: 'white', fontSize: 20, fontWeight: 900, fontFamily: 'serif' }}>מ</span>
+            </div>
+            <h1 style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+              שלום {appUser?.name || 'עובד'} 👋
+            </h1>
+          </div>
           <p style={{ fontSize: 14, color: '#94a3b8', margin: '4px 0 0' }}>
             סניף {branchName} · {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>

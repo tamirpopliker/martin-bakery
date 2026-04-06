@@ -33,8 +33,14 @@ export default function Login() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
         <Card className="p-8 w-full max-w-md">
           <CardContent>
-            <h1 className="text-3xl font-bold text-indigo-500 text-center mb-2">מערכת מרטין</h1>
-            <p className="text-gray-500 text-center mb-8">מערכת ניהול קונדיטוריה</p>
+            <div style={{ textAlign: 'center', marginBottom: 32 }}>
+              <h1 style={{ fontSize: 48, fontWeight: 900, color: '#0d6165', margin: 0, fontFamily: 'serif', letterSpacing: 2 }}>
+                מרטין
+              </h1>
+              <p style={{ fontSize: 14, color: '#0d6165', margin: '4px 0 0', letterSpacing: 4 }}>
+                קונדיטוריה ובית מאפה · 1964
+              </p>
+            </div>
 
             {/* Google Login */}
             <button
