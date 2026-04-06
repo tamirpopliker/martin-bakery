@@ -9,7 +9,7 @@ const fadeIn = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, tra
 type Availability = 'unavailable' | 'prefer_not' | 'available'
 type ViewFilter = 'all' | 'problems'
 
-interface Employee { id: number; name: string }
+interface Employee { id: number; name: string; training_status: string }
 interface Constraint { employee_id: number; date: string; availability: Availability; shift_id: number | null }
 interface BranchShift { id: number; name: string; start_time: string; end_time: string; days_of_week: number[] }
 interface StaffingRequirement { shift_id: number; role_id: number; required_count: number }
@@ -59,7 +59,7 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
   async function loadData() {
     setLoading(true)
     const [empsRes, consRes, shiftsRes, staffingRes] = await Promise.all([
-      supabase.from('branch_employees').select('id, name').eq('branch_id', branchId).eq('active', true).order('name'),
+      supabase.from('branch_employees').select('id, name, training_status').eq('branch_id', branchId).eq('active', true).order('name'),
       supabase.from('schedule_constraints').select('employee_id, date, availability, shift_id')
         .eq('branch_id', branchId)
         .gte('date', weekDays[0])
@@ -294,6 +294,37 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
                     {problems.length > 0 && (
                       <div style={{ fontSize: 11, color: '#64748b' }}>
                         {problems.map(p => <div key={p}>• {p}</div>)}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {(() => {
+                const trainees = employees.filter(e => e.training_status === 'trainee')
+                const mentors = employees.filter(e => e.training_status === 'mentor')
+                if (trainees.length === 0 && mentors.length === 0) return null
+
+                return (
+                  <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, marginTop: 12 }}>
+                    <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>חונכות והכשרה</h3>
+                    <div className="flex gap-4" style={{ fontSize: 13 }}>
+                      <span>📚 מתלמדים: {trainees.length}</span>
+                      <span>⭐ חונכים: {mentors.length}</span>
+                    </div>
+                    {trainees.length > mentors.length && (
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#ef4444', fontWeight: 600, background: '#fef2f2', padding: '6px 12px', borderRadius: 8 }}>
+                        ⚠️ חסרים חונכים — {trainees.length} מתלמדים מול {mentors.length} חונכים
+                      </div>
+                    )}
+                    {trainees.length > 0 && (
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#64748b' }}>
+                        <strong>מתלמדים:</strong> {trainees.map(t => t.name).join(', ')}
+                      </div>
+                    )}
+                    {mentors.length > 0 && (
+                      <div style={{ marginTop: 4, fontSize: 12, color: '#64748b' }}>
+                        <strong>חונכים:</strong> {mentors.map(m => m.name).join(', ')}
                       </div>
                     )}
                   </div>

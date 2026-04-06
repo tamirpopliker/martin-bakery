@@ -43,6 +43,7 @@ interface BranchEmployee {
   active: boolean
   priority: number | null
   min_shifts_per_week: number | null
+  training_status: string | null
 }
 
 interface SpecialDay {
@@ -498,7 +499,7 @@ function EmployeesTab({ branchId }: { branchId: number }) {
   useEffect(() => {
     async function load() {
       const [empRes, rolesRes, assignRes] = await Promise.all([
-        supabase.from('branch_employees').select('id, name, active, priority, min_shifts_per_week').eq('branch_id', branchId).eq('active', true).order('name'),
+        supabase.from('branch_employees').select('id, name, active, priority, min_shifts_per_week, training_status').eq('branch_id', branchId).eq('active', true).order('name'),
         supabase.from('shift_roles').select('*').eq('branch_id', branchId).eq('is_active', true).order('name'),
         supabase.from('employee_role_assignments').select('*'),
       ])
@@ -554,6 +555,7 @@ function EmployeesTab({ branchId }: { branchId: number }) {
               <tr>
                 <th style={{ textAlign: 'right', padding: '8px 12px', borderBottom: '2px solid #e2e8f0', fontWeight: '700' }}>עובד</th>
                 <th style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '2px solid #e2e8f0', fontWeight: '700', fontSize: '12px' }}>עדיפות</th>
+                <th style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '2px solid #e2e8f0', fontWeight: '700', fontSize: '12px' }}>הכשרה</th>
                 <th style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '2px solid #e2e8f0', fontWeight: '700', fontSize: '12px' }}>מינ׳ משמרות</th>
                 {roles.map(role => (
                   <th key={role.id} style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '2px solid #e2e8f0' }}>
@@ -598,6 +600,21 @@ function EmployeesTab({ branchId }: { branchId: number }) {
                         <option value={1}>&#x1F947; עדיפות גבוהה</option>
                         <option value={2}>&#x1F464; רגיל</option>
                         <option value={3}>&#x1F504; גמיש</option>
+                      </select>
+                    </td>
+                    <td style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '1px solid #f1f5f9' }}>
+                      <select
+                        value={emp.training_status || 'independent'}
+                        onChange={async (e) => {
+                          const training_status = e.target.value
+                          await supabase.from('branch_employees').update({ training_status }).eq('id', emp.id)
+                          setEmployees(prev => prev.map(x => x.id === emp.id ? { ...x, training_status } : x))
+                        }}
+                        style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0', background: 'white' }}
+                      >
+                        <option value="independent">{'\uD83D\uDFE2'} עצמאי</option>
+                        <option value="trainee">{'\uD83D\uDCDA'} מתלמד</option>
+                        <option value="mentor">{'\u2B50'} חונך</option>
                       </select>
                     </td>
                     <td style={{ textAlign: 'center', padding: '8px 6px', borderBottom: '1px solid #f1f5f9' }}>

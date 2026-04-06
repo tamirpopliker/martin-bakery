@@ -58,6 +58,7 @@ interface BranchEmployee {
   name: string
   priority: number
   min_shifts_per_week: number
+  training_status: string
 }
 
 interface SpecialDay {
@@ -180,7 +181,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
       supabase.from('shift_roles').select('id, name, color')
         .eq('branch_id', branchId).eq('is_active', true).order('name'),
       supabase.from('shift_staffing_requirements').select('shift_id, role_id, required_count'),
-      supabase.from('branch_employees').select('id, name, priority, min_shifts_per_week')
+      supabase.from('branch_employees').select('id, name, priority, min_shifts_per_week, training_status')
         .eq('branch_id', branchId).eq('active', true).order('name'),
       supabase.from('employee_role_assignments').select('employee_id, role_id'),
       supabase.from('schedule_constraints').select('employee_id, date, availability, shift_id')
@@ -455,8 +456,18 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
 
             scored.sort((a, b) => b.score - a.score)
 
-            if (scored.length > 0 && scored[0].score > 0) {
-              const chosen = scored[0].emp
+            // Rule: trainee needs a mentor in the same shift
+            const filteredScored = scored.filter(({ emp }) => {
+              if (emp.training_status !== 'trainee') return true
+              // Check if a mentor is already assigned to this shift
+              return newAssignments.some(a =>
+                a.shift_id === shift.id && a.date === date &&
+                employees.find(e => e.id === a.employee_id)?.training_status === 'mentor'
+              )
+            })
+
+            if (filteredScored.length > 0 && filteredScored[0].score > 0) {
+              const chosen = filteredScored[0].emp
               newAssignments.push({
                 branch_id: branchId,
                 shift_id: shift.id,
@@ -772,7 +783,11 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
                                     {assignment ? (
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                         <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: roleColor, color: 'white' }}>
-                                          {getEmployeeName(assignment.employee_id)}
+                                          {(() => {
+                                            const emp = employees.find(e => e.id === assignment.employee_id)
+                                            const badge = emp?.training_status === 'mentor' ? '⭐ ' : emp?.training_status === 'trainee' ? '📚 ' : ''
+                                            return `${badge}${emp?.name || '?'}`
+                                          })()}
                                         </span>
                                         <button onClick={() => removeAssignment(assignment.id)}
                                           style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>×</button>
@@ -789,11 +804,40 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
                             })}
                           </div>
 
+                          {/* Trainee without mentor warning */}
+                          {(() => {
+                            const shiftAssigns = assignments.filter(a => a.shift_id === shift.id && a.date === date)
+                            const hasTrainee = shiftAssigns.some(a => {
+                              const emp = employees.find(e => e.id === a.employee_id)
+                              return emp?.training_status === 'trainee'
+                            })
+                            const hasMentor = shiftAssigns.some(a => {
+                              const emp = employees.find(e => e.id === a.employee_id)
+                              return emp?.training_status === 'mentor'
+                            })
+                            if (hasTrainee && !hasMentor) {
+                              return (
+                                <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 600, marginTop: 4, padding: '4px 8px', background: '#fef2f2', borderRadius: 6 }}>
+                                  ⚠️ מתלמד ללא חונך
+                                </div>
+                              )
+                            }
+                            return null
+                          })()}
+
                           {/* Card footer progress */}
                           {cardSummary.total > 0 && (
                             <div style={{ padding: '6px 10px', background: cardSummary.filled === cardSummary.total ? '#f0fdf4' : '#fef2f2', borderRadius: '0 0 10px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                               <span style={{ fontSize: 11, fontWeight: 600, color: cardSummary.filled === cardSummary.total ? '#15803d' : '#dc2626' }}>
-                                {cardSummary.filled === cardSummary.total ? '\u2705' : '\u26A0\uFE0F'} {cardSummary.filled}/{cardSummary.total} {'\u05D0\u05D5\u05D9\u05E9\u05D5'}
+                                {(() => {
+                                  const shiftAssignsForSummary = assignments.filter(a => a.shift_id === shift.id && a.date === date)
+                                  const traineeCount = shiftAssignsForSummary.filter(a => {
+                                    const emp = employees.find(e => e.id === a.employee_id)
+                                    return emp?.training_status === 'trainee'
+                                  }).length
+                                  const regularCount = cardSummary.filled - traineeCount
+                                  return `${cardSummary.filled === cardSummary.total ? '\u2705' : '\u26A0\uFE0F'} ${regularCount}/${cardSummary.total} תפקידים${traineeCount > 0 ? ` + ${traineeCount} מתלמדים` : ''}`
+                                })()}
                               </span>
                               <div style={{ width: 60, height: 4, background: '#e2e8f0', borderRadius: 2, overflow: 'hidden' }}>
                                 <div style={{ width: `${cardSummary.total > 0 ? (cardSummary.filled / cardSummary.total) * 100 : 0}%`, height: '100%', background: cardSummary.filled === cardSummary.total ? '#22c55e' : '#ef4444', borderRadius: 2 }} />
@@ -939,22 +983,35 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
             {getPopoverEmployees().length === 0 && (
               <div className="text-center py-4 text-xs text-slate-400">{'\u05D0\u05D9\u05DF \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05DE\u05EA\u05D0\u05D9\u05DE\u05D9\u05DD \u05DC\u05EA\u05E4\u05E7\u05D9\u05D3'}</div>
             )}
-            {getPopoverEmployees().map(({ emp, avail, alreadyAssigned }) => (
-              <button key={emp.id}
-                onClick={() => addAssignment(popover.shiftId, popover.roleId, popover.date, emp.id)}
-                className="w-full text-right px-3 py-2 hover:bg-slate-50 flex items-center justify-between gap-2 transition-colors"
-                style={{ borderBottom: '1px solid #f8fafc' }}>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">{AVAIL_EMOJI[avail || 'available']}</span>
-                  <span className="text-xs font-medium text-slate-700">{emp.name}</span>
-                </div>
-                {alreadyAssigned && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold whitespace-nowrap">
-                    {'\u05DE\u05E9\u05D5\u05D1\u05E5'}
-                  </span>
-                )}
-              </button>
-            ))}
+            {(() => {
+              const popoverShiftAssigns = assignments.filter(a => a.shift_id === popover.shiftId && a.date === popover.date)
+              const hasMentorInShift = popoverShiftAssigns.some(a => {
+                const e = employees.find(emp => emp.id === a.employee_id)
+                return e?.training_status === 'mentor'
+              })
+              return getPopoverEmployees().map(({ emp, avail, alreadyAssigned }) => {
+                const trainingBadge = emp.training_status === 'mentor' ? '⭐ ' : emp.training_status === 'trainee' ? '📚 ' : ''
+                return (
+                  <button key={emp.id}
+                    onClick={() => addAssignment(popover.shiftId, popover.roleId, popover.date, emp.id)}
+                    className="w-full text-right px-3 py-2 hover:bg-slate-50 flex items-center justify-between gap-2 transition-colors"
+                    style={{ borderBottom: '1px solid #f8fafc' }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">{AVAIL_EMOJI[avail || 'available']}</span>
+                      <span className="text-xs font-medium text-slate-700">{trainingBadge}{emp.name}</span>
+                      {emp.training_status === 'trainee' && !hasMentorInShift && (
+                        <span style={{ fontSize: 10, color: '#f59e0b' }}>⚠️ אין חונך במשמרת</span>
+                      )}
+                    </div>
+                    {alreadyAssigned && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold whitespace-nowrap">
+                        {'\u05DE\u05E9\u05D5\u05D1\u05E5'}
+                      </span>
+                    )}
+                  </button>
+                )
+              })
+            })()}
           </div>
         </div>
       )}
