@@ -143,6 +143,10 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
   const [popover, setPopover] = useState<PopoverState | null>(null)
   const [showAutoDialog, setShowAutoDialog] = useState(false)
   const [showClearDialog, setShowClearDialog] = useState(false)
+  const [roleColors, setRoleColors] = useState<Map<number, string>>(new Map())
+  const [isPublished, setIsPublished] = useState(false)
+  const [publishedAt, setPublishedAt] = useState<string | null>(null)
+  const [showPublishDialog, setShowPublishDialog] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
 
   const currentWeekSunday = getSundayOfCurrentWeek()
@@ -180,13 +184,23 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     ])
 
     if (shiftsRes.data) setShifts(shiftsRes.data as BranchShift[])
-    if (rolesRes.data) setRoles(rolesRes.data as ShiftRole[])
+    if (rolesRes.data) {
+      setRoles(rolesRes.data as ShiftRole[])
+      const colorMap = new Map<number, string>()
+      rolesRes.data.forEach((r: any) => colorMap.set(r.id, r.color || '#6366f1'))
+      setRoleColors(colorMap)
+    }
     if (staffingRes.data) setStaffingReqs(staffingRes.data as StaffingRequirement[])
     if (empsRes.data) setEmployees(empsRes.data as BranchEmployee[])
     if (roleAssignRes.data) setRoleAssignments(roleAssignRes.data as EmployeeRoleAssignment[])
     if (constraintsRes.data) setConstraints(constraintsRes.data as Constraint[])
     if (assignmentsRes.data) setAssignments(assignmentsRes.data as ShiftAssignment[])
     if (specialDaysRes.data) setSpecialDays(specialDaysRes.data as SpecialDay[])
+
+    const { data: pub } = await supabase.from('schedule_publications')
+      .select('*').eq('branch_id', branchId).eq('week_start', weekDates[0]).maybeSingle()
+    setIsPublished(!!pub)
+    setPublishedAt(pub?.published_at || null)
 
     setLoading(false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -462,6 +476,27 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     setAssignments([])
   }
 
+  async function publishSchedule() {
+    setShowPublishDialog(false)
+    const { data: session } = await supabase.auth.getSession()
+    await supabase.from('schedule_publications').upsert({
+      branch_id: branchId,
+      week_start: weekDates[0],
+      published_by: session?.session?.user?.id
+    }, { onConflict: 'branch_id,week_start' })
+    setIsPublished(true)
+    setPublishedAt(new Date().toISOString())
+    alert('\u2705 \u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E4\u05D5\u05E8\u05E1\u05DD \u05D1\u05D4\u05E6\u05DC\u05D7\u05D4')
+  }
+
+  async function unpublishSchedule() {
+    if (!confirm('\u05D4\u05D0\u05DD \u05DC\u05D1\u05D8\u05DC \u05D0\u05EA \u05E4\u05E8\u05E1\u05D5\u05DD \u05D4\u05E1\u05D9\u05D3\u05D5\u05E8?')) return
+    await supabase.from('schedule_publications').delete()
+      .eq('branch_id', branchId).eq('week_start', weekDates[0])
+    setIsPublished(false)
+    setPublishedAt(null)
+  }
+
   const summary = !loading ? getWeeklySummary() : null
 
   return (
@@ -503,6 +538,27 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
           {'\u05E0\u05E7\u05D4 \u05E9\u05D9\u05D1\u05D5\u05E5'}
         </Button>
       </div>
+
+      {/* Publish status banner */}
+      {!loading && (isPublished ? (
+        <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 12, padding: '10px 16px', marginBottom: 10 }}
+          className="flex items-center justify-between">
+          <span style={{ color: '#065f46', fontSize: 13, fontWeight: 600 }}>
+            {'\u2705 \u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E4\u05D5\u05E8\u05E1\u05DD'}{publishedAt ? ` \u2014 ${new Date(publishedAt).toLocaleDateString('he-IL')} ${new Date(publishedAt).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}` : ''}
+          </span>
+          <button onClick={unpublishSchedule} style={{ color: '#ef4444', fontSize: 12, fontWeight: 600, background: 'none', border: '1px solid #ef4444', borderRadius: 8, padding: '4px 12px', cursor: 'pointer' }}>
+            {'\u05D1\u05D8\u05DC \u05E4\u05E8\u05E1\u05D5\u05DD'}
+          </button>
+        </div>
+      ) : (
+        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '10px 16px', marginBottom: 10 }}
+          className="flex items-center justify-between">
+          <span style={{ color: '#92400e', fontSize: 13, fontWeight: 600 }}>{'\u26A0\uFE0F \u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05D8\u05E8\u05DD \u05E4\u05D5\u05E8\u05E1\u05DD \u2014 \u05D4\u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05D0\u05D9\u05E0\u05DD \u05E8\u05D5\u05D0\u05D9\u05DD \u05D0\u05D5\u05EA\u05D5'}</span>
+          <button onClick={() => setShowPublishDialog(true)} style={{ color: 'white', background: '#6366f1', fontSize: 12, fontWeight: 700, border: 'none', borderRadius: 8, padding: '6px 16px', cursor: 'pointer' }}>
+            {'\u05E4\u05E8\u05E1\u05DD \u05E1\u05D9\u05D3\u05D5\u05E8 \u2713'}
+          </button>
+        </div>
+      ))}
 
       {loading ? (
         <div className="text-center py-12 text-slate-400">{'\u05D8\u05D5\u05E2\u05DF...'}</div>
@@ -556,12 +612,15 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
                                     <div key={`${sr.roleId}-${i}`}
                                       className="flex items-center justify-between py-1.5 px-2 rounded-lg"
                                       style={{ background: '#f8fafc' }}>
-                                      <span className="text-xs text-slate-500">{sr.roleName}</span>
+                                      <span className="text-xs text-slate-500 flex items-center gap-1">
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: roleColors.get(sr.roleId) || '#6366f1', display: 'inline-block', marginLeft: 4 }} />
+                                        {sr.roleName}
+                                      </span>
                                       {assignment ? (
                                         <div className="flex items-center gap-1">
                                           <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                                            style={{ background: getAvailColor(assignment.employee_id, date, shift.id), color: 'white' }}>
-                                            {getEmployeeName(assignment.employee_id)}
+                                            style={{ background: roleColors.get(sr.roleId) || '#6366f1', color: 'white' }}>
+                                            {getEmployeeName(assignment.employee_id)} &middot; {sr.roleName}
                                           </span>
                                           <button onClick={() => removeAssignment(assignment.id)}
                                             className="text-red-400 hover:text-red-600">
@@ -676,6 +735,20 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setShowClearDialog(false)}>{'\u05D1\u05D9\u05D8\u05D5\u05DC'}</Button>
               <Button onClick={clearWeekAssignments} style={{ background: '#ef4444', color: 'white' }}>{'\u05E0\u05E7\u05D4'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Publish dialog */}
+      {showPublishDialog && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowPublishDialog(false)}>
+          <div className="bg-white rounded-xl p-6 max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{'\u05E4\u05E8\u05E1\u05D5\u05DD \u05E1\u05D9\u05D3\u05D5\u05E8'}</h3>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>{'\u05DC\u05D0\u05D7\u05E8 \u05D4\u05E4\u05E8\u05E1\u05D5\u05DD \u05D4\u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05D9\u05D5\u05DB\u05DC\u05D5 \u05DC\u05E8\u05D0\u05D5\u05EA \u05D0\u05EA \u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E9\u05DC\u05D4\u05DD.'}</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowPublishDialog(false)} style={{ padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>{'\u05D1\u05D9\u05D8\u05D5\u05DC'}</button>
+              <button onClick={publishSchedule} style={{ padding: '6px 16px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{'\u05E4\u05E8\u05E1\u05DD'}</button>
             </div>
           </div>
         </div>

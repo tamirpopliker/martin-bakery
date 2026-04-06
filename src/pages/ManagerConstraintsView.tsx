@@ -2,25 +2,19 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const fadeIn = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.35 } } }
 
 type Availability = 'unavailable' | 'prefer_not' | 'available'
-type ViewMode = 'day' | 'shift'
+type ViewFilter = 'all' | 'problems'
 
 interface Employee { id: number; name: string }
 interface Constraint { employee_id: number; date: string; availability: Availability; shift_id: number | null }
 interface BranchShift { id: number; name: string; start_time: string; end_time: string; days_of_week: number[] }
 interface StaffingRequirement { shift_id: number; role_id: number; required_count: number }
 
-const AVAIL_EMOJI: Record<Availability, string> = {
-  available: '🟢',
-  prefer_not: '🟡',
-  unavailable: '🔴',
-}
-
-const DAY_NAMES_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
+const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
 
 function getWeekDays(weekOffset: number): string[] {
   const today = new Date()
@@ -55,7 +49,7 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
   const [staffingReqs, setStaffingReqs] = useState<StaffingRequirement[]>([])
   const [weekOffset, setWeekOffset] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<ViewMode>('shift')
+  const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
 
   const weekDays = getWeekDays(weekOffset)
   const weekLabel = `${formatShortDate(weekDays[0])} — ${formatShortDate(weekDays[6])}`
@@ -91,25 +85,9 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
     return c ? c.availability : null
   }
 
-  // Summary per day (used by day view)
-  function getDaySummary(date: string) {
-    const isSat = new Date(date + 'T12:00:00').getDay() === 6
-    if (isSat) return null
-    let available = 0, unavailable = 0, preferNot = 0, noData = 0
-    for (const emp of employees) {
-      const av = getAvail(emp.id, date)
-      if (av === 'available') available++
-      else if (av === 'unavailable') unavailable++
-      else if (av === 'prefer_not') preferNot++
-      else noData++
-    }
-    return { available, unavailable, preferNot, noData }
-  }
-
   // Get shifts that apply to a specific day of week (0=Sunday ... 6=Saturday)
-  function getShiftsForDay(date: string): BranchShift[] {
-    const dayOfWeek = new Date(date + 'T12:00:00').getDay()
-    return shifts.filter(s => s.days_of_week && s.days_of_week.includes(dayOfWeek))
+  function getShiftsForDay(dayIndex: number): BranchShift[] {
+    return shifts.filter(s => s.days_of_week && s.days_of_week.includes(dayIndex))
   }
 
   // Get total required count for a shift (sum across all roles)
@@ -119,15 +97,21 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
       .reduce((sum, r) => sum + r.required_count, 0)
   }
 
-  // Get shift summary: available count and required count
-  function getShiftSummary(date: string, shiftId: number) {
-    let available = 0
-    for (const emp of employees) {
-      const av = getAvail(emp.id, date, shiftId)
-      if (av === 'available') available++
-    }
+  function getShiftSummary(shiftId: number, date: string) {
     const required = getRequiredCount(shiftId)
-    return { available, required }
+    const availableEmps: string[] = []
+    const preferNotEmps: string[] = []
+    const unavailableEmps: string[] = []
+
+    employees.forEach(emp => {
+      const avail = getAvail(emp.id, date, shiftId)
+      const name = emp.name
+      if (avail === 'available' || avail === null) availableEmps.push(name)
+      else if (avail === 'prefer_not') preferNotEmps.push(name)
+      else if (avail === 'unavailable') unavailableEmps.push(name)
+    })
+
+    return { required, available: availableEmps.length, availableEmps, preferNotEmps, unavailableEmps }
   }
 
   return (
@@ -145,35 +129,9 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
         </div>
       </motion.div>
 
-      {/* View mode toggle */}
-      <motion.div variants={fadeIn} initial="hidden" animate="visible" className="flex items-center justify-center gap-2 mb-4">
-        <div className="bg-slate-100 rounded-xl p-1 flex gap-1">
-          <button
-            onClick={() => setViewMode('day')}
-            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
-              viewMode === 'day'
-                ? 'bg-white text-slate-800 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            הצג לפי יום
-          </button>
-          <button
-            onClick={() => setViewMode('shift')}
-            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
-              viewMode === 'shift'
-                ? 'bg-white text-slate-800 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            הצג לפי משמרת
-          </button>
-        </div>
-      </motion.div>
-
       {/* Week nav */}
       <motion.div variants={fadeIn} initial="hidden" animate="visible"
-        className="flex items-center justify-center gap-4 mb-5">
+        className="flex items-center justify-center gap-4 mb-4">
         <Button variant="outline" size="sm" onClick={() => setWeekOffset(w => w - 1)} className="rounded-lg">
           <ChevronRight size={16} />
         </Button>
@@ -188,155 +146,161 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
         )}
       </motion.div>
 
+      {/* Filter toggle */}
+      <motion.div variants={fadeIn} initial="hidden" animate="visible" className="flex items-center justify-center gap-2 mb-5">
+        <div className="bg-slate-100 rounded-xl p-1 flex gap-1">
+          <button
+            onClick={() => setViewFilter('all')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+              viewFilter === 'all'
+                ? 'bg-white text-slate-800 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            הצג הכל
+          </button>
+          <button
+            onClick={() => setViewFilter('problems')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+              viewFilter === 'problems'
+                ? 'bg-white text-slate-800 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            הצג בעייתיים בלבד
+          </button>
+        </div>
+      </motion.div>
+
       {loading ? (
         <div className="text-center py-12 text-slate-400">טוען...</div>
-      ) : viewMode === 'day' ? (
-        /* ===== DAY VIEW (existing grid) ===== */
-        <motion.div variants={fadeIn} initial="hidden" animate="visible">
-          <div className="bg-white rounded-xl overflow-hidden" style={{ border: '0.5px solid #e2e8f0' }}>
-            {/* Header row */}
-            <div className="grid" style={{ gridTemplateColumns: `140px repeat(7, 1fr)`, background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-              <div className="px-3 py-2 text-xs font-bold text-slate-500">עובד</div>
-              {weekDays.map((date, i) => {
-                const isSat = new Date(date + 'T12:00:00').getDay() === 6
-                return (
-                  <div key={date} className="px-1 py-2 text-center text-xs font-bold"
-                    style={{ color: isSat ? '#cbd5e1' : '#64748b' }}>
-                    <div>{DAY_NAMES_SHORT[i]}</div>
-                    <div className="text-[10px] font-normal">{formatShortDate(date)}</div>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Employee rows */}
-            {employees.map(emp => (
-              <div key={emp.id} className="grid" style={{ gridTemplateColumns: `140px repeat(7, 1fr)`, borderBottom: '1px solid #f1f5f9' }}>
-                <div className="px-3 py-2 text-sm font-semibold text-slate-700 truncate">{emp.name}</div>
-                {weekDays.map(date => {
-                  const isSat = new Date(date + 'T12:00:00').getDay() === 6
-                  const av = getAvail(emp.id, date)
-                  return (
-                    <div key={date} className="flex items-center justify-center py-2"
-                      style={{ opacity: isSat ? 0.3 : 1 }}>
-                      {isSat ? (
-                        <span className="text-xs text-slate-300">—</span>
-                      ) : av ? (
-                        <span className="text-base">{AVAIL_EMOJI[av]}</span>
-                      ) : (
-                        <span className="w-4 h-4 rounded-full bg-slate-100 border border-slate-200" />
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
-
-            {/* Summary row */}
-            <div className="grid" style={{ gridTemplateColumns: `140px repeat(7, 1fr)`, background: '#fafafa', borderTop: '2px solid #e2e8f0' }}>
-              <div className="px-3 py-2 text-xs font-bold text-slate-500">סיכום</div>
-              {weekDays.map(date => {
-                const summary = getDaySummary(date)
-                if (!summary) return <div key={date} className="px-1 py-2 text-center text-xs text-slate-300">—</div>
-                return (
-                  <div key={date} className="px-1 py-2 text-center">
-                    <div className="text-[10px] leading-tight">
-                      <span style={{ color: '#16a34a' }}>{summary.available}🟢</span>
-                      {summary.unavailable > 0 && <> <span style={{ color: '#dc2626' }}>{summary.unavailable}🔴</span></>}
-                      {summary.preferNot > 0 && <> <span style={{ color: '#ca8a04' }}>{summary.preferNot}🟡</span></>}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {employees.length === 0 && (
-            <div className="text-center py-8 text-slate-400 text-sm">
-              אין עובדים פעילים בסניף זה
-            </div>
-          )}
-        </motion.div>
       ) : (
-        /* ===== SHIFT VIEW ===== */
-        <motion.div variants={fadeIn} initial="hidden" animate="visible" className="space-y-6">
+        <motion.div variants={fadeIn} initial="hidden" animate="visible">
           {shifts.length === 0 ? (
             <div className="text-center py-8 text-slate-400 text-sm">
               לא הוגדרו משמרות לסניף זה
             </div>
-          ) : weekDays.map((date, dayIdx) => {
-            const isSat = new Date(date + 'T12:00:00').getDay() === 6
-            if (isSat) return null
-            const dayShifts = getShiftsForDay(date)
-            if (dayShifts.length === 0) return null
+          ) : (
+            <>
+              {/* Shift cards per day */}
+              {weekDays.slice(0, 6).map((date, dayIdx) => {
+                const dayOfWeek = new Date(date + 'T12:00:00').getDay()
+                const dayName = DAY_NAMES[dayOfWeek]
+                const shiftsForDay = getShiftsForDay(dayOfWeek)
+                if (shiftsForDay.length === 0) return null
 
-            return (
-              <div key={date}>
-                {/* Day header */}
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm font-bold text-slate-700">
-                    {DAY_NAMES_SHORT[dayIdx]} — {formatShortDate(date)}
-                  </span>
-                </div>
+                // Check if all shifts for this day are fully covered (for filter)
+                const hasProblems = shiftsForDay.some(shift => {
+                  const summary = getShiftSummary(shift.id, date)
+                  const coverage = summary.required > 0 ? summary.available / summary.required : 1
+                  return coverage < 1
+                })
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {dayShifts.map(shift => {
-                    const summary = getShiftSummary(date, shift.id)
-                    const isShort = summary.required > 0 && summary.available < summary.required
+                // If filtering problems only and no problems this day, skip entire day
+                if (viewFilter === 'problems' && !hasProblems) return null
 
-                    return (
-                      <div
-                        key={shift.id}
-                        className="bg-white rounded-xl p-4"
-                        style={{ border: '0.5px solid #e2e8f0' }}
-                      >
-                        {/* Shift header */}
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <div className="text-sm font-bold text-slate-800">{shift.name}</div>
-                            <div className="text-[11px] text-slate-400">
-                              {shift.start_time?.slice(0, 5)} — {shift.end_time?.slice(0, 5)}
-                            </div>
+                return (
+                  <div key={date} style={{ marginBottom: 16 }}>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>
+                      {dayName} {date.split('-').reverse().slice(0, 2).join('/')}
+                    </h3>
+                    {shiftsForDay.map(shift => {
+                      const summary = getShiftSummary(shift.id, date)
+                      const coverage = summary.required > 0 ? summary.available / summary.required : 1
+                      const coverageColor = coverage >= 1 ? '#10b981' : coverage >= 0.5 ? '#f59e0b' : '#ef4444'
+
+                      // If filter is 'problems' and coverage >= 1, skip
+                      if (viewFilter === 'problems' && coverage >= 1) return null
+
+                      return (
+                        <div key={shift.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 14, marginBottom: 8 }}>
+                          {/* Header: shift name + badge */}
+                          <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+                            <span style={{ fontWeight: 600, fontSize: 13 }}>{shift.name} {shift.start_time?.slice(0, 5)}–{shift.end_time?.slice(0, 5)}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: coverage >= 1 ? '#ecfdf5' : '#fef2f2', color: coverageColor }}>
+                              {summary.available}/{summary.required} זמינים
+                            </span>
                           </div>
-                          {isShort && (
-                            <div className="flex items-center gap-1 bg-red-50 text-red-600 text-[11px] font-bold px-2 py-1 rounded-lg">
-                              <AlertTriangle size={12} />
-                              חסר כ״א
+
+                          {/* Progress bar */}
+                          <div style={{ height: 6, background: '#f1f5f9', borderRadius: 3, marginBottom: 10 }}>
+                            <div style={{ height: '100%', width: `${Math.min(coverage * 100, 100)}%`, background: coverageColor, borderRadius: 3, transition: 'width 0.3s' }} />
+                          </div>
+
+                          {/* Employee badges by availability */}
+                          <div style={{ fontSize: 12 }}>
+                            {summary.availableEmps.length > 0 && (
+                              <div className="flex flex-wrap gap-1 items-center" style={{ marginBottom: 4 }}>
+                                <span style={{ color: '#10b981', marginLeft: 4 }}>✅</span>
+                                {summary.availableEmps.map(name => (
+                                  <span key={name} style={{ background: '#ecfdf5', color: '#065f46', padding: '2px 8px', borderRadius: 6, fontSize: 11 }}>{name}</span>
+                                ))}
+                              </div>
+                            )}
+                            {summary.preferNotEmps.length > 0 && (
+                              <div className="flex flex-wrap gap-1 items-center" style={{ marginBottom: 4 }}>
+                                <span style={{ color: '#f59e0b', marginLeft: 4 }}>⚠️</span>
+                                {summary.preferNotEmps.map(name => (
+                                  <span key={name} style={{ background: '#fffbeb', color: '#92400e', padding: '2px 8px', borderRadius: 6, fontSize: 11 }}>{name}</span>
+                                ))}
+                              </div>
+                            )}
+                            {summary.unavailableEmps.length > 0 && (
+                              <div className="flex flex-wrap gap-1 items-center">
+                                <span style={{ color: '#ef4444', marginLeft: 4 }}>❌</span>
+                                {summary.unavailableEmps.map(name => (
+                                  <span key={name} style={{ background: '#fef2f2', color: '#991b1b', padding: '2px 8px', borderRadius: 6, fontSize: 11 }}>{name}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Warning if understaffed */}
+                          {coverage < 1 && (
+                            <div style={{ marginTop: 8, fontSize: 11, color: '#ef4444', fontWeight: 600 }}>
+                              ⚠️ חסרים {summary.required - summary.available} עובדים
                             </div>
                           )}
                         </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
 
-                        {/* Employee list */}
-                        <div className="space-y-1.5 mb-3">
-                          {employees.map(emp => {
-                            const av = getAvail(emp.id, date, shift.id)
-                            const emoji = av ? AVAIL_EMOJI[av] : '⚪'
-                            return (
-                              <div key={emp.id} className="flex items-center gap-2">
-                                <span className="text-sm">{emoji}</span>
-                                <span className="text-xs text-slate-600 truncate">{emp.name}</span>
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        {/* Summary */}
-                        <div
-                          className="text-[11px] font-bold pt-2 text-center"
-                          style={{
-                            borderTop: '1px solid #f1f5f9',
-                            color: isShort ? '#dc2626' : '#64748b',
-                          }}
-                        >
-                          {summary.available} זמינים / דרישה: {summary.required}
-                        </div>
+              {/* Weekly summary card */}
+              {(() => {
+                let totalShifts = 0, fullShifts = 0, problemShifts = 0
+                const problems: string[] = []
+                for (let d = 0; d < 6; d++) {
+                  const date = weekDays[d]
+                  const dayOfWeek = new Date(date + 'T12:00:00').getDay()
+                  const dayShifts = getShiftsForDay(dayOfWeek)
+                  for (const shift of dayShifts) {
+                    totalShifts++
+                    const s = getShiftSummary(shift.id, date)
+                    if (s.available >= s.required) fullShifts++
+                    else { problemShifts++; problems.push(`${DAY_NAMES[dayOfWeek]} - ${shift.name}`) }
+                  }
+                }
+                return (
+                  <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, marginTop: 16 }}>
+                    <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>סיכום שבועי</h3>
+                    <div className="flex gap-4" style={{ fontSize: 13, marginBottom: 8 }}>
+                      <span>סה&quot;כ {totalShifts} משמרות</span>
+                      <span style={{ color: '#10b981' }}>✅ {fullShifts} מכוסות</span>
+                      {problemShifts > 0 && <span style={{ color: '#ef4444' }}>⚠️ {problemShifts} עם מחסור</span>}
+                    </div>
+                    {problems.length > 0 && (
+                      <div style={{ fontSize: 11, color: '#64748b' }}>
+                        {problems.map(p => <div key={p}>• {p}</div>)}
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
+                    )}
+                  </div>
+                )
+              })()}
+            </>
+          )}
 
           {employees.length === 0 && (
             <div className="text-center py-8 text-slate-400 text-sm">

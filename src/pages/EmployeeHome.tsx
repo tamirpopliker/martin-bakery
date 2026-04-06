@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Calendar, Hand, CheckSquare, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppUser } from '../lib/UserContext'
+import MySchedule from './MySchedule'
 import { useBranches } from '../lib/BranchContext'
 import { supabase } from '../lib/supabase'
 import EmployeeConstraints from './EmployeeConstraints'
@@ -13,7 +14,7 @@ const fadeIn = (delay = 0) => ({
 })
 
 const cards = [
-  { key: 'schedule', label: 'הסידור שלי', emoji: '📅', subtitle: 'משמרות · שעות · ימים', Icon: Calendar, ready: false },
+  { key: 'schedule', label: 'הסידור שלי', emoji: '📅', subtitle: 'משמרות · שעות · ימים', Icon: Calendar, ready: true },
   { key: 'constraints', label: 'האילוצים שלי', emoji: '🙋', subtitle: 'זמינות · העדפות · חופש', Icon: Hand, ready: true },
   { key: 'tasks', label: 'המשימות שלי', emoji: '✅', subtitle: 'יומיות · שיוך · מעקב', Icon: CheckSquare, ready: false },
 ]
@@ -60,6 +61,9 @@ export default function EmployeeHome() {
     fetchNextWeekAvailability()
   }, [appUser])
 
+  if (page === 'schedule') {
+    return <MySchedule onBack={() => setPage(null)} />
+  }
   if (page === 'constraints') {
     return <EmployeeConstraints onBack={() => setPage(null)} />
   }
