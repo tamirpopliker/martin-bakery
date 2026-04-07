@@ -13,7 +13,7 @@ interface AppUser {
   id: string
   email: string
   name: string
-  role: 'admin' | 'factory' | 'branch' | 'employee'
+  role: 'admin' | 'factory' | 'branch' | 'employee' | 'scheduler'
   branch_id: number | null
   excluded_departments: string[]
   can_settings: boolean
@@ -32,6 +32,7 @@ const ROLE_LABELS: Record<string, string> = {
   factory: 'מפעל',
   branch: 'מנהל סניף',
   employee: 'עובד',
+  scheduler: 'סידור עבודה',
 }
 
 const DEPT_LABELS: Record<string, string> = {
@@ -48,6 +49,7 @@ const ROLE_BADGE_STYLES: Record<string, { background: string; color: string }> =
   factory: { background: '#fffbeb', color: '#92400e' },
   branch: { background: '#ecfdf5', color: '#065f46' },
   employee: { background: '#f1f5f9', color: '#64748b' },
+  scheduler: { background: '#faf5ff', color: '#a855f7' },
 }
 const ROLE_COLORS: Record<string, string> = {
   admin: '#4338ca',
@@ -353,9 +355,10 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                   <option value="factory">מפעל</option>
                   <option value="branch">מנהל סניף</option>
                   <option value="employee">עובד</option>
+                  <option value="scheduler">סידור עבודה</option>
                 </select>
               </div>
-              {(newUser.role === 'branch' || newUser.role === 'employee') && (
+              {(newUser.role === 'branch' || newUser.role === 'employee' || newUser.role === 'scheduler') && (
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', display: 'block', marginBottom: '4px' }}>סניף</label>
                   <select value={newUser.branch_id} onChange={e => {
@@ -478,9 +481,10 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                     <option value="factory">מפעל</option>
                     <option value="branch">מנהל סניף</option>
                     <option value="employee">עובד</option>
+                    <option value="scheduler">סידור עבודה</option>
                   </select>
                   <div>
-                    {(editData.role === 'branch' || editData.role === 'employee') && (
+                    {(editData.role === 'branch' || editData.role === 'employee' || editData.role === 'scheduler') && (
                       <select value={editData.branch_id ?? 1} onChange={e => setEditData({ ...editData, branch_id: Number(e.target.value) })}
                         style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }}
                       >

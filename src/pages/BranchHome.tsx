@@ -210,6 +210,8 @@ export default function BranchHome({ branch, onBack }: Props) {
           animate="visible"
         >
           {MENU_ITEMS.filter(item => {
+            // Scheduler can only see team management
+            if (appUser?.role === 'scheduler') return item.page === 'branch-team'
             // Hide settings and data_import for non-admin users
             if (!isAdmin && (item.page === 'settings' || item.page === 'data_import')) return false
             return true

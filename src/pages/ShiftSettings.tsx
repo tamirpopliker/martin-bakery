@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { Plus, X, Check, AlertCircle } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
+import { useAppUser } from '../lib/UserContext'
 
 interface Props {
   branchId: number
@@ -520,6 +521,8 @@ function StaffingTab({ branchId }: { branchId: number }) {
 
 /* ==================== Tab 4: Employee Roles ==================== */
 function EmployeesTab({ branchId }: { branchId: number }) {
+  const { appUser } = useAppUser()
+  const isReadOnly = appUser?.role === 'scheduler'
   const [employees, setEmployees] = useState<BranchEmployee[]>([])
   const [roles, setRoles] = useState<ShiftRole[]>([])
   const [assignments, setAssignments] = useState<EmployeeRoleAssignment[]>([])
@@ -631,7 +634,7 @@ function EmployeesTab({ branchId }: { branchId: number }) {
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeIn}>
-      {hasPendingChanges && (
+      {hasPendingChanges && !isReadOnly && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 10, padding: '10px 16px', marginBottom: 10 }}>
           <span style={{ fontSize: 13, color: '#4338ca', fontWeight: 600 }}>יש שינויים שלא נשמרו</span>
           <button
@@ -688,7 +691,8 @@ function EmployeesTab({ branchId }: { branchId: number }) {
                         onChange={(e) => {
                           updateEmpField(emp.id, 'priority', Number(e.target.value))
                         }}
-                        style={{ fontSize: '12px', padding: '4px 6px', borderRadius: '6px', border: '1px solid #e2e8f0', fontFamily: 'inherit', cursor: 'pointer', background: '#fff' }}
+                        disabled={isReadOnly}
+                        style={{ fontSize: '12px', padding: '4px 6px', borderRadius: '6px', border: '1px solid #e2e8f0', fontFamily: 'inherit', cursor: isReadOnly ? 'default' : 'pointer', background: isReadOnly ? '#f8fafc' : '#fff', opacity: isReadOnly ? 0.7 : 1 }}
                       >
                         <option value={1}>&#x1F947; עדיפות גבוהה</option>
                         <option value={2}>&#x1F464; רגיל</option>
@@ -701,7 +705,8 @@ function EmployeesTab({ branchId }: { branchId: number }) {
                         onChange={(e) => {
                           updateEmpField(emp.id, 'training_status', e.target.value)
                         }}
-                        style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0', background: 'white', fontFamily: 'inherit', cursor: 'pointer' }}
+                        disabled={isReadOnly}
+                        style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0', background: isReadOnly ? '#f8fafc' : 'white', fontFamily: 'inherit', cursor: isReadOnly ? 'default' : 'pointer', opacity: isReadOnly ? 0.7 : 1 }}
                       >
                         <option value="independent">{'\uD83D\uDFE2'} עצמאי</option>
                         <option value="trainee">{'\uD83D\uDCDA'} מתלמד</option>
@@ -717,14 +722,16 @@ function EmployeesTab({ branchId }: { branchId: number }) {
                         onChange={(e) => {
                           updateEmpField(emp.id, 'min_shifts_per_week', Number(e.target.value))
                         }}
-                        style={{ width: '56px', textAlign: 'center', fontSize: '13px', padding: '4px 6px', borderRadius: '6px', border: '1px solid #e2e8f0', fontFamily: 'inherit', background: '#fff' }}
+                        disabled={isReadOnly}
+                        style={{ width: '56px', textAlign: 'center', fontSize: '13px', padding: '4px 6px', borderRadius: '6px', border: '1px solid #e2e8f0', fontFamily: 'inherit', background: isReadOnly ? '#f8fafc' : '#fff', opacity: isReadOnly ? 0.7 : 1 }}
                       />
                     </td>
                     {roles.map(role => (
                       <td key={role.id} style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f8fafc' }}>
                         <input type="checkbox" checked={hasAssignment(emp.id, role.id)}
                           onChange={() => toggleAssignment(emp.id, role.id)}
-                          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: role.color }} />
+                          disabled={isReadOnly}
+                          style={{ width: '16px', height: '16px', cursor: isReadOnly ? 'default' : 'pointer', accentColor: role.color, opacity: isReadOnly ? 0.7 : 1 }} />
                       </td>
                     ))}
                   </tr>
