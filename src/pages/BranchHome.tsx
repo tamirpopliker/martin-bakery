@@ -316,30 +316,34 @@ export default function BranchHome({ branch, onBack }: Props) {
                   status: !kpiTargets?.transaction_target ? 'none' : kpiData.dailyTransactions >= kpiTargets.transaction_target ? 'good' : kpiData.dailyTransactions >= kpiTargets.transaction_target * 0.8 ? 'warn' : 'bad',
                 },
               ].map((tile, i) => {
-                const colors = { good: '#10b981', warn: '#f59e0b', bad: '#ef4444', none: '#94a3b8' }
-                const c = colors[tile.status as keyof typeof colors] || colors.none
-                const icons = { good: '\u2705', warn: '\u26a0\ufe0f', bad: '\ud83d\udd34', none: '' }
-                const icon = icons[tile.status as keyof typeof icons] || ''
+                const theme = {
+                  good:  { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', bar: '#4ade80' },
+                  warn:  { bg: '#fffbeb', border: '#fde68a', text: '#b45309', bar: '#fbbf24' },
+                  bad:   { bg: '#fff1f2', border: '#fecdd3', text: '#be123c', bar: '#fb7185' },
+                  none:  { bg: '#f9fafb', border: '#e5e7eb', text: '#374151', bar: '#d1d5db' },
+                }
+                const t = theme[tile.status as keyof typeof theme] || theme.none
+                const pctDisplay = tile.pct !== null ? `${Math.round(tile.pct)}%` : ''
                 return (
                   <motion.div key={tile.label}
                     initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: i * 0.05 }}
-                    style={{ border: '1px solid #f1f5f9', borderRadius: 10, padding: 12, position: 'relative' }}>
-                    {icon && <span style={{ position: 'absolute', top: 8, left: 8, fontSize: 12 }}>{icon}</span>}
-                    <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>{tile.label}</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: tile.status === 'none' ? '#0f172a' : c, marginBottom: 6 }}>
-                      {tile.value}
+                    style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: 12, padding: 16 }}>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>{tile.label}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                      <span style={{ fontSize: 22, fontWeight: 700, color: t.text }}>{tile.value}</span>
+                      {pctDisplay && <span style={{ fontSize: 16, fontWeight: 700, color: t.text }}>{pctDisplay}</span>}
                     </div>
                     {tile.pct !== null && (
-                      <div style={{ height: 4, background: '#f1f5f9', borderRadius: 2, marginBottom: 4 }}>
-                        <div style={{ height: '100%', width: `${Math.min(tile.pct, 100)}%`, background: c, borderRadius: 2, transition: 'width 0.5s' }} />
+                      <div style={{ height: 6, background: tile.status === 'none' ? '#e5e7eb' : `${t.border}`, borderRadius: 3, marginBottom: 6 }}>
+                        <div style={{ height: '100%', width: `${Math.min(tile.pct, 100)}%`, background: t.bar, borderRadius: 3, transition: 'width 0.5s' }} />
                       </div>
                     )}
                     {tile.targetLabel ? (
-                      <div style={{ fontSize: 10, color: '#94a3b8' }}>{tile.targetLabel}</div>
+                      <div style={{ fontSize: 11, color: '#9ca3af' }}>{tile.targetLabel}</div>
                     ) : (
-                      <div style={{ fontSize: 10, color: '#6366f1', cursor: 'pointer' }}
-                        onClick={() => setPage('settings' as any)}>הגדר יעד</div>
+                      <div style={{ fontSize: 11, color: '#6366f1', cursor: 'pointer', fontWeight: 600 }}
+                        onClick={() => setPage('settings' as any)}>הגדר יעד →</div>
                     )}
                   </motion.div>
                 )
