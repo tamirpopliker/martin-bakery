@@ -283,6 +283,94 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       {!loading && (
         <div style={{ padding: '20px', maxWidth: 1200, margin: '0 auto' }}>
 
+          {/* Hero KPI Card */}
+          {branches.length > 0 && (() => {
+            const totalRev = branches.reduce((s, br) => s + br.totalRevenue, 0)
+            const totalLabor = branches.reduce((s, br) => s + br.laborEmployer, 0)
+            const totalWaste = branches.reduce((s, br) => s + br.wasteTotal, 0)
+            const totalGross = branches.reduce((s, br) => s + br.grossProfit, 0)
+            const avgControllable = totalRev > 0 ? (totalGross / totalRev) * 100 : 0
+            const avgLabor = totalRev > 0 ? (totalLabor / totalRev) * 100 : 0
+            const avgWaste = totalRev > 0 ? (totalWaste / totalRev) * 100 : 0
+
+            // Average targets
+            const targetKeys = Object.keys(kpiTargets)
+            const avgLaborTarget = targetKeys.length > 0 ? targetKeys.reduce((s, k) => s + (kpiTargets[Number(k)]?.labor_pct || 0), 0) / targetKeys.length : 0
+            const avgWasteTarget = targetKeys.length > 0 ? targetKeys.reduce((s, k) => s + (kpiTargets[Number(k)]?.waste_pct || 0), 0) / targetKeys.length : 0
+            const avgRevTarget = targetKeys.length > 0 ? targetKeys.reduce((s, k) => s + (kpiTargets[Number(k)]?.revenue_target || 0), 0) : 0
+
+            const tiles = [
+              {
+                label: 'סה"כ הכנסות',
+                value: `₪${Math.round(totalRev).toLocaleString()}`,
+                pct: avgRevTarget > 0 ? (totalRev / avgRevTarget) * 100 : null,
+                targetLabel: avgRevTarget > 0 ? `יעד: ₪${avgRevTarget.toLocaleString()}` : undefined,
+                status: avgRevTarget <= 0 ? 'none' : totalRev >= avgRevTarget * 0.95 ? 'good' : totalRev >= avgRevTarget * 0.8 ? 'warn' : 'bad',
+              },
+              {
+                label: 'רווח נשלט %',
+                value: `${avgControllable.toFixed(1)}%`,
+                pct: null,
+                targetLabel: undefined,
+                status: avgControllable >= 30 ? 'good' : avgControllable >= 20 ? 'warn' : 'bad',
+              },
+              {
+                label: '% לייבור ממוצע',
+                value: `${avgLabor.toFixed(1)}%`,
+                pct: avgLaborTarget > 0 ? Math.max(0, (1 - (avgLabor - avgLaborTarget) / avgLaborTarget)) * 100 : null,
+                targetLabel: avgLaborTarget > 0 ? `יעד: ${avgLaborTarget.toFixed(0)}%` : undefined,
+                status: avgLaborTarget <= 0 ? 'none' : avgLabor <= avgLaborTarget ? 'good' : avgLabor <= avgLaborTarget + 2 ? 'warn' : 'bad',
+              },
+              {
+                label: '% פחת ממוצע',
+                value: `${avgWaste.toFixed(1)}%`,
+                pct: avgWasteTarget > 0 ? Math.max(0, (1 - (avgWaste - avgWasteTarget) / avgWasteTarget)) * 100 : null,
+                targetLabel: avgWasteTarget > 0 ? `יעד: ${avgWasteTarget.toFixed(0)}%` : undefined,
+                status: avgWasteTarget <= 0 ? 'none' : avgWaste <= avgWasteTarget ? 'good' : avgWaste <= avgWasteTarget + 1 ? 'warn' : 'bad',
+              },
+            ]
+
+            const theme = {
+              good:  { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', bar: '#4ade80' },
+              warn:  { bg: '#fffbeb', border: '#fde68a', text: '#b45309', bar: '#fbbf24' },
+              bad:   { bg: '#fff1f2', border: '#fecdd3', text: '#be123c', bar: '#fb7185' },
+              none:  { bg: '#f9fafb', border: '#e5e7eb', text: '#374151', bar: '#d1d5db' },
+            }
+
+            return (
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 20, marginBottom: 16 }}>
+                <div style={{ marginBottom: 16 }}>
+                  <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                    סיכום {period.label}
+                  </h2>
+                  <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>כל הסניפים</p>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                  {tiles.map((tile, i) => {
+                    const t = theme[tile.status as keyof typeof theme] || theme.none
+                    const pctDisplay = tile.pct !== null ? `${Math.round(tile.pct)}%` : ''
+                    return (
+                      <div key={tile.label}
+                        style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: 12, padding: 14 }}>
+                        <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>{tile.label}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                          <span style={{ fontSize: 20, fontWeight: 700, color: t.text }}>{tile.value}</span>
+                          {pctDisplay && <span style={{ fontSize: 14, fontWeight: 700, color: t.text }}>{pctDisplay}</span>}
+                        </div>
+                        {tile.pct !== null && (
+                          <div style={{ height: 5, background: `${t.border}`, borderRadius: 3, marginBottom: 4 }}>
+                            <div style={{ height: '100%', width: `${Math.min(tile.pct, 100)}%`, background: t.bar, borderRadius: 3, transition: 'width 0.5s' }} />
+                          </div>
+                        )}
+                        {tile.targetLabel && <div style={{ fontSize: 10, color: '#9ca3af' }}>{tile.targetLabel}</div>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
           {/* KPI Cards */}
           <motion.div variants={fadeIn(0)} initial="hidden" animate="visible" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
             <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>

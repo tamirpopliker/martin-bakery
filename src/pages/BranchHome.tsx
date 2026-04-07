@@ -21,7 +21,7 @@ import WeeklySchedule from './WeeklySchedule'
 import ScheduleHistory from './ScheduleHistory'
 import BranchDashboard from './BranchDashboard'
 import DataImport from './DataImport'
-import { calculateBranchPL, type PLResult } from '../lib/calculatePL'
+// calculateBranchPL moved to BranchManagerDashboard
 
 // ─── אנימציות ─────────────────────────────────────────────────────────────────
 const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }
@@ -92,16 +92,6 @@ export default function BranchHome({ branch, onBack }: Props) {
   const [hovCard, setHovCard] = useState<BranchPage | null>(null)
   const [pendingOrders, setPendingOrders] = useState(0)
 
-  // ─── Hero KPI state ──────────────────────────────────────────────────────
-  const [kpiData, setKpiData] = useState<{
-    revenue: number; controllableMargin: number; laborPct: number; wastePct: number
-    basketAvg: number; dailyTransactions: number
-  } | null>(null)
-  const [kpiTargets, setKpiTargets] = useState<{
-    revenue_target: number; controllable_margin_pct: number; labor_pct: number
-    waste_pct: number; basket_target: number; transaction_target: number
-  } | null>(null)
-
   // ─── טעינת הזמנות ממתינות ──────────────────────────────────────────────────
   useEffect(() => {
     async function loadPendingCount() {
@@ -114,40 +104,6 @@ export default function BranchHome({ branch, onBack }: Props) {
       setPendingOrders((fs.count || 0) + (b2b.count || 0))
     }
     loadPendingCount()
-  }, [branch.id])
-
-  // ─── Hero KPI data loading ──────────────────────────────────────────────────
-  useEffect(() => {
-    async function loadKpi() {
-      const now = new Date()
-      const y = now.getFullYear(), m = now.getMonth()
-      const from = `${y}-${String(m + 1).padStart(2, '0')}-01`
-      const toDate = new Date(y, m + 1, 1)
-      const to = toDate.toISOString().split('T')[0]
-      const mk = from.slice(0, 7)
-
-      const [pl, targets, revData] = await Promise.all([
-        calculateBranchPL(branch.id, from, to, undefined, mk),
-        supabase.from('branch_kpi_targets').select('*').eq('branch_id', branch.id).maybeSingle(),
-        supabase.from('branch_revenue').select('amount, transaction_count').eq('branch_id', branch.id).gte('date', from).lt('date', to),
-      ])
-
-      const totalRev = pl.revenue
-      const totalTransactions = (revData.data || []).reduce((s: number, r: any) => s + (Number(r.transaction_count) || 0), 0)
-      const daysElapsed = Math.max(1, now.getDate())
-
-      setKpiData({
-        revenue: totalRev,
-        controllableMargin: pl.controllableMargin,
-        laborPct: totalRev > 0 ? (pl.labor / totalRev) * 100 : 0,
-        wastePct: totalRev > 0 ? (pl.waste / totalRev) * 100 : 0,
-        basketAvg: totalTransactions > 0 ? totalRev / totalTransactions : 0,
-        dailyTransactions: totalTransactions / daysElapsed,
-      })
-
-      if (targets.data) setKpiTargets(targets.data)
-    }
-    loadKpi()
   }, [branch.id])
 
   // ─── ניתוב פנימי ──────────────────────────────────────────────────────────
@@ -255,102 +211,6 @@ export default function BranchHome({ branch, onBack }: Props) {
       {/* ─── כרטיסי מודולים ──────────────────────────────────────────────── */}
       <div style={{ padding: '36px', maxWidth: '960px', margin: '0 auto' }}>
 
-        {/* Hero KPI Card */}
-        {kpiData && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
-            style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 20, marginBottom: 16 }}>
-            <div style={{ marginBottom: 16 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                סיכום חודש {new Date().toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
-              </h2>
-              <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>{branch.name}</p>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
-              {[
-                {
-                  label: 'הכנסות',
-                  value: `₪${Math.round(kpiData.revenue).toLocaleString()}`,
-                  target: kpiTargets?.revenue_target,
-                  targetLabel: kpiTargets?.revenue_target ? `יעד: ₪${kpiTargets.revenue_target.toLocaleString()}` : undefined,
-                  pct: kpiTargets?.revenue_target ? (kpiData.revenue / kpiTargets.revenue_target) * 100 : null,
-                  status: !kpiTargets?.revenue_target ? 'none' : kpiData.revenue >= kpiTargets.revenue_target * 0.95 ? 'good' : kpiData.revenue >= kpiTargets.revenue_target * 0.8 ? 'warn' : 'bad',
-                },
-                {
-                  label: 'רווח נשלט %',
-                  value: `${kpiData.controllableMargin.toFixed(1)}%`,
-                  target: kpiTargets?.controllable_margin_pct,
-                  targetLabel: kpiTargets?.controllable_margin_pct ? `יעד: ${kpiTargets.controllable_margin_pct}%` : undefined,
-                  pct: kpiTargets?.controllable_margin_pct ? (kpiData.controllableMargin / kpiTargets.controllable_margin_pct) * 100 : null,
-                  status: !kpiTargets?.controllable_margin_pct ? 'none' : kpiData.controllableMargin >= kpiTargets.controllable_margin_pct ? 'good' : kpiData.controllableMargin >= kpiTargets.controllable_margin_pct - 3 ? 'warn' : 'bad',
-                },
-                {
-                  label: '% לייבור',
-                  value: `${kpiData.laborPct.toFixed(1)}%`,
-                  target: kpiTargets?.labor_pct,
-                  targetLabel: kpiTargets?.labor_pct ? `יעד: ${kpiTargets.labor_pct}%` : undefined,
-                  pct: kpiTargets?.labor_pct ? Math.max(0, (1 - (kpiData.laborPct - kpiTargets.labor_pct) / kpiTargets.labor_pct)) * 100 : null,
-                  status: !kpiTargets?.labor_pct ? 'none' : kpiData.laborPct <= kpiTargets.labor_pct ? 'good' : kpiData.laborPct <= kpiTargets.labor_pct + 2 ? 'warn' : 'bad',
-                },
-                {
-                  label: '% פחת',
-                  value: `${kpiData.wastePct.toFixed(1)}%`,
-                  target: kpiTargets?.waste_pct,
-                  targetLabel: kpiTargets?.waste_pct ? `יעד: ${kpiTargets.waste_pct}%` : undefined,
-                  pct: kpiTargets?.waste_pct ? Math.max(0, (1 - (kpiData.wastePct - kpiTargets.waste_pct) / kpiTargets.waste_pct)) * 100 : null,
-                  status: !kpiTargets?.waste_pct ? 'none' : kpiData.wastePct <= kpiTargets.waste_pct ? 'good' : kpiData.wastePct <= kpiTargets.waste_pct + 1 ? 'warn' : 'bad',
-                },
-                {
-                  label: 'סל ממוצע',
-                  value: `₪${Math.round(kpiData.basketAvg).toLocaleString()}`,
-                  target: kpiTargets?.basket_target,
-                  targetLabel: kpiTargets?.basket_target ? `יעד: ₪${kpiTargets.basket_target}` : undefined,
-                  pct: kpiTargets?.basket_target ? (kpiData.basketAvg / kpiTargets.basket_target) * 100 : null,
-                  status: !kpiTargets?.basket_target ? 'none' : kpiData.basketAvg >= kpiTargets.basket_target ? 'good' : kpiData.basketAvg >= kpiTargets.basket_target * 0.9 ? 'warn' : 'bad',
-                },
-                {
-                  label: 'עסקאות יומי',
-                  value: Math.round(kpiData.dailyTransactions).toLocaleString(),
-                  target: kpiTargets?.transaction_target,
-                  targetLabel: kpiTargets?.transaction_target ? `יעד: ${kpiTargets.transaction_target}` : undefined,
-                  pct: kpiTargets?.transaction_target ? (kpiData.dailyTransactions / kpiTargets.transaction_target) * 100 : null,
-                  status: !kpiTargets?.transaction_target ? 'none' : kpiData.dailyTransactions >= kpiTargets.transaction_target ? 'good' : kpiData.dailyTransactions >= kpiTargets.transaction_target * 0.8 ? 'warn' : 'bad',
-                },
-              ].map((tile, i) => {
-                const theme = {
-                  good:  { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', bar: '#4ade80' },
-                  warn:  { bg: '#fffbeb', border: '#fde68a', text: '#b45309', bar: '#fbbf24' },
-                  bad:   { bg: '#fff1f2', border: '#fecdd3', text: '#be123c', bar: '#fb7185' },
-                  none:  { bg: '#f9fafb', border: '#e5e7eb', text: '#374151', bar: '#d1d5db' },
-                }
-                const t = theme[tile.status as keyof typeof theme] || theme.none
-                const pctDisplay = tile.pct !== null ? `${Math.round(tile.pct)}%` : ''
-                return (
-                  <motion.div key={tile.label}
-                    initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: i * 0.05 }}
-                    style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: 12, padding: 16 }}>
-                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>{tile.label}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                      <span style={{ fontSize: 22, fontWeight: 700, color: t.text }}>{tile.value}</span>
-                      {pctDisplay && <span style={{ fontSize: 16, fontWeight: 700, color: t.text }}>{pctDisplay}</span>}
-                    </div>
-                    {tile.pct !== null && (
-                      <div style={{ height: 6, background: tile.status === 'none' ? '#e5e7eb' : `${t.border}`, borderRadius: 3, marginBottom: 6 }}>
-                        <div style={{ height: '100%', width: `${Math.min(tile.pct, 100)}%`, background: t.bar, borderRadius: 3, transition: 'width 0.5s' }} />
-                      </div>
-                    )}
-                    {tile.targetLabel ? (
-                      <div style={{ fontSize: 11, color: '#9ca3af' }}>{tile.targetLabel}</div>
-                    ) : (
-                      <div style={{ fontSize: 11, color: '#6366f1', cursor: 'pointer', fontWeight: 600 }}
-                        onClick={() => setPage('settings' as any)}>הגדר יעד →</div>
-                    )}
-                  </motion.div>
-                )
-              })}
-            </div>
-          </motion.div>
-        )}
 
         <motion.div
           style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}
