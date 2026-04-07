@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence, PanInfo } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
@@ -91,7 +91,8 @@ export default function EmployeeConstraints({ onBack }: Props) {
   const [weekOffset, setWeekOffset] = useState(0)
   const [constraintMap, setConstraintMap] = useState<Map<string, Availability>>(new Map())
   const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set())
-  const [mobileDayIdx, setMobileDayIdx] = useState(0)
+  const [currentDayIndex, setCurrentDayIndex] = useState(0)
+  const [direction, setDirection] = useState(0)
 
   // Role assignments tab state
   const [roles, setRoles] = useState<ShiftRole[]>([])
@@ -129,7 +130,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
   // ─── Load shifts & constraints when employee resolved or week changes ───
   useEffect(() => {
     if (resolvedEmpId) loadShiftsAndConstraints()
-    setMobileDayIdx(0)
+    setCurrentDayIndex(0)
   }, [resolvedEmpId, weekOffset])
 
   async function loadShiftsAndConstraints() {
@@ -241,6 +242,26 @@ export default function EmployeeConstraints({ onBack }: Props) {
         setAssignments(prev => [...prev, data[0] as EmployeeRoleAssignment])
       }
     }
+  }
+
+  // ─── Swipe gesture handler ──────────────────────────────
+  const handleDragEnd = (_: any, info: PanInfo) => {
+    const threshold = 50
+    if (info.offset.x < -threshold && currentDayIndex < 5) {
+      setDirection(1)
+      setCurrentDayIndex(prev => prev + 1)
+      if (navigator.vibrate) navigator.vibrate(10)
+    } else if (info.offset.x > threshold && currentDayIndex > 0) {
+      setDirection(-1)
+      setCurrentDayIndex(prev => prev - 1)
+      if (navigator.vibrate) navigator.vibrate(10)
+    }
+  }
+
+  const swipeVariants = {
+    enter: (dir: number) => ({ x: dir > 0 ? 300 : -300, opacity: 0 }),
+    center: { x: 0, opacity: 1 },
+    exit: (dir: number) => ({ x: dir > 0 ? -300 : 300, opacity: 0 }),
   }
 
   // ─── Compute which shifts apply to ANY day in the week ─
@@ -356,127 +377,136 @@ export default function EmployeeConstraints({ onBack }: Props) {
               </div>
             ) : (
               <>
-              {/* ═══ MOBILE: Day-by-day card view ═══ */}
+              {/* ═══ MOBILE: Day-by-day card view with swipe ═══ */}
               <motion.div variants={fadeIn(0.15)} initial="hidden" animate="visible" className="md:hidden">
                 {(() => {
-                  const DAY_NAMES_FULL = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
-                  const mDate = weekDays[mobileDayIdx]
+                  const DAY_NAMES_FULL = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי']
+                  const mDate = weekDays[currentDayIndex]
                   const mDow = new Date(mDate + 'T12:00:00').getDay()
-                  const mIsSat = mobileDayIdx === 6
                   const mShifts = shifts.filter(s => s.days_of_week && s.days_of_week.includes(mDow))
 
                   return (
                     <>
-                      {/* Day nav */}
-                      <div className="flex items-center justify-center gap-4 mb-4">
-                        <button onClick={() => setMobileDayIdx(i => Math.max(0, i - 1))}
-                          disabled={mobileDayIdx === 0}
-                          style={{ fontSize: '20px', color: mobileDayIdx === 0 ? '#e2e8f0' : '#64748b', cursor: 'pointer', background: 'none', border: 'none', fontWeight: '700' }}>
-                          ›
-                        </button>
-                        <div className="text-center min-w-[140px]">
-                          <div className="text-base font-bold text-slate-800">יום {DAY_NAMES_FULL[mobileDayIdx]}</div>
-                          <div className="text-sm text-slate-500">{formatShortDate(mDate)}</div>
+                      {/* Day header */}
+                      <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                          <button
+                            onClick={() => { if (currentDayIndex > 0) { setDirection(-1); setCurrentDayIndex(prev => prev - 1); if (navigator.vibrate) navigator.vibrate(10) } }}
+                            disabled={currentDayIndex === 0}
+                            style={{ width: 44, height: 44, borderRadius: '50%', background: 'white', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: currentDayIndex > 0 ? 'pointer' : 'default', opacity: currentDayIndex === 0 ? 0.3 : 1, fontSize: 18 }}
+                          >{'\u2192'}</button>
+                          <div>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>{'יום ' + DAY_NAMES_FULL[currentDayIndex]}</div>
+                            <div style={{ fontSize: 14, color: '#94a3b8' }}>{formatShortDate(weekDays[currentDayIndex])}</div>
+                          </div>
+                          <button
+                            onClick={() => { if (currentDayIndex < 5) { setDirection(1); setCurrentDayIndex(prev => prev + 1); if (navigator.vibrate) navigator.vibrate(10) } }}
+                            disabled={currentDayIndex === 5}
+                            style={{ width: 44, height: 44, borderRadius: '50%', background: 'white', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: currentDayIndex < 5 ? 'pointer' : 'default', opacity: currentDayIndex === 5 ? 0.3 : 1, fontSize: 18 }}
+                          >{'\u2190'}</button>
                         </div>
-                        <button onClick={() => setMobileDayIdx(i => Math.min(6, i + 1))}
-                          disabled={mobileDayIdx === 6}
-                          style={{ fontSize: '20px', color: mobileDayIdx === 6 ? '#e2e8f0' : '#64748b', cursor: 'pointer', background: 'none', border: 'none', fontWeight: '700' }}>
-                          ‹
-                        </button>
-                      </div>
-
-                      {/* Dots */}
-                      <div className="flex justify-center gap-2 mb-5">
-                        {weekDays.map((_, i) => (
-                          <button key={i} onClick={() => setMobileDayIdx(i)}
-                            style={{
-                              width: i === mobileDayIdx ? '20px' : '8px', height: '8px', borderRadius: '4px',
-                              background: i === mobileDayIdx ? '#6366f1' : '#e2e8f0',
-                              border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+                        {/* Dots */}
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 10 }}>
+                          {[0,1,2,3,4,5].map(i => (
+                            <div key={i} style={{
+                              width: i === currentDayIndex ? 10 : 8,
+                              height: i === currentDayIndex ? 10 : 8,
+                              borderRadius: '50%',
+                              background: i === currentDayIndex ? '#6366f1' : '#e2e8f0',
+                              transition: 'all 0.2s',
                             }} />
-                        ))}
+                          ))}
+                        </div>
                       </div>
 
-                      {/* Content */}
-                      {mIsSat ? (
-                        <div style={{
-                          background: 'white',
-                          border: '1px solid #f1f5f9',
-                          borderRadius: 12,
-                          padding: 32,
-                          textAlign: 'center',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                        }}>
-                          <div className="text-slate-400 font-semibold">שבת — יום מנוחה</div>
-                        </div>
-                      ) : mShifts.length === 0 ? (
-                        <div style={{
-                          background: 'white',
-                          border: '1px solid #f1f5f9',
-                          borderRadius: 12,
-                          padding: 32,
-                          textAlign: 'center',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                        }}>
-                          <div className="text-slate-400 text-sm">אין משמרות ביום זה</div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col gap-3">
-                          {mShifts.map(shift => {
-                            const key = `${mDate}|${shift.id}`
-                            const current = constraintMap.get(key) || 'available'
-                            const isSaved = savedKeys.has(key)
-                            const ac = AVAIL_CONFIG[current]
-                            const nextAvail = CYCLE_ORDER[(CYCLE_ORDER.indexOf(current) + 1) % 3]
-
-                            return (
-                              <div key={shift.id} style={{
+                      {/* Day content with swipe */}
+                      <div style={{ overflow: 'hidden' }}>
+                        <AnimatePresence mode="wait" custom={direction}>
+                          <motion.div
+                            key={currentDayIndex}
+                            custom={direction}
+                            variants={swipeVariants}
+                            initial="enter"
+                            animate="center"
+                            exit="exit"
+                            transition={{ duration: 0.2, ease: 'easeInOut' }}
+                            drag="x"
+                            dragConstraints={{ left: 0, right: 0 }}
+                            dragElastic={0.2}
+                            onDragEnd={handleDragEnd}
+                            style={{ touchAction: 'pan-y' }}
+                          >
+                            {mShifts.length === 0 ? (
+                              <div style={{
                                 background: 'white',
                                 border: '1px solid #f1f5f9',
                                 borderRadius: 12,
-                                overflow: 'hidden',
+                                padding: 32,
+                                textAlign: 'center',
                                 boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                               }}>
-                                <div style={{
-                                  padding: '10px 16px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  borderBottom: '1px solid #f1f5f9',
-                                }}>
-                                  <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{shift.name}</span>
-                                  <span style={{ fontSize: 12, color: '#94a3b8' }}>{formatTime(shift.start_time)} — {formatTime(shift.end_time)}</span>
-                                </div>
-                                <motion.button
-                                  whileTap={{ scale: 0.96 }}
-                                  onClick={() => setAvailability(mDate, shift.id, nextAvail)}
-                                  className="w-full transition-colors duration-200 relative"
-                                  style={{
-                                    height: '100px',
-                                    border: 'none',
-                                    background: 'white',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '4px',
-                                  }}>
-                                  <span style={{ fontSize: '28px', fontWeight: '800', color: ac.color, lineHeight: 1 }}>{ac.icon}</span>
-                                  <span style={{ fontSize: '13px', fontWeight: '600', color: ac.color }}>{ac.label}</span>
-                                  {isSaved && (
-                                    <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
-                                      style={{ position: 'absolute', top: '8px', left: '8px' }}
-                                      className="text-emerald-500">
-                                      <Check size={16} />
-                                    </motion.span>
-                                  )}
-                                </motion.button>
+                                <div className="text-slate-400 text-sm">אין משמרות ביום זה</div>
                               </div>
-                            )
-                          })}
-                        </div>
-                      )}
+                            ) : (
+                              <div className="flex flex-col gap-3">
+                                {mShifts.map(shift => {
+                                  const key = `${mDate}|${shift.id}`
+                                  const current = constraintMap.get(key) || 'available'
+                                  const isSaved = savedKeys.has(key)
+                                  const ac = AVAIL_CONFIG[current]
+                                  const nextAvail = CYCLE_ORDER[(CYCLE_ORDER.indexOf(current) + 1) % 3]
+
+                                  return (
+                                    <div key={shift.id} style={{
+                                      background: 'white',
+                                      border: '1px solid #f1f5f9',
+                                      borderRadius: 12,
+                                      overflow: 'hidden',
+                                      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                                    }}>
+                                      <div style={{
+                                        padding: '10px 16px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        borderBottom: '1px solid #f1f5f9',
+                                      }}>
+                                        <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{shift.name}</span>
+                                        <span style={{ fontSize: 12, color: '#94a3b8' }}>{formatTime(shift.start_time)} — {formatTime(shift.end_time)}</span>
+                                      </div>
+                                      <motion.button
+                                        whileTap={{ scale: 0.96 }}
+                                        onClick={() => setAvailability(mDate, shift.id, nextAvail)}
+                                        className="w-full transition-colors duration-200 relative"
+                                        style={{
+                                          height: '100px',
+                                          border: 'none',
+                                          background: 'white',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          gap: '4px',
+                                        }}>
+                                        <span style={{ fontSize: '28px', fontWeight: '800', color: ac.color, lineHeight: 1 }}>{ac.icon}</span>
+                                        <span style={{ fontSize: '13px', fontWeight: '600', color: ac.color }}>{ac.label}</span>
+                                        {isSaved && (
+                                          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                            style={{ position: 'absolute', top: '8px', left: '8px' }}
+                                            className="text-emerald-500">
+                                            <Check size={16} />
+                                          </motion.span>
+                                        )}
+                                      </motion.button>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </motion.div>
+                        </AnimatePresence>
+                      </div>
                     </>
                   )
                 })()}
