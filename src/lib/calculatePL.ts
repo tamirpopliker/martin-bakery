@@ -66,7 +66,12 @@ export async function calculateBranchPL(
   // Expenses by type
   let factoryPurchases = 0, externalSuppliers = 0, repairs = 0
   let deliveries = 0, infrastructure = 0, otherExpenses = 0
-  for (const r of (expRes.data || [])) {
+  const expRows = expRes.data || []
+  if (expRows.length > 0) {
+    const factoryRows = expRows.filter((r: any) => r.from_factory === true)
+    console.log(`[calculatePL] branch=${branchId} total_expenses=${expRows.length} from_factory_true=${factoryRows.length}`)
+  }
+  for (const r of expRows) {
     const amt = Number(r.amount)
     const t = r.expense_type || 'other'
     if (r.from_factory) {
