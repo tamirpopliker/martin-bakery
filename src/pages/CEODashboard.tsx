@@ -872,19 +872,37 @@ export default function CEODashboard({ onBack }: Props) {
                 label: string; factory: number; getBr: (br: BranchData) => number
                 bold: boolean; color: '' | 'profit'; kpiKey?: 'labor' | 'waste' | 'operating'
               }
+              // In consolidated: use external expenses only (internal is eliminated)
+              // In segment: show internal + external separately
+              const brExpenses = (br: BranchData) => isSegment ? br.expenses : br.expExternal
+              const brGross = (br: BranchData) => br.revenue - brExpenses(br) - br.labor
+              const brOp = (br: BranchData) => brGross(br) - br.fixedCosts - br.waste - (br.revenue * overheadPct / 100)
+
               const rows: PLRow[] = [
                 { label: 'הכנסות', factory: fRev, getBr: br => br.revenue, bold: false, color: '' },
                 ...(isSegment ? [
-                  { label: 'רכישות פנימיות', factory: 0, getBr: (br: BranchData) => br.expInternal, bold: false, color: '' as const },
+                  { label: 'רכישות פנימיות', factory: factoryInternalSales, getBr: (br: BranchData) => br.expInternal, bold: false, color: '' as const },
                 ] : []),
-                { label: isSegment ? 'ספקים חיצוניים' : 'חומרי גלם / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => isSegment ? br.expExternal : br.expenses, bold: false, color: '' },
+                { label: isSegment ? 'ספקים חיצוניים' : 'חומרי גלם / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => isSegment ? br.expExternal : br.expExternal, bold: false, color: '' },
                 { label: 'לייבור', factory: factoryLabor, getBr: br => br.labor, bold: false, color: '', kpiKey: 'labor' },
-                { label: 'רווח נשלט', factory: fRev - factorySuppliers - factoryLabor, getBr: br => br.grossProfit, bold: true, color: 'profit' },
+                { label: 'רווח נשלט', factory: fRev - factorySuppliers - factoryLabor, getBr: br => brGross(br), bold: true, color: 'profit' },
                 { label: 'עלויות קבועות', factory: factoryFixed, getBr: br => br.fixedCosts, bold: false, color: '' },
                 { label: 'פחת', factory: factoryWaste, getBr: br => br.waste, bold: false, color: '', kpiKey: 'waste' },
                 { label: 'העמסת מטה', factory: 0, getBr: br => br.revenue * overheadPct / 100, bold: false, color: '' },
-                { label: 'רווח תפעולי', factory: fOp, getBr: br => br.operatingProfit, bold: true, color: 'profit', kpiKey: 'operating' },
+                { label: 'רווח תפעולי', factory: fOp, getBr: br => brOp(br), bold: true, color: 'profit', kpiKey: 'operating' },
               ]
+
+              // In consolidated view, add intercompany elimination row for transparency
+              if (!isSegment) {
+                const elimRow: PLRow = {
+                  label: '↔ ביטול עסקאות פנימיות',
+                  factory: -factoryInternalSales,
+                  getBr: (br: BranchData) => -br.expInternal,
+                  bold: false, color: '' as const
+                }
+                // Insert after revenue row
+                rows.splice(1, 0, elimRow)
+              }
 
               // Helper: get KPI target for a branch row
               const getBrTarget = (brId: number, kpiKey?: 'labor' | 'waste' | 'operating'): number | null => {
