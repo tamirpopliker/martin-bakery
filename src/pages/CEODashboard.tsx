@@ -893,11 +893,13 @@ export default function CEODashboard({ onBack }: Props) {
               ]
 
               // In consolidated view, add intercompany elimination row for transparency
+              // Factory: negative (internal revenue removed), Branches: positive (internal expense removed)
+              // Net should be ~0 (both sides cancel out)
               if (!isSegment) {
                 const elimRow: PLRow = {
                   label: '↔ ביטול עסקאות פנימיות',
                   factory: -factoryInternalSales,
-                  getBr: (br: BranchData) => -br.expInternal,
+                  getBr: (br: BranchData) => br.expInternal,
                   bold: false, color: '' as const
                 }
                 // Insert after revenue row
