@@ -46,8 +46,8 @@ const fadeIn = {
 interface BranchData {
   id: number; name: string; color: string
   revenue: number; expenses: number; expInternal: number; expExternal: number
-  labor: number; waste: number
-  fixedCosts: number; grossProfit: number; operatingProfit: number
+  labor: number; waste: number; managerSalary: number; repairs: number
+  fixedCosts: number; grossProfit: number; operatingProfit: number; overhead: number
   revCashier: number; revCredit: number; revWebsite: number
 }
 
@@ -212,9 +212,12 @@ export default function CEODashboard({ onBack }: Props) {
         expExternal: pl.externalSuppliers,
         labor: pl.labor,
         waste: pl.waste,
+        managerSalary: pl.managerSalary,
+        repairs: pl.repairs,
         fixedCosts: pl.fixedCosts,
         grossProfit: pl.controllableProfit,
         operatingProfit: pl.operatingProfit,
+        overhead: pl.overhead,
         revCashier: brCashier,
         revCredit: brCredit,
         revWebsite: brWebsite,
@@ -815,10 +818,12 @@ export default function CEODashboard({ onBack }: Props) {
                 ] : []),
                 { label: isSegment ? 'ספקים חיצוניים' : 'חומרי גלם / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => br.expExternal, bold: false, color: '' },
                 { label: 'לייבור', factory: factoryLabor, getBr: br => br.labor, bold: false, color: '', kpiKey: 'labor' },
-                { label: 'רווח נשלט', factory: fRev - factorySuppliers - factoryLabor, getBr: br => br.grossProfit, bold: true, color: 'profit' },
-                { label: 'עלויות קבועות', factory: factoryFixed, getBr: br => br.fixedCosts, bold: false, color: '' },
+                { label: 'שכר מנהל', factory: 0, getBr: br => br.managerSalary, bold: false, color: '' },
                 { label: 'פחת', factory: factoryWaste, getBr: br => br.waste, bold: false, color: '', kpiKey: 'waste' },
-                { label: 'העמסת מטה', factory: 0, getBr: br => br.revenue * overheadPct / 100, bold: false, color: '' },
+                { label: 'תיקונים', factory: factoryRepairs, getBr: br => br.repairs, bold: false, color: '' },
+                { label: 'רווח נשלט', factory: fRev - factorySuppliers - factoryLabor - factoryWaste - factoryRepairs, getBr: br => br.grossProfit, bold: true, color: 'profit' },
+                { label: 'עלויות קבועות', factory: factoryFixed, getBr: br => br.fixedCosts, bold: false, color: '' },
+                { label: 'העמסת מטה', factory: 0, getBr: br => br.overhead, bold: false, color: '' },
                 { label: 'רווח תפעולי', factory: fOp, getBr: br => br.operatingProfit, bold: true, color: 'profit', kpiKey: 'operating' },
               ]
 
