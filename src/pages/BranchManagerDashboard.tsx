@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, getOverheadPct } from '../lib/supabase'
-import { fetchAllBranchesProfit } from '../lib/profitCalc'
+import { calculateBranchPL, type PLResult } from '../lib/calculatePL'
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -79,68 +79,52 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   const [kpiTargets, setKpiTargets] = useState<Record<number, { labor_pct: number; waste_pct: number; revenue_target: number; basket_target: number; transaction_target: number }>>({})
 
   const brOH = (br: BranchData) => br.totalRevenue * overheadPct / 100
-  const brGross = (br: BranchData) => br.totalRevenue - br.totalExpenses - br.laborEmployer - br.mgmtCosts - br.wasteTotal
-  const brOP = (br: BranchData) => brGross(br) - br.fixedCosts - brOH(br)
+  const brGross = (br: BranchData) => br.grossProfit
+  const brOP = (br: BranchData) => br.operatingProfit
 
-  async function fetchBranchData(branchId: number, name: string, color: string, dateFrom: string, dateTo: string, monthKey: string): Promise<BranchData> {
-    const entityType = `branch_${branchId}`
+  function plToBranchData(pl: PLResult, name: string, color: string): BranchData {
+    const totalExpenses = pl.factoryPurchases + pl.externalSuppliers + pl.repairs + pl.deliveries + pl.infrastructure + pl.otherExpenses
+    return {
+      id: pl.branchId, name, color,
+      revCashier: 0, revWebsite: 0, revCredit: 0,
+      totalRevenue: pl.revenue,
+      expSuppliers: pl.factoryPurchases + pl.externalSuppliers,
+      expSuppliersInternal: pl.factoryPurchases,
+      expSuppliersExternal: pl.externalSuppliers,
+      expRepairs: pl.repairs,
+      expInfra: pl.infrastructure,
+      expDelivery: pl.deliveries,
+      expOther: pl.otherExpenses,
+      totalExpenses,
+      laborGross: 0,
+      laborEmployer: pl.labor,
+      wasteTotal: pl.waste,
+      fixedCosts: pl.fixedCosts,
+      mgmtCosts: pl.managerSalary,
+      grossProfit: pl.controllableProfit,
+      operatingProfit: pl.operatingProfit,
+      laborPct: pl.revenue > 0 ? (pl.labor / pl.revenue) * 100 : 0,
+      wastePct: pl.revenue > 0 ? (pl.waste / pl.revenue) * 100 : 0,
+      grossPct: pl.revenue > 0 ? (pl.controllableProfit / pl.revenue) * 100 : 0,
+      operatingPct: pl.revenue > 0 ? (pl.operatingProfit / pl.revenue) * 100 : 0,
+      totalTransactions: 0, workingDays: 1, avgBasket: 0, avgDailyTransactions: 0,
+    }
+  }
 
-    const [revRes, expRes, labRes, wstRes, fcRes] = await Promise.all([
-      supabase.from('branch_revenue').select('source, amount, transaction_count, date').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
-      supabase.from('branch_expenses').select('expense_type, amount, from_factory').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
-      supabase.from('branch_labor').select('employer_cost, gross_salary').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
-      supabase.from('branch_waste').select('amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
-      supabase.from('fixed_costs').select('amount, entity_id').eq('entity_type', entityType).eq('month', monthKey),
-    ])
-
-    const revData = revRes.data || []
-    const expData = expRes.data || []
-    const labData = labRes.data || []
-    const wstData = wstRes.data || []
-    const fcData = fcRes.data || []
-
-    const revCashier = revData.filter(r => r.source === 'cashier').reduce((s, r) => s + Number(r.amount), 0)
-    const revWebsite = revData.filter(r => r.source === 'website').reduce((s, r) => s + Number(r.amount), 0)
-    const revCredit = revData.filter(r => r.source === 'credit').reduce((s, r) => s + Number(r.amount), 0)
-    const totalRevenue = revCashier + revWebsite + revCredit
-
-    const supplierRows = expData.filter(r => r.expense_type === 'suppliers' || r.expense_type === 'supplier')
-    const expSuppliers = supplierRows.reduce((s, r) => s + Number(r.amount), 0)
-    const expSuppliersInternal = supplierRows.filter(r => r.from_factory).reduce((s, r) => s + Number(r.amount), 0)
-    const expSuppliersExternal = supplierRows.filter(r => !r.from_factory).reduce((s, r) => s + Number(r.amount), 0)
-    const expRepairs = expData.filter(r => r.expense_type === 'repairs' || r.expense_type === 'repair').reduce((s, r) => s + Number(r.amount), 0)
-    const expInfra = expData.filter(r => r.expense_type === 'infrastructure').reduce((s, r) => s + Number(r.amount), 0)
-    const expDelivery = expData.filter(r => r.expense_type === 'deliveries' || r.expense_type === 'delivery').reduce((s, r) => s + Number(r.amount), 0)
-    const expOther = expData.filter(r => r.expense_type === 'other').reduce((s, r) => s + Number(r.amount), 0)
-    const totalExpenses = expSuppliers + expRepairs + expInfra + expDelivery + expOther
-
-    const laborGross = labData.reduce((s, r) => s + Number(r.gross_salary), 0)
-    const laborEmployer = labData.reduce((s, r) => s + Number(r.employer_cost), 0)
-    const wasteTotal = wstData.reduce((s, r) => s + Number(r.amount), 0)
-    const fixedCosts = fcData.filter((r: any) => r.entity_id !== 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
-    const mgmtCosts = fcData.filter((r: any) => r.entity_id === 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
-
-    const grossProfit = totalRevenue - laborEmployer - totalExpenses
-    const operatingProfit = grossProfit - fixedCosts - mgmtCosts - wasteTotal
-
-    const totalTransactions = revData.filter(r => r.source === 'cashier').reduce((s, r) => s + (Number(r.transaction_count) || 0), 0)
-    const uniqueDays = new Set(revData.filter(r => r.source === 'cashier' && Number(r.transaction_count) > 0).map(r => r.date)).size
+  async function fetchTransactionData(branchId: number, dateFrom: string, dateTo: string) {
+    const { data: revData } = await supabase.from('branch_revenue').select('source, amount, transaction_count, date')
+      .eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo)
+    const rows = revData || []
+    const revCashier = rows.filter(r => r.source === 'cashier').reduce((s, r) => s + Number(r.amount), 0)
+    const revWebsite = rows.filter(r => r.source === 'website').reduce((s, r) => s + Number(r.amount), 0)
+    const revCredit = rows.filter(r => r.source === 'credit').reduce((s, r) => s + Number(r.amount), 0)
+    const laborGross = 0 // not needed from revenue query
+    const totalTransactions = rows.filter(r => r.source === 'cashier').reduce((s, r) => s + (Number(r.transaction_count) || 0), 0)
+    const uniqueDays = new Set(rows.filter(r => r.source === 'cashier' && Number(r.transaction_count) > 0).map(r => r.date)).size
     const workingDays = uniqueDays || 1
     const avgBasket = totalTransactions > 0 ? revCashier / totalTransactions : 0
     const avgDailyTransactions = totalTransactions / workingDays
-
-    return {
-      id: branchId, name, color,
-      revCashier, revWebsite, revCredit, totalRevenue,
-      expSuppliers, expSuppliersInternal, expSuppliersExternal, expRepairs, expInfra, expDelivery, expOther, totalExpenses,
-      laborGross, laborEmployer, wasteTotal, fixedCosts, mgmtCosts,
-      grossProfit, operatingProfit,
-      laborPct: totalRevenue > 0 ? (laborEmployer / totalRevenue) * 100 : 0,
-      wastePct: totalRevenue > 0 ? (wasteTotal / totalRevenue) * 100 : 0,
-      grossPct: totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0,
-      operatingPct: totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0,
-      totalTransactions, workingDays, avgBasket, avgDailyTransactions,
-    }
+    return { revCashier, revWebsite, revCredit, laborGross, totalTransactions, workingDays, avgBasket, avgDailyTransactions }
   }
 
   useEffect(() => {
@@ -148,26 +132,31 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       setLoading(true)
       const oh = await getOverheadPct()
       setOverheadPct(oh)
-      const monthKey = from.slice(0, 7)
-      const prevMonthKey = comparisonPeriod.from.slice(0, 7)
+      const mk = from.slice(0, 7)
+      const prevMk = comparisonPeriod.from.slice(0, 7)
 
-      const [current, previous] = await Promise.all([
-        Promise.all(BRANCHES.map(br => fetchBranchData(br.id, br.name, br.color, from, to, monthKey))),
-        Promise.all(BRANCHES.map(br => fetchBranchData(br.id, br.name, br.color, comparisonPeriod.from, comparisonPeriod.to, prevMonthKey))),
+      const overheadPctVal = Number(localStorage.getItem('overhead_pct') || String(oh))
+
+      const [currentPLs, previousPLs, transactionData] = await Promise.all([
+        Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, from, to, overheadPctVal, mk))),
+        Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, comparisonPeriod.from, comparisonPeriod.to, overheadPctVal, prevMk))),
+        Promise.all(BRANCHES.map(br => fetchTransactionData(br.id, from, to))),
       ])
 
-      const branchIds = BRANCHES.map(br => br.id)
-      const viewProfits = await fetchAllBranchesProfit(branchIds, from, to)
-      console.log('[BranchManager] viewProfits:', JSON.stringify(viewProfits))
-      for (const br of current) {
-        const vp = viewProfits.find(p => p.branchId === br.id)
-        console.log('[BranchManager] branch', br.id, 'vp:', JSON.stringify(vp))
-        if (vp && vp.revenue > 0) {
-          br.expSuppliersInternal = vp.internalSupplierCost
-          br.expSuppliersExternal = vp.externalSupplierCost
-          br.expSuppliers = vp.totalSupplierCost
-        }
-      }
+      const current = currentPLs.map((pl, i) => {
+        const bd = plToBranchData(pl, BRANCHES[i].name, BRANCHES[i].color)
+        const tx = transactionData[i]
+        bd.revCashier = tx.revCashier
+        bd.revWebsite = tx.revWebsite
+        bd.revCredit = tx.revCredit
+        bd.totalTransactions = tx.totalTransactions
+        bd.workingDays = tx.workingDays
+        bd.avgBasket = tx.avgBasket
+        bd.avgDailyTransactions = tx.avgDailyTransactions
+        return bd
+      })
+
+      const previous = previousPLs.map((pl, i) => plToBranchData(pl, BRANCHES[i].name, BRANCHES[i].color))
 
       setBranches(current)
       setPrevBranches(previous)

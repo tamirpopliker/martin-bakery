@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
-import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept, getOverheadPct } from '../lib/supabase'
-import { fetchAllBranchesProfit } from '../lib/profitCalc'
+import { supabase, getOverheadPct } from '../lib/supabase'
+import { calculateBranchPL, calculateFactoryPL, type PLResult, type FactoryPLResult } from '../lib/calculatePL'
 import { ArrowRight, TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck, Building2, Layers } from 'lucide-react'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon, TrophyIcon } from '@/components/icons'
 import { BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
@@ -165,125 +165,83 @@ export default function CEODashboard({ onBack }: Props) {
       setFactoryTargets({ labor_pct: avgLabor, waste_pct: avgWaste })
     }
 
-    const [fSalesFs, fSalesB2b, fLabor, fSupp, fWaste, fRepairs, fFixed, globalEmpsData, wdData] = await Promise.all([
-      supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', from).lt('date', to),
-      supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', from).lt('date', to),
-      supabase.from('labor').select('employee_name, employer_cost').eq('entity_type', 'factory').gte('date', from).lt('date', to),
-      supabase.from('supplier_invoices').select('amount').gte('date', from).lt('date', to),
-      supabase.from('factory_waste').select('amount').gte('date', from).lt('date', to),
-      supabase.from('factory_repairs').select('amount').gte('date', from).lt('date', to),
-      supabase.from('fixed_costs').select('amount').eq('entity_type', 'factory').eq('month', monthKey || from.slice(0, 7)),
-      fetchGlobalEmployees(),
-      getWorkingDays(monthKey || from.slice(0, 7)),
+    const mk = monthKey || from.slice(0, 7)
+    const overheadPctVal = Number(localStorage.getItem('overhead_pct') || String(oh))
+
+    // Use unified P&L calculations
+    const [branchPLs, factoryPL] = await Promise.all([
+      Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, from, to, overheadPctVal, mk))),
+      calculateFactoryPL(from, to, mk),
     ])
 
-    const fSalesDirect = (fSalesFs.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    const fSalesB2bTotal = (fSalesB2b.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    const fSalesTotal = fSalesDirect + fSalesB2bTotal
-    const globalNames = new Set(globalEmpsData.map(e => e.name))
-    const fHourlyLabor = (fLabor.data || []).filter((r: any) => !globalNames.has(r.employee_name)).reduce((s, r) => s + Number(r.employer_cost), 0)
-    const fGlobalLaborCreams = calcGlobalLaborForDept(globalEmpsData, 'creams', wdData)
-    const fGlobalLaborDough  = calcGlobalLaborForDept(globalEmpsData, 'dough', wdData)
-    const fLaborTotal = fHourlyLabor + fGlobalLaborCreams + fGlobalLaborDough
-    const fSuppTotal  = (fSupp.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    const fWasteTotal = (fWaste.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    const fRepairsTotal = (fRepairs.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    const fFixedTotal = (fFixed.data || []).reduce((s, r) => s + Number(r.amount), 0)
+    // Map factory PL to state variables
+    setFactorySales(factoryPL.externalRevenue)
+    setFactoryLabor(factoryPL.labor)
+    setFactorySuppliers(factoryPL.suppliers)
+    setFactoryWaste(factoryPL.waste)
+    setFactoryRepairs(factoryPL.repairs)
+    setFactoryFixed(factoryPL.fixedCosts)
+    setFactoryB2b(0) // b2b breakdown not needed separately
+    setFactoryInternalSales(factoryPL.internalRevenue)
 
-    setFactorySales(fSalesTotal)
-    setFactoryLabor(fLaborTotal)
-    setFactorySuppliers(fSuppTotal)
-    setFactoryWaste(fWasteTotal)
-    setFactoryRepairs(fRepairsTotal)
-    setFactoryFixed(fFixedTotal)
-    setFactoryB2b(fSalesB2bTotal)
-
-    // Fetch internal factory sales (factory → branches)
-    const [fInternalSalesFs, fInternalSalesB2b] = await Promise.all([
-      supabase.from('factory_sales').select('amount').eq('is_internal', true).gte('date', from).lt('date', to),
-      supabase.from('factory_b2b_sales').select('amount').eq('is_internal', true).gte('date', from).lt('date', to),
-    ])
-    const fInternalTotal = (fInternalSalesFs.data || []).reduce((s, r) => s + Number(r.amount), 0)
-                         + (fInternalSalesB2b.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    setFactoryInternalSales(fInternalTotal)
-
-    const branchResults: BranchData[] = []
-    let totalExpByType: Record<string, number> = {}
+    // Fetch revenue by channel for each branch (needed for UI breakdown)
     let totalCashier = 0, totalCredit = 0, totalWebsite = 0
+    const channelData = await Promise.all(
+      BRANCHES.map(br =>
+        supabase.from('branch_revenue').select('source, amount')
+          .eq('branch_id', br.id).gte('date', from).lt('date', to)
+      )
+    )
 
-    for (const br of BRANCHES) {
-      const { data: revData } = await supabase.from('branch_revenue').select('source, amount')
-        .eq('branch_id', br.id).gte('date', from).lt('date', to)
-      const revenue = revData ? revData.reduce((s, r) => s + Number(r.amount), 0) : 0
+    const branchResults: BranchData[] = branchPLs.map((pl, i) => {
+      const br = BRANCHES[i]
+      const revData = channelData[i].data || []
       let brCashier = 0, brCredit = 0, brWebsite = 0
-      if (revData) {
-        for (const r of revData) {
-          const amt = Number(r.amount)
-          if (r.source === 'cashier') { totalCashier += amt; brCashier += amt }
-          else if (r.source === 'credit') { totalCredit += amt; brCredit += amt }
-          else if (r.source === 'website') { totalWebsite += amt; brWebsite += amt }
-        }
+      for (const r of revData) {
+        const amt = Number(r.amount)
+        if (r.source === 'cashier') { totalCashier += amt; brCashier += amt }
+        else if (r.source === 'credit') { totalCredit += amt; brCredit += amt }
+        else if (r.source === 'website') { totalWebsite += amt; brWebsite += amt }
       }
-
-      const { data: expData } = await supabase.from('branch_expenses').select('expense_type, amount, from_factory')
-        .eq('branch_id', br.id).gte('date', from).lt('date', to)
-      const expenses = expData ? expData.reduce((s, r) => s + Number(r.amount), 0) : 0
-      let brExpInternal = 0, brExpExternal = 0
-      if (expData) {
-        for (const r of expData) {
-          const type = r.expense_type || 'other'
-          const amt = Number(r.amount)
-          totalExpByType[type] = (totalExpByType[type] || 0) + amt
-          if ((type === 'suppliers' || type === 'supplier') && r.from_factory) brExpInternal += amt
-          else brExpExternal += amt
-        }
+      const expenses = pl.factoryPurchases + pl.externalSuppliers + pl.repairs + pl.deliveries + pl.infrastructure + pl.otherExpenses
+      return {
+        ...br,
+        revenue: pl.revenue,
+        expenses,
+        expInternal: pl.factoryPurchases,
+        expExternal: pl.externalSuppliers,
+        labor: pl.labor,
+        waste: pl.waste,
+        fixedCosts: pl.fixedCosts,
+        grossProfit: pl.controllableProfit,
+        operatingProfit: pl.operatingProfit,
+        revCashier: brCashier,
+        revCredit: brCredit,
+        revWebsite: brWebsite,
       }
+    })
 
-      const { data: labData } = await supabase.from('branch_labor').select('employer_cost')
-        .eq('branch_id', br.id).gte('date', from).lt('date', to)
-      const labor = labData ? labData.reduce((s, r) => s + Number(r.employer_cost), 0) : 0
-      totalExpByType['labor'] = (totalExpByType['labor'] || 0) + labor
-
-      const { data: wstData } = await supabase.from('branch_waste').select('amount')
-        .eq('branch_id', br.id).gte('date', from).lt('date', to)
-      const waste = wstData ? wstData.reduce((s, r) => s + Number(r.amount), 0) : 0
-      totalExpByType['waste'] = (totalExpByType['waste'] || 0) + waste
-
-      const { data: fcData } = await supabase.from('fixed_costs').select('amount')
-        .eq('entity_type', `branch_${br.id}`).eq('month', monthKey || from.slice(0, 7))
-      const fixedCosts = fcData ? fcData.reduce((s, r) => s + Number(r.amount), 0) : 0
-      totalExpByType['fixed'] = (totalExpByType['fixed'] || 0) + fixedCosts
-
-      const grossProfit = revenue - labor - expenses
-      const oh = revenue * overheadPct / 100
-      const operatingProfit = grossProfit - fixedCosts - waste - oh
-
-      branchResults.push({ ...br, revenue, expenses, expInternal: brExpInternal, expExternal: brExpExternal, labor, waste, fixedCosts, grossProfit, operatingProfit, revCashier: brCashier, revCredit: brCredit, revWebsite: brWebsite })
-    }
-
-    // Override branch profits from View (single source of truth)
-    const branchIds = BRANCHES.map(br => br.id)
-    const viewProfits = await fetchAllBranchesProfit(branchIds, from, to)
-    for (const br of branchResults) {
-      const vp = viewProfits.find(p => p.branchId === br.id)
-      if (vp) {
-        br.grossProfit = vp.grossProfit
-        br.operatingProfit = vp.operatingProfit
-        br.expInternal = vp.internalSupplierCost
-        br.expExternal = vp.externalSupplierCost
-      }
-    }
-
-    // Track branch internal expenses from View data
-    const totalBranchInternal = viewProfits.reduce((s, p) => s + p.internalSupplierCost, 0)
+    const totalBranchInternal = branchPLs.reduce((s, pl) => s + pl.factoryPurchases, 0)
     setBranchInternalExpenses(totalBranchInternal)
 
     setBranches(branchResults)
     setRevCashier(totalCashier)
     setRevCredit(totalCredit)
     setRevWebsite(totalWebsite)
-    setBranchSuppliers((totalExpByType['supplier'] || 0) + (totalExpByType['inventory'] || 0))
+    setBranchSuppliers(branchPLs.reduce((s, pl) => s + pl.externalSuppliers, 0))
 
+    // Build expense breakdown from PL data
+    const totalExpByType: Record<string, number> = {}
+    for (const pl of branchPLs) {
+      totalExpByType['supplier'] = (totalExpByType['supplier'] || 0) + pl.factoryPurchases + pl.externalSuppliers
+      totalExpByType['repair'] = (totalExpByType['repair'] || 0) + pl.repairs
+      totalExpByType['infrastructure'] = (totalExpByType['infrastructure'] || 0) + pl.infrastructure
+      totalExpByType['delivery'] = (totalExpByType['delivery'] || 0) + pl.deliveries
+      totalExpByType['other'] = (totalExpByType['other'] || 0) + pl.otherExpenses
+      totalExpByType['labor'] = (totalExpByType['labor'] || 0) + pl.labor
+      totalExpByType['waste'] = (totalExpByType['waste'] || 0) + pl.waste
+      totalExpByType['fixed'] = (totalExpByType['fixed'] || 0) + pl.fixedCosts
+    }
     const typeLabels: Record<string, string> = {
       supplier: 'ספקים/מלאי', inventory: 'ספקים/מלאי', repair: 'תיקונים',
       infrastructure: 'תשתיות', delivery: 'משלוחים', other: 'אחר',
@@ -312,48 +270,23 @@ export default function CEODashboard({ onBack }: Props) {
       })))
     }
 
+    // Comparison period using unified P&L
     const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
     const pm = comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)
-    let pRev = 0, pExp = 0, pLab = 0, pWst = 0, pFc = 0
-    for (const br of BRANCHES) {
-      const { data: r } = await supabase.from('branch_revenue').select('amount').eq('branch_id', br.id).gte('date', pFrom).lt('date', pTo)
-      pRev += r ? r.reduce((s, x) => s + Number(x.amount), 0) : 0
-      const { data: e } = await supabase.from('branch_expenses').select('amount').eq('branch_id', br.id).gte('date', pFrom).lt('date', pTo)
-      pExp += e ? e.reduce((s, x) => s + Number(x.amount), 0) : 0
-      const { data: l } = await supabase.from('branch_labor').select('employer_cost').eq('branch_id', br.id).gte('date', pFrom).lt('date', pTo)
-      pLab += l ? l.reduce((s, x) => s + Number(x.employer_cost), 0) : 0
-      const { data: w } = await supabase.from('branch_waste').select('amount').eq('branch_id', br.id).gte('date', pFrom).lt('date', pTo)
-      pWst += w ? w.reduce((s, x) => s + Number(x.amount), 0) : 0
-      const { data: fc } = await supabase.from('fixed_costs').select('amount').eq('entity_type', `branch_${br.id}`).eq('month', pm)
-      pFc += fc ? fc.reduce((s, x) => s + Number(x.amount), 0) : 0
-    }
-    const [pfSalesFs2, pfSalesB2b2, pfLabor2, pfSupp2, pfWaste2, pfRepairs2, pfFixed2, pfWd] = await Promise.all([
-      supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', pFrom).lt('date', pTo),
-      supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', pFrom).lt('date', pTo),
-      supabase.from('labor').select('employee_name, employer_cost').eq('entity_type', 'factory').gte('date', pFrom).lt('date', pTo),
-      supabase.from('supplier_invoices').select('amount').gte('date', pFrom).lt('date', pTo),
-      supabase.from('factory_waste').select('amount').gte('date', pFrom).lt('date', pTo),
-      supabase.from('factory_repairs').select('amount').gte('date', pFrom).lt('date', pTo),
-      supabase.from('fixed_costs').select('amount').eq('entity_type', 'factory').eq('month', pm),
-      getWorkingDays(pm),
+    const [prevBranchPLs, prevFactoryPL] = await Promise.all([
+      Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, pFrom, pTo, overheadPctVal, pm))),
+      calculateFactoryPL(pFrom, pTo, pm),
     ])
-    const pfSalesTotal = (pfSalesFs2.data || []).reduce((s, r) => s + Number(r.amount), 0)
-                        + (pfSalesB2b2.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    const pfHourlyLabor = (pfLabor2.data || []).filter((r: any) => !globalNames.has(r.employee_name)).reduce((s, r) => s + Number(r.employer_cost), 0)
-    const pfGlobalLaborCreams = calcGlobalLaborForDept(globalEmpsData, 'creams', pfWd)
-    const pfGlobalLaborDough  = calcGlobalLaborForDept(globalEmpsData, 'dough', pfWd)
-    const pfLaborTotal = pfHourlyLabor + pfGlobalLaborCreams + pfGlobalLaborDough
-    const pfSuppTotal  = (pfSupp2.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    const pfWasteTotal = (pfWaste2.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    const pfRepairsTotal = (pfRepairs2.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    const pfFixedTotal = (pfFixed2.data || []).reduce((s, r) => s + Number(r.amount), 0)
-    const pfGross = pfSalesTotal - pfLaborTotal - pfSuppTotal
-    const pfOperating = pfGross - pfFixedTotal - pfWasteTotal - pfRepairsTotal
 
-    const prevGross = pRev - pLab - pExp
-    setPrevTotalRev(pRev + pfSalesTotal)
-    setPrevTotalGross(prevGross + pfGross)
-    setPrevTotalOperating((prevGross - pFc - pWst) + pfOperating)
+    const pRev = prevBranchPLs.reduce((s, pl) => s + pl.revenue, 0)
+    const pGross = prevBranchPLs.reduce((s, pl) => s + pl.controllableProfit, 0)
+    const pOperating = prevBranchPLs.reduce((s, pl) => s + pl.operatingProfit, 0)
+    const pfGross = prevFactoryPL.controllableProfit
+    const pfOperating = prevFactoryPL.operatingProfit
+
+    setPrevTotalRev(pRev + prevFactoryPL.externalRevenue)
+    setPrevTotalGross(pGross + pfGross)
+    setPrevTotalOperating(pOperating + pfOperating)
 
     setLoading(false)
   }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, fetchBranchTrends, fetchBranchPL, getOverheadPct, BranchPLResult, MonthTrend } from '../lib/supabase'
+import { supabase, fetchBranchTrends, getOverheadPct, MonthTrend } from '../lib/supabase'
+import { calculateBranchPL, type PLResult } from '../lib/calculatePL'
 import { usePeriod } from '../lib/PeriodContext'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import PeriodPicker from '../components/PeriodPicker'
@@ -25,8 +26,8 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   const { period, setPeriod, from, to, monthKey, comparisonPeriod } = usePeriod()
   const [loading, setLoading] = useState(false)
 
-  // P&L result from shared function
-  const [pl, setPl] = useState<BranchPLResult | null>(null)
+  // P&L result from unified function
+  const [pl, setPl] = useState<PLResult | null>(null)
 
   const [overheadPct, setOverheadPct] = useState(5)
 
@@ -40,6 +41,11 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   const [prevProfit, setPrevProfit]     = useState(0)
   const [prevLabor, setPrevLabor]       = useState(0)
 
+  // Revenue breakdown (not in PLResult, fetched separately for UI)
+  const [revCashier, setRevCashier] = useState(0)
+  const [revWebsite, setRevWebsite] = useState(0)
+  const [revCredit, setRevCredit] = useState(0)
+
   async function fetchData() {
     setLoading(true)
 
@@ -47,31 +53,25 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
     const oh = await getOverheadPct()
     setOverheadPct(oh)
 
-    // P&L via shared function
-    const plResult = await fetchBranchPL(branchId, from, to, monthKey || from.slice(0, 7), oh)
+    const curMonthKey = monthKey || from.slice(0, 7)
 
-    // Override supplier split from branch_pl_summary View (single source of truth)
-    const viewMonth = from.substring(0, 7) + '-01'
-    const { data: plSummary, error: plError } = await supabase
-      .from('branch_pl_summary')
-      .select('internal_supplier_cost, external_supplier_cost, total_supplier_cost')
-      .eq('branch_id', branchId)
-      .eq('month', viewMonth)
-      .maybeSingle()
-
-    console.log('[BranchPL] plSummary result:', JSON.stringify(plSummary))
-    console.log('[BranchPL] plSummary error:', JSON.stringify(plError))
-    console.log('[BranchPL] month used:', viewMonth)
-    console.log('[BranchPL] branchId:', branchId)
-    console.log('[BranchPL] from:', from)
-
-    if (plSummary) {
-      plResult.expSuppliersInternal = Number(plSummary.internal_supplier_cost || 0)
-      plResult.expSuppliersExternal = Number(plSummary.external_supplier_cost || 0)
-      plResult.expSuppliers = Number(plSummary.total_supplier_cost || 0)
-    }
-
+    // P&L via unified calculateBranchPL
+    const plResult = await calculateBranchPL(branchId, from, to, oh, curMonthKey)
     setPl(plResult)
+
+    // Revenue breakdown by source (for UI table)
+    const { data: revRows } = await supabase.from('branch_revenue').select('source, amount')
+      .eq('branch_id', branchId).gte('date', from).lt('date', to)
+    let cashier = 0, website = 0, credit = 0
+    for (const r of (revRows || [])) {
+      const amt = Number(r.amount)
+      if (r.source === 'cashier') cashier += amt
+      else if (r.source === 'website') website += amt
+      else if (r.source === 'credit') credit += amt
+    }
+    setRevCashier(cashier)
+    setRevWebsite(website)
+    setRevCredit(credit)
 
     // KPI targets
     const { data: kpiData } = await supabase.from('branch_kpi_targets').select('*').eq('branch_id', branchId).maybeSingle()
@@ -81,35 +81,12 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
       setRevenueTarget(Number(kpiData.revenue_target) || 0)
     }
 
-    // previous month (comparison period)
-    const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
-    const entityType = `branch_${branchId}`
-
-    const { data: prevRev } = await supabase.from('branch_revenue').select('amount')
-      .eq('branch_id', branchId).gte('date', pFrom).lt('date', pTo)
-    const pRevTotal = prevRev ? prevRev.reduce((s, r) => s + Number(r.amount), 0) : 0
-    setPrevRevenue(pRevTotal)
-
-    const { data: prevExp } = await supabase.from('branch_expenses').select('amount')
-      .eq('branch_id', branchId).gte('date', pFrom).lt('date', pTo)
-    const pExpTotal = prevExp ? prevExp.reduce((s, r) => s + Number(r.amount), 0) : 0
-
-    const { data: prevLab } = await supabase.from('branch_labor').select('employer_cost')
-      .eq('branch_id', branchId).gte('date', pFrom).lt('date', pTo)
-    const pLabTotal = prevLab ? prevLab.reduce((s, r) => s + Number(r.employer_cost), 0) : 0
-    setPrevLabor(pLabTotal)
-
-    const { data: prevWst } = await supabase.from('branch_waste').select('amount')
-      .eq('branch_id', branchId).gte('date', pFrom).lt('date', pTo)
-    const pWstTotal = prevWst ? prevWst.reduce((s, r) => s + Number(r.amount), 0) : 0
-
-    const { data: prevFc } = await supabase.from('fixed_costs').select('amount, entity_id')
-      .eq('entity_type', entityType).eq('month', comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7))
-    const pFcTotal = prevFc ? prevFc.filter(r => r.entity_id !== 'mgmt').reduce((s, r) => s + Number(r.amount), 0) : 0
-    const pMgmtTotal = prevFc ? prevFc.filter(r => r.entity_id === 'mgmt').reduce((s, r) => s + Number(r.amount), 0) : 0
-
-    const prevGross = pRevTotal - pLabTotal - pExpTotal
-    setPrevProfit(prevGross - pFcTotal - pMgmtTotal - pWstTotal - (pRevTotal * oh / 100))
+    // Previous period via unified calculateBranchPL
+    const prevMonthKey = comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)
+    const prevPl = await calculateBranchPL(branchId, comparisonPeriod.from, comparisonPeriod.to, oh, prevMonthKey)
+    setPrevRevenue(prevPl.revenue)
+    setPrevLabor(prevPl.labor)
+    setPrevProfit(prevPl.operatingProfit)
 
     setLoading(false)
   }
@@ -121,33 +98,30 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
     getOverheadPct().then(oh => fetchBranchTrends(branchId, monthKey || from.slice(0, 7), oh)).then(setTrendData)
   }, [branchId, monthKey, from])
 
-  // derived values from PL result
-  const totalRevenue    = pl?.revenue ?? 0
-  const revCashier      = pl?.revCashier ?? 0
-  const revWebsite      = pl?.revWebsite ?? 0
-  const revCredit       = pl?.revCredit ?? 0
-  const expSuppliers    = pl?.expSuppliers ?? 0
-  const expSuppliersInternal = pl?.expSuppliersInternal ?? 0
-  const expSuppliersExternal = pl?.expSuppliersExternal ?? 0
-  const expRepairs      = pl?.expRepairs ?? 0
-  const expInfra        = pl?.expInfra ?? 0
-  const expDelivery     = pl?.expDelivery ?? 0
-  const expOther        = pl?.expOther ?? 0
-  const laborEmployer   = pl?.laborEmployer ?? 0
-  const wasteTotal      = pl?.wasteTotal ?? 0
-  const fixedCosts      = pl?.fixedCosts ?? 0
-  const mgmtCosts       = pl?.mgmtCosts ?? 0
-  const overheadAmount  = pl?.overheadAmount ?? 0
-  const controllableMargin = pl?.controllableMargin ?? 0
-  const operatingProfit = pl?.operatingProfit ?? 0
+  // derived values from PLResult
+  const totalRevenue         = pl?.revenue ?? 0
+  const expSuppliersInternal = pl?.factoryPurchases ?? 0
+  const expSuppliersExternal = pl?.externalSuppliers ?? 0
+  const expSuppliers         = expSuppliersInternal + expSuppliersExternal
+  const expRepairs           = pl?.repairs ?? 0
+  const expInfra             = pl?.infrastructure ?? 0
+  const expDelivery          = pl?.deliveries ?? 0
+  const expOther             = pl?.otherExpenses ?? 0
+  const laborEmployer        = pl?.labor ?? 0
+  const wasteTotal           = pl?.waste ?? 0
+  const fixedCosts           = pl?.fixedCosts ?? 0
+  const mgmtCosts            = pl?.managerSalary ?? 0
+  const overheadAmount       = pl?.overhead ?? 0
+  const controllableMargin   = pl?.controllableProfit ?? 0
+  const operatingProfit      = pl?.operatingProfit ?? 0
 
   const totalExpenses   = expSuppliers + expRepairs + expInfra + expDelivery + expOther
   const grossProfit     = totalRevenue - laborEmployer - totalExpenses
   const laborPct        = totalRevenue > 0 ? (laborEmployer / totalRevenue) * 100 : 0
   const wastePct        = totalRevenue > 0 ? (wasteTotal / totalRevenue) * 100 : 0
   const grossPct        = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0
-  const operatingPct    = totalRevenue > 0 ? (operatingProfit / totalRevenue) * 100 : 0
-  const controllablePct = totalRevenue > 0 ? (controllableMargin / totalRevenue) * 100 : 0
+  const operatingPct    = pl?.operatingMargin ?? 0
+  const controllablePct = pl?.controllableMargin ?? 0
 
   function DiffArrow({ current, previous }: { current: number; previous: number }) {
     if (previous === 0) return <Minus size={14} color="#94a3b8" />
