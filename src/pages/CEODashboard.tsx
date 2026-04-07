@@ -166,11 +166,10 @@ export default function CEODashboard({ onBack }: Props) {
     }
 
     const mk = monthKey || from.slice(0, 7)
-    const overheadPctVal = Number(localStorage.getItem('overhead_pct') || String(oh))
 
-    // Use unified P&L calculations
+    // Use unified P&L calculations — overhead fetched from branches table per branch
     const [branchPLs, factoryPL] = await Promise.all([
-      Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, from, to, overheadPctVal, mk))),
+      Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, from, to, undefined, mk))),
       calculateFactoryPL(from, to, mk),
     ])
 
@@ -277,7 +276,7 @@ export default function CEODashboard({ onBack }: Props) {
     const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
     const pm = comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)
     const [prevBranchPLs, prevFactoryPL] = await Promise.all([
-      Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, pFrom, pTo, overheadPctVal, pm))),
+      Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, pFrom, pTo, undefined, pm))),
       calculateFactoryPL(pFrom, pTo, pm),
     ])
 

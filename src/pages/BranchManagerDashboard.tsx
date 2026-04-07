@@ -135,11 +135,9 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       const mk = from.slice(0, 7)
       const prevMk = comparisonPeriod.from.slice(0, 7)
 
-      const overheadPctVal = Number(localStorage.getItem('overhead_pct') || String(oh))
-
       const [currentPLs, previousPLs, transactionData] = await Promise.all([
-        Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, from, to, overheadPctVal, mk))),
-        Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, comparisonPeriod.from, comparisonPeriod.to, overheadPctVal, prevMk))),
+        Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, from, to, undefined, mk))),
+        Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, comparisonPeriod.from, comparisonPeriod.to, undefined, prevMk))),
         Promise.all(BRANCHES.map(br => fetchTransactionData(br.id, from, to))),
       ])
 

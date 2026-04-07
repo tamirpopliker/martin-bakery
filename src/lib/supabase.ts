@@ -52,13 +52,14 @@ export interface Branch {
   short_name: string | null
   address: string | null
   active: boolean
+  overhead_pct: number | null
 }
 
 /** Fetch all active branches, ordered by id */
 export async function fetchBranches(): Promise<Branch[]> {
   const { data } = await supabase
     .from('branches')
-    .select('id, name, short_name, address, active')
+    .select('id, name, short_name, address, active, overhead_pct')
     .eq('active', true)
     .order('id')
   return (data || []) as Branch[]

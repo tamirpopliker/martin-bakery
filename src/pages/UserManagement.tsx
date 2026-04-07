@@ -584,15 +584,29 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
       {tab === 'branches' && (
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
           <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr 1fr 100px 80px', padding: '14px 20px', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
-              <span>ID</span><span>שם</span><span>שם קצר</span><span>כתובת</span><span>סטטוס</span><span>פעולות</span>
+            <div style={{ display: 'grid', gridTemplateColumns: '50px 1fr 1fr 80px 80px 80px', padding: '14px 20px', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
+              <span>ID</span><span>שם</span><span>כתובת</span><span>העמסה %</span><span>סטטוס</span><span>פעולות</span>
             </div>
             {branches.map(branch => (
-              <div key={branch.id} style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr 1fr 100px 80px', padding: '14px 20px', borderBottom: '1px solid #f8fafc', alignItems: 'center', fontSize: '13px' }}>
+              <div key={branch.id} style={{ display: 'grid', gridTemplateColumns: '50px 1fr 1fr 80px 80px 80px', padding: '14px 20px', borderBottom: '1px solid #f8fafc', alignItems: 'center', fontSize: '13px' }}>
                 <span style={{ fontWeight: '700', color: '#818cf8' }}>#{branch.id}</span>
                 <span style={{ fontWeight: '600', color: '#0f172a' }}>{branch.name}</span>
-                <span style={{ color: '#64748b' }}>{branch.short_name || '—'}</span>
                 <span style={{ color: '#64748b' }}>{branch.address || '—'}</span>
+                <span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="30"
+                    defaultValue={branch.overhead_pct ?? 5}
+                    onBlur={async (e) => {
+                      const val = Number(e.target.value)
+                      if (isNaN(val)) return
+                      await supabase.from('branches').update({ overhead_pct: val }).eq('id', branch.id)
+                    }}
+                    style={{ width: 50, textAlign: 'center', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px' }}
+                  />%
+                </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600', color: '#34d399' }}>
                   <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34d399' }} /> פעיל
                 </span>

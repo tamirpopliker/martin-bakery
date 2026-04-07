@@ -49,14 +49,11 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   async function fetchData() {
     setLoading(true)
 
-    // Fetch overhead from system_settings
-    const oh = await getOverheadPct()
-    setOverheadPct(oh)
-
     const curMonthKey = monthKey || from.slice(0, 7)
 
-    // P&L via unified calculateBranchPL
-    const plResult = await calculateBranchPL(branchId, from, to, oh, curMonthKey)
+    // P&L via unified calculateBranchPL — overhead fetched from branches table
+    const plResult = await calculateBranchPL(branchId, from, to, undefined, curMonthKey)
+    setOverheadPct(plResult.overheadPct)
     setPl(plResult)
 
     // Revenue breakdown by source (for UI table)
@@ -83,7 +80,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
 
     // Previous period via unified calculateBranchPL
     const prevMonthKey = comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)
-    const prevPl = await calculateBranchPL(branchId, comparisonPeriod.from, comparisonPeriod.to, oh, prevMonthKey)
+    const prevPl = await calculateBranchPL(branchId, comparisonPeriod.from, comparisonPeriod.to, undefined, prevMonthKey)
     setPrevRevenue(prevPl.revenue)
     setPrevLabor(prevPl.labor)
     setPrevProfit(prevPl.operatingProfit)

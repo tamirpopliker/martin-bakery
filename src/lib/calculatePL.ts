@@ -32,6 +32,9 @@ export interface PLResult {
   operatingProfit: number
   operatingMargin: number       // % of revenue
 
+  // Config
+  overheadPct: number           // actual overhead % used
+
   // Meta
   branchId: number
   periodStart: string
@@ -42,10 +45,21 @@ export async function calculateBranchPL(
   branchId: number,
   periodStart: string,
   periodEnd: string,
-  overheadPct: number = 0,
+  overheadPct?: number,
   monthKey?: string
 ): Promise<PLResult> {
   const mk = monthKey || periodStart.slice(0, 7)
+
+  // Fetch overhead_pct from DB if not provided
+  let pct = overheadPct
+  if (pct === undefined || pct === null) {
+    const { data: branchData } = await supabase
+      .from('branches')
+      .select('overhead_pct')
+      .eq('id', branchId)
+      .single()
+    pct = Number(branchData?.overhead_pct ?? 5.0)
+  }
 
   const [revRes, expRes, labRes, wasteRes, fcRes] = await Promise.all([
     supabase.from('branch_revenue').select('amount')
@@ -107,7 +121,7 @@ export async function calculateBranchPL(
   const controllableMargin = revenue > 0 ? (controllableProfit / revenue) * 100 : 0
 
   // Overhead
-  const overhead = revenue * overheadPct / 100
+  const overhead = revenue * pct / 100
 
   // Operating profit
   const operatingProfit = controllableProfit - fixedCosts - overhead
@@ -118,6 +132,7 @@ export async function calculateBranchPL(
     waste, repairs, deliveries, infrastructure, otherExpenses,
     controllableProfit, controllableMargin,
     fixedCosts, overhead, operatingProfit, operatingMargin,
+    overheadPct: pct,
     branchId, periodStart, periodEnd,
   }
 }
