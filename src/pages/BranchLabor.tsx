@@ -1151,8 +1151,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                 </div>
 
                 {/* Chart */}
-                <Card className="shadow-sm">
-                  <CardContent className="p-4">
+                <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px' }}>
                     <h3 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>עלות יומית</h3>
                     <ResponsiveContainer width="100%" height={220}>
                       <LineChart data={dailyData.map(d => ({
@@ -1170,8 +1169,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                         <Line type="monotone" dataKey="עלות מעסיק" stroke="#fb7185" strokeWidth={2} dot={{ r: 3, fill: 'white', stroke: '#fb7185', strokeWidth: 2 }} />
                       </LineChart>
                     </ResponsiveContainer>
-                  </CardContent>
-                </Card>
+                </div>
               </>
             )}
           </motion.div>
@@ -1180,8 +1178,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
         {/* מגמת 6 חודשים — לייבור */}
         {laborTrend.length > 0 && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-          <Card className="shadow-sm mt-4">
-            <CardContent className="p-6">
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px', marginTop: 16 }}>
               <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>מגמת 6 חודשים — לייבור</h3>
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={laborTrend}>
@@ -1197,8 +1194,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                   <Line yAxisId="pct" type="monotone" dataKey="laborPct" name="% לייבור" stroke="#f97316" strokeWidth={2.5} dot={{ r: 4 }} />
                 </LineChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
+          </div>
           </motion.div>
         )}
 

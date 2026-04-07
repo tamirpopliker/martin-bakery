@@ -261,12 +261,12 @@ export default function DataExport() {
       <motion.div variants={fadeIn} initial="hidden" animate="visible">
       <Card className="shadow-sm">
         <CardContent className="p-6">
-        <h2 style={{ margin: '0 0 16px', fontSize: '17px', fontWeight: '800', color: '#0f172a' }}>ייצוא נתונים לקובץ ZIP</h2>
+        <h2 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>ייצוא נתונים לקובץ ZIP</h2>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: '20px' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
             <input type="checkbox" checked={allTime} onChange={e => setAllTime(e.target.checked)}
-              style={{ width: '18px', height: '18px', accentColor: '#818cf8' }} />
+              style={{ width: '18px', height: '18px', accentColor: '#6366f1' }} />
             <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>כל הזמנים</span>
           </label>
 
@@ -277,7 +277,7 @@ export default function DataExport() {
 
           <button onClick={doExport} disabled={exporting}
             style={{
-              background: exporting ? '#94a3b8' : '#0f172a', color: 'white',
+              background: exporting ? '#94a3b8' : '#6366f1', color: 'white',
               border: 'none', borderRadius: '10px', padding: '12px 32px',
               fontSize: '15px', fontWeight: '700', cursor: exporting ? 'default' : 'pointer',
               display: 'flex', alignItems: 'center', gap: '8px', marginRight: 'auto',
@@ -304,7 +304,7 @@ export default function DataExport() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
             <CheckCircle size={22} color="#34d399" />
             <div>
-              <div style={{ fontSize: '16px', fontWeight: '800', color: '#065f46' }}>הייצוא הושלם!</div>
+              <div style={{ fontSize: '16px', fontWeight: '700', color: '#065f46' }}>הייצוא הושלם!</div>
               <div style={{ fontSize: '13px', color: '#34d399', fontWeight: '600' }}>
                 מייצא {EXPORT_TABLES.length} טבלאות · {totalRecords.toLocaleString()} רשומות סה"כ · {allTime ? 'כל הזמנים' : month}
               </div>
@@ -315,8 +315,7 @@ export default function DataExport() {
             {results.map(r => (
               <div key={r.fileName} style={{
                 display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '8px 12px', borderRadius: '8px',
-                background: r.count > 0 ? '#f0fdf4' : '#f8fafc',
+                padding: '8px 12px', borderBottom: '1px solid #f8fafc',
               }}>
                 {r.count > 0
                   ? <CheckCircle size={14} color="#34d399" />

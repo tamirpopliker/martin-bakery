@@ -42,11 +42,17 @@ const DEPT_LABELS: Record<string, string> = {
 
 const ALL_DEPTS = ['creams', 'dough', 'packaging', 'cleaning']
 
+const ROLE_BADGE_STYLES: Record<string, { background: string; color: string }> = {
+  admin: { background: '#eef2ff', color: '#4338ca' },
+  factory: { background: '#fffbeb', color: '#92400e' },
+  branch: { background: '#ecfdf5', color: '#065f46' },
+  employee: { background: '#f1f5f9', color: '#64748b' },
+}
 const ROLE_COLORS: Record<string, string> = {
-  admin: '#c084fc',
-  factory: '#818cf8',
-  branch: '#34d399',
-  employee: '#f59e0b',
+  admin: '#4338ca',
+  factory: '#92400e',
+  branch: '#065f46',
+  employee: '#64748b',
 }
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
@@ -247,32 +253,27 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
       {/* Header */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
+      <div style={{ background: 'white', padding: '16px 32px', display: 'flex', alignItems: 'center', gap: '16px', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
+        <Button variant="outline" size="lg" onClick={onBack} style={{ borderRadius: '12px', padding: '8px 20px', fontSize: '14px', fontWeight: 600, color: '#64748b' }}>
+          <ArrowRight size={20} />
           חזרה
         </Button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '40px', height: '40px', background: '#c084fc', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <UserCog size={22} color="white" />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: 0 }}>ניהול מערכת</h1>
-            <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>משתמשים · סניפים · הרשאות</p>
-          </div>
+        <div>
+          <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', margin: 0 }}>ניהול מערכת</h1>
+          <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>משתמשים · סניפים · הרשאות</p>
         </div>
         <div style={{ flex: 1 }} />
         {tab === 'users' && !addMode && (
           <button onClick={() => setAddMode(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#c084fc', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
             <Plus size={16} /> הוסף משתמש
           </button>
         )}
         {tab === 'branches' && (
           <button onClick={() => { setEditBranch({ name: '', short_name: '', address: '' }); setBranchSheetOpen(true) }}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
             <Plus size={16} /> הוסף סניף
           </button>
         )}
@@ -280,8 +281,8 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
 
       <div style={{ padding: '28px 36px', maxWidth: '1100px', margin: '0 auto' }}>
 
-      {/* Tab switcher */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+      {/* Tab switcher — underline style */}
+      <div style={{ display: 'flex', gap: '0', borderBottom: '2px solid #f1f5f9', marginBottom: '20px' }}>
         {[
           { key: 'users' as const, label: 'משתמשים', icon: UserCog, count: users.length },
           { key: 'branches' as const, label: 'סניפים', icon: Store, count: branches.length },
@@ -290,15 +291,16 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px',
-              padding: '10px 20px', borderRadius: '12px', fontSize: '14px', fontWeight: '700',
-              border: tab === t.key ? '2px solid #818cf8' : '2px solid #e2e8f0',
-              background: tab === t.key ? '#eef2ff' : 'white', color: tab === t.key ? '#4f46e5' : '#64748b',
-              cursor: 'pointer', transition: 'all 0.15s',
+              padding: '10px 20px', fontSize: '14px', fontWeight: 600,
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: tab === t.key ? '#6366f1' : '#94a3b8',
+              borderBottom: tab === t.key ? '2px solid #6366f1' : '2px solid transparent',
+              marginBottom: '-2px', transition: 'all 0.15s',
             }}>
             <t.icon size={16} />
             {t.label}
             {t.count !== undefined && (
-              <span style={{ background: tab === t.key ? '#818cf8' : '#e2e8f0', color: tab === t.key ? 'white' : '#64748b', fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
+              <span style={{ background: tab === t.key ? '#eef2ff' : '#f1f5f9', color: tab === t.key ? '#6366f1' : '#94a3b8', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px' }}>
                 {t.count}
               </span>
             )}
@@ -320,7 +322,7 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
               setImportBranchId(appUser.branch_id)
             }
           }}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
             <Upload size={16} /> ייבא עובדים מסניף
           </button>
         </div>
@@ -328,8 +330,7 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
 
       {/* Add user form */}
       {addMode && (
-        <Card className="shadow-sm" style={{ marginBottom: '20px', border: '2px solid #c084fc' }}>
-          <CardContent className="p-6">
+        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', marginBottom: '20px', padding: '24px' }}>
             <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>משתמש חדש</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '14px', marginBottom: '16px' }}>
               <div>
@@ -436,7 +437,7 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={handleAdd} disabled={saving || !newUser.name || !newUser.email}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#c084fc', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', opacity: saving || !newUser.name || !newUser.email ? 0.5 : 1 }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', opacity: saving || !newUser.name || !newUser.email ? 0.5 : 1 }}
               >
                 <Save size={14} /> {saving ? 'שומר...' : 'שמור'}
               </button>
@@ -446,8 +447,7 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                 <X size={14} /> ביטול
               </button>
             </div>
-          </CardContent>
-        </Card>
+        </div>
       )}
 
       {/* Users table */}
@@ -455,9 +455,9 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
         <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8', fontSize: '16px' }}>טוען...</div>
       ) : (
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
-        <div className="table-scroll"><Card className="shadow-sm" style={{ overflow: 'hidden' }}>
+        <div className="table-scroll"><div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', overflow: 'hidden' }}>
           {/* Header row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '180px 200px 90px 160px 180px 80px 100px', padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '180px 200px 90px 160px 180px 80px 100px', padding: '14px 20px', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
             <span>שם</span>
             <span>אימייל</span>
             <span>תפקיד</span>
@@ -468,7 +468,7 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
           </div>
 
           {users.map(user => (
-            <div key={user.id} style={{ display: 'grid', gridTemplateColumns: '180px 200px 90px 160px 180px 80px 100px', padding: '14px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px' }}>
+            <div key={user.id} style={{ display: 'grid', gridTemplateColumns: '180px 200px 90px 160px 180px 80px 100px', padding: '14px 20px', borderBottom: '1px solid #f8fafc', alignItems: 'center', fontSize: '13px' }}>
               {editingId === user.id ? (
                 <>
                   {/* Editing mode */}
@@ -535,8 +535,9 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                   <span style={{ color: '#64748b', direction: 'ltr', textAlign: 'left' }}>{user.email}</span>
                   <span>
                     <span style={{
-                      display: 'inline-block', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700',
-                      background: ROLE_COLORS[user.role] + '15', color: ROLE_COLORS[user.role],
+                      display: 'inline-block', padding: '2px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600,
+                      background: ROLE_BADGE_STYLES[user.role]?.background || '#f1f5f9',
+                      color: ROLE_BADGE_STYLES[user.role]?.color || '#64748b',
                     }}>
                       {ROLE_LABELS[user.role]}
                     </span>
@@ -573,7 +574,7 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
               )}
             </div>
           ))}
-        </Card></div>
+        </div></div>
         </motion.div>
       )}
 
@@ -582,12 +583,12 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
       {/* ═══ BRANCHES TAB ═══ */}
       {tab === 'branches' && (
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
-          <Card className="shadow-sm" style={{ overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr 1fr 100px 80px', padding: '14px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr 1fr 100px 80px', padding: '14px 20px', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
               <span>ID</span><span>שם</span><span>שם קצר</span><span>כתובת</span><span>סטטוס</span><span>פעולות</span>
             </div>
             {branches.map(branch => (
-              <div key={branch.id} style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr 1fr 100px 80px', padding: '14px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px' }}>
+              <div key={branch.id} style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr 1fr 100px 80px', padding: '14px 20px', borderBottom: '1px solid #f8fafc', alignItems: 'center', fontSize: '13px' }}>
                 <span style={{ fontWeight: '700', color: '#818cf8' }}>#{branch.id}</span>
                 <span style={{ fontWeight: '600', color: '#0f172a' }}>{branch.name}</span>
                 <span style={{ color: '#64748b' }}>{branch.short_name || '—'}</span>
@@ -615,7 +616,7 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
             {branches.length === 0 && (
               <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>אין סניפים פעילים</div>
             )}
-          </Card>
+          </div>
         </motion.div>
       )}
 
@@ -670,7 +671,7 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                 }}
                 disabled={branchSaving || !editBranch.name.trim()}
                 style={{
-                  background: branchSaving || !editBranch.name.trim() ? '#e2e8f0' : '#818cf8',
+                  background: branchSaving || !editBranch.name.trim() ? '#e2e8f0' : '#6366f1',
                   color: branchSaving || !editBranch.name.trim() ? '#94a3b8' : 'white',
                   border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '15px', fontWeight: '700',
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
@@ -777,7 +778,7 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                 disabled={importSaving || importEmployees.filter(e => e.checked).length === 0}
                 style={{
                   flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                  background: importSaving || importEmployees.filter(e => e.checked).length === 0 ? '#e2e8f0' : '#f59e0b',
+                  background: importSaving || importEmployees.filter(e => e.checked).length === 0 ? '#e2e8f0' : '#6366f1',
                   color: importSaving || importEmployees.filter(e => e.checked).length === 0 ? '#94a3b8' : 'white',
                   border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer',
                 }}>
@@ -823,7 +824,7 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                   onClick={saveSettings}
                   disabled={settingsSaving}
                   style={{
-                    background: settingsSaved ? '#639922' : '#818cf8',
+                    background: settingsSaved ? '#639922' : '#6366f1',
                     color: 'white', border: 'none', borderRadius: '10px',
                     padding: '12px 28px', fontSize: '15px', fontWeight: '700',
                     cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',

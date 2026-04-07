@@ -317,7 +317,7 @@ export default function Home() {
 
   // ─── מסך הבית ─────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-100 font-sans" style={{ direction: 'rtl' }}>
+    <div className="min-h-screen font-sans" style={{ direction: 'rtl', background: '#f8fafc' }}>
 
       <div className="max-w-[900px] mx-auto px-6 py-5">
 
@@ -333,8 +333,8 @@ export default function Home() {
               <span style={{ color: 'white', fontSize: 20, fontWeight: 900, fontFamily: 'serif' }}>מ</span>
             </div>
             <div>
-              <h1 className="text-xl font-extrabold text-slate-900 m-0">שלום, {appUser?.name || 'משתמש'}</h1>
-              <p className="text-slate-400 text-xs m-0">
+              <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>שלום, {appUser?.name || 'משתמש'}</h1>
+              <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>
                 {new Date().toLocaleDateString('he-IL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             </div>
@@ -342,22 +342,20 @@ export default function Home() {
           <div className="flex items-center gap-2.5">
             <InstallPWA />
             <PeriodPicker period={period} onChange={setPeriod} />
-            <Button
-              variant="outline"
-              size="icon"
+            <button
               onClick={() => logout()}
               title="יציאה"
-              className="w-9 h-9 rounded-[10px] hover:border-rose-400 hover:bg-rose-50"
+              style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              <LogOut size={16} className="text-slate-500" />
-            </Button>
+              <LogOut size={16} color="#64748b" />
+            </button>
           </div>
         </motion.div>
 
         {/* ─── KPI Strip ──────────────────────────────────────────────────── */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.1 }}>
-          <Card className="mb-5 py-0">
-            <CardContent className="kpi-grid flex items-center gap-0 flex-wrap py-3.5 px-6">
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', marginBottom: 20, padding: 0 }}>
+            <div className="kpi-grid flex items-center gap-0 flex-wrap" style={{ padding: '14px 24px' }}>
               {/* הכנסות — clickable */}
               {(() => { const grandRevenue = factoryRevenue + totalBranchRevenue; return (
               <button onClick={() => setRevenueSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 pe-4 border-e border-slate-200 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
@@ -423,8 +421,8 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </motion.div>
 
         {/* ═══ 4-Card Grid Navigation ═══════════════════════════════════════ */}
@@ -440,20 +438,20 @@ export default function Home() {
               <button
                 onClick={() => setExpandedSection(expandedSection === 'factory' ? null : 'factory')}
                 style={{
-                  width: '100%', border: 'none', borderRadius: '12px', padding: '14px',
-                  background: '#EEEDFE', cursor: 'pointer', textAlign: 'right',
+                  width: '100%', border: expandedSection === 'factory' ? '2px solid #6366f1' : '1px solid #f1f5f9', borderRadius: '12px', padding: '14px',
+                  background: 'white', cursor: 'pointer', textAlign: 'right',
                   transition: 'transform 0.15s, box-shadow 0.15s',
-                  outline: expandedSection === 'factory' ? '2.5px solid #534AB7' : 'none',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                 }}
-                className="hover:-translate-y-0.5 hover:shadow-md"
+                className="hover:shadow-md hover:border-[#c7d2fe]"
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#534AB7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Monitor size={16} color="white" />
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Monitor size={16} color="#6366f1" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e1b4b' }}>מפעל</div>
-                    <div style={{ fontSize: '10px', color: '#7c6fcd', marginTop: '1px' }}>מחלקות · מכירות · לייבור</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>מפעל</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: '1px' }}>מחלקות · מכירות · לייבור</div>
                   </div>
                 </div>
               </button>
@@ -466,20 +464,20 @@ export default function Home() {
               <button
                 onClick={() => setExpandedSection(expandedSection === 'branches' ? null : 'branches')}
                 style={{
-                  width: '100%', border: 'none', borderRadius: '12px', padding: '14px',
-                  background: '#E1F5EE', cursor: 'pointer', textAlign: 'right',
+                  width: '100%', border: expandedSection === 'branches' ? '2px solid #6366f1' : '1px solid #f1f5f9', borderRadius: '12px', padding: '14px',
+                  background: 'white', cursor: 'pointer', textAlign: 'right',
                   transition: 'transform 0.15s, box-shadow 0.15s',
-                  outline: expandedSection === 'branches' ? '2.5px solid #0F6E56' : 'none',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                 }}
-                className="hover:-translate-y-0.5 hover:shadow-md"
+                className="hover:shadow-md hover:border-[#c7d2fe]"
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#0F6E56', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <HomeIcon size={16} color="white" />
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <HomeIcon size={16} color="#6366f1" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#064e3b' }}>סניפים</div>
-                    <div style={{ fontSize: '10px', color: '#3d9b7f', marginTop: '1px' }}>{branchList.map(b => b.name).join(' · ') || 'ניהול סניפים'}</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>סניפים</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: '1px' }}>{branchList.map(b => b.name).join(' · ') || 'ניהול סניפים'}</div>
                   </div>
                 </div>
               </button>
@@ -492,20 +490,20 @@ export default function Home() {
               <button
                 onClick={() => setExpandedSection(expandedSection === 'meetings' ? null : 'meetings')}
                 style={{
-                  width: '100%', border: 'none', borderRadius: '12px', padding: '14px',
-                  background: '#FAEEDA', cursor: 'pointer', textAlign: 'right',
+                  width: '100%', border: expandedSection === 'meetings' ? '2px solid #6366f1' : '1px solid #f1f5f9', borderRadius: '12px', padding: '14px',
+                  background: 'white', cursor: 'pointer', textAlign: 'right',
                   transition: 'transform 0.15s, box-shadow 0.15s',
-                  outline: expandedSection === 'meetings' ? '2.5px solid #BA7517' : 'none',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                 }}
-                className="hover:-translate-y-0.5 hover:shadow-md"
+                className="hover:shadow-md hover:border-[#c7d2fe]"
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#BA7517', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Activity size={16} color="white" />
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Activity size={16} color="#6366f1" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#78350f' }}>ישיבות הנהלה</div>
-                    <div style={{ fontSize: '10px', color: '#c68a2e', marginTop: '1px' }}>דשבורד מנכ"ל · השוואת סניפים</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>ישיבות הנהלה</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: '1px' }}>דשבורד מנכ"ל · השוואת סניפים</div>
                   </div>
                 </div>
               </button>
@@ -518,20 +516,20 @@ export default function Home() {
               <button
                 onClick={() => setExpandedSection(expandedSection === 'manage' ? null : 'manage')}
                 style={{
-                  width: '100%', border: 'none', borderRadius: '12px', padding: '14px',
-                  background: '#f1f5f9', cursor: 'pointer', textAlign: 'right',
+                  width: '100%', border: expandedSection === 'manage' ? '2px solid #6366f1' : '1px solid #f1f5f9', borderRadius: '12px', padding: '14px',
+                  background: 'white', cursor: 'pointer', textAlign: 'right',
                   transition: 'transform 0.15s, box-shadow 0.15s',
-                  outline: expandedSection === 'manage' ? '2.5px solid #64748b' : 'none',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                 }}
-                className="hover:-translate-y-0.5 hover:shadow-md"
+                className="hover:shadow-md hover:border-[#c7d2fe]"
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Settings size={16} color="white" />
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Settings size={16} color="#6366f1" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#334155' }}>ניהול</div>
-                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '1px' }}>משתמשים · דוחות · הגדרות</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>ניהול</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: '1px' }}>משתמשים · דוחות · הגדרות</div>
                   </div>
                 </div>
               </button>
@@ -544,8 +542,7 @@ export default function Home() {
         {/* Factory content */}
         {expandedSection === 'factory' && showFactory && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <Card className="mb-4 py-0 overflow-hidden">
-              <CardContent className="pb-5 pt-4">
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', marginBottom: 16, padding: '16px 16px 20px' }}>
                 <motion.div variants={staggerContainer} initial="hidden" animate="visible"
                   className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
                   {filteredPanelFactory.map(item => {
@@ -553,13 +550,14 @@ export default function Home() {
                     return (
                       <motion.div key={item.page} variants={fadeUp}>
                         <button onClick={() => setPage(item.page)}
-                          className="w-full bg-slate-50 border-[1.5px] border-slate-200 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-current hover:-translate-y-0.5 hover:shadow-md">
-                          <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: item.color + '15' }}>
-                            <Icon size={18} color={item.color} />
+                          style={{ width: '100%', background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+                          className="hover:shadow-md hover:border-[#c7d2fe]">
+                          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Icon size={18} color="#6366f1" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-[13px] font-bold text-slate-900">{item.label}</div>
-                            <div className="text-[10px] text-slate-400 mt-0.5">{item.subtitle}</div>
+                            <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>{item.label}</div>
+                            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{item.subtitle}</div>
                           </div>
                           <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
                         </button>
@@ -567,16 +565,14 @@ export default function Home() {
                     )
                   })}
                 </motion.div>
-              </CardContent>
-            </Card>
+            </div>
           </motion.div>
         )}
 
         {/* Branches content */}
         {expandedSection === 'branches' && showBranches && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <Card className="mb-4 py-0 overflow-hidden">
-              <CardContent className="pb-5 pt-4">
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', marginBottom: 16, padding: '16px 16px 20px' }}>
                 <motion.div variants={staggerContainer} initial="hidden" animate="visible">
                   {/* Individual branch cards — stacked vertically */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -587,14 +583,14 @@ export default function Home() {
                       return (
                         <motion.div key={br.id} variants={fadeUp}>
                           <button onClick={() => setPage(br.page)}
-                            className="w-full bg-slate-50 rounded-xl p-3.5 px-4 cursor-pointer text-right transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
-                            style={{ border: `1.5px solid ${br.color}30`, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ background: br.color }}>
-                              <Store size={18} color="white" />
+                            style={{ width: '100%', background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+                            className="hover:shadow-md hover:border-[#c7d2fe]">
+                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <Store size={18} color="#6366f1" />
                             </div>
                             <div style={{ flex: 1 }}>
-                              <div className="text-sm font-bold text-slate-900">{br.name}</div>
-                              <div className="text-[11px] text-slate-400 mt-0.5">{rev > 0 ? `הכנסות: ${fmtK(rev)}` : 'אין נתונים'}</div>
+                              <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>{br.name}</div>
+                              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{rev > 0 ? `הכנסות: ${fmtK(rev)}` : 'אין נתונים'}</div>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               {rev > 0 && (
@@ -613,13 +609,14 @@ export default function Home() {
                   {/* Branch comparison dashboard */}
                   <motion.div variants={fadeUp}>
                     <button onClick={() => setPage('branch_comparison')}
-                      className="w-full bg-slate-50 border-[1.5px] border-indigo-400/20 rounded-xl p-3 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-indigo-400 hover:-translate-y-0.5 hover:shadow-md hover:shadow-indigo-400/10 mt-3">
-                      <div className="w-[38px] h-[38px] bg-indigo-400/10 rounded-[10px] flex items-center justify-center shrink-0">
-                        <BarChart3 size={18} color="#818cf8" />
+                      style={{ width: '100%', background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '10px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginTop: 12 }}
+                      className="hover:shadow-md hover:border-[#c7d2fe]">
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <BarChart3 size={18} color="#6366f1" />
                       </div>
                       <div className="flex-1">
-                        <div className="text-[13px] font-bold text-slate-900">השוואת סניפים</div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">רווח והפסד השוואתי · גרפים</div>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>השוואת סניפים</div>
+                        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>רווח והפסד השוואתי · גרפים</div>
                       </div>
                       <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
                     </button>
@@ -628,40 +625,40 @@ export default function Home() {
                   {/* Branch data import */}
                   <motion.div variants={fadeUp}>
                     <button onClick={() => setPage('branch_import')}
-                      className="w-full bg-slate-50 border-[1.5px] border-indigo-400/20 rounded-xl p-3 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-indigo-400 hover:-translate-y-0.5 hover:shadow-md hover:shadow-indigo-400/10 mt-3">
-                      <div className="w-[38px] h-[38px] bg-indigo-400/10 rounded-[10px] flex items-center justify-center shrink-0">
-                        <Database size={18} color="#818cf8" />
+                      style={{ width: '100%', background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '10px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginTop: 12 }}
+                      className="hover:shadow-md hover:border-[#c7d2fe]">
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Database size={18} color="#6366f1" />
                       </div>
                       <div className="flex-1">
-                        <div className="text-[13px] font-bold text-slate-900">ייבוא נתוני סניפים</div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">CSV מ-Base44 · כל הסניפים ביחד</div>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>ייבוא נתוני סניפים</div>
+                        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>CSV מ-Base44 · כל הסניפים ביחד</div>
                       </div>
                       <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
                     </button>
                   </motion.div>
                 </motion.div>
-              </CardContent>
-            </Card>
+            </div>
           </motion.div>
         )}
 
         {/* Meetings content */}
         {expandedSection === 'meetings' && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <Card className="mb-4 py-0 overflow-hidden">
-              <CardContent className="pb-5 pt-4">
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', marginBottom: 16, padding: '16px 16px 20px' }}>
                 <motion.div variants={staggerContainer} initial="hidden" animate="visible"
                   className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
                   {canAccessPage('ceo_dashboard') && (
                     <motion.div variants={fadeUp}>
                       <button onClick={() => setPage('ceo_dashboard')}
-                        className="w-full bg-slate-50 border-[1.5px] border-slate-200 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-amber-400 hover:-translate-y-0.5 hover:shadow-md">
-                        <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: '#f59e0b15' }}>
-                          <TrophyIcon size={18} color="#f59e0b" />
+                        style={{ width: '100%', background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+                        className="hover:shadow-md hover:border-[#c7d2fe]">
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <TrophyIcon size={18} color="#6366f1" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-bold text-slate-900">דשבורד מנכ"ל</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">מבט רשתי · כל הסניפים</div>
+                          <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>דשבורד מנכ"ל</div>
+                          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>מבט רשתי · כל הסניפים</div>
                         </div>
                         <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
                       </button>
@@ -670,29 +667,28 @@ export default function Home() {
                   {canAccessPage('branch_dashboard') && (
                     <motion.div variants={fadeUp}>
                       <button onClick={() => setPage('branch_dashboard')}
-                        className="w-full bg-slate-50 border-[1.5px] border-slate-200 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-emerald-400 hover:-translate-y-0.5 hover:shadow-md">
-                        <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: '#34d39915' }}>
-                          <ProfitIcon size={18} color="#34d399" />
+                        style={{ width: '100%', background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+                        className="hover:shadow-md hover:border-[#c7d2fe]">
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <ProfitIcon size={18} color="#6366f1" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-bold text-slate-900">דשבורד מנהל סניפים</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">השוואת סניפים · P&L · KPI</div>
+                          <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>דשבורד מנהל סניפים</div>
+                          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>השוואת סניפים · P&L · KPI</div>
                         </div>
                         <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
                       </button>
                     </motion.div>
                   )}
                 </motion.div>
-              </CardContent>
-            </Card>
+            </div>
           </motion.div>
         )}
 
         {/* Manage content — admin only */}
         {expandedSection === 'manage' && appUser?.role === 'admin' && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <Card className="mb-4 py-0 overflow-hidden">
-              <CardContent className="pb-5 pt-4">
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', marginBottom: 16, padding: '16px 16px 20px' }}>
                 <motion.div variants={staggerContainer} initial="hidden" animate="visible"
                   className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
                   {[
@@ -705,13 +701,14 @@ export default function Home() {
                     return (
                       <motion.div key={item.page} variants={fadeUp}>
                         <button onClick={() => setPage(item.page)}
-                          className="w-full bg-slate-50 border-[1.5px] border-slate-200 rounded-xl p-3.5 px-4 cursor-pointer flex items-center gap-3 text-right transition-all duration-150 hover:border-current hover:-translate-y-0.5 hover:shadow-md">
-                          <div className="w-[38px] h-[38px] rounded-[10px] flex items-center justify-center shrink-0" style={{ background: item.color + '15' }}>
-                            <Icon size={18} color={item.color} />
+                          style={{ width: '100%', background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+                          className="hover:shadow-md hover:border-[#c7d2fe]">
+                          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Icon size={18} color="#6366f1" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-[13px] font-bold text-slate-900">{item.label}</div>
-                            <div className="text-[10px] text-slate-400 mt-0.5">{item.subtitle}</div>
+                            <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>{item.label}</div>
+                            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{item.subtitle}</div>
                           </div>
                           <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
                         </button>
@@ -719,8 +716,7 @@ export default function Home() {
                     )
                   })}
                 </motion.div>
-              </CardContent>
-            </Card>
+            </div>
           </motion.div>
         )}
 

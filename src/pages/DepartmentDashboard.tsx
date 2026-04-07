@@ -36,8 +36,8 @@ interface KpiTarget {
 
 // --- Config ---
 const DEPT_CONFIG = {
-  creams: { label: 'קרמים', color: '#818cf8', bg: '#dbeafe' },
-  dough:  { label: 'בצקים', color: '#c084fc', bg: '#ede9fe' },
+  creams: { label: 'קרמים', color: '#6366f1', bg: '#f1f5f9' },
+  dough:  { label: 'בצקים', color: '#6366f1', bg: '#f1f5f9' },
 }
 
 const DEFAULT_TARGETS: KpiTarget = {
@@ -206,37 +206,33 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
 
   // --- Cost breakdown for Row 2 right card ---
   const costItems = [
-    { label: 'לייבור', value: totalLabor, color: '#534AB7' },
-    { label: 'פחת', value: totalWaste, color: '#E24B4A' },
-    { label: 'תיקונים', value: totalRepairs, color: '#E24B4A' },
+    { label: 'לייבור', value: totalLabor, color: '#6366f1' },
+    { label: 'פחת', value: totalWaste, color: '#94a3b8' },
+    { label: 'תיקונים', value: totalRepairs, color: '#94a3b8' },
   ]
   const maxCost = Math.max(...costItems.map(c => c.value), 1)
 
   // --- Render ---
   if (loading) return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center" style={{ direction: 'rtl' }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ direction: 'rtl', background: '#f8fafc' }}>
       <div className="text-slate-400 text-base">טוען נתונים...</div>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div className="min-h-screen" style={{ direction: 'rtl', background: '#f8fafc' }}>
 
       {/* ── Header ── */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: cfg.bg }}>
-          <ProfitIcon size={20} color={cfg.color} />
-        </div>
-        <div>
-          <h1 className="text-xl font-extrabold text-slate-900 m-0">דשבורד — {cfg.label}</h1>
-          <p className="text-[13px] text-slate-400 m-0">KPI · גרפים · פירוט</p>
-        </div>
-        <div className="mr-auto">
-          <PeriodPicker period={globalPeriod} onChange={setGlobalPeriod} />
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>דשבורד — {cfg.label}</h1>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>KPI · גרפים · פירוט</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <PeriodPicker period={globalPeriod} onChange={setGlobalPeriod} />
+            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>{'\u2190'} חזרה</button>
+          </div>
         </div>
       </div>
 
@@ -248,40 +244,40 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
           className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-2.5"
         >
           {/* 1. Sales */}
-          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-            <div className="text-[11px] font-semibold text-slate-400 mb-1">מכירות מחלקה</div>
-            <div className="text-[22px] font-medium" style={{ color: '#378ADD' }}>
+          <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>מכירות מחלקה</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>
               {fmtMoney(totalSales)}
             </div>
             <DiffBadge current={totalSales} previous={prevSales} />
           </div>
 
           {/* 2. Production cost */}
-          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-            <div className="text-[11px] font-semibold text-slate-400 mb-1">ייצור (כמות)</div>
-            <div className="text-[22px] font-medium" style={{ color: '#E24B4A' }}>
+          <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>ייצור (כמות)</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>
               {fmtMoney(totalProd)}
             </div>
             <DiffBadge current={totalProd} previous={prevProd} />
           </div>
 
           {/* 3. Labor % */}
-          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-            <div className="text-[11px] font-semibold text-slate-400 mb-1">% לייבור</div>
-            <div className="text-[22px] font-medium" style={{ color: '#534AB7' }}>
+          <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>% לייבור</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#6366f1' }}>
               {fmtPct(laborPct)}
             </div>
-            <div className="text-[11px] text-slate-400">יעד: {fmtPct(targets.labor_pct)}</div>
+            <div style={{ fontSize: 11, color: '#94a3b8' }}>יעד: {fmtPct(targets.labor_pct)}</div>
             <DiffBadge current={laborPct} previous={prevLaborPct} inverse />
           </div>
 
           {/* 4. Waste % */}
-          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-            <div className="text-[11px] font-semibold text-slate-400 mb-1">% פחת</div>
-            <div className="text-[22px] font-medium" style={{ color: '#BA7517' }}>
+          <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>% פחת</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>
               {fmtPct(wastePct)}
             </div>
-            <div className="text-[11px] text-slate-400">יעד: {fmtPct(targets.waste_pct)}</div>
+            <div style={{ fontSize: 11, color: '#94a3b8' }}>יעד: {fmtPct(targets.waste_pct)}</div>
             <DiffBadge current={wastePct} previous={prevWastePct} />
           </div>
         </motion.div>
@@ -292,17 +288,16 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
           className="grid grid-cols-2 gap-2.5 mb-2.5"
         >
           {/* LEFT: Sales breakdown */}
-          <Card className="shadow-sm border border-slate-200 rounded-lg">
-            <CardContent className="p-4">
-              <div className="text-sm font-bold text-slate-700 mb-3">פירוט מכירות</div>
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>פירוט מכירות</div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[13px] text-slate-600">סה״כ מכירות</span>
-                <span className="text-[14px] font-bold" style={{ color: '#378ADD' }}>{fmtMoney(totalSales)}</span>
+                <span className="text-[14px] font-bold" style={{ color: '#6366f1' }}>{fmtMoney(totalSales)}</span>
               </div>
               <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
-                  style={{ width: '100%', background: '#378ADD' }}
+                  style={{ width: '100%', background: '#6366f1' }}
                 />
               </div>
               <div className="mt-4 flex items-center justify-between mb-2">
@@ -314,7 +309,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                   className="h-full rounded-full transition-all duration-500"
                   style={{
                     width: totalSales > 0 ? `${Math.max(0, Math.min(100, (grossProfit / totalSales) * 100))}%` : '0%',
-                    background: '#378ADD',
+                    background: '#6366f1',
                   }}
                 />
               </div>
@@ -327,17 +322,15 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                   className="h-full rounded-full transition-all duration-500"
                   style={{
                     width: totalSales > 0 ? `${Math.max(0, Math.min(100, (operatingProfit / totalSales) * 100))}%` : '0%',
-                    background: '#378ADD',
+                    background: '#6366f1',
                   }}
                 />
               </div>
-            </CardContent>
-          </Card>
+          </div>
 
           {/* RIGHT: Costs breakdown */}
-          <Card className="shadow-sm border border-slate-200 rounded-lg">
-            <CardContent className="p-4">
-              <div className="text-sm font-bold text-slate-700 mb-3">עלויות מחלקה</div>
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>עלויות מחלקה</div>
               {costItems.map(item => (
                 <div key={item.label} className="mb-3 last:mb-0">
                   <div className="flex items-center justify-between mb-1">
@@ -355,8 +348,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                   </div>
                 </div>
               ))}
-            </CardContent>
-          </Card>
+          </div>
         </motion.div>
 
         {/* ── ROW 3: KPI Targets with progress bars ── */}
@@ -365,14 +357,14 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
           className="grid grid-cols-1 md:grid-cols-3 gap-2.5 mb-2.5"
         >
           {[
-            { label: '% לייבור', actual: laborPct, target: targets.labor_pct, color: '#534AB7', inverse: true },
+            { label: '% לייבור', actual: laborPct, target: targets.labor_pct, color: '#6366f1', inverse: true },
             { label: '% פחת', actual: wastePct, target: targets.waste_pct, color: '#BA7517', inverse: true },
-            { label: '% ייצור', actual: productionPct, target: targets.gross_profit_pct, color: '#378ADD', inverse: true },
+            { label: '% ייצור', actual: productionPct, target: targets.gross_profit_pct, color: '#6366f1', inverse: true },
           ].map(item => {
             const barColor = kpiColor(item.actual, item.target, item.inverse)
             const ratio = item.target > 0 ? Math.min((item.actual / item.target) * 100, 100) : 0
             return (
-              <div key={item.label} className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
+              <div key={item.label} style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[12px] font-semibold text-slate-500">{item.label}</span>
                   <span className="text-[12px] font-bold" style={{ color: barColor }}>
@@ -392,9 +384,8 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
 
         {/* ── ROW 4: 6-month / period LineChart ── */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-5">
-          <Card className="shadow-sm border border-slate-200 rounded-lg">
-            <CardContent className="p-4">
-              <div className="text-sm font-bold text-slate-700 mb-3">מגמות לאורך התקופה</div>
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>מגמות לאורך התקופה</div>
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={chartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -405,24 +396,22 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                     formatter={(value: any, name: any) => [fmtMoney(Number(value)), String(name)]}
                   />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Line type="monotone" dataKey="sales" name="מכירות" stroke="#378ADD" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="production" name="ייצור" stroke="#534AB7" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="labor" name="לייבור" stroke="#534AB7" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="waste" name="פחת" stroke="#BA7517" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="sales" name="מכירות" stroke="#6366f1" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="production" name="ייצור" stroke="#10b981" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="labor" name="לייבור" stroke="#94a3b8" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="waste" name="פחת" stroke="#cbd5e1" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
+          </div>
         </motion.div>
 
         {/* ── Daily Detail Table ── */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
-          <Card className="shadow-sm border border-slate-200 rounded-lg">
-            <CardContent className="p-5">
-              <div className="text-[15px] font-bold text-slate-700 mb-4">פירוט יומי</div>
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginBottom: 16 }}>פירוט יומי</div>
 
               {/* Header */}
-              <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr', padding: '10px 16px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr', padding: '10px 16px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #f1f5f9', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
                 <span>תאריך</span>
                 <span style={{ textAlign: 'left' }}>מכירות</span>
                 <span style={{ textAlign: 'left' }}>ייצור</span>
@@ -442,26 +431,23 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                   <div key={d.date} style={{
                     display: 'grid', gridTemplateColumns: '100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr',
                     alignItems: 'center', padding: '12px 16px',
-                    borderBottom: i < days.length - 1 ? '1px solid #f1f5f9' : 'none',
-                    background: i % 2 === 0 ? 'white' : '#fafafa',
+                    borderBottom: '1px solid #f8fafc',
                   }}>
                     <span className="text-[13px] text-slate-500 font-medium">
                       {new Date(d.date + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })}
                     </span>
-                    <span className="text-[14px] font-bold" style={{ color: '#378ADD' }}>{d.sales > 0 ? fmtMoney(d.sales) : '—'}</span>
+                    <span className="text-[14px] font-bold" style={{ color: '#6366f1' }}>{d.sales > 0 ? fmtMoney(d.sales) : '—'}</span>
                     <span className="text-[13px] text-slate-500">{d.production > 0 ? fmtMoney(d.production) : '—'}</span>
-                    <span className="text-[13px]" style={{ color: '#534AB7', fontWeight: d.labor > 0 ? 600 : 400 }}>{d.labor > 0 ? fmtMoney(d.labor) : '—'}</span>
+                    <span className="text-[13px]" style={{ color: '#6366f1', fontWeight: d.labor > 0 ? 600 : 400 }}>{d.labor > 0 ? fmtMoney(d.labor) : '—'}</span>
                     <span className="text-[13px]" style={{ color: '#E24B4A', fontWeight: d.waste > 0 ? 600 : 400 }}>{d.waste > 0 ? fmtMoney(d.waste) : '—'}</span>
                     <span className="text-[13px]" style={{ color: '#E24B4A', fontWeight: d.repairs > 0 ? 600 : 400 }}>{d.repairs > 0 ? fmtMoney(d.repairs) : '—'}</span>
-                    <span className="text-[13px] font-bold px-2 py-0.5 rounded-md inline-block" style={{
+                    <span className="text-[13px] font-bold" style={{
                       color: gp >= 0 ? '#639922' : '#E24B4A',
-                      background: gp >= 0 ? '#f0fdf4' : '#fef2f2',
                     }}>
                       {d.sales > 0 ? fmtMoney(gp) : '—'}
                     </span>
-                    <span className="text-[13px] font-bold px-2 py-0.5 rounded-md inline-block" style={{
+                    <span className="text-[13px] font-bold" style={{
                       color: op >= 0 ? '#639922' : '#E24B4A',
-                      background: op >= 0 ? '#f0fdf4' : '#fef2f2',
                     }}>
                       {d.sales > 0 ? fmtMoney(op) : '—'}
                     </span>
@@ -471,30 +457,28 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
 
               {/* Total row */}
               {days.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr', padding: '14px 16px', background: cfg.bg, borderTop: `2px solid ${cfg.color}33`, borderRadius: '0 0 20px 20px', fontWeight: 700 }}>
-                  <span className="text-[13px] text-slate-700">סה"כ</span>
-                  <span style={{ color: '#378ADD' }}>{fmtMoney(totalSales)}</span>
-                  <span className="text-slate-500">{fmtMoney(totalProd)}</span>
-                  <span style={{ color: '#534AB7' }}>{fmtMoney(totalLabor)}</span>
-                  <span style={{ color: '#E24B4A' }}>{fmtMoney(totalWaste)}</span>
-                  <span style={{ color: '#E24B4A' }}>{fmtMoney(totalRepairs)}</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr', padding: '14px 16px', background: '#fafafa', borderTop: '1px solid #f1f5f9', borderRadius: '0 0 12px 12px', fontWeight: 700 }}>
+                  <span style={{ fontSize: 13, color: '#0f172a' }}>סה"כ</span>
+                  <span style={{ color: '#0f172a' }}>{fmtMoney(totalSales)}</span>
+                  <span style={{ color: '#64748b' }}>{fmtMoney(totalProd)}</span>
+                  <span style={{ color: '#6366f1' }}>{fmtMoney(totalLabor)}</span>
+                  <span style={{ color: '#64748b' }}>{fmtMoney(totalWaste)}</span>
+                  <span style={{ color: '#64748b' }}>{fmtMoney(totalRepairs)}</span>
                   <span style={{ color: grossProfit >= 0 ? '#639922' : '#E24B4A' }}>{fmtMoney(grossProfit)}</span>
                   <span style={{ color: operatingProfit >= 0 ? '#639922' : '#E24B4A' }}>{fmtMoney(operatingProfit)}</span>
                 </div>
               )}
-            </CardContent>
-          </Card>
+          </div>
         </motion.div>
 
         {/* ── Global Employees Table ── */}
         {relevantGlobalEmps.length > 0 && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mt-5">
-            <Card className="shadow-sm border border-slate-200 rounded-lg">
-              <CardContent className="p-5">
-                <div className="text-[15px] font-bold text-slate-700 mb-4">פירוט לייבור — עובדים גלובליים</div>
+            <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 20 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginBottom: 16 }}>פירוט לייבור — עובדים גלובליים</div>
 
                 {/* Header */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 80px 70px 70px 70px 110px 120px', padding: '10px 16px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 80px 70px 70px 70px 110px 120px', padding: '10px 16px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #f1f5f9', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>
                   <span>עובד</span>
                   <span style={{ textAlign: 'center' }}>ימים</span>
                   <span style={{ textAlign: 'center' }}>100%</span>
@@ -513,8 +497,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                     <div key={emp.id} style={{
                       display: 'grid', gridTemplateColumns: '1.5fr 80px 70px 70px 70px 110px 120px',
                       alignItems: 'center', padding: '12px 16px',
-                      borderBottom: i < relevantGlobalEmps.length - 1 ? '1px solid #f1f5f9' : 'none',
-                      background: i % 2 === 0 ? 'white' : '#fafafa',
+                      borderBottom: '1px solid #f8fafc',
                     }}>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-slate-700 text-sm">{emp.name}</span>
@@ -532,17 +515,16 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                 })}
 
                 {/* Total row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 80px 70px 70px 70px 110px 120px', padding: '14px 16px', background: cfg.bg, borderTop: `2px solid ${cfg.color}33`, borderRadius: '0 0 20px 20px', fontWeight: 700 }}>
-                  <span className="text-[13px] text-slate-700">סה"כ גלובלי</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 80px 70px 70px 70px 110px 120px', padding: '14px 16px', background: '#fafafa', borderTop: '1px solid #f1f5f9', borderRadius: '0 0 12px 12px', fontWeight: 700 }}>
+                  <span style={{ fontSize: 13, color: '#0f172a' }}>סה"כ גלובלי</span>
                   <span />
                   <span />
                   <span />
                   <span />
                   <span />
-                  <span className="text-[15px]" style={{ color: cfg.color }}>{fmtMoney(globalLaborCost)}</span>
+                  <span style={{ fontSize: 15, color: '#6366f1' }}>{fmtMoney(globalLaborCost)}</span>
                 </div>
-              </CardContent>
-            </Card>
+            </div>
           </motion.div>
         )}
 

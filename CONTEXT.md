@@ -487,6 +487,10 @@ martin-bakery/
 33. **סניפים דינמיים** — טבלת branches ב-Supabase, BranchContext, הסרת כל הערכים הקשיחים מהקוד, ממשק ניהול סניפים ב-UserManagement
 34. **PWA** — manifest.json, Service Worker, כפתור התקנה, תמיכה ב-iOS/Android, offline cache
 35. **מערכת התרעות** — alert_rules, alert_log, Edge Function check-alerts (רצה כל שעה דרך cron-job.org), ממשק ניהול התרעות AlertsManagement.tsx עם הפעלה/כיבוי, הוספה, ולוג שליחות — גישה לadmin בלבד
+36. **מודול ניהול צוות מלא** — schedule_constraints (זמינות עובדים לפי משמרת), shift_roles, branch_shifts, shift_staffing_requirements, employee_role_assignments, shift_assignments. ShiftSettings (תפקידים/משמרות/דרישות/תפקידי עובדים/חגים). WeeklySchedule (סידור שבועי, שיבוץ אוטומטי עם ניקוד, פרסום, ייצוא PDF/וואטסאפ). EmployeeConstraints (לוח שבועי, תאים חכמים, מובייל). ManagerConstraintsView (תצוגת זמינות הצוות). MySchedule (סידור אישי לעובד). ScheduleHistory (ארכיון סידורים). חונך-מתלמד (training_status). חגים מ-Hebcal API. send-schedule Edge Function לשליחת סידור במייל
+37. **תפקיד עובד (employee role)** — app_users עם role='employee', EmployeeHome, auth trigger אוטומטי ליצירת חשבון, send-invitation Edge Function, ייבוא עובדים בצובר מ-UserManagement
+38. **לוגו קונדיטוריית מרטין** — מוטמע בכל הדפים הרלוונטיים (Login, Home, EmployeeHome, מיילים), צבע מותג #0d6165
+39. **עיצוב Clean UI מינימליסטי** — כל האפליקציה, white space, indigo (#6366f1) palette, shadow-sm cards, border-gray-100, רקע gray-50, טבלאות נקיות ללא רקע שורות, headers אחידים
 
 ---
 

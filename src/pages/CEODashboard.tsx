@@ -22,12 +22,12 @@ type KpiSheetType =
   | 'rev_cashier' | 'rev_credit' | 'rev_website' | 'rev_all_channels'
 
 
-const PIE_COLORS = ['#818cf8', '#fb7185', '#fbbf24', '#34d399', '#c084fc', '#38bdf8', '#94a3b8']
+const PIE_COLORS = ['#6366f1', '#94a3b8', '#10b981', '#a5b4fc', '#64748b', '#6ee7b7', '#cbd5e1']
 
-// Soft chart palette
-const CHART_INDIGO  = '#818cf8'
-const CHART_ROSE    = '#fb7185'
-const CHART_EMERALD = '#34d399'
+// Clean chart palette — max 3 colors: indigo, gray, emerald
+const CHART_INDIGO  = '#6366f1'
+const CHART_GRAY    = '#94a3b8'
+const CHART_EMERALD = '#10b981'
 
 // Animation variants
 const staggerContainer = {
@@ -433,7 +433,7 @@ export default function CEODashboard({ onBack }: Props) {
     return (
       <Table>
         <TableHeader>
-          <TableRow className="bg-slate-50">
+          <TableRow style={{ borderBottom: '1px solid #e2e8f0' }}>
             <TableHead className="text-xs font-bold text-slate-500">סניף</TableHead>
             <TableHead className="text-xs font-bold text-slate-500">סכום</TableHead>
             <TableHead className="text-xs font-bold text-slate-500">% מסה"כ</TableHead>
@@ -444,7 +444,7 @@ export default function CEODashboard({ onBack }: Props) {
             const val = getValue(br)
             const pct = total > 0 ? (val / total) * 100 : 0
             return (
-              <TableRow key={br.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+              <TableRow key={br.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: br.color }} />
@@ -456,7 +456,7 @@ export default function CEODashboard({ onBack }: Props) {
               </TableRow>
             )
           })}
-          <TableRow className="bg-indigo-50/50">
+          <TableRow style={{ borderBottom: '1px solid #f8fafc' }}>
             <TableCell>
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-indigo-400" />
@@ -466,7 +466,7 @@ export default function CEODashboard({ onBack }: Props) {
             <TableCell className="text-sm font-semibold text-slate-700">{fmtN(factoryValue)}</TableCell>
             <TableCell className="text-sm text-slate-500">{total > 0 ? ((factoryValue / total) * 100).toFixed(1) : '0.0'}%</TableCell>
           </TableRow>
-          <TableRow className="bg-amber-50 border-t-2 border-amber-200">
+          <TableRow style={{ background: '#fafafa', borderTop: '1px solid #e2e8f0' }}>
             <TableCell className="text-sm font-bold text-slate-800">סה"כ</TableCell>
             <TableCell className="text-sm font-extrabold text-slate-900">{fmtN(total)}</TableCell>
             <TableCell className="text-sm font-bold text-slate-500">100%</TableCell>
@@ -481,7 +481,7 @@ export default function CEODashboard({ onBack }: Props) {
     return (
       <Table>
         <TableHeader>
-          <TableRow className="bg-slate-50">
+          <TableRow style={{ borderBottom: '1px solid #e2e8f0' }}>
             <TableHead className="text-xs font-bold text-slate-500">יחידה</TableHead>
             <TableHead className="text-xs font-bold text-slate-500">סכום לייבור</TableHead>
             <TableHead className="text-xs font-bold text-slate-500">% מהכנסות</TableHead>
@@ -492,7 +492,7 @@ export default function CEODashboard({ onBack }: Props) {
             const pct = br.revenue > 0 ? (br.labor / br.revenue) * 100 : 0
             const overTarget = avgLaborTarget > 0 && pct > avgLaborTarget
             return (
-              <TableRow key={br.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+              <TableRow key={br.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: br.color }} />
@@ -504,7 +504,7 @@ export default function CEODashboard({ onBack }: Props) {
               </TableRow>
             )
           })}
-          <TableRow className="bg-indigo-50/50">
+          <TableRow style={{ borderBottom: '1px solid #f8fafc' }}>
             <TableCell>
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-indigo-400" />
@@ -514,7 +514,7 @@ export default function CEODashboard({ onBack }: Props) {
             <TableCell className="text-sm font-semibold text-slate-700">{fmtN(factoryLabor)}</TableCell>
             <TableCell className={`text-sm font-semibold ${avgLaborTarget > 0 ? (factoryLaborPct > avgLaborTarget ? 'text-rose-500' : 'text-emerald-500') : 'text-slate-700'}`}>{factoryLaborPct.toFixed(1)}%</TableCell>
           </TableRow>
-          <TableRow className="bg-amber-50 border-t-2 border-amber-200">
+          <TableRow style={{ background: '#fafafa', borderTop: '1px solid #e2e8f0' }}>
             <TableCell className="text-sm font-bold text-slate-800">סה"כ</TableCell>
             <TableCell className="text-sm font-extrabold text-slate-900">{fmtN(grandLabor)}</TableCell>
             <TableCell className={`text-sm font-bold ${avgLaborTarget > 0 ? (grandLaborPct > avgLaborTarget ? 'text-rose-500' : 'text-emerald-500') : 'text-slate-700'}`}>{grandLaborPct.toFixed(1)}%</TableCell>
@@ -546,7 +546,7 @@ export default function CEODashboard({ onBack }: Props) {
     return (
       <Table>
         <TableHeader>
-          <TableRow className="bg-slate-50">
+          <TableRow style={{ borderBottom: '1px solid #e2e8f0' }}>
             <TableHead className="text-xs font-bold text-slate-500">יחידה</TableHead>
             <TableHead className="text-xs font-bold text-slate-500">הכנסות</TableHead>
             <TableHead className="text-xs font-bold text-slate-500">הוצאות</TableHead>
@@ -556,7 +556,7 @@ export default function CEODashboard({ onBack }: Props) {
         </TableHeader>
         <TableBody>
           {rows.map((r, i) => (
-            <TableRow key={r.name} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+            <TableRow key={r.name} style={{ borderBottom: '1px solid #f8fafc' }}>
               <TableCell>
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: r.color }} />
@@ -569,7 +569,7 @@ export default function CEODashboard({ onBack }: Props) {
               <TableCell className={`text-sm font-semibold ${r.pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{r.pct.toFixed(1)}%</TableCell>
             </TableRow>
           ))}
-          <TableRow className="bg-indigo-50/50">
+          <TableRow style={{ borderBottom: '1px solid #f8fafc' }}>
             <TableCell>
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-indigo-400" />
@@ -581,7 +581,7 @@ export default function CEODashboard({ onBack }: Props) {
             <TableCell className={`text-sm font-bold ${factoryProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmtN(factoryProfit)}</TableCell>
             <TableCell className={`text-sm font-semibold ${factoryPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{factoryPct.toFixed(1)}%</TableCell>
           </TableRow>
-          <TableRow className="bg-amber-50 border-t-2 border-amber-200">
+          <TableRow style={{ background: '#fafafa', borderTop: '1px solid #e2e8f0' }}>
             <TableCell className="text-sm font-bold text-slate-800">סה"כ</TableCell>
             <TableCell className="text-sm font-bold text-slate-700">{fmtN(grandRevenue)}</TableCell>
             <TableCell className="text-sm font-bold text-slate-700">{fmtN(totalExp)}</TableCell>
@@ -598,14 +598,14 @@ export default function CEODashboard({ onBack }: Props) {
     return (
       <Table>
         <TableHeader>
-          <TableRow className="bg-slate-50">
+          <TableRow style={{ borderBottom: '1px solid #e2e8f0' }}>
             <TableHead className="text-xs font-bold text-slate-500">יחידה</TableHead>
             <TableHead className="text-xs font-bold text-slate-500">עלויות קבועות</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {branches.map((br, i) => (
-            <TableRow key={br.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+            <TableRow key={br.id} style={{ borderBottom: '1px solid #f8fafc' }}>
               <TableCell>
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: br.color }} />
@@ -615,7 +615,7 @@ export default function CEODashboard({ onBack }: Props) {
               <TableCell className="text-sm font-semibold text-slate-700">{fmtN(br.fixedCosts)}</TableCell>
             </TableRow>
           ))}
-          <TableRow className="bg-indigo-50/50">
+          <TableRow style={{ borderBottom: '1px solid #f8fafc' }}>
             <TableCell>
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-indigo-400" />
@@ -624,7 +624,7 @@ export default function CEODashboard({ onBack }: Props) {
             </TableCell>
             <TableCell className="text-sm font-semibold text-slate-700">{fmtN(factoryFixed)}</TableCell>
           </TableRow>
-          <TableRow className="bg-amber-50 border-t-2 border-amber-200">
+          <TableRow style={{ background: '#fafafa', borderTop: '1px solid #e2e8f0' }}>
             <TableCell className="text-sm font-bold text-slate-800">סה"כ</TableCell>
             <TableCell className="text-sm font-extrabold text-slate-900">{fmtN(total)}</TableCell>
           </TableRow>
@@ -638,14 +638,14 @@ export default function CEODashboard({ onBack }: Props) {
     return (
       <Table>
         <TableHeader>
-          <TableRow className="bg-slate-50">
+          <TableRow style={{ borderBottom: '1px solid #e2e8f0' }}>
             <TableHead className="text-xs font-bold text-slate-500">יחידה</TableHead>
             <TableHead className="text-xs font-bold text-slate-500">סכום ספקים</TableHead>
             <TableHead className="text-xs font-bold text-slate-500">% מסה"כ</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          <TableRow className="bg-white">
+          <TableRow style={{ borderBottom: '1px solid #f8fafc' }}>
             <TableCell>
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-indigo-400" />
@@ -655,7 +655,7 @@ export default function CEODashboard({ onBack }: Props) {
             <TableCell className="text-sm font-semibold text-slate-700">{fmtN(factorySuppliers)}</TableCell>
             <TableCell className="text-sm text-slate-500">{total > 0 ? ((factorySuppliers / total) * 100).toFixed(1) : '0.0'}%</TableCell>
           </TableRow>
-          <TableRow className="bg-slate-50/50">
+          <TableRow style={{ borderBottom: '1px solid #f8fafc' }}>
             <TableCell>
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-emerald-400" />
@@ -665,7 +665,7 @@ export default function CEODashboard({ onBack }: Props) {
             <TableCell className="text-sm font-semibold text-slate-700">{fmtN(branchSuppliers)}</TableCell>
             <TableCell className="text-sm text-slate-500">{total > 0 ? ((branchSuppliers / total) * 100).toFixed(1) : '0.0'}%</TableCell>
           </TableRow>
-          <TableRow className="bg-amber-50 border-t-2 border-amber-200">
+          <TableRow style={{ background: '#fafafa', borderTop: '1px solid #e2e8f0' }}>
             <TableCell className="text-sm font-bold text-slate-800">סה"כ</TableCell>
             <TableCell className="text-sm font-extrabold text-slate-900">{fmtN(total)}</TableCell>
             <TableCell className="text-sm font-bold text-slate-500">100%</TableCell>
@@ -712,22 +712,20 @@ export default function CEODashboard({ onBack }: Props) {
     valueColor?: string; diff?: React.ReactNode; borderColor: string; iconBg?: string; onClick?: () => void
   }) {
     return (
-      <Card className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer border-r-4 overflow-hidden" style={{ borderRightColor: borderColor }} onClick={onClick}>
-        <CardContent className="p-4">
+      <div onClick={onClick} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px', cursor: 'pointer', transition: 'box-shadow 0.2s' }}>
           <div className="flex items-center gap-2 mb-2">
             {iconBg ? (
               <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${iconBg}15` }}>
                 {icon}
               </div>
             ) : icon}
-            <span className="text-xs font-semibold text-slate-500">{label}</span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>{label}</span>
           </div>
-          <div className="text-2xl font-extrabold" style={{ color: valueColor || '#0f172a' }}>
+          <div style={{ fontSize: '22px', fontWeight: 700, color: valueColor || '#0f172a' }}>
             <CountUp end={numericValue} duration={1.5} separator="," prefix={prefix} suffix={suffix} decimals={decimals} />
           </div>
           {diff}
-        </CardContent>
-      </Card>
+      </div>
     )
   }
 
@@ -736,52 +734,59 @@ export default function CEODashboard({ onBack }: Props) {
     valueColor?: string; borderColor: string; iconBg?: string; onClick?: () => void
   }) {
     return (
-      <Card className="shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer border-r-4 overflow-hidden" style={{ borderRightColor: borderColor }} onClick={onClick}>
-        <CardContent className="p-4">
+      <div onClick={onClick} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px', cursor: 'pointer', transition: 'box-shadow 0.2s' }}>
           <div className="flex items-center gap-2 mb-1.5">
             {iconBg ? (
               <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: `${iconBg}15` }}>
                 {icon}
               </div>
             ) : icon}
-            <span className="text-[11px] font-semibold text-slate-500">{label}</span>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }}>{label}</span>
           </div>
-          <div className="text-xl font-extrabold" style={{ color: valueColor || '#0f172a' }}>
+          <div style={{ fontSize: '20px', fontWeight: 700, color: valueColor || '#0f172a' }}>
             <CountUp end={numericValue} duration={1.5} separator="," prefix={prefix} suffix={suffix} decimals={decimals} />
           </div>
-        </CardContent>
-      </Card>
+      </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
       {/* Header */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
+      <div style={{ background: 'white', padding: '16px 32px', display: 'flex', alignItems: 'center', gap: '16px', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
+        <Button variant="outline" size="lg" onClick={onBack} style={{ borderRadius: '12px', padding: '8px 20px', fontSize: '14px', fontWeight: 600, color: '#64748b' }}>
+          <ArrowRight size={20} />
           חזרה
         </Button>
-        <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
-          <TrophyIcon size={20} color="#f59e0b" />
-        </div>
         <div>
-          <h1 className="text-xl font-extrabold text-slate-900 m-0">דשבורד מנכ"ל</h1>
-          <p className="text-[13px] text-slate-400 m-0">מבט רשתי · מפעל + סניפים · {period.label}</p>
+          <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', margin: 0 }}>דשבורד מנכ"ל</h1>
+          <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>מבט רשתי · מפעל + סניפים · {period.label}</p>
         </div>
         <div className="mr-auto flex items-center gap-3">
-          <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+          <div style={{ display: 'flex', borderBottom: '2px solid #f1f5f9' }}>
             <button
               onClick={() => setViewMode('consolidated')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all ${viewMode === 'consolidated' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', fontSize: '13px', fontWeight: 600,
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: viewMode === 'consolidated' ? '#6366f1' : '#94a3b8',
+                borderBottom: viewMode === 'consolidated' ? '2px solid #6366f1' : '2px solid transparent',
+                marginBottom: '-2px', transition: 'all 0.15s',
+              }}
             >
               <Layers size={14} />
               מאוחד
             </button>
             <button
               onClick={() => setViewMode('segment')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all ${viewMode === 'segment' ? 'bg-blue-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', fontSize: '13px', fontWeight: 600,
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: viewMode === 'segment' ? '#6366f1' : '#94a3b8',
+                borderBottom: viewMode === 'segment' ? '2px solid #6366f1' : '2px solid transparent',
+                marginBottom: '-2px', transition: 'all 0.15s',
+              }}
             >
               <Building2 size={14} />
               מרכזי רווח
@@ -799,15 +804,11 @@ export default function CEODashboard({ onBack }: Props) {
           <>
             {/* ─── View Mode Banner ─── */}
             <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-3">
-              {viewMode === 'consolidated' ? (
-                <div className="rounded-lg px-4 py-2 text-center text-[13px] font-semibold" style={{ background: '#E8FDF5', color: '#065F46' }}>
-                  תצוגה מאוחדת — עסקאות פנימיות מבוטלות
-                </div>
-              ) : (
-                <div className="rounded-lg px-4 py-2 text-center text-[13px] font-semibold" style={{ background: '#EEF2FF', color: '#3730A3' }}>
-                  תצוגת מרכזי רווח — כולל מחירי העברה פנימיים
-                </div>
-              )}
+              <div style={{ borderRadius: '8px', padding: '8px 16px', textAlign: 'center', fontSize: '13px', fontWeight: 600, background: 'white', border: '1px solid #f1f5f9', color: '#64748b' }}>
+                {viewMode === 'consolidated'
+                  ? 'תצוגה מאוחדת — עסקאות פנימיות מבוטלות'
+                  : 'תצוגת מרכזי רווח — כולל מחירי העברה פנימיים'}
+              </div>
             </motion.div>
 
             {/* ═══ ROW 1: 4 Golden KPIs ═══ */}
@@ -817,50 +818,42 @@ export default function CEODashboard({ onBack }: Props) {
               const kpiOp = viewMode === 'consolidated' ? consOperating : grandOperating
               const kpiLaborPct = kpiRev > 0 ? (grandLabor / kpiRev) * 100 : 0
               return (
-            <motion.div className="grid grid-cols-4 gap-2.5 mb-2.5" variants={staggerContainer} initial="hidden" animate="visible">
+            <motion.div className="grid grid-cols-4 gap-3 mb-3" variants={staggerContainer} initial="hidden" animate="visible">
               <motion.div variants={fadeUp}>
-                <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('revenue_total')}>
-                  <CardContent className="p-4">
-                    <span className="text-[11px] font-semibold text-slate-400">{viewMode === 'consolidated' ? 'הכנסות אמיתיות' : 'הכנסות כוללות'}</span>
-                    <div className="text-[22px] font-medium text-slate-900 mt-1">
+                <div onClick={() => setSheetType('revenue_total')} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px', cursor: 'pointer' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>{viewMode === 'consolidated' ? 'הכנסות אמיתיות' : 'הכנסות כוללות'}</span>
+                    <div style={{ fontSize: '22px', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>
                       <CountUp end={Math.round(kpiRev)} duration={1.5} separator="," prefix="₪" />
                     </div>
                     <DiffBadge current={kpiRev} previous={prevTotalRev} />
-                  </CardContent>
-                </Card>
+                </div>
               </motion.div>
               <motion.div variants={fadeUp}>
-                <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('gross_profit')}>
-                  <CardContent className="p-4">
-                    <span className="text-[11px] font-semibold text-slate-400 cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span>
-                    <div className="text-[22px] font-medium mt-1" style={{ color: kpiGross >= 0 ? '#639922' : '#E24B4A' }}>
+                <div onClick={() => setSheetType('gross_profit')} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px', cursor: 'pointer' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }} title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span>
+                    <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: kpiGross >= 0 ? '#639922' : '#E24B4A' }}>
                       <CountUp end={Math.round(kpiGross)} duration={1.5} separator="," prefix="₪" />
                     </div>
-                    <span className="text-[11px] text-slate-400">{kpiRev > 0 ? ((kpiGross / kpiRev) * 100).toFixed(1) : '0.0'}% מהכנסות</span>
-                  </CardContent>
-                </Card>
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>{kpiRev > 0 ? ((kpiGross / kpiRev) * 100).toFixed(1) : '0.0'}% מהכנסות</span>
+                </div>
               </motion.div>
               <motion.div variants={fadeUp}>
-                <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('operating_profit')}>
-                  <CardContent className="p-4">
-                    <span className="text-[11px] font-semibold text-slate-400">רווח תפעולי</span>
-                    <div className="text-[22px] font-medium mt-1" style={{ color: kpiOp >= 0 ? '#639922' : '#E24B4A' }}>
+                <div onClick={() => setSheetType('operating_profit')} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px', cursor: 'pointer' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>רווח תפעולי</span>
+                    <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: kpiOp >= 0 ? '#639922' : '#E24B4A' }}>
                       <CountUp end={Math.round(kpiOp)} duration={1.5} separator="," prefix="₪" />
                     </div>
-                    <span className="text-[11px] text-slate-400">{kpiRev > 0 ? ((kpiOp / kpiRev) * 100).toFixed(1) : '0.0'}% מהכנסות</span>
-                  </CardContent>
-                </Card>
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>{kpiRev > 0 ? ((kpiOp / kpiRev) * 100).toFixed(1) : '0.0'}% מהכנסות</span>
+                </div>
               </motion.div>
               <motion.div variants={fadeUp}>
-                <Card className="shadow-sm cursor-pointer hover:shadow-md transition-all" onClick={() => setSheetType('labor_pct_total')}>
-                  <CardContent className="p-4">
-                    <span className="text-[11px] font-semibold text-slate-400">% לייבור כולל</span>
-                    <div className="text-[22px] font-medium mt-1" style={{ color: avgLaborTarget > 0 ? (kpiLaborPct <= avgLaborTarget ? '#639922' : '#E24B4A') : '#334155' }}>
+                <div onClick={() => setSheetType('labor_pct_total')} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px', cursor: 'pointer' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>% לייבור כולל</span>
+                    <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: avgLaborTarget > 0 ? (kpiLaborPct <= avgLaborTarget ? '#639922' : '#E24B4A') : '#334155' }}>
                       <CountUp end={kpiLaborPct} duration={1.5} separator="," suffix="%" decimals={1} />
                     </div>
-                    <span className="text-[11px] text-slate-400">{avgLaborTarget > 0 ? `יעד ${avgLaborTarget.toFixed(0)}%` : '\u2014'}</span>
-                  </CardContent>
-                </Card>
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>{avgLaborTarget > 0 ? `יעד ${avgLaborTarget.toFixed(0)}%` : '\u2014'}</span>
+                </div>
               </motion.div>
             </motion.div>
               )})()}
@@ -917,7 +910,7 @@ export default function CEODashboard({ onBack }: Props) {
                   ? kpiColor(pct, target, kpiKey !== 'operating') // labor & waste: lower=better (inverse), operating: higher=better
                   : '#64748b'
                 return (
-                  <TableCell className={`text-[12px] text-center ${bold ? 'font-bold' : ''} ${isTotalCol ? 'bg-amber-50' : ''} ${bold && isTotalCol ? 'font-extrabold' : ''}`}>
+                  <TableCell className={`text-[12px] text-center ${bold ? 'font-bold' : ''} ${isTotalCol ? '' : ''} ${bold && isTotalCol ? 'font-extrabold' : ''}`}>
                     <div style={{ color: profitColor === 'profit' ? (value >= 0 ? '#639922' : '#E24B4A') : '' }}>
                       {fmtN(value)}
                     </div>
@@ -931,19 +924,18 @@ export default function CEODashboard({ onBack }: Props) {
               }
 
               return (
-                <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5">
-                  <Card className="shadow-sm">
-                    <CardContent className="p-4 overflow-x-auto">
-                      <span className="text-[13px] font-bold text-slate-700 block mb-3">{tableTitle}</span>
+                <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-3">
+                  <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px', overflow: 'auto' }}>
+                      <span style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '12px' }}>{tableTitle}</span>
                       <Table>
                         <TableHeader>
-                          <TableRow className="bg-slate-50">
+                          <TableRow style={{ borderBottom: '1px solid #e2e8f0' }}>
                             <TableHead className="text-xs font-bold text-slate-500 min-w-[120px]">מדד</TableHead>
                             <TableHead className="text-xs font-bold text-slate-500 text-center">מפעל</TableHead>
                             {branches.map(br => (
                               <TableHead key={br.id} className="text-xs font-bold text-slate-500 text-center">{br.name}</TableHead>
                             ))}
-                            <TableHead className="text-xs font-bold text-slate-800 text-center bg-amber-50">סה"כ</TableHead>
+                            <TableHead className="text-xs font-bold text-slate-700 text-center">סה"כ</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -952,7 +944,7 @@ export default function CEODashboard({ onBack }: Props) {
                             const total = row.factory + brVals.reduce((s, v) => s + v, 0)
                             const totalRev = fRev + branches.reduce((s, br) => s + br.revenue, 0)
                             return (
-                              <TableRow key={row.label} className={row.bold ? 'bg-slate-50' : ''}>
+                              <TableRow key={row.label} style={row.bold ? { background: '#fafafa' } : { borderBottom: '1px solid #f8fafc' }}>
                                 <TableCell className={`text-[12px] ${row.bold ? 'font-bold text-slate-800' : 'text-slate-600'}`}>{row.label}</TableCell>
                                 {renderCell(row.factory, fRev, row.kpiKey, getFactoryTarget(row.kpiKey), row.bold, row.color, false)}
                                 {branches.map((br, i) => renderCell(brVals[i], br.revenue, row.kpiKey, getBrTarget(br.id, row.kpiKey), row.bold, row.color, false))}
@@ -962,19 +954,17 @@ export default function CEODashboard({ onBack }: Props) {
                           })}
                         </TableBody>
                       </Table>
-                      <p className="text-[11px] text-slate-400 mt-3 text-center">{footerNote}</p>
-                    </CardContent>
-                  </Card>
+                      <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '12px', textAlign: 'center' }}>{footerNote}</p>
+                  </div>
                 </motion.div>
               )
             })()}
 
             {/* ═══ ROW 2: Revenue Breakdown | Expense Breakdown ═══ */}
-            <motion.div className="grid grid-cols-2 gap-2.5 mb-2.5" variants={fadeIn} initial="hidden" animate="visible">
+            <motion.div className="grid grid-cols-2 gap-3 mb-3" variants={fadeIn} initial="hidden" animate="visible">
               {/* Revenue breakdown */}
-              <Card className="shadow-sm">
-                <CardContent className="p-4">
-                  <span className="text-[13px] font-bold text-slate-700 block mb-3">פירוט הכנסות</span>
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px' }}>
+                  <span style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '12px' }}>פירוט הכנסות</span>
                   {(() => {
                     const items = [
                       { label: 'קופה', value: revCashier, sheet: 'rev_cashier' as KpiSheetType },
@@ -988,19 +978,17 @@ export default function CEODashboard({ onBack }: Props) {
                           <span className="text-[12px] text-slate-600">{item.label}</span>
                           <span className="text-[12px] font-bold text-slate-700">{fmtN(item.value)}</span>
                         </div>
-                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${(item.value / maxVal) * 100}%`, background: '#534AB7' }} />
+                        <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', borderRadius: '4px', width: `${(item.value / maxVal) * 100}%`, background: '#6366f1' }} />
                         </div>
                       </div>
                     ))
                   })()}
-                </CardContent>
-              </Card>
+              </div>
 
               {/* Expense breakdown */}
-              <Card className="shadow-sm">
-                <CardContent className="p-4">
-                  <span className="text-[13px] font-bold text-slate-700 block mb-3">פירוט הוצאות</span>
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px' }}>
+                  <span style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '12px' }}>פירוט הוצאות</span>
                   {(() => {
                     const items = [
                       { label: 'ספקים', value: factorySuppliers + branchSuppliers, sheet: 'suppliers_total' as KpiSheetType },
@@ -1014,26 +1002,24 @@ export default function CEODashboard({ onBack }: Props) {
                           <span className="text-[12px] text-slate-600">{item.label}</span>
                           <span className="text-[12px] font-bold text-slate-700">{fmtN(item.value)}</span>
                         </div>
-                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${(item.value / maxVal) * 100}%`, background: '#E24B4A' }} />
+                        <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', borderRadius: '4px', width: `${(item.value / maxVal) * 100}%`, background: '#94a3b8' }} />
                         </div>
                       </div>
                     ))
                   })()}
-                </CardContent>
-              </Card>
+              </div>
             </motion.div>
 
             {/* ═══ ROW 3: Branch Performance ═══ */}
-            <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5">
-              <Card className="shadow-sm">
-                <CardContent className="p-4">
-                  <span className="text-[13px] font-bold text-slate-700 block mb-3">ביצועי סניפים</span>
+            <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-3">
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px' }}>
+                  <span style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '12px' }}>ביצועי סניפים</span>
                   <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${branches.length + 1}, 1fr)` }}>
                     {branches.map(br => {
                       const opPct = br.revenue > 0 ? (br.operatingProfit / br.revenue) * 100 : 0
                       return (
-                        <div key={br.id} className="bg-slate-50 rounded-lg p-3">
+                        <div key={br.id} style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: '12px', padding: '12px' }}>
                           <div className="flex items-center gap-1.5 mb-2">
                             <div className="w-2 h-2 rounded-full" style={{ background: br.color }} />
                             <span className="text-[12px] font-semibold text-slate-700">{br.name}</span>
@@ -1048,7 +1034,7 @@ export default function CEODashboard({ onBack }: Props) {
                       )
                     })}
                     {/* Factory column */}
-                    <div className="bg-indigo-50 rounded-lg p-3">
+                    <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: '12px', padding: '12px' }}>
                       <div className="flex items-center gap-1.5 mb-2">
                         <div className="w-2 h-2 rounded-full bg-indigo-400" />
                         <span className="text-[12px] font-semibold text-slate-700">מפעל</span>
@@ -1061,36 +1047,36 @@ export default function CEODashboard({ onBack }: Props) {
                       <div className="text-[11px] text-slate-400">רווח תפעולי</div>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+
+              </div>
             </motion.div>
 
             {/* ═══ Charts ═══ */}
-            <motion.div className="grid grid-cols-2 gap-2.5 mb-2.5" variants={fadeIn} initial="hidden" animate="visible">
-              <Card className="shadow-sm">
-                <CardHeader className="pb-0"><CardTitle className="text-sm font-bold text-slate-700">הכנסות/הוצאות לפי יחידה</CardTitle></CardHeader>
-                <CardContent>
+            <motion.div className="grid grid-cols-2 gap-3 mb-3" variants={fadeIn} initial="hidden" animate="visible">
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px' }}>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '12px' }}>הכנסות/הוצאות לפי יחידה</span>
+                <div>
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={barData} barGap={4}>
                       <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => `₪${(v / 1000).toFixed(0)}K`} axisLine={false} tickLine={false} />
                       <Tooltip content={<ChartTooltip />} cursor={{ fill: '#f1f5f9', radius: 8 }} />
                       <Legend wrapperStyle={{ fontSize: '12px' }} />
-                      <Bar dataKey="הכנסות" fill={CHART_INDIGO} radius={[8, 8, 0, 0]} />
-                      <Bar dataKey="הוצאות" fill={CHART_ROSE} radius={[8, 8, 0, 0]} />
-                      <Bar dataKey="רווח תפעולי" radius={[8, 8, 0, 0]}>
+                      <Bar dataKey="הכנסות" fill={CHART_INDIGO} radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="הוצאות" fill={CHART_GRAY} radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="רווח תפעולי" radius={[6, 6, 0, 0]}>
                         {barData.map((entry, index) => (
-                          <Cell key={index} fill={entry['רווח תפעולי'] >= 0 ? CHART_EMERALD : CHART_ROSE} />
+                          <Cell key={index} fill={entry['רווח תפעולי'] >= 0 ? CHART_EMERALD : '#94a3b8'} />
                         ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              <Card className="shadow-sm">
-                <CardHeader className="pb-0"><CardTitle className="text-sm font-bold text-slate-700">התפלגות הוצאות</CardTitle></CardHeader>
-                <CardContent>
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px' }}>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '12px' }}>התפלגות הוצאות</span>
+                <div>
                   {expenseBreakdown.length > 0 ? (
                     <ResponsiveContainer width="100%" height={250}>
                       <PieChart>
@@ -1103,16 +1089,16 @@ export default function CEODashboard({ onBack }: Props) {
                   ) : (
                     <div className="h-[250px] flex items-center justify-center text-slate-400">אין נתונים</div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </motion.div>
 
             {/* Daily revenue area chart */}
             {dailyRevenue.length > 0 && (
               <motion.div variants={fadeIn} initial="hidden" animate="visible">
-              <Card className="shadow-sm mb-2.5">
-                <CardHeader className="pb-0"><CardTitle className="text-sm font-bold text-slate-700">הכנסות יומיות לפי סניף</CardTitle></CardHeader>
-                <CardContent>
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px', marginBottom: '12px' }}>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '12px' }}>הכנסות יומיות לפי סניף</span>
+                <div>
                   <ResponsiveContainer width="100%" height={250}>
                     <AreaChart data={dailyRevenue}>
                       <defs>
@@ -1132,8 +1118,8 @@ export default function CEODashboard({ onBack }: Props) {
                       ))}
                     </AreaChart>
                   </ResponsiveContainer>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
               </motion.div>
             )}
           </>

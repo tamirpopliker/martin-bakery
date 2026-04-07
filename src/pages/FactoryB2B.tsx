@@ -220,24 +220,22 @@ export default function FactoryB2B({ onBack }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div className="min-h-screen" style={{ direction: 'rtl', background: '#f8fafc' }}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div style={{ width: '40px', height: '40px', background: cfg.bg, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <RevenueIcon size={20} color={cfg.color} />
-        </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>מכירות</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>קרמים · בצקים · B2B · שונות</p>
-        </div>
-        <div style={{ marginRight: 'auto', background: cfg.bg, border: `1px solid ${cfg.color}33`, borderRadius: '10px', padding: '8px 18px' }}>
-          <span style={{ fontSize: '18px', fontWeight: '800', color: cfg.color }}>₪{total.toLocaleString()}</span>
-          <span style={{ fontSize: '12px', color: '#64748b', marginRight: '6px' }}>סה"כ החודש</span>
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>מכירות</h1>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>קרמים · בצקים · B2B · שונות</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 8, padding: '6px 14px' }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>₪{total.toLocaleString()}</span>
+              <span style={{ fontSize: 12, color: '#94a3b8', marginRight: 6 }}>סה"כ</span>
+            </div>
+            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>{'\u2190'} חזרה</button>
+          </div>
         </div>
       </div>
 
@@ -245,8 +243,8 @@ export default function FactoryB2B({ onBack }: Props) {
       <div className="flex px-8 bg-white border-b border-slate-200">
         {TABS.map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`py-3.5 px-6 bg-transparent border-0 border-b-[3px] cursor-pointer text-sm ${tab === t ? 'font-bold' : 'font-medium text-slate-500'}`}
-            style={{ borderBottomColor: tab === t ? TAB_CONFIG[t].color : 'transparent', color: tab === t ? TAB_CONFIG[t].color : undefined }}>
+            className={`py-3.5 px-6 bg-transparent border-0 border-b-2 cursor-pointer text-sm ${tab === t ? 'font-bold' : 'font-medium'}`}
+            style={{ borderBottomColor: tab === t ? '#6366f1' : 'transparent', color: tab === t ? '#6366f1' : '#94a3b8' }}>
             {TAB_CONFIG[t].label}
           </button>
         ))}
@@ -255,9 +253,9 @@ export default function FactoryB2B({ onBack }: Props) {
       <div className="page-container" style={{ padding: '28px 32px', maxWidth: '960px', margin: '0 auto' }}>
 
         {/* ─── תיאור ────────────────────────────────────────────────────── */}
-        <div style={{ background: cfg.bg, border: `1px solid ${cfg.color}22`, borderRadius: '12px', padding: '12px 18px', marginBottom: '20px', fontSize: '13px', color: cfg.color, fontWeight: '600' }}>
+        <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '12px 18px', marginBottom: '20px', fontSize: 13, color: '#0f172a', fontWeight: 600, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
           {cfg.subtitle}
-          <span style={{ fontWeight: '400', color: '#64748b', marginRight: '8px' }}>— ללא מע״מ, נכנסות להכנסות ברווח נשלט</span>
+          <span style={{ fontWeight: 400, color: '#94a3b8', marginRight: '8px' }}>— ללא מע״מ, נכנסות להכנסות ברווח נשלט</span>
         </div>
 
         {/* ─── טופס הוספה ───────────────────────────────────────────────── */}
@@ -333,7 +331,7 @@ export default function FactoryB2B({ onBack }: Props) {
 
           </div>
           <button onClick={addEntry} disabled={loading || !amount || !customer}
-            style={{ background: loading || !amount || !customer ? '#e2e8f0' : cfg.color, color: loading || !amount || !customer ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            style={{ background: loading || !amount || !customer ? '#e2e8f0' : '#6366f1', color: loading || !amount || !customer ? '#94a3b8' : 'white', border: 'none', borderRadius: 8, padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Plus size={18} />הוסף
           </button>
           </CardContent>
@@ -350,7 +348,7 @@ export default function FactoryB2B({ onBack }: Props) {
             {searchFilter && <button onClick={() => setSearchFilter('')} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer' }}><X size={14} color="#94a3b8" /></button>}
           </div>
           <button onClick={() => setShowRanking(v => !v)}
-            style={{ background: showRanking ? cfg.color : '#f1f5f9', color: showRanking ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+            style={{ background: showRanking ? '#6366f1' : 'white', color: showRanking ? 'white' : '#64748b', border: showRanking ? 'none' : '1px solid #e2e8f0', borderRadius: 8, padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
             דירוג לקוחות
           </button>
         </div>
@@ -365,14 +363,14 @@ export default function FactoryB2B({ onBack }: Props) {
               const pctVal = grandTotal > 0 ? (r.total / grandTotal) * 100 : 0
               return (
                 <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                  <span style={{ width: '22px', height: '22px', background: i < 3 ? cfg.color : '#f1f5f9', color: i < 3 ? 'white' : '#64748b', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
+                  <span style={{ width: '22px', height: '22px', background: i < 3 ? '#6366f1' : '#f1f5f9', color: i < 3 ? 'white' : '#64748b', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
                     {i + 1}
                   </span>
                   <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px', flex: 1 }}>{r.name}</span>
                   <div style={{ width: '140px', background: '#f1f5f9', borderRadius: '20px', height: '8px', overflow: 'hidden' }}>
-                    <div style={{ width: `${pctVal}%`, background: cfg.color, height: '100%', borderRadius: '20px' }} />
+                    <div style={{ width: `${pctVal}%`, background: '#6366f1', height: '100%', borderRadius: '20px' }} />
                   </div>
-                  <span style={{ fontWeight: '700', color: cfg.color, fontSize: '14px', minWidth: '80px', textAlign: 'left' as const }}>
+                  <span style={{ fontWeight: '700', color: '#6366f1', fontSize: '14px', minWidth: '80px', textAlign: 'left' as const }}>
                     ₪{r.total.toLocaleString()}
                   </span>
                   <span style={{ fontSize: '12px', color: '#94a3b8', minWidth: '40px' }}>{pctVal.toFixed(1)}%</span>
@@ -389,20 +387,20 @@ export default function FactoryB2B({ onBack }: Props) {
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
         <div className="table-scroll"><Card className="shadow-sm">
           <CardContent className="p-6">
-          <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 130px 36px 36px', padding: '10px 20px', background: '#f8fafc', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 130px 36px 36px', padding: '10px 20px', background: 'white', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #f1f5f9', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
             <span>תאריך</span><span>לקוח</span><span>תעודה</span><span style={{ textAlign: 'left' }}>סכום</span><span /><span />
           </div>
 
           {filtered.length === 0 ? (
             <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין רשומות לחודש זה</div>
           ) : filtered.map((entry, i) => (
-            <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 130px 36px 36px', alignItems: 'center', padding: '13px 20px', borderBottom: i < filtered.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+            <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 130px 36px 36px', alignItems: 'center', padding: '13px 20px', borderBottom: '1px solid #f8fafc', background: 'transparent' }}>
               {editId === entry.id ? (
                 <>
-                  <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
-                  <AutocompleteInput value={editData.customer || ''} onChange={v => setEditData({ ...editData, customer: v })} suggestions={allCustomers} placeholder="לקוח" color={cfg.color} />
-                  <input type="text" value={editData.doc_number || ''} onChange={e => setEditData({ ...editData, doc_number: e.target.value })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                  <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid ' + cfg.color, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
+                  <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
+                  <AutocompleteInput value={editData.customer || ''} onChange={v => setEditData({ ...editData, customer: v })} suggestions={allCustomers} placeholder="לקוח" color="#6366f1" />
+                  <input type="text" value={editData.doc_number || ''} onChange={e => setEditData({ ...editData, doc_number: e.target.value })} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
+                  <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
                   <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                   <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                 </>
@@ -426,7 +424,7 @@ export default function FactoryB2B({ onBack }: Props) {
                     {entry.notes && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{entry.notes}</div>}
                   </div>
                   <span style={{ fontSize: '13px', color: '#94a3b8' }}>{entry.doc_number || '—'}</span>
-                  <span style={{ fontWeight: '800', color: cfg.color, fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString()}</span>
+                  <span style={{ fontWeight: '800', color: '#6366f1', fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString()}</span>
                   <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
                   <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
                 </>
@@ -435,9 +433,9 @@ export default function FactoryB2B({ onBack }: Props) {
           ))}
 
           {filtered.length > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', background: cfg.bg, borderTop: `2px solid ${cfg.color}33`, borderRadius: '0 0 20px 20px' }}>
-              <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>סה"כ — {filtered.length} רשומות</span>
-              <span style={{ fontSize: '20px', fontWeight: '800', color: cfg.color }}>₪{total.toLocaleString()}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', background: '#fafafa', borderTop: '1px solid #f1f5f9', borderRadius: '0 0 12px 12px' }}>
+              <span style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>סה"כ — {filtered.length} רשומות</span>
+              <span style={{ fontSize: '20px', fontWeight: '800', color: '#6366f1' }}>₪{total.toLocaleString()}</span>
             </div>
           )}
           </CardContent>

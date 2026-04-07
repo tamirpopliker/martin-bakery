@@ -867,10 +867,10 @@ export default function DataImport({ branchOnly }: Props) {
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
       {/* Purge all data */}
-      <Card className="shadow-sm mb-2" style={{ border: '2px solid #fecdd3', background: '#fff5f5' }}>
+      <Card className="shadow-sm mb-2" style={{ border: '1px solid #fecdd3', background: 'white' }}>
         <CardContent className="p-6">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           <div>
@@ -905,7 +905,7 @@ export default function DataImport({ branchOnly }: Props) {
 
       {/* Purge result */}
       {purgeResult && (
-        <Card className="shadow-sm mb-2" style={{ border: '2px solid #86efac', background: '#f0fdf4' }}>
+        <Card className="shadow-sm mb-2" style={{ border: '1px solid #86efac', background: 'white' }}>
           <CardContent className="p-6">
           <div style={{ fontSize: '15px', fontWeight: '700', color: '#065f46', marginBottom: '10px' }}>
             ✅ מחיקה הושלמה
@@ -936,7 +936,7 @@ export default function DataImport({ branchOnly }: Props) {
             style={{
               flex: 1, padding: '14px 20px', border: 'none', cursor: 'pointer',
               borderRadius: '12px 0 0 12px', fontSize: '15px', fontWeight: '700',
-              background: importMode === 'zip' ? '#0f172a' : '#f1f5f9',
+              background: importMode === 'zip' ? '#6366f1' : '#f1f5f9',
               color: importMode === 'zip' ? 'white' : '#64748b',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
               transition: 'all 0.2s',
@@ -947,7 +947,7 @@ export default function DataImport({ branchOnly }: Props) {
             style={{
               flex: 1, padding: '14px 20px', border: 'none', cursor: 'pointer',
               borderRadius: '0 12px 12px 0', fontSize: '15px', fontWeight: '700',
-              background: importMode === 'single' ? '#0f172a' : '#f1f5f9',
+              background: importMode === 'single' ? '#6366f1' : '#f1f5f9',
               color: importMode === 'single' ? 'white' : '#64748b',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
               transition: 'all 0.2s',
@@ -965,13 +965,13 @@ export default function DataImport({ branchOnly }: Props) {
           onDrop={onDrop}
           onClick={() => fileRef.current?.click()}
           style={{
-            background: dragOver ? '#eff6ff' : '#fafafa',
-            border: `2.5px dashed ${dragOver ? '#818cf8' : '#cbd5e1'}`,
+            background: dragOver ? '#eef2ff' : 'white',
+            border: `2px dashed ${dragOver ? '#6366f1' : '#e2e8f0'}`,
             borderRadius: '16px', padding: '60px 40px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
           }}
         >
-          <Upload size={48} color={dragOver ? '#818cf8' : '#94a3b8'} style={{ marginBottom: '16px' }} />
+          <Upload size={48} color={dragOver ? '#6366f1' : '#94a3b8'} style={{ marginBottom: '16px' }} />
           <div style={{ fontSize: '18px', fontWeight: '700', color: '#374151', marginBottom: '8px' }}>
             גרור קבצי CSV או ZIP לכאן
           </div>
@@ -1006,12 +1006,12 @@ export default function DataImport({ branchOnly }: Props) {
               <div key={key}
                 onClick={() => { setSelectedTable(key); singleFileRef.current?.click() }}
                 style={{
-                  background: selectedTable === key ? '#eff6ff' : '#fafafa',
-                  border: `2px solid ${selectedTable === key ? '#818cf8' : '#e2e8f0'}`,
+                  background: selectedTable === key ? '#eef2ff' : 'white',
+                  border: `2px solid ${selectedTable === key ? '#6366f1' : '#e2e8f0'}`,
                   borderRadius: '12px', padding: '16px 12px', textAlign: 'center',
                   cursor: 'pointer', transition: 'all 0.15s',
                 }}>
-                <FileText size={24} color={selectedTable === key ? '#818cf8' : '#94a3b8'} style={{ marginBottom: '8px' }} />
+                <FileText size={24} color={selectedTable === key ? '#6366f1' : '#94a3b8'} style={{ marginBottom: '8px' }} />
                 <div style={{ fontSize: '13px', fontWeight: '700', color: '#374151' }}>{def.label}</div>
                 <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', direction: 'ltr' as const }}>{key}.csv</div>
               </div>
@@ -1047,7 +1047,7 @@ export default function DataImport({ branchOnly }: Props) {
                   : `${totalReady.toLocaleString()} שורות סה"כ`}
               </div>
               {detectedMonth && !done && (
-                <div style={{ fontSize: '13px', color: '#818cf8', fontWeight: '600', marginTop: '4px' }}>
+                <div style={{ fontSize: '13px', color: '#6366f1', fontWeight: '600', marginTop: '4px' }}>
                   חודש נתונים: {new Date(detectedMonth + '-01').toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
                 </div>
               )}
@@ -1084,7 +1084,7 @@ export default function DataImport({ branchOnly }: Props) {
               {!done && (
                 <button onClick={importAll} disabled={!canImport}
                   style={{
-                    background: canImport ? '#0f172a' : '#e2e8f0', color: canImport ? 'white' : '#94a3b8',
+                    background: canImport ? '#6366f1' : '#e2e8f0', color: canImport ? 'white' : '#94a3b8',
                     border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700',
                     cursor: canImport ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: '8px',
                   }}>
@@ -1108,7 +1108,7 @@ export default function DataImport({ branchOnly }: Props) {
               </div>
               <div style={{ background: '#e2e8f0', borderRadius: '8px', height: '8px', overflow: 'hidden' }}>
                 <div style={{
-                  background: 'linear-gradient(90deg, #818cf8, #c084fc)', height: '100%', borderRadius: '8px',
+                  background: '#6366f1', height: '100%', borderRadius: '8px',
                   width: `${(progress.current / progress.total) * 100}%`, transition: 'width 0.3s',
                 }} />
               </div>
@@ -1117,7 +1117,7 @@ export default function DataImport({ branchOnly }: Props) {
 
           {/* Files */}
           {files.map((fm, i) => {
-            const color = fm.status === 'done' ? '#34d399' : fm.status === 'error' ? '#fb7185' : fm.status === 'skip' ? '#94a3b8' : fm.status === 'warning' ? '#fbbf24' : '#818cf8'
+            const color = fm.status === 'done' ? '#34d399' : fm.status === 'error' ? '#fb7185' : fm.status === 'skip' ? '#94a3b8' : fm.status === 'warning' ? '#fbbf24' : '#6366f1'
             return (
               <Card key={fm.csvName + i} className="shadow-sm" style={{
                 borderRight: `4px solid ${color}`,
@@ -1128,8 +1128,8 @@ export default function DataImport({ branchOnly }: Props) {
                   {fm.status === 'error' && <XCircle size={20} color="#fb7185" />}
                   {fm.status === 'skip' && <XCircle size={20} color="#94a3b8" />}
                   {fm.status === 'warning' && <AlertCircle size={20} color="#fbbf24" />}
-                  {fm.status === 'importing' && <Loader2 size={20} color="#818cf8" style={{ animation: 'spin 1s linear infinite' }} />}
-                  {fm.status === 'ready' && <FileText size={20} color="#818cf8" />}
+                  {fm.status === 'importing' && <Loader2 size={20} color="#6366f1" style={{ animation: 'spin 1s linear infinite' }} />}
+                  {fm.status === 'ready' && <FileText size={20} color="#6366f1" />}
 
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1222,7 +1222,7 @@ export default function DataImport({ branchOnly }: Props) {
 
           {/* DB Status Verification */}
           {dbStatus && (
-            <Card className="shadow-sm" style={{ border: '2px solid #818cf8', background: '#fafcff' }}>
+            <Card className="shadow-sm" style={{ border: '1px solid #6366f1', background: 'white' }}>
               <CardContent className="p-6">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                 <div style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a' }}>

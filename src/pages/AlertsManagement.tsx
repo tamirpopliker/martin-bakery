@@ -176,25 +176,20 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
 
   // ─── Render ───────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
       {/* Header */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} /> חזרה
+      <div style={{ background: 'white', padding: '16px 32px', display: 'flex', alignItems: 'center', gap: '16px', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
+        <Button variant="outline" size="lg" onClick={onBack} style={{ borderRadius: '12px', padding: '8px 20px', fontSize: '14px', fontWeight: 600, color: '#64748b' }}>
+          <ArrowRight size={20} /> חזרה
         </Button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '40px', height: '40px', background: '#f59e0b', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Bell size={22} color="white" />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', margin: 0 }}>ניהול התראות</h1>
-            <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>כללי התרעה · לוג · {rules.length} כללים</p>
-          </div>
+        <div>
+          <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', margin: 0 }}>ניהול התראות</h1>
+          <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>כללי התרע�� · לוג · {rules.length} כללים</p>
         </div>
         <div style={{ flex: 1 }} />
         {tab === 'rules' && (
           <button onClick={openNew}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
             <Plus size={16} /> הוסף התרעה
           </button>
         )}
@@ -202,8 +197,8 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
 
       <div style={{ padding: '28px 36px', maxWidth: '1100px', margin: '0 auto' }}>
 
-        {/* Tab switcher */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+        {/* Tab switcher — underline style */}
+        <div style={{ display: 'flex', gap: '0', borderBottom: '2px solid #f1f5f9', marginBottom: '20px' }}>
           {([
             { key: 'rules' as const, label: 'כללי התרעה', icon: AlertTriangle, count: rules.length },
             { key: 'log' as const, label: 'לוג התראות', icon: History, count: logEntries.length },
@@ -211,14 +206,15 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
             <button key={t.key} onClick={() => setTab(t.key)}
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px',
-                padding: '10px 20px', borderRadius: '12px', fontSize: '14px', fontWeight: '700',
-                border: tab === t.key ? '2px solid #f59e0b' : '2px solid #e2e8f0',
-                background: tab === t.key ? '#fffbeb' : 'white', color: tab === t.key ? '#b45309' : '#64748b',
-                cursor: 'pointer', transition: 'all 0.15s',
+                padding: '10px 20px', fontSize: '14px', fontWeight: 600,
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                color: tab === t.key ? '#6366f1' : '#94a3b8',
+                borderBottom: tab === t.key ? '2px solid #6366f1' : '2px solid transparent',
+                marginBottom: '-2px', transition: 'all 0.15s',
               }}>
               <t.icon size={16} />
               {t.label}
-              <span style={{ background: tab === t.key ? '#f59e0b' : '#e2e8f0', color: tab === t.key ? 'white' : '#64748b', fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '10px' }}>
+              <span style={{ background: tab === t.key ? '#eef2ff' : '#f1f5f9', color: tab === t.key ? '#6366f1' : '#94a3b8', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px' }}>
                 {t.count}
               </span>
             </button>
@@ -244,7 +240,7 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
                   <div key={rule.id} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 100px 120px 100px 80px', padding: '14px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: rule.active ? 1 : 0.5 }}>
                     <span style={{ fontWeight: '600', color: '#0f172a' }}>{rule.name}</span>
                     <span style={{ color: '#64748b' }}>
-                      <span style={{ fontSize: '10px', background: rule.entity_type === 'branch' ? '#dbeafe' : '#f3e8ff', color: rule.entity_type === 'branch' ? '#2563eb' : '#7c3aed', padding: '2px 6px', borderRadius: '4px', fontWeight: '600', marginLeft: '4px' }}>
+                      <span style={{ fontSize: '10px', background: rule.entity_type === 'branch' ? '#eef2ff' : '#f1f5f9', color: rule.entity_type === 'branch' ? '#4338ca' : '#64748b', padding: '2px 8px', borderRadius: '20px', fontWeight: '600', marginLeft: '4px' }}>
                         {rule.entity_type === 'branch' ? 'סניף' : 'מפעל'}
                       </span>
                       {' '}{getEntityLabel(rule)}
@@ -258,9 +254,11 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
                     </span>
                     <span>
                       <button onClick={() => toggleActive(rule)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600', color: rule.active ? '#34d399' : '#94a3b8' }}>
-                        {rule.active ? <ToggleRight size={18} color="#34d399" /> : <ToggleLeft size={18} color="#94a3b8" />}
-                        {rule.active ? 'פעיל' : 'מושבת'}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '600', color: rule.active ? '#065f46' : '#64748b' }}>
+                        {rule.active ? <ToggleRight size={18} color="#065f46" /> : <ToggleLeft size={18} color="#94a3b8" />}
+                        <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: rule.active ? '#ecfdf5' : '#f1f5f9', color: rule.active ? '#065f46' : '#64748b' }}>
+                          {rule.active ? 'פעיל' : 'מושבת'}
+                        </span>
                       </button>
                     </span>
                     <button onClick={() => openEdit(rule)}
@@ -283,8 +281,8 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
                 <button key={d} onClick={() => setLogDays(d)}
                   style={{
                     padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
-                    border: logDays === d ? '2px solid #f59e0b' : '1px solid #e2e8f0',
-                    background: logDays === d ? '#fffbeb' : 'white', color: logDays === d ? '#b45309' : '#64748b',
+                    border: logDays === d ? '2px solid #6366f1' : '1px solid #e2e8f0',
+                    background: logDays === d ? '#eef2ff' : 'white', color: logDays === d ? '#4338ca' : '#64748b',
                   }}>
                   {d} ימים
                 </button>
@@ -387,7 +385,7 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
                 <button onClick={handleSave}
                   disabled={saving || !form.name.trim() || !form.threshold}
                   style={{
-                    background: saving || !form.name.trim() || !form.threshold ? '#e2e8f0' : '#f59e0b',
+                    background: saving || !form.name.trim() || !form.threshold ? '#e2e8f0' : '#6366f1',
                     color: saving || !form.name.trim() || !form.threshold ? '#94a3b8' : 'white',
                     border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '15px', fontWeight: '700',
                     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',

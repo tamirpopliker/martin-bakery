@@ -2,10 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { supabase, monthEnd, getWorkingDays } from '../lib/supabase'
 import { parseTimeWatchPDF, type TimeWatchRow } from '../lib/parseTimeWatch'
-import { ArrowRight, Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save, Calendar, FileText, ChevronDown, ChevronUp, Clock, HelpCircle } from 'lucide-react'
-import { LaborIcon } from '@/components/icons'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save, Calendar, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react'
 import { useAppUser } from '../lib/UserContext'
 
 interface Props { onBack: () => void }
@@ -56,17 +53,12 @@ const EMPLOYER_FACTOR = 1.3
 
 function calcWage(emp: Employee, h100: number, h125: number, h150: number, workingDays = 26): { gross: number; employerCost: number; total: number } {
   if (emp.wage_type === 'global') {
-    // Daily cost = monthly salary / working days in month
     const dailyGross = (emp.global_daily_rate + (emp.bonus || 0)) / workingDays
     const dailyEmployer = (emp.global_daily_rate * EMPLOYER_FACTOR + (emp.bonus || 0)) / workingDays
     return { gross: dailyGross, employerCost: dailyEmployer, total: dailyEmployer }
   }
-  // שעתי:
-  // שכר גולמי = (100% × שכר) + (125% × שכר × 1.25) + (150% × שכר × 1.5) + (סה"כ שעות × בונוס)
   const totalHours = h100 + h125 + h150
   const gross = (h100 * emp.hourly_rate) + (h125 * emp.hourly_rate * 1.25) + (h150 * emp.hourly_rate * 1.5) + ((emp.bonus || 0) * totalHours)
-  // עלות מעסיק = (100% × שכר × 1.3) + (125% × שכר × 1.25) + (150% × שכר × 1.5) + (שעות × בונוס)
-  // מכפיל 1.3 רק על שעות רגילות, שעות נוספות בערך נקוב
   const employerCost = (h100 * emp.hourly_rate * EMPLOYER_FACTOR) + (h125 * emp.hourly_rate * 1.25) + (h150 * emp.hourly_rate * 1.5) + ((emp.bonus || 0) * totalHours)
   return { gross, employerCost, total: employerCost }
 }
@@ -79,11 +71,8 @@ export default function Labor({ onBack }: Props) {
   const { appUser } = useAppUser()
   const isDeptManager = appUser?.role === 'factory' && !!appUser?.managed_department
 
-  // Department managers can't see salary of the OTHER department's manager
-  // תמיר (בצקים) לא רואה שכר של נאור (קרמים) — והפוך
   function shouldHideSalary(emp: Employee | undefined): boolean {
     if (!isDeptManager || !emp) return false
-    // Only hide the OTHER main department's manager (global employee in the opposing dept)
     const myDept = appUser?.managed_department
     if (myDept === 'creams' && emp.wage_type === 'global' && emp.department === 'dough') return true
     if (myDept === 'dough' && emp.wage_type === 'global' && emp.department === 'creams') return true
@@ -92,8 +81,7 @@ export default function Labor({ onBack }: Props) {
 
   const [tab, setTab] = useState<'upload' | 'employees' | 'history'>('upload')
   const [employees, setEmployees] = useState<Employee[]>([])
-  const [allEmployees, setAllEmployees] = useState<Employee[]>([]) // includes inactive, for PDF matching
-  // History state
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([])
   const [historyData, setHistoryData] = useState<any[]>([])
   const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7))
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -163,7 +151,6 @@ export default function Labor({ onBack }: Props) {
   async function saveHistoryEdit() {
     if (!editHistId) return
     const { hours_100, hours_125, hours_150 } = editHistData
-    // Recalculate costs based on the employee
     const emp = allEmployees.find(e => e.name === editHistData.employee_name)
     let employer_cost = editHistData.employer_cost
     let gross_salary = editHistData.gross_salary
@@ -212,7 +199,6 @@ export default function Labor({ onBack }: Props) {
       setReplaceMode(false)
       setSaved(false)
 
-      // Check for duplicate dates in DB
       if (seenDates.size > 0) {
         const dateArr = [...seenDates]
         const { data: existing } = await supabase
@@ -239,7 +225,6 @@ export default function Labor({ onBack }: Props) {
     const files = e.target.files
     if (!files || files.length === 0) return
 
-    // Collect PDF files
     const pdfFiles = [...files].filter(f => f.name.toLowerCase().endsWith('.pdf'))
     if (pdfFiles.length > 0) {
       parseMultiplePDFs(pdfFiles)
@@ -247,10 +232,8 @@ export default function Labor({ onBack }: Props) {
       return
     }
 
-    // CSV fallback (single file)
     const file = files[0]
     if (file && file.name.toLowerCase().endsWith('.csv')) {
-      // CSV fallback
       const reader = new FileReader()
       reader.onload = ev => {
         const text = ev.target?.result as string
@@ -305,7 +288,6 @@ export default function Labor({ onBack }: Props) {
     const knownRows = rows.filter(r => r.found && r.employee)
     if (!knownRows.length) return
     setSaving(true)
-    // Delete existing data for duplicate dates before inserting
     if (duplicateDates.length > 0 && replaceMode) {
       for (const d of duplicateDates) {
         await supabase.from('labor').delete()
@@ -316,7 +298,7 @@ export default function Labor({ onBack }: Props) {
     const inserts = knownRows.map(r => ({
       entity_type: 'factory',
       entity_id: r.employee!.department,
-      date: r.date || date,  // תאריך per-row, fallback ל-picker
+      date: r.date || date,
       employee_name: r.name,
       hours_100: r.hours_100,
       hours_125: r.hours_125,
@@ -325,7 +307,6 @@ export default function Labor({ onBack }: Props) {
       gross_salary: calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150, workingDays).gross,
       employer_cost: calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150, workingDays).total
     }))
-    // insert בקבוצות של 100 כדי לא לעבור מגבלת API
     for (let i = 0; i < inserts.length; i += 100) {
       await supabase.from('labor').insert(inserts.slice(i, i + 100))
     }
@@ -333,11 +314,9 @@ export default function Labor({ onBack }: Props) {
     setSaved(true)
     setDuplicateDates([])
     setReplaceMode(false)
-    // Keep rows to show count in success message, clear after 3s
     const count = inserts.length
     const dateCount = new Set(inserts.map(r => r.date)).size
     setTimeout(() => { setRows([]); setSaved(false) }, 5000)
-    // Store for display
     setSavedInfo({ count, dateCount })
   }
 
@@ -374,95 +353,94 @@ export default function Labor({ onBack }: Props) {
   const unknownRows = rows.filter(r => !r.found)
   const totalCost = knownRows.reduce((s, r) => s + calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150, workingDays).total, 0)
 
-  const inpStyle = { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '9px 12px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', textAlign: 'right' as const, width: '100%', boxSizing: 'border-box' as const }
+  const inpStyle: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 10, padding: '9px 12px', fontSize: 14, outline: 'none', fontFamily: 'inherit', textAlign: 'right' as const, width: '100%', boxSizing: 'border-box' as const }
+
+  const tabBtn = (key: typeof tab, label: string) => (
+    <button onClick={() => setTab(key)} style={{ padding: '13px 22px', background: 'none', border: 'none', borderBottom: tab === key ? '2px solid #6366f1' : '2px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: tab === key ? 700 : 500, color: tab === key ? '#6366f1' : '#64748b', transition: 'all 0.15s' }}>
+      {label}
+    </button>
+  )
 
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div style={{ width: '40px', height: '40px', background: '#818cf820', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <LaborIcon size={20} color="#818cf8" />
-        </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>לייבור מרוכז</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>העלאת נוכחות PDF · ניהול עובדים · עלות מעסיק ×1.3</p>
-        </div>
-        <div style={{ marginRight: 'auto', display: 'flex', gap: '8px' }}>
-          <button onClick={() => setTab('upload')} style={{ background: tab === 'upload' ? '#818cf8' : '#f1f5f9', color: tab === 'upload' ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 20px', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
-            העלאת קובץ
-          </button>
-          <button onClick={() => setTab('history')} style={{ background: tab === 'history' ? '#818cf8' : '#f1f5f9', color: tab === 'history' ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 20px', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
-            היסטוריה
-          </button>
-          <button onClick={() => setTab('employees')} style={{ background: tab === 'employees' ? '#818cf8' : '#f1f5f9', color: tab === 'employees' ? 'white' : '#64748b', border: 'none', borderRadius: '10px', padding: '8px 20px', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}>
-            עובדים ({employees.length})
-          </button>
+      {/* Header */}
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>לייבור מפעל</h1>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>העלאת נוכחות PDF · ניהול עובדים · עלות מעסיק x1.3</p>
+          </div>
+          <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>{'\u2190'} חזרה</button>
         </div>
       </div>
 
-      <div className="page-container" style={{ padding: '32px', maxWidth: '1000px', margin: '0 auto' }}>
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 0, padding: '0 20px', background: 'white', borderBottom: '1px solid #f1f5f9', marginBottom: 16 }}>
+        {tabBtn('upload', 'העלאת קובץ')}
+        {tabBtn('history', 'היסטוריה')}
+        {tabBtn('employees', `עובדים (${employees.length})`)}
+      </div>
 
+      <div style={{ padding: '0 20px 28px', maxWidth: 1000, margin: '0 auto' }}>
+
+        {/* ═══ UPLOAD TAB ═══ */}
         {tab === 'upload' && (
           <>
-            <Card className="shadow-sm" style={{ marginBottom: '24px' }}>
-              <CardContent className="p-6">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                  <h2 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#374151' }}>העלאת קובץ נוכחות</h2>
-                  <div style={{ position: 'relative' }} className="help-popover-wrapper">
-                    <button onClick={(e) => { const el = (e.currentTarget.nextElementSibling as HTMLElement); el.style.display = el.style.display === 'block' ? 'none' : 'block' }}
-                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px' }}>
-                      <HelpCircle size={18} color="#818cf8" />
-                    </button>
-                    <div style={{ display: 'none', position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '24px', width: '360px', maxWidth: '90vw', boxShadow: '0 12px 40px rgba(0,0,0,0.15)', zIndex: 1000, fontSize: '13px', color: '#374151', lineHeight: '1.8' }}>
-                      <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '10px', color: '#0f172a' }}>איך להוריד דוח מ-TimeWatch?</div>
-                      <ol style={{ margin: 0, paddingRight: '18px' }}>
-                        <li>היכנס ל-<strong>TimeWatch</strong> של המפעל</li>
-                        <li>לחץ על <strong>"דוחות"</strong> בתפריט העליון</li>
-                        <li>בחר <strong>"דוח נוכחות יומית / חודשית"</strong></li>
-                        <li>בשדה <strong>סוג</strong> → בחר <strong>"תקופתי"</strong></li>
-                        <li>הגדר <strong>מתאריך</strong> ו<strong>עד תאריך</strong> לטווח הרצוי</li>
-                        <li>בשדה <strong>תצוגה</strong> → בחר <strong>"כל העובדים ברצף"</strong></li>
-                        <li>ודא שמסומן <strong>"הצג בפורמט עשרוני"</strong> ✓</li>
-                        <li>לחץ <strong>"הצג"</strong> ואז על כפתור <strong>PDF</strong> להורדה</li>
-                      </ol>
-                      <div style={{ marginTop: '10px', fontSize: '11px', color: '#94a3b8' }}>
-                        הקובץ מכיל שעות רגילות + שעות נוספות לכל עובד לכל יום.
-                      </div>
+            {/* Upload card */}
+            <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 24, marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>העלאת קובץ נוכחות</h2>
+                <div style={{ position: 'relative' }} className="help-popover-wrapper">
+                  <button onClick={(e) => { const el = (e.currentTarget.nextElementSibling as HTMLElement); el.style.display = el.style.display === 'block' ? 'none' : 'block' }}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2 }}>
+                    <HelpCircle size={18} color="#6366f1" />
+                  </button>
+                  <div style={{ display: 'none', position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'white', border: '1px solid #e2e8f0', borderRadius: 14, padding: 24, width: 360, maxWidth: '90vw', boxShadow: '0 12px 40px rgba(0,0,0,0.12)', zIndex: 1000, fontSize: 13, color: '#374151', lineHeight: '1.8' }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10, color: '#0f172a' }}>איך להוריד דוח מ-TimeWatch?</div>
+                    <ol style={{ margin: 0, paddingRight: 18 }}>
+                      <li>היכנס ל-<strong>TimeWatch</strong> של המפעל</li>
+                      <li>לחץ על <strong>"דוחות"</strong> בתפריט העליון</li>
+                      <li>בחר <strong>"דוח נוכחות יומית / חודשית"</strong></li>
+                      <li>בשדה <strong>סוג</strong> → בחר <strong>"תקופתי"</strong></li>
+                      <li>הגדר <strong>מתאריך</strong> ו<strong>עד תאריך</strong> לטווח הרצוי</li>
+                      <li>בשדה <strong>תצוגה</strong> → בחר <strong>"כל העובדים ברצף"</strong></li>
+                      <li>ודא שמסומן <strong>"הצג בפורמט עשרוני"</strong> ✓</li>
+                      <li>לחץ <strong>"הצג"</strong> ואז על כפתור <strong>PDF</strong> להורדה</li>
+                    </ol>
+                    <div style={{ marginTop: 10, fontSize: 11, color: '#94a3b8' }}>
+                      הקובץ מכיל שעות רגילות + שעות נוספות לכל עובד לכל יום.
                     </div>
                   </div>
                 </div>
-                <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#94a3b8' }}>PDF דוח נוכחות מ-TimeWatch — פרסור אוטומטי ללא שרת</p>
-                <div>
-                  <input type="file" accept=".pdf,.csv" multiple ref={fileRef} onChange={handleFile} style={{ display: 'none' }} />
-                  <button onClick={() => fileRef.current?.click()} style={{ background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Upload size={18} />בחר קבצי PDF
-                  </button>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+              <p style={{ margin: '0 0 16px', fontSize: 13, color: '#94a3b8' }}>PDF דוח נוכחות מ-TimeWatch — פרסור אוטומטי ללא שרת</p>
+              <div>
+                <input type="file" accept=".pdf,.csv" multiple ref={fileRef} onChange={handleFile} style={{ display: 'none' }} />
+                <button onClick={() => fileRef.current?.click()} style={{ background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 10, padding: '9px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Upload size={16} />בחר קבצי PDF
+                </button>
+              </div>
+            </div>
 
-            {/* באנר קובץ חודשי */}
+            {/* Monthly banner */}
             {isMonthly && rows.length > 0 && (() => {
               const dates = rows.filter(r => r.date).map(r => r.date).sort()
               const firstD = dates[0]; const lastD = dates[dates.length - 1]
               const uniqueEmps = new Set(rows.map(r => r.name)).size
               return (
-                <div style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: '16px', padding: '16px 24px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                  <Calendar size={20} color="#818cf8" />
-                  <span style={{ fontWeight: '700', color: '#1e40af', fontSize: '14px' }}>
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '14px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <Calendar size={18} color="#6366f1" />
+                  <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>
                     קובץ חודשי — {knownRows.length} רשומות, {uniqueEmps} עובדים
                   </span>
-                  <span style={{ fontSize: '13px', color: '#818cf8' }}>
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>
                     {firstD && new Date(firstD + 'T12:00:00').toLocaleDateString('he-IL')} – {lastD && new Date(lastD + 'T12:00:00').toLocaleDateString('he-IL')}
                   </span>
-                  <label style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <label style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                     <input type="checkbox" checked={replaceMode} onChange={e => setReplaceMode(e.target.checked)}
-                      style={{ width: '18px', height: '18px', accentColor: '#fb7185', cursor: 'pointer' }} />
-                    <span style={{ fontSize: '13px', fontWeight: '600', color: replaceMode ? '#dc2626' : '#64748b' }}>
+                      style={{ width: 16, height: 16, accentColor: '#6366f1', cursor: 'pointer' }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: replaceMode ? '#dc2626' : '#64748b' }}>
                       מחק נתונים קיימים לחודש זה לפני ייבוא
                     </span>
                   </label>
@@ -470,23 +448,24 @@ export default function Labor({ onBack }: Props) {
               )
             })()}
 
+            {/* Unknown employees */}
             {unknownRows.length > 0 && (
-              <div style={{ background: '#fef3c7', border: '1.5px solid #fde68a', borderRadius: '16px', padding: '20px 24px', marginBottom: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                  <AlertTriangle size={20} color="#fbbf24" />
-                  <span style={{ fontWeight: '700', color: '#92400e', fontSize: '15px' }}>עובדים לא מזוהים — ניתן להקים או למחוק מהרשימה</span>
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '18px 20px', marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                  <AlertTriangle size={18} color="#f59e0b" />
+                  <span style={{ fontWeight: 700, color: '#92400e', fontSize: 14 }}>עובדים לא מזוהים — ניתן להקים או למחוק מהרשימה</span>
                 </div>
                 {unknownRows.map(row => (
-                  <div key={row.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', borderRadius: '10px', padding: '12px 16px', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: '600', color: '#374151' }}>{row.name}</span>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                  <div key={row.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', borderRadius: 10, padding: '10px 14px', marginBottom: 6 }}>
+                    <span style={{ fontWeight: 600, color: '#374151', fontSize: 13 }}>{row.name}</span>
+                    <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => { setShowAddEmp(true); setAddForm(f => ({ ...f, name: row.name })) }}
-                        style={{ background: '#fbbf24', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontWeight: '700', cursor: 'pointer', fontSize: '13px' }}>
+                        style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '5px 14px', fontWeight: 600, cursor: 'pointer', fontSize: 12 }}>
                         הקם עובד
                       </button>
                       <button onClick={() => deleteRow(row.id)}
-                        style={{ background: '#fee2e2', color: '#fb7185', border: 'none', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer' }}>
-                        <Trash2 size={14} />
+                        style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 8, padding: '5px 10px', cursor: 'pointer' }}>
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </div>
@@ -494,28 +473,29 @@ export default function Labor({ onBack }: Props) {
               </div>
             )}
 
+            {/* Parsed rows table */}
             {rows.length > 0 && (
               <>
                 <motion.div variants={fadeIn} initial="hidden" animate="visible">
-                <Card className="shadow-sm" style={{ overflow: 'hidden', marginBottom: '20px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: isMonthly ? '80px 1fr 70px 70px 70px 90px 110px 36px 36px' : '1fr 90px 90px 90px 110px 130px 36px 36px', padding: '12px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', overflow: 'hidden', marginBottom: 16 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMonthly ? '80px 1fr 70px 70px 70px 90px 110px 36px 36px' : '1fr 90px 90px 90px 110px 130px 36px 36px', padding: '12px 24px', borderBottom: '1px solid #f1f5f9', fontSize: 12, fontWeight: 700, color: '#94a3b8' }}>
                     {isMonthly && <span>תאריך</span>}
                     <span>עובד</span><span>100%</span><span>125%</span><span>150%</span><span>מחלקה</span><span>עלות מעביד</span><span></span><span></span>
                   </div>
                   {rows.map((row, i) => (
-                    <div key={row.id} style={{ display: 'grid', gridTemplateColumns: isMonthly ? '80px 1fr 70px 70px 70px 90px 110px 36px 36px' : '1fr 90px 90px 90px 110px 130px 36px 36px', alignItems: 'center', padding: '12px 24px', borderBottom: i < rows.length - 1 ? '1px solid #f1f5f9' : 'none', background: !row.found ? '#fef9f0' : i % 2 === 0 ? 'white' : '#fafafa' }}>
+                    <div key={row.id} style={{ display: 'grid', gridTemplateColumns: isMonthly ? '80px 1fr 70px 70px 70px 90px 110px 36px 36px' : '1fr 90px 90px 90px 110px 130px 36px 36px', alignItems: 'center', padding: '11px 24px', borderBottom: '1px solid #f8fafc', background: 'white' }}>
                       {isMonthly && (
-                        <span style={{ fontSize: '12px', color: '#64748b' }}>
+                        <span style={{ fontSize: 12, color: '#64748b' }}>
                           {row.date ? new Date(row.date + 'T12:00:00').toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' }) : '—'}
                         </span>
                       )}
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {!row.found && <AlertTriangle size={14} color="#fbbf24" />}
-                          <span style={{ fontWeight: '600', color: row.found ? '#374151' : '#92400e', fontSize: '14px' }}>{row.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {!row.found && <AlertTriangle size={13} color="#f59e0b" />}
+                          <span style={{ fontWeight: 600, color: row.found ? '#374151' : '#92400e', fontSize: 13 }}>{row.name}</span>
                         </div>
                         {row.found && row.employee && !shouldHideSalary(row.employee) && (
-                          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
                             {row.employee.wage_type === 'global'
                               ? `גלובלי: ₪${Math.round(row.employee.global_daily_rate).toLocaleString()}/חודש${row.employee.bonus ? ` + בונוס ₪${Math.round(row.employee.bonus).toLocaleString()}/חודש` : ''}`
                               : `₪${row.employee.hourly_rate}/ש׳${row.employee.bonus ? ` + בונוס ₪${row.employee.bonus}/ש׳` : ''}`
@@ -526,62 +506,62 @@ export default function Labor({ onBack }: Props) {
 
                       {row.editing ? (
                         <>
-                          <input type="number" value={row.hours_100} onChange={e => updateRow(row.id, 'hours_100', e.target.value)} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', width: '60px' }} />
-                          <input type="number" value={row.hours_125} onChange={e => updateRow(row.id, 'hours_125', e.target.value)} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', width: '60px' }} />
-                          <input type="number" value={row.hours_150} onChange={e => updateRow(row.id, 'hours_150', e.target.value)} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', width: '60px' }} />
-                          <span style={{ fontSize: '12px', color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
-                          <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>
+                          <input type="number" value={row.hours_100} onChange={e => updateRow(row.id, 'hours_100', e.target.value)} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 6px', fontSize: 13, width: 60 }} />
+                          <input type="number" value={row.hours_125} onChange={e => updateRow(row.id, 'hours_125', e.target.value)} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 6px', fontSize: 13, width: 60 }} />
+                          <input type="number" value={row.hours_150} onChange={e => updateRow(row.id, 'hours_150', e.target.value)} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 6px', fontSize: 13, width: 60 }} />
+                          <span style={{ fontSize: 12, color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
+                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>
                             {row.employee ? (shouldHideSalary(row.employee) ? '—' : '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150, workingDays).total.toFixed(0)) : '—'}
                           </span>
-                          <button onClick={() => saveRowEdit(row.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 6px', cursor: 'pointer' }}>
-                            <Check size={14} />
+                          <button onClick={() => saveRowEdit(row.id)} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}>
+                            <Check size={13} />
                           </button>
-                          <button onClick={() => deleteRow(row.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                            <Trash2 size={14} color="#fb7185" />
+                          <button onClick={() => deleteRow(row.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+                            <Trash2 size={13} color="#94a3b8" />
                           </button>
                         </>
                       ) : (
                         <>
-                          <span style={{ fontSize: '13px', color: '#64748b' }}>{row.hours_100}</span>
-                          <span style={{ fontSize: '13px', color: row.hours_125 > 0 ? '#fbbf24' : '#64748b', fontWeight: row.hours_125 > 0 ? '600' : '400' }}>{row.hours_125 || '—'}</span>
-                          <span style={{ fontSize: '13px', color: row.hours_150 > 0 ? '#fb7185' : '#64748b', fontWeight: row.hours_150 > 0 ? '600' : '400' }}>{row.hours_150 || '—'}</span>
-                          <span style={{ fontSize: '12px', color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
-                          <span style={{ fontWeight: '700', color: row.found ? '#0f172a' : '#94a3b8', fontSize: '14px' }}>
+                          <span style={{ fontSize: 13, color: '#64748b' }}>{row.hours_100}</span>
+                          <span style={{ fontSize: 13, color: row.hours_125 > 0 ? '#f59e0b' : '#94a3b8', fontWeight: row.hours_125 > 0 ? 600 : 400 }}>{row.hours_125 || '—'}</span>
+                          <span style={{ fontSize: 13, color: row.hours_150 > 0 ? '#ef4444' : '#94a3b8', fontWeight: row.hours_150 > 0 ? 600 : 400 }}>{row.hours_150 || '—'}</span>
+                          <span style={{ fontSize: 12, color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
+                          <span style={{ fontWeight: 700, color: row.found ? '#0f172a' : '#94a3b8', fontSize: 13 }}>
                             {row.found && row.employee ? (shouldHideSalary(row.employee) ? '—' : '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150, workingDays).total.toFixed(0)) : '—'}
                           </span>
-                          <button onClick={() => startEdit(row.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                            <Pencil size={14} color="#94a3b8" />
+                          <button onClick={() => startEdit(row.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+                            <Pencil size={13} color="#94a3b8" />
                           </button>
-                          <button onClick={() => deleteRow(row.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                            <Trash2 size={14} color="#fb7185" />
+                          <button onClick={() => deleteRow(row.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+                            <Trash2 size={13} color="#94a3b8" />
                           </button>
                         </>
                       )}
                     </div>
                   ))}
-                </Card>
+                </div>
                 </motion.div>
 
                 {/* Duplicate dates warning */}
                 {showDuplicateWarning && duplicateDates.length > 0 && (
-                  <div style={{ background: '#fef3c7', border: '1.5px solid #fde68a', borderRadius: '14px', padding: '16px 20px', marginBottom: '14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                      <AlertTriangle size={18} color="#f59e0b" />
-                      <span style={{ fontWeight: '700', color: '#92400e', fontSize: '14px' }}>
+                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '14px 18px', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <AlertTriangle size={16} color="#f59e0b" />
+                      <span style={{ fontWeight: 700, color: '#92400e', fontSize: 13 }}>
                         נמצאו נתונים קיימים ל-{duplicateDates.length} {duplicateDates.length === 1 ? 'יום' : 'ימים'}
                       </span>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#78350f', marginBottom: '12px' }}>
+                    <div style={{ fontSize: 12, color: '#78350f', marginBottom: 10 }}>
                       {duplicateDates.slice(0, 5).map(d => new Date(d + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })).join(' · ')}
                       {duplicateDates.length > 5 && ` ועוד ${duplicateDates.length - 5}...`}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => { setReplaceMode(true); setShowDuplicateWarning(false) }}
-                        style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Trash2 size={14} />מחק קיימים והחלף
+                        style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: 8, padding: '7px 14px', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Trash2 size={13} />מחק קיימים והחלף
                       </button>
                       <button onClick={() => { setRows([]); setShowDuplicateWarning(false); setDuplicateDates([]) }}
-                        style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+                        style={{ background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 14px', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
                         בטל העלאה
                       </button>
                     </div>
@@ -589,22 +569,22 @@ export default function Labor({ onBack }: Props) {
                 )}
 
                 {replaceMode && duplicateDates.length > 0 && (
-                  <div style={{ background: '#fff1f2', border: '1.5px solid #fecdd3', borderRadius: '12px', padding: '12px 20px', marginBottom: '12px', fontSize: '13px', color: '#dc2626', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <AlertTriangle size={16} />
+                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 18px', marginBottom: 12, fontSize: 12, color: '#dc2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <AlertTriangle size={14} />
                     שים לב: הנתונים הקיימים ל-{duplicateDates.length} ימים יימחקו ויוחלפו בנתונים החדשים
                   </div>
                 )}
 
                 {saved && savedInfo && (
-                  <div style={{ background: '#d1fae5', border: '1.5px solid #6ee7b7', borderRadius: '14px', padding: '20px 24px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
-                    <div style={{ fontWeight: '800', fontSize: '18px', color: '#065f46', marginBottom: '4px' }}>
+                  <div style={{ background: 'white', border: '1px solid #d1fae5', borderRadius: 12, padding: '20px 24px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: '#065f46', marginBottom: 4 }}>
                       נשמרו {savedInfo.count} רשומות בהצלחה
                     </div>
-                    <div style={{ fontSize: '13px', color: '#047857' }}>
+                    <div style={{ fontSize: 13, color: '#047857' }}>
                       {savedInfo.dateCount} {savedInfo.dateCount === 1 ? 'יום' : 'ימים'} · {new Set(rows.map(r => r.name)).size || savedInfo.count} עובדים
                     </div>
-                    <button onClick={() => setTab('history')} style={{ marginTop: '12px', background: '#059669', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 20px', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+                    <button onClick={() => setTab('history')} style={{ marginTop: 12, background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '7px 18px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
                       צפה בהיסטוריה
                     </button>
                   </div>
@@ -612,13 +592,13 @@ export default function Labor({ onBack }: Props) {
 
                 {!showDuplicateWarning && !saved && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ background: '#0f172a', color: 'white', borderRadius: '12px', padding: '12px 24px', fontWeight: '800', fontSize: '18px' }}>
+                    <div style={{ background: 'white', borderRadius: 12, padding: '12px 24px', fontWeight: 700, fontSize: 16, color: '#0f172a', border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                       סה"כ עלות מעביד: ₪{totalCost.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      {isMonthly && <span style={{ fontSize: '13px', fontWeight: '500', marginRight: '12px', opacity: 0.7 }}>{knownRows.length} רשומות</span>}
+                      {isMonthly && <span style={{ fontSize: 12, fontWeight: 500, marginRight: 12, color: '#94a3b8' }}>{knownRows.length} רשומות</span>}
                     </div>
                     <button onClick={handleSave} disabled={saving || knownRows.length === 0}
-                      style={{ background: saving || knownRows.length === 0 ? '#e2e8f0' : replaceMode ? '#dc2626' : '#818cf8', color: knownRows.length > 0 ? 'white' : '#94a3b8', border: 'none', borderRadius: '12px', padding: '12px 32px', fontWeight: '700', fontSize: '16px', cursor: knownRows.length > 0 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {saving ? 'שומר...' : replaceMode ? <><Save size={18} />מחק והחלף</> : <><Save size={18} />אשר ושמור</>}
+                      style={{ background: saving || knownRows.length === 0 ? '#e2e8f0' : replaceMode ? '#dc2626' : '#6366f1', color: knownRows.length > 0 ? 'white' : '#94a3b8', border: 'none', borderRadius: 10, padding: '10px 28px', fontWeight: 700, fontSize: 15, cursor: knownRows.length > 0 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {saving ? 'שומר...' : replaceMode ? <><Save size={16} />מחק והחלף</> : <><Save size={16} />אשר ושמור</>}
                     </button>
                   </div>
                 )}
@@ -629,7 +609,6 @@ export default function Labor({ onBack }: Props) {
 
         {/* ═══ HISTORY TAB ═══ */}
         {tab === 'history' && (() => {
-          // Group history by date
           const byDate = new Map<string, typeof historyData>()
           for (const row of historyData) {
             const d = row.date
@@ -642,11 +621,11 @@ export default function Labor({ onBack }: Props) {
 
           return (
             <>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
                 <input type="month" value={historyMonth} onChange={e => setHistoryMonth(e.target.value)}
-                  style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '8px 14px', fontSize: '14px', fontFamily: 'inherit' }} />
-                <div style={{ marginRight: 'auto', display: 'flex', gap: '16px', fontSize: '13px', color: '#64748b' }}>
-                  <span>סה"כ: <strong style={{ color: '#818cf8' }}>₪{Math.round(totalCostAll).toLocaleString()}</strong></span>
+                  style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '8px 14px', fontSize: 14, fontFamily: 'inherit' }} />
+                <div style={{ marginRight: 'auto', display: 'flex', gap: 16, fontSize: 13, color: '#64748b' }}>
+                  <span>סה"כ: <strong style={{ color: '#0f172a' }}>₪{Math.round(totalCostAll).toLocaleString()}</strong></span>
                   <span>שעות: <strong>{totalHoursAll.toFixed(1)}</strong></span>
                   <span>ימים: <strong>{dates.length}</strong></span>
                   <span>רשומות: <strong>{historyData.length}</strong></span>
@@ -654,9 +633,9 @@ export default function Labor({ onBack }: Props) {
               </div>
 
               {historyLoading ? (
-                <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>טוען...</div>
+                <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>טוען...</div>
               ) : dates.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '48px', color: '#94a3b8' }}>אין נתונים לחודש זה</div>
+                <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>אין נתונים לחודש זה</div>
               ) : (
                 <motion.div variants={fadeIn} initial="hidden" animate="visible">
                   {dates.map(d => {
@@ -670,61 +649,61 @@ export default function Labor({ onBack }: Props) {
                     const dateStr = dateObj.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })
 
                     return (
-                      <Card key={d} className="shadow-sm" style={{ marginBottom: '8px', overflow: 'hidden' }}>
+                      <div key={d} style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginBottom: 8, overflow: 'hidden' }}>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                           <button onClick={() => setExpandedDate(isOpen ? null : d)}
-                            style={{ flex: 1, display: 'grid', gridTemplateColumns: '80px 1fr 100px 100px 30px', alignItems: 'center', padding: '14px 20px', background: 'white', border: 'none', cursor: 'pointer', fontSize: '13px', textAlign: 'right' }}>
-                            <span style={{ fontWeight: '700', color: '#0f172a' }}>{dayName} {dateStr}</span>
-                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>{dayEmps} עובדים · {dayHours.toFixed(1)} ש׳</span>
-                            <span style={{ fontWeight: '700', color: '#818cf8' }}>₪{Math.round(dayCost).toLocaleString()}</span>
+                            style={{ flex: 1, display: 'grid', gridTemplateColumns: '80px 1fr 100px 100px 30px', alignItems: 'center', padding: '13px 20px', background: 'white', border: 'none', cursor: 'pointer', fontSize: 13, textAlign: 'right' }}>
+                            <span style={{ fontWeight: 700, color: '#0f172a' }}>{dayName} {dateStr}</span>
+                            <span style={{ fontSize: 12, color: '#94a3b8' }}>{dayEmps} עובדים · {dayHours.toFixed(1)} ש׳</span>
+                            <span style={{ fontWeight: 700, color: '#0f172a' }}>₪{Math.round(dayCost).toLocaleString()}</span>
                             <span />
-                            {isOpen ? <ChevronUp size={16} color="#94a3b8" /> : <ChevronDown size={16} color="#94a3b8" />}
+                            {isOpen ? <ChevronUp size={15} color="#94a3b8" /> : <ChevronDown size={15} color="#94a3b8" />}
                           </button>
                           <button onClick={(e) => { e.stopPropagation(); deleteHistoryDay(d) }}
                             style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '8px 12px' }}
                             title="מחק יום">
-                            <Trash2 size={14} color="#fb7185" />
+                            <Trash2 size={13} color="#94a3b8" />
                           </button>
                         </div>
 
                         {isOpen && (
-                          <div style={{ borderTop: '1px solid #e2e8f0' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 60px 60px 90px 60px', padding: '8px 20px', background: '#f8fafc', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
+                          <div style={{ borderTop: '1px solid #f1f5f9' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 60px 60px 90px 60px', padding: '8px 20px', fontSize: 11, fontWeight: 700, color: '#94a3b8' }}>
                               <span>עובד</span><span>מחלקה</span><span>100%</span><span>125%</span><span>150%</span><span>עלות</span><span></span>
                             </div>
                             {dayRows.map((r: any, i: number) => (
-                              <div key={r.id || i} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 60px 60px 90px 60px', padding: '8px 20px', borderBottom: i < dayRows.length - 1 ? '1px solid #f1f5f9' : 'none', fontSize: '13px', alignItems: 'center' }}>
+                              <div key={r.id || i} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 60px 60px 90px 60px', padding: '8px 20px', borderBottom: '1px solid #f8fafc', fontSize: 13, alignItems: 'center' }}>
                                 {editHistId === r.id ? (
                                   <>
-                                    <span style={{ fontWeight: '600', color: '#374151' }}>{r.employee_name}</span>
-                                    <span style={{ fontSize: '11px', color: '#818cf8' }}>{deptOptions.find(x => x.value === r.entity_id)?.label || r.entity_id}</span>
+                                    <span style={{ fontWeight: 600, color: '#374151' }}>{r.employee_name}</span>
+                                    <span style={{ fontSize: 11, color: '#64748b' }}>{deptOptions.find(x => x.value === r.entity_id)?.label || r.entity_id}</span>
                                     <input type="number" value={editHistData.hours_100 ?? ''} onChange={e => setEditHistData({ ...editHistData, hours_100: parseFloat(e.target.value) || 0 })}
-                                      style={{ border: '1px solid #818cf8', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', width: '50px' }} />
+                                      style={{ border: '1px solid #6366f1', borderRadius: 4, padding: '2px 4px', fontSize: 12, width: 50 }} />
                                     <input type="number" value={editHistData.hours_125 ?? ''} onChange={e => setEditHistData({ ...editHistData, hours_125: parseFloat(e.target.value) || 0 })}
-                                      style={{ border: '1px solid #818cf8', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', width: '50px' }} />
+                                      style={{ border: '1px solid #6366f1', borderRadius: 4, padding: '2px 4px', fontSize: 12, width: 50 }} />
                                     <input type="number" value={editHistData.hours_150 ?? ''} onChange={e => setEditHistData({ ...editHistData, hours_150: parseFloat(e.target.value) || 0 })}
-                                      style={{ border: '1px solid #818cf8', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', width: '50px' }} />
+                                      style={{ border: '1px solid #6366f1', borderRadius: 4, padding: '2px 4px', fontSize: 12, width: 50 }} />
                                     <span />
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                      <button onClick={saveHistoryEdit} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}><Check size={12} /></button>
-                                      <button onClick={() => setEditHistId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}><X size={12} /></button>
+                                    <div style={{ display: 'flex', gap: 4 }}>
+                                      <button onClick={saveHistoryEdit} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 4, padding: '2px 6px', cursor: 'pointer' }}><Check size={12} /></button>
+                                      <button onClick={() => setEditHistId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 4, padding: '2px 6px', cursor: 'pointer' }}><X size={12} /></button>
                                     </div>
                                   </>
                                 ) : (
                                   <>
-                                    <span style={{ fontWeight: '600', color: '#374151' }}>{r.employee_name}</span>
-                                    <span style={{ fontSize: '11px', color: '#818cf8' }}>{deptOptions.find(x => x.value === r.entity_id)?.label || r.entity_id}</span>
+                                    <span style={{ fontWeight: 600, color: '#374151' }}>{r.employee_name}</span>
+                                    <span style={{ fontSize: 11, color: '#64748b' }}>{deptOptions.find(x => x.value === r.entity_id)?.label || r.entity_id}</span>
                                     <span style={{ color: '#64748b' }}>{r.hours_100 || '—'}</span>
-                                    <span style={{ color: r.hours_125 > 0 ? '#f59e0b' : '#d1d5db', fontWeight: r.hours_125 > 0 ? '600' : '400' }}>{r.hours_125 || '—'}</span>
-                                    <span style={{ color: r.hours_150 > 0 ? '#fb7185' : '#d1d5db', fontWeight: r.hours_150 > 0 ? '600' : '400' }}>{r.hours_150 || '—'}</span>
-                                    <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '12px' }}>
+                                    <span style={{ color: r.hours_125 > 0 ? '#f59e0b' : '#d1d5db', fontWeight: r.hours_125 > 0 ? 600 : 400 }}>{r.hours_125 || '—'}</span>
+                                    <span style={{ color: r.hours_150 > 0 ? '#ef4444' : '#d1d5db', fontWeight: r.hours_150 > 0 ? 600 : 400 }}>{r.hours_150 || '—'}</span>
+                                    <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 12 }}>
                                       {shouldHideSalary(allEmployees.find(e => e.name === r.employee_name)) ? '—' : `₪${Math.round(r.employer_cost || 0).toLocaleString()}`}
                                     </span>
-                                    <div style={{ display: 'flex', gap: '2px' }}>
+                                    <div style={{ display: 'flex', gap: 2 }}>
                                       <button onClick={() => { setEditHistId(r.id); setEditHistData({ ...r }) }}
-                                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px' }}><Pencil size={12} color="#94a3b8" /></button>
+                                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2 }}><Pencil size={12} color="#94a3b8" /></button>
                                       <button onClick={() => deleteHistoryRow(r.id)}
-                                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px' }}><Trash2 size={12} color="#fb7185" /></button>
+                                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2 }}><Trash2 size={12} color="#94a3b8" /></button>
                                     </div>
                                   </>
                                 )}
@@ -732,7 +711,7 @@ export default function Labor({ onBack }: Props) {
                             ))}
                           </div>
                         )}
-                      </Card>
+                      </div>
                     )
                   })}
                 </motion.div>
@@ -741,98 +720,102 @@ export default function Labor({ onBack }: Props) {
           )
         })()}
 
+        {/* ═══ EMPLOYEES TAB ═══ */}
         {tab === 'employees' && (
           <>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-              <button onClick={() => setShowAddEmp(true)} style={{ background: '#818cf8', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 24px', fontWeight: '700', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Plus size={16} />הוסף עובד
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+              <button onClick={() => setShowAddEmp(true)} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 10, padding: '9px 20px', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Plus size={15} />הוסף עובד
               </button>
             </div>
             <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <div className="table-scroll"><Card className="shadow-sm" style={{ overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px 100px 40px 40px', padding: '12px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
-                <span>שם</span><span>מחלקה</span><span>סוג שכר</span><span>שכר</span><span>בונוס</span><span></span><span></span>
-              </div>
-              {employees.length === 0 ? (
-                <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין עובדים — הוסף עובד ראשון</div>
-              ) : employees.map((emp, i) => (
-                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px 100px 40px 40px', alignItems: 'center', padding: '13px 24px', borderBottom: i < employees.length - 1 ? '1px solid #f1f5f9' : 'none', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
-                  {editEmpId === emp.id ? (
-                    <>
-                      <input value={editEmpData.name || ''} onChange={e => setEditEmpData({ ...editEmpData, name: e.target.value })} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 8px', fontSize: '13px', textAlign: 'right' }} />
-                      <select value={editEmpData.department || ''} onChange={e => setEditEmpData({ ...editEmpData, department: e.target.value })} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px', fontSize: '12px' }}>
-                        {deptOptions.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-                      </select>
-                      <select value={editEmpData.wage_type || ''} onChange={e => setEditEmpData({ ...editEmpData, wage_type: e.target.value as any })} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px', fontSize: '12px' }}>
-                        <option value="hourly">שעתי</option>
-                        <option value="global">גלובאלי</option>
-                      </select>
-                      <input type="number" value={editEmpData.wage_type === 'global' ? (editEmpData.global_daily_rate || '') : (editEmpData.hourly_rate || '')} onChange={e => setEditEmpData(p => p.wage_type === 'global' ? { ...p, global_daily_rate: parseFloat(e.target.value) } : { ...p, hourly_rate: parseFloat(e.target.value) })} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 8px', fontSize: '13px' }} placeholder={editEmpData.wage_type === 'global' ? 'חודשי' : 'שעתי'} />
-                      <input type="number" value={editEmpData.bonus || ''} onChange={e => setEditEmpData({ ...editEmpData, bonus: parseFloat(e.target.value) })} style={{ border: '1px solid #818cf8', borderRadius: '6px', padding: '4px 8px', fontSize: '13px' }} placeholder={editEmpData.wage_type === 'hourly' ? 'בונוס/ש׳' : 'בונוס/חודש'} />
-                      <button onClick={() => handleEditEmployee(emp.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✓</button>
-                      <button onClick={() => setEditEmpId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✗</button>
-                    </>
-                  ) : (
-                    <>
-                      <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{emp.name}</span>
-                      <span style={{ fontSize: '12px', background: '#eff6ff', color: '#818cf8', padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>
-                        {deptOptions.find(d => d.value === emp.department)?.label}
-                      </span>
-                      <span style={{ fontSize: '11px', background: emp.wage_type === 'hourly' ? '#dbeafe' : '#d1fae5', color: emp.wage_type === 'hourly' ? '#1d4ed8' : '#065f46', padding: '2px 8px', borderRadius: '20px', fontWeight: '600', textAlign: 'center' }}>
-                        {emp.wage_type === 'hourly' ? 'שעתי' : 'גלובאלי'}
-                      </span>
-                      <span style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>
-                        {emp.wage_type === 'hourly'
-                          ? (emp.hourly_rate ? `₪${emp.hourly_rate}/ש׳` : '—')
-                          : (emp.global_daily_rate ? '₪' + Math.round(emp.global_daily_rate).toLocaleString() + '/חודש' : '—')}
-                      </span>
-                      <span style={{ fontSize: '12px', color: emp.bonus ? '#fbbf24' : '#d1d5db', fontWeight: '600' }}>
-                        {emp.bonus
-                          ? (emp.wage_type === 'hourly' ? `₪${emp.bonus}/ש׳` : '₪' + Math.round(emp.bonus).toLocaleString() + '/חודש')
-                          : '—'}
-                      </span>
-                      <button onClick={() => { setEditEmpId(emp.id); setEditEmpData(emp) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                        <Pencil size={15} color="#94a3b8" />
-                      </button>
-                      <button onClick={() => handleDeleteEmployee(emp.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
-                        <Trash2 size={15} color="#fb7185" />
-                      </button>
-                    </>
-                  )}
+            <div className="table-scroll">
+              <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px 100px 40px 40px', padding: '12px 24px', borderBottom: '1px solid #f1f5f9', fontSize: 12, fontWeight: 700, color: '#94a3b8' }}>
+                  <span>שם</span><span>מחלקה</span><span>סוג שכר</span><span>שכר</span><span>בונוס</span><span></span><span></span>
                 </div>
-              ))}
-            </Card></div>
+                {employees.length === 0 ? (
+                  <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>אין עובדים — הוסף עובד ראשון</div>
+                ) : employees.map((emp, i) => (
+                  <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px 100px 40px 40px', alignItems: 'center', padding: '12px 24px', borderBottom: '1px solid #f8fafc' }}>
+                    {editEmpId === emp.id ? (
+                      <>
+                        <input value={editEmpData.name || ''} onChange={e => setEditEmpData({ ...editEmpData, name: e.target.value })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 8px', fontSize: 13, textAlign: 'right' }} />
+                        <select value={editEmpData.department || ''} onChange={e => setEditEmpData({ ...editEmpData, department: e.target.value })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: 4, fontSize: 12 }}>
+                          {deptOptions.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                        </select>
+                        <select value={editEmpData.wage_type || ''} onChange={e => setEditEmpData({ ...editEmpData, wage_type: e.target.value as any })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: 4, fontSize: 12 }}>
+                          <option value="hourly">שעתי</option>
+                          <option value="global">גלובאלי</option>
+                        </select>
+                        <input type="number" value={editEmpData.wage_type === 'global' ? (editEmpData.global_daily_rate || '') : (editEmpData.hourly_rate || '')} onChange={e => setEditEmpData(p => p.wage_type === 'global' ? { ...p, global_daily_rate: parseFloat(e.target.value) } : { ...p, hourly_rate: parseFloat(e.target.value) })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 8px', fontSize: 13 }} placeholder={editEmpData.wage_type === 'global' ? 'חודשי' : 'שעתי'} />
+                        <input type="number" value={editEmpData.bonus || ''} onChange={e => setEditEmpData({ ...editEmpData, bonus: parseFloat(e.target.value) })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 8px', fontSize: 13 }} placeholder={editEmpData.wage_type === 'hourly' ? 'בונוס/ש׳' : 'בונוס/חודש'} />
+                        <button onClick={() => handleEditEmployee(emp.id)} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}>✓</button>
+                        <button onClick={() => setEditEmpId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}>✗</button>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontWeight: 600, color: '#374151', fontSize: 13 }}>{emp.name}</span>
+                        <span style={{ fontSize: 11, background: '#f1f5f9', color: '#64748b', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>
+                          {deptOptions.find(d => d.value === emp.department)?.label}
+                        </span>
+                        <span style={{ fontSize: 11, background: '#f1f5f9', color: '#64748b', padding: '2px 8px', borderRadius: 20, fontWeight: 600, textAlign: 'center' }}>
+                          {emp.wage_type === 'hourly' ? 'שעתי' : 'גלובאלי'}
+                        </span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                          {emp.wage_type === 'hourly'
+                            ? (emp.hourly_rate ? `₪${emp.hourly_rate}/ש׳` : '—')
+                            : (emp.global_daily_rate ? '₪' + Math.round(emp.global_daily_rate).toLocaleString() + '/חודש' : '—')}
+                        </span>
+                        <span style={{ fontSize: 12, color: emp.bonus ? '#64748b' : '#d1d5db', fontWeight: 600 }}>
+                          {emp.bonus
+                            ? (emp.wage_type === 'hourly' ? `₪${emp.bonus}/ש׳` : '₪' + Math.round(emp.bonus).toLocaleString() + '/חודש')
+                            : '—'}
+                        </span>
+                        <button onClick={() => { setEditEmpId(emp.id); setEditEmpData(emp) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+                          <Pencil size={14} color="#94a3b8" />
+                        </button>
+                        <button onClick={() => handleDeleteEmployee(emp.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+                          <Trash2 size={14} color="#94a3b8" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
             </motion.div>
           </>
         )}
       </div>
 
+      {/* Add employee modal */}
       {showAddEmp && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'white', borderRadius: '24px', padding: '32px', width: '480px', maxWidth: '90vw' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>הוספת עובד חדש</h2>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 28, width: 460, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>הוספת עובד חדש</h2>
               <button onClick={() => { setShowAddEmp(false); setAddForm(emptyForm) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                <X size={20} color="#64748b" />
+                <X size={18} color="#64748b" />
               </button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>שם עובד</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>שם עובד</label>
                 <input value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} style={inpStyle} placeholder="שם מלא..." />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>מספר עובד</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>מספר עובד</label>
                 <input value={addForm.employee_number} onChange={e => setAddForm(f => ({ ...f, employee_number: e.target.value }))} style={inpStyle} placeholder="אופציונלי" />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>מחלקה</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>מחלקה</label>
                 <select value={addForm.department} onChange={e => setAddForm(f => ({ ...f, department: e.target.value }))} style={{ ...inpStyle, background: 'white' }}>
                   {deptOptions.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
                 </select>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>סוג שכר</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>סוג שכר</label>
                 <select value={addForm.wage_type} onChange={e => setAddForm(f => ({ ...f, wage_type: e.target.value as any }))} style={{ ...inpStyle, background: 'white' }}>
                   <option value="hourly">שעתי</option>
                   <option value="global">גלובאלי</option>
@@ -840,31 +823,31 @@ export default function Labor({ onBack }: Props) {
               </div>
               {addForm.wage_type === 'hourly' ? (
                 <>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>תעריף שעתי (₪)</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>תעריף שעתי (₪)</label>
                     <input type="number" value={addForm.hourly_rate} onChange={e => setAddForm(f => ({ ...f, hourly_rate: e.target.value }))} style={inpStyle} placeholder="0" />
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>בונוס שעתי (₪/ש׳) <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופציונלי)</span></label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>בונוס שעתי (₪/ש׳) <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופציונלי)</span></label>
                     <input type="number" value={addForm.bonus} onChange={e => setAddForm(f => ({ ...f, bonus: e.target.value }))} style={inpStyle} placeholder="0" />
-                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>סכום נוסף לשעה — לא מוכפל ב-×1.3</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>סכום נוסף לשעה — לא מוכפל ב-x1.3</span>
                   </div>
                 </>
               ) : (
                 <>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>משכורת חודשית (₪)</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>משכורת חודשית (₪)</label>
                     <input type="number" value={addForm.global_daily_rate} onChange={e => setAddForm(f => ({ ...f, global_daily_rate: e.target.value }))} style={inpStyle} placeholder="0" />
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>בונוס חודשי (₪) <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופציונלי)</span></label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>בונוס חודשי (₪) <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופציונלי)</span></label>
                     <input type="number" value={addForm.bonus} onChange={e => setAddForm(f => ({ ...f, bonus: e.target.value }))} style={inpStyle} placeholder="0" />
-                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>חישוב: (משכורת × 1.3) + בונוס</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>חישוב: (משכורת x 1.3) + בונוס</span>
                   </div>
                 </>
               )}
               <button onClick={handleAddEmployee} disabled={!addForm.name}
-                style={{ background: !addForm.name ? '#e2e8f0' : '#818cf8', color: !addForm.name ? '#94a3b8' : 'white', border: 'none', borderRadius: '12px', padding: '12px', fontSize: '16px', fontWeight: '700', cursor: addForm.name ? 'pointer' : 'not-allowed', marginTop: '8px' }}>
+                style={{ background: !addForm.name ? '#e2e8f0' : '#6366f1', color: !addForm.name ? '#94a3b8' : 'white', border: 'none', borderRadius: 10, padding: 12, fontSize: 15, fontWeight: 700, cursor: addForm.name ? 'pointer' : 'not-allowed', marginTop: 8 }}>
                 הוסף עובד
               </button>
             </div>

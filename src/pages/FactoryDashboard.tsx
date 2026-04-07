@@ -280,7 +280,7 @@ export default function FactoryDashboard({ onBack }: Props) {
 
   // ─── Loading State ──────────────────────────────────────────────────────
   if (loading) return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center" style={{ direction: 'rtl' }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ direction: 'rtl', background: '#f8fafc' }}>
       <div className="text-center py-16 text-slate-400">טוען נתונים...</div>
     </div>
   )
@@ -332,23 +332,21 @@ export default function FactoryDashboard({ onBack }: Props) {
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div className="min-h-screen" style={{ direction: 'rtl', background: '#f8fafc' }}>
 
       {/* ─── Header ───────────────────────────────────────────────────── */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
-          <Factory size={20} className="text-indigo-500" />
-        </div>
-        <div>
-          <h1 className="text-xl font-extrabold text-slate-900 m-0">דשבורד מפעל</h1>
-          <p className="text-[13px] text-slate-400 m-0">KPI · מכירות · עלויות · {period.label}</p>
-        </div>
-        <div className="mr-auto">
-          <PeriodPicker period={period} onChange={setPeriod} />
+      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div>
+              <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>דשבורד מפעל</h1>
+              <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>KPI · מכירות · עלויות · {period.label}</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <PeriodPicker period={period} onChange={setPeriod} />
+            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>{'\u2190'} חזרה</button>
+          </div>
         </div>
       </div>
 
@@ -359,46 +357,46 @@ export default function FactoryDashboard({ onBack }: Props) {
         <motion.div variants={fadeIn} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-2.5">
 
           {/* 1. Total Sales */}
-          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-            <div className="text-[11px] font-semibold text-slate-400 mb-1">מכירות כוללות</div>
+          <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>מכירות כוללות</div>
             <div className="flex items-center gap-2">
-              <span className="text-[22px] font-medium" style={{ color: '#378ADD' }}>{fmtM(totalSales)}</span>
+              <span style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{fmtM(totalSales)}</span>
               <DiffBadge current={totalSales} previous={prev.sales} />
             </div>
             {salesInternal > 0 && (
-              <div className="text-[11px] text-slate-400 mt-1">פנימיות: {fmtM(salesInternal)}</div>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>פנימיות: {fmtM(salesInternal)}</div>
             )}
           </div>
 
           {/* 2. Controllable Margin */}
-          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-            <div className="text-[11px] font-semibold text-slate-400 mb-1 cursor-help" title="מכירות פחות ספקים, לייבור, פחת ותיקונים">רווח נשלט</div>
+          <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4, cursor: 'help' }} title="מכירות פחות ספקים, לייבור, פחת ותיקונים">רווח נשלט</div>
             <div className="flex items-center gap-2">
-              <span className="text-[22px] font-medium" style={{ color: controllableMargin >= 0 ? '#639922' : '#E24B4A' }}>{fmtM(controllableMargin)}</span>
+              <span style={{ fontSize: 24, fontWeight: 700, color: controllableMargin >= 0 ? '#639922' : '#E24B4A' }}>{fmtM(controllableMargin)}</span>
               <DiffBadge current={controllableMargin} previous={prevControllable} />
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">{totalSales > 0 ? pct(controllableMargin, totalSales).toFixed(1) : '0.0'}% מהמכירות</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{totalSales > 0 ? pct(controllableMargin, totalSales).toFixed(1) : '0.0'}% מהמכירות</div>
           </div>
 
           {/* 3. Operating Profit */}
-          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-            <div className="text-[11px] font-semibold text-slate-400 mb-1">רווח תפעולי</div>
+          <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>רווח תפעולי</div>
             <div className="flex items-center gap-2">
-              <span className="text-[22px] font-medium" style={{ color: operatingProfit >= 0 ? '#639922' : '#E24B4A' }}>{fmtM(operatingProfit)}</span>
+              <span style={{ fontSize: 24, fontWeight: 700, color: operatingProfit >= 0 ? '#639922' : '#E24B4A' }}>{fmtM(operatingProfit)}</span>
               <DiffBadge current={operatingProfit} previous={prevOperatingProfit} />
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">{totalSales > 0 ? pct(operatingProfit, totalSales).toFixed(1) : '0.0'}% מהמכירות</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{totalSales > 0 ? pct(operatingProfit, totalSales).toFixed(1) : '0.0'}% מהמכירות</div>
           </div>
 
           {/* 4. Labor % */}
-          <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-            <div className="text-[11px] font-semibold text-slate-400 mb-1">% לייבור</div>
+          <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>% לייבור</div>
             <div className="flex items-center gap-2">
-              <span className="text-[22px] font-medium" style={{ color: '#534AB7' }}>{laborPct.toFixed(1)}%</span>
+              <span style={{ fontSize: 24, fontWeight: 700, color: '#6366f1' }}>{laborPct.toFixed(1)}%</span>
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
               יעד {targets.labor_pct.toFixed(0)}%
-              <span className="mr-1.5" style={{ color: laborPct <= targets.labor_pct ? '#639922' : '#E24B4A' }}>
+              <span style={{ marginRight: 6, color: laborPct <= targets.labor_pct ? '#639922' : '#E24B4A' }}>
                 ({laborPct <= targets.labor_pct ? 'עומד ביעד' : 'חורג'})
               </span>
             </div>
@@ -408,12 +406,11 @@ export default function FactoryDashboard({ onBack }: Props) {
 
         {/* ═══ ROW 2 — P&L Table ═══ */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5" transition={{ delay: 0.1 }}>
-          <Card className="shadow-sm">
-            <CardContent className="p-4">
-              <span className="text-[13px] font-bold text-slate-700 block mb-3">רווח והפסד — מפעל — {period.label}</span>
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 16 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: 12 }}>רווח והפסד — מפעל — {period.label}</span>
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50">
+                  <TableRow>
                     <TableHead className="text-xs font-bold text-slate-500 min-w-[140px]">מדד</TableHead>
                     <TableHead className="text-xs font-bold text-slate-500 text-center">סכום ₪</TableHead>
                     <TableHead className="text-xs font-bold text-slate-500 text-center">% מהכנסות</TableHead>
@@ -424,7 +421,7 @@ export default function FactoryDashboard({ onBack }: Props) {
                     if (row.type === 'separator') {
                       return (
                         <TableRow key={`sep-${i}`} className="h-1">
-                          <TableCell colSpan={3} className="p-0"><div className="border-t-2 border-slate-200" /></TableCell>
+                          <TableCell colSpan={3} className="p-0"><div style={{ borderTop: '1px solid #f1f5f9' }} /></TableCell>
                         </TableRow>
                       )
                     }
@@ -434,7 +431,7 @@ export default function FactoryDashboard({ onBack }: Props) {
                     const revPct = totalSales > 0 ? (row.amount / totalSales * 100) : 0
                     const pctColor = isProfit ? profitColor : '#64748b'
                     return (
-                      <TableRow key={row.label} className={isBold ? 'bg-slate-50' : ''}>
+                      <TableRow key={row.label} style={{ background: isBold ? '#fafafa' : 'transparent', borderBottom: '1px solid #f8fafc' }}>
                         <TableCell className={`px-3.5 py-2.5 text-[12px] ${isBold ? 'font-bold text-slate-800' : 'text-slate-600'}`}>
                           {row.label}
                         </TableCell>
@@ -449,8 +446,7 @@ export default function FactoryDashboard({ onBack }: Props) {
                   })}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </div>
         </motion.div>
 
         {/* ═══ ROW 3 — KPI Targets ═══ */}
@@ -463,11 +459,11 @@ export default function FactoryDashboard({ onBack }: Props) {
             const color = kpiColor(actual, target, true)
             const progressW = target > 0 ? Math.min((actual / target) * 100, 150) : 0
             return (
-              <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-                <div className="text-[11px] font-semibold text-slate-400 mb-1">% לייבור</div>
+              <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>% לייבור</div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-lg font-bold" style={{ color }}>{actual.toFixed(1)}%</span>
-                  <span className="text-[11px] text-slate-400">יעד {target.toFixed(0)}%</span>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>יעד {target.toFixed(0)}%</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(progressW, 100)}%`, backgroundColor: color }} />
@@ -483,11 +479,11 @@ export default function FactoryDashboard({ onBack }: Props) {
             const color = kpiColor(actual, target, true)
             const progressW = target > 0 ? Math.min((actual / target) * 100, 150) : 0
             return (
-              <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-                <div className="text-[11px] font-semibold text-slate-400 mb-1">% פחת</div>
+              <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>% פחת</div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-lg font-bold" style={{ color }}>{actual.toFixed(1)}%</span>
-                  <span className="text-[11px] text-slate-400">יעד {target.toFixed(0)}%</span>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>יעד {target.toFixed(0)}%</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(progressW, 100)}%`, backgroundColor: color }} />
@@ -503,11 +499,11 @@ export default function FactoryDashboard({ onBack }: Props) {
             const color = kpiColor(actual, target, false)
             const progressW = target > 0 ? Math.min((actual / target) * 100, 150) : 0
             return (
-              <div className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-                <div className="text-[11px] font-semibold text-slate-400 mb-1">% רווח תפעולי</div>
+              <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>% רווח תפעולי</div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-lg font-bold" style={{ color }}>{actual.toFixed(1)}%</span>
-                  <span className="text-[11px] text-slate-400">יעד {target.toFixed(0)}%</span>
+                  <span style={{ fontSize: 11, color: '#94a3b8' }}>יעד {target.toFixed(0)}%</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(progressW, 100)}%`, backgroundColor: color }} />
@@ -521,24 +517,22 @@ export default function FactoryDashboard({ onBack }: Props) {
         {/* ═══ ROW 4 — 6-Month Trend Chart ═══ */}
         {trendData.length > 0 && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5" transition={{ delay: 0.3 }}>
-            <Card className="shadow-sm">
-              <CardContent className="p-4">
-                <div className="text-[13px] font-bold text-slate-700 mb-3">מגמות מפעל — 6 חודשים</div>
+            <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>מגמות מפעל — 6 חודשים</div>
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={trendData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                     <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => `₪${(v / 1000).toFixed(0)}k`} />
                     <Tooltip formatter={(value: any, name: any) => [`₪${Math.round(Number(value)).toLocaleString()}`, String(name)]} />
                     <Legend />
                     <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
-                    <Line type="monotone" dataKey="revenue" name="מכירות" stroke="#378ADD" strokeWidth={2} dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="grossProfit" name="רווח נשלט" stroke="#639922" strokeWidth={2} dot={{ r: 3 }} />
-                    <Line type="monotone" dataKey="operatingProfit" name="רווח תפעולי" stroke="#534AB7" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="revenue" name="מכירות" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="grossProfit" name="רווח נשלט" stroke="#94a3b8" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="operatingProfit" name="רווח תפעולי" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
-              </CardContent>
-            </Card>
+            </div>
           </motion.div>
         )}
 
@@ -546,24 +540,20 @@ export default function FactoryDashboard({ onBack }: Props) {
         <motion.div variants={fadeIn} initial="hidden" animate="visible" className="grid grid-cols-2 gap-2.5 mb-2.5" transition={{ delay: 0.4 }}>
 
           {/* Sales by Department */}
-          <Card className="shadow-sm">
-            <CardContent className="p-4">
-              <div className="text-[13px] font-bold text-slate-700 mb-3">מכירות לפי מחלקה</div>
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>מכירות לפי מחלקה</div>
               {salesItems.map(item => (
-                <ProgressRow key={item.label} label={item.label} value={item.value} max={maxSale} color="#378ADD" />
+                <ProgressRow key={item.label} label={item.label} value={item.value} max={maxSale} color="#6366f1" />
               ))}
-            </CardContent>
-          </Card>
+          </div>
 
           {/* Costs */}
-          <Card className="shadow-sm">
-            <CardContent className="p-4">
-              <div className="text-[13px] font-bold text-slate-700 mb-3">עלויות</div>
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>עלויות</div>
               {costItems.map(item => (
-                <ProgressRow key={item.label} label={item.label} value={item.value} max={maxCost} color="#E24B4A" />
+                <ProgressRow key={item.label} label={item.label} value={item.value} max={maxCost} color="#94a3b8" />
               ))}
-            </CardContent>
-          </Card>
+          </div>
 
         </motion.div>
 
