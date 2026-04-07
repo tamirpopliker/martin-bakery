@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useBranches } from '../lib/BranchContext'
-import { ArrowRight, Plus, Save, Bell, BellOff, History, AlertTriangle, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Plus, Save, Bell, BellOff, History, AlertTriangle, ToggleLeft, ToggleRight } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -177,23 +178,14 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
   // ─── Render ───────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
-      {/* Header */}
-      <div style={{ background: 'white', padding: '16px 32px', display: 'flex', alignItems: 'center', gap: '16px', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
-        <Button variant="outline" size="lg" onClick={onBack} style={{ borderRadius: '12px', padding: '8px 20px', fontSize: '14px', fontWeight: 600, color: '#64748b' }}>
-          <ArrowRight size={20} /> חזרה
-        </Button>
-        <div>
-          <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', margin: 0 }}>ניהול התראות</h1>
-          <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>כללי התרע�� · לוג · {rules.length} כללים</p>
-        </div>
-        <div style={{ flex: 1 }} />
-        {tab === 'rules' && (
+      <PageHeader title="התראות" onBack={onBack} action={
+        tab === 'rules' ? (
           <button onClick={openNew}
             style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
             <Plus size={16} /> הוסף התרעה
           </button>
-        )}
-      </div>
+        ) : undefined
+      } />
 
       <div style={{ padding: '28px 36px', maxWidth: '1100px', margin: '0 auto' }}>
 

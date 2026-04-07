@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { Button } from '@/components/ui/button'
-import { ArrowRight, Calendar, History } from 'lucide-react'
+import { Calendar } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } }
 
@@ -77,20 +77,7 @@ export default function ScheduleHistory({ branchId, branchName, branchColor, onB
   return (
     <motion.div dir="rtl" initial="hidden" animate="visible" variants={fadeIn}
       style={{ padding: '16px', maxWidth: '800px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowRight style={{ width: '18px', height: '18px' }} />
-        </Button>
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <History size={22} style={{ color: '#6366f1' }} />
-            {'\u05D4\u05D9\u05E1\u05D8\u05D5\u05E8\u05D9\u05D9\u05EA \u05E1\u05D9\u05D3\u05D5\u05E8\u05D9\u05DD'}
-          </h1>
-          <span style={{ fontSize: '13px', color: '#64748b' }}>{branchName}</span>
-        </div>
-        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: branchColor }} />
-      </div>
+      <PageHeader title="היסטוריית סידורים" subtitle={branchName} onBack={onBack} />
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '48px 0', color: '#94a3b8' }}>{'\u05D8\u05D5\u05E2\u05DF...'}</div>

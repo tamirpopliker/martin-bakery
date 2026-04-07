@@ -3,7 +3,8 @@ import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Plus, Pencil, Trash2, Search, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { RevenueIcon } from '@/components/icons'
 import { detectBranchId, getBranchNameById } from '../lib/internalCustomers'
 import { useBranches } from '../lib/BranchContext'
@@ -222,22 +223,7 @@ export default function FactoryB2B({ onBack }: Props) {
   return (
     <div className="min-h-screen" style={{ direction: 'rtl', background: '#f8fafc' }}>
 
-      {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>מכירות</h1>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>קרמים · בצקים · B2B · שונות</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 8, padding: '6px 14px' }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>₪{total.toLocaleString()}</span>
-              <span style={{ fontSize: 12, color: '#94a3b8', marginRight: 6 }}>סה"כ</span>
-            </div>
-            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>{'\u2190'} חזרה</button>
-          </div>
-        </div>
-      </div>
+      <PageHeader title={`מכירות — ${cfg.label}`} onBack={onBack} />
 
       {/* ─── טאבים ───────────────────────────────────────────────────────── */}
       <div className="flex px-8 bg-white border-b border-slate-200">

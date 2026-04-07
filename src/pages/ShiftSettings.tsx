@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ArrowRight, Plus, X, Check, AlertCircle } from 'lucide-react'
+import { Plus, X, Check, AlertCircle } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 
 interface Props {
   branchId: number
@@ -103,20 +104,7 @@ export default function ShiftSettings({ branchId, branchName, branchColor, onBac
   return (
     <motion.div dir="rtl" initial="hidden" animate="visible" variants={fadeIn}
       style={{ padding: '24px 16px', maxWidth: '900px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px' }}>
-        <button onClick={onBack}
-          style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-          <ArrowRight style={{ width: '18px', height: '18px', color: '#64748b' }} />
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: branchColor }} />
-          <div>
-            <h1 style={{ fontSize: '20px', fontWeight: '700', margin: 0, color: '#1e293b' }}>הגדרות משמרות</h1>
-            <span style={{ fontSize: '13px', color: '#94a3b8' }}>{branchName}</span>
-          </div>
-        </div>
-      </div>
+      <PageHeader title="הגדרות משמרות" subtitle={branchName} onBack={onBack} />
 
       {/* Tab navigation */}
       <div style={{ display: 'flex', gap: '0', marginBottom: '24px', borderBottom: '1px solid #f1f5f9' }}>

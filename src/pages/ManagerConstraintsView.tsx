@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 
 const fadeIn = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.35 } } }
 
@@ -116,18 +117,7 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6" dir="rtl">
-      {/* Header */}
-      <motion.div variants={fadeIn} initial="hidden" animate="visible" className="flex items-center gap-3 mb-5">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2 px-4 text-[15px] font-bold text-slate-500">
-          <ArrowRight size={18} /> חזרה
-        </Button>
-        <div className="flex-1 text-center">
-          <h1 className="text-xl font-bold text-slate-800">זמינות הצוות — {branchName}</h1>
-        </div>
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: branchColor }}>
-          <span className="text-white text-lg">📋</span>
-        </div>
-      </motion.div>
+      <PageHeader title="זמינות הצוות" subtitle={branchName} onBack={onBack} />
 
       {/* Week nav */}
       <motion.div variants={fadeIn} initial="hidden" animate="visible"

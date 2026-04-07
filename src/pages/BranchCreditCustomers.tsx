@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ArrowRight, CreditCard, Plus, Pencil, Trash2, ChevronDown, ChevronUp, DollarSign, AlertTriangle } from 'lucide-react'
+import { CreditCard, Plus, Pencil, Trash2, ChevronDown, ChevronUp, DollarSign, AlertTriangle } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 
 interface Props {
   branchId: number
@@ -172,27 +173,15 @@ export default function BranchCreditCustomers({ branchId, branchName, branchColo
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      {/* Header */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div>
-              <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>לקוחות הקפה</h1>
-              <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
-            </div>
-            {totalDebt > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 16 }}>
-                <AlertTriangle size={14} color="#ef4444" />
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#ef4444' }}>₪{Math.round(totalDebt).toLocaleString()}</span>
-                <span style={{ fontSize: 11, color: '#94a3b8' }}>חוב פתוח</span>
-              </div>
-            )}
+      <PageHeader title="לקוחות הקפה" subtitle={branchName} onBack={onBack} action={
+        totalDebt > 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <AlertTriangle size={14} color="#ef4444" />
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#ef4444' }}>₪{Math.round(totalDebt).toLocaleString()}</span>
+            <span style={{ fontSize: 11, color: '#94a3b8' }}>חוב פתוח</span>
           </div>
-          <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ArrowRight size={14} /> חזרה</span>
-          </button>
-        </div>
-      </div>
+        ) : undefined
+      } />
 
       {/* Tabs */}
       <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '0 20px', display: 'flex', gap: 0 }}>

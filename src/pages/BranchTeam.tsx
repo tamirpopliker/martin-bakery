@@ -1,6 +1,6 @@
-import { Users, CalendarCheck, History, Clock, ClipboardList, Calendar, Settings, Mail, ArrowRight } from 'lucide-react'
+import { Users, CalendarCheck, History, Clock, ClipboardList, Calendar, Settings, Mail } from 'lucide-react'
 import { useAppUser } from '../lib/UserContext'
-import { Button } from '@/components/ui/button'
+import PageHeader from '../components/PageHeader'
 
 interface Props {
   branchId: number
@@ -44,15 +44,7 @@ export default function BranchTeam({ branchName, branchColor, onBack, onNavigate
   const isManagerOrAdmin = appUser?.role === 'admin' || appUser?.role === 'branch'
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
-      {/* Header */}
-      <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: 16, borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2 px-4 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={18} /> חזרה
-        </Button>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1e293b' }}>ניהול צוות — {branchName}</h1>
-        </div>
-      </div>
+      <PageHeader title="ניהול צוות" subtitle={branchName} onBack={onBack} />
 
       {/* Category cards */}
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 16px' }}>

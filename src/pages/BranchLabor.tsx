@@ -3,7 +3,8 @@ import { motion } from 'framer-motion'
 import { supabase, fetchBranchLaborTrend, BranchLaborTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Plus, Pencil, Trash2, CheckCircle, AlertTriangle, FileText, Eye, HelpCircle, BarChart3 } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
+import { Plus, Pencil, Trash2, CheckCircle, AlertTriangle, FileText, Eye, HelpCircle, BarChart3 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts'
 import { parseWorkingHoursPDF } from '../lib/parseWorkingHours'
 
@@ -710,22 +711,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      {/* Header */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: '12px' }}>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>לייבור</h1>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const }}>
-            <PeriodPicker period={period} onChange={setPeriod} />
-            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
-              <ArrowRight size={14} style={{ verticalAlign: 'middle', marginLeft: 4 }} />
-              חזרה
-            </button>
-          </div>
-        </div>
-      </div>
+      <PageHeader title="לייבור" subtitle={branchName} onBack={onBack} />
 
       {/* KPI bar */}
       <div style={{ padding: '0 20px', maxWidth: '1000px', margin: '0 auto 16px' }}>

@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 
 const fadeIn = (delay = 0) => ({
   hidden: { opacity: 0, y: 14 },
@@ -291,16 +292,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }} dir="rtl">
       <div className="max-w-lg mx-auto px-4 py-6">
-        {/* Header */}
-        <motion.div variants={fadeIn(0)} initial="hidden" animate="visible" className="flex items-center gap-3 mb-6">
-          <Button variant="outline" size="sm" onClick={onBack} className="rounded-xl gap-1 px-3">
-            <ArrowRight size={16} /> חזרה
-          </Button>
-          <div className="flex-1 text-center">
-            <h1 className="text-xl font-bold text-slate-800">הזמינות שלי</h1>
-            {branchName && <p className="text-xs text-slate-400 mt-0.5">{branchName}</p>}
-          </div>
-        </motion.div>
+        <PageHeader title="הזמינות שלי" subtitle={branchName} onBack={onBack} />
 
         {/* Tab toggle */}
         <motion.div variants={fadeIn(0.05)} initial="hidden" animate="visible" className="flex items-center justify-center gap-2 mb-5">

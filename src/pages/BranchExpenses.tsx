@@ -3,7 +3,8 @@ import { motion } from 'framer-motion'
 import { supabase, fetchBranchExpensesTrend, BranchExpensesTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Plus, Pencil, Trash2, Search, X, Factory, AlertTriangle, Info } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
+import { Plus, Pencil, Trash2, Search, X, Factory, AlertTriangle, Info } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface Props {
@@ -262,26 +263,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
-      {/* Header */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: '12px' }}>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>הוצאות</h1>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const }}>
-            <PeriodPicker period={period} onChange={setPeriod} />
-            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '8px 18px', textAlign: 'center' as const }}>
-              <div style={{ fontSize: '20px', fontWeight: '700', color: '#fb7185' }}>₪{totalAll.toLocaleString()}</div>
-              <div style={{ fontSize: '12px', color: '#94a3b8' }}>סה"כ</div>
-            </div>
-            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
-              <ArrowRight size={14} style={{ verticalAlign: 'middle', marginLeft: 4 }} />
-              חזרה
-            </button>
-          </div>
-        </div>
-      </div>
+      <PageHeader title="הוצאות" subtitle={branchName} onBack={onBack} />
 
       <div style={{ padding: '0 20px 24px', maxWidth: '1000px', margin: '0 auto' }}>
 

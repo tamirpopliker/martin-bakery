@@ -3,7 +3,8 @@ import { motion } from 'framer-motion'
 import { supabase, fetchBranchRevenueTrend, BranchRevenueTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Plus, Pencil, Trash2, Search, X, ShoppingBag, CreditCard, Monitor, Upload, FileText, Check, AlertCircle, HelpCircle } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
+import { Plus, Pencil, Trash2, Search, X, ShoppingBag, CreditCard, Monitor, Upload, FileText, Check, AlertCircle, HelpCircle } from 'lucide-react'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { parseCashOnTabPDF, CashOnTabRow } from '../lib/parseCashOnTab'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
@@ -248,57 +249,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      {/* Header */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: '12px' }}>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>הכנסות</h1>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
-              <button onClick={() => { setPdfSheetOpen(true); setPdfRows([]); setPdfResult(null) }}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-                <Upload size={15} /> העלאת PDF קופה
-              </button>
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setHelpOpen(p => !p)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
-                  <HelpCircle size={18} color="#94a3b8" />
-                </button>
-                {helpOpen && (
-                  <>
-                    <div onClick={() => setHelpOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-                    <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: '8px', width: '320px', background: 'white', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0', padding: '16px', zIndex: 50, direction: 'rtl' }}>
-                      <div style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a', marginBottom: '12px' }}>איך להוריד את הקובץ מ-CashOnTab?</div>
-                      {[
-                        'היכנס למערכת CashOnTab של הסניף',
-                        'בתפריט הימני לחץ על "דוחות מכירות"',
-                        'בשדה "מחזור מכירות" בחר "דוח מכירות יומי"',
-                        'ב"רשימת קופות" — סמן את כל הקופות של הסניף',
-                        'בחר את טווח התאריכים הרצוי',
-                        'ב"בחר פורמט" בחר PDF',
-                        'לחץ "הפק דו״ח" ושמור את הקובץ',
-                        'חזור לכאן והעלה את הקובץ',
-                      ].map((step, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px', fontSize: '13px', color: '#374151', lineHeight: '1.5' }}>
-                          <span style={{ background: '#6366f1', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0, marginTop: '1px' }}>{i + 1}</span>
-                          <span>{step}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-            <PeriodPicker period={period} onChange={setPeriod} />
-            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
-              <ArrowRight size={14} style={{ verticalAlign: 'middle', marginLeft: 4 }} />
-              חזרה
-            </button>
-          </div>
-        </div>
-      </div>
+      <PageHeader title="הכנסות" subtitle={branchName} onBack={onBack} />
 
       {/* KPI summary cards */}
       <div style={{ padding: '0 20px', maxWidth: '1000px', margin: '0 auto 16px' }}>

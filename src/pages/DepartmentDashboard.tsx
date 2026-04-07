@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept, countWorkingDaysInRange } from '../lib/supabase'
 import type { GlobalEmployee } from '../lib/supabase'
-import { ArrowRight, TrendingUp, TrendingDown } from 'lucide-react'
+import { TrendingUp, TrendingDown } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { ProfitIcon } from '@/components/icons'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -222,19 +223,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
   return (
     <div className="min-h-screen" style={{ direction: 'rtl', background: '#f8fafc' }}>
 
-      {/* ── Header ── */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>דשבורד — {cfg.label}</h1>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>KPI · גרפים · פירוט</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <PeriodPicker period={globalPeriod} onChange={setGlobalPeriod} />
-            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>{'\u2190'} חזרה</button>
-          </div>
-        </div>
-      </div>
+      <PageHeader title="דשבורד מחלקה" subtitle={cfg.label} onBack={onBack} action={<PeriodPicker period={globalPeriod} onChange={setGlobalPeriod} />} />
 
       <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
 

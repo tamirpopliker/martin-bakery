@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 
 interface Props {
   department: 'creams' | 'dough' | 'packaging'
@@ -78,16 +79,7 @@ export default function FactoryWaste({ department, onBack }: Props) {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
-      {/* Header */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>פחת מפעל — {deptName[department]}</h1>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>הזנת פחת לפי קטגוריה</p>
-          </div>
-          <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>{'\u2190'} חזרה</button>
-        </div>
-      </div>
+      <PageHeader title="פחת מפעל" subtitle={deptName[department]} onBack={onBack} />
 
       <div style={{ padding: '0 20px 28px', maxWidth: 900, margin: '0 auto' }}>
         {/* Add form card */}

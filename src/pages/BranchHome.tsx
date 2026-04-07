@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ArrowRight, ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package } from 'lucide-react'
+import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import PageHeader from '../components/PageHeader'
 import { useAppUser } from '../lib/UserContext'
 import BranchRevenue from './BranchRevenue'
 import BranchExpenses from './BranchExpenses'
@@ -196,17 +197,7 @@ export default function BranchHome({ branch, onBack }: Props) {
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div style={{ background: 'white', padding: '20px 32px', display: 'flex', alignItems: 'center', gap: 16, borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#1e293b' }}>סניף {branch.name}</h1>
-          <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>{today}</p>
-        </div>
-      </div>
+      <PageHeader title={`סניף ${branch.name}`} subtitle={today} onBack={onBack} />
 
       {/* ─── כרטיסי מודולים ──────────────────────────────────────────────── */}
       <div style={{ padding: '36px', maxWidth: '960px', margin: '0 auto' }}>

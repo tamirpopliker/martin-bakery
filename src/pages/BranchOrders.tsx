@@ -3,7 +3,8 @@ import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Package, CheckCircle, Pencil, Check, X, AlertTriangle, CheckSquare, Square } from 'lucide-react'
+import { Package, CheckCircle, Pencil, Check, X, AlertTriangle, CheckSquare, Square } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
@@ -216,16 +217,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
   return (
     <div style={{ direction: 'rtl', background: '#f8fafc', minHeight: '100vh' }}>
 
-      {/* ─── Header ───────────────────────────────────────────────────────── */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>הזמנות מהמפעל</h1>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
-          </div>
-          <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer', fontFamily: 'inherit' }}>← חזרה</button>
-        </div>
-      </div>
+      <PageHeader title="הזמנות מהמפעל" subtitle={branchName} onBack={onBack} />
 
       <div style={{ padding: '0 24px', maxWidth: '960px', margin: '0 auto' }}>
 

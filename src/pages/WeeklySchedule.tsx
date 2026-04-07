@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import PageHeader from '../components/PageHeader'
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } }
 
@@ -623,24 +624,12 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     <motion.div dir="rtl" initial="hidden" animate="visible" variants={fadeIn}
       style={{ maxWidth: 1400, margin: '0 auto' }}>
 
-      {/* ─── Sticky Header ─── */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button onClick={onBack} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#94a3b8', padding: 4 }}>→</button>
-              <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>סידור עבודה שבועי</h1>
-            </div>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={prevWeek} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: canGoBack ? '#94a3b8' : '#e2e8f0', padding: 4 }}>›</button>
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#334155', minWidth: 140, textAlign: 'center' }}>
-              {formatShortDate(weekStart)} – {formatShortDate(weekEnd)}
-            </span>
-            <button onClick={nextWeek} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#94a3b8', padding: 4 }}>‹</button>
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
+      <PageHeader
+        title="סידור עבודה שבועי"
+        subtitle={branchName}
+        onBack={onBack}
+        action={
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <button onClick={() => setShowAutoDialog(true)} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               שבץ אוטומטית ✦
             </button>
@@ -651,8 +640,8 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
               📱
             </button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       <div style={{ padding: '12px 20px' }}>
 

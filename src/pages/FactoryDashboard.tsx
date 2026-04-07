@@ -3,7 +3,8 @@ import { motion } from 'framer-motion'
 import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept, fetchFactoryTrends, getFixedCostTotal } from '../lib/supabase'
 import type { GlobalEmployee, MonthTrend } from '../lib/supabase'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
-import { ArrowRight, TrendingUp, TrendingDown, Factory } from 'lucide-react'
+import { TrendingUp, TrendingDown } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { usePeriod } from '../lib/PeriodContext'
 import { getMonthsInRange } from '../lib/period'
 import PeriodPicker from '../components/PeriodPicker'
@@ -334,21 +335,7 @@ export default function FactoryDashboard({ onBack }: Props) {
   return (
     <div className="min-h-screen" style={{ direction: 'rtl', background: '#f8fafc' }}>
 
-      {/* ─── Header ───────────────────────────────────────────────────── */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div>
-              <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>דשבורד מפעל</h1>
-              <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>KPI · מכירות · עלויות · {period.label}</p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <PeriodPicker period={period} onChange={setPeriod} />
-            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>{'\u2190'} חזרה</button>
-          </div>
-        </div>
-      </div>
+      <PageHeader title="דשבורד מפעל" onBack={onBack} action={<PeriodPicker period={period} onChange={setPeriod} />} />
 
       {/* ─── Main Content ─────────────────────────────────────────────── */}
       <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>

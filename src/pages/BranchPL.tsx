@@ -5,10 +5,9 @@ import { calculateBranchPL, type PLResult } from '../lib/calculatePL'
 import { usePeriod } from '../lib/PeriodContext'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, TrendingUp, TrendingDown, Minus, Info } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
+import { TrendingUp, TrendingDown, Minus, Info } from 'lucide-react'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon } from '@/components/icons'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 
 interface Props {
   branchId: number
@@ -139,19 +138,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
   return (
     <div style={{ direction: 'rtl', background: '#f8fafc', minHeight: '100vh' }}>
 
-      {/* Header */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>רווח והפסד</h1>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName}</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <PeriodPicker period={period} onChange={setPeriod} />
-            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer', fontFamily: 'inherit' }}>← חזרה</button>
-          </div>
-        </div>
-      </div>
+      <PageHeader title="רווח והפסד" subtitle={branchName} onBack={onBack} />
 
       <div style={{ padding: '0 24px', maxWidth: '900px', margin: '0 auto' }}>
 

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ArrowRight, Building2, Plus, Pencil, Trash2, Phone, Search, CheckCircle, XCircle } from 'lucide-react'
+import { Building2, Plus, Pencil, Trash2, Phone, Search, CheckCircle, XCircle } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 
 interface Props {
   branchId: number
@@ -107,18 +108,7 @@ export default function BranchSuppliers({ branchId, branchName, branchColor, onB
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      {/* Header */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>ספקים</h1>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>{branchName} - {activeCount} ספקים פעילים מתוך {suppliers.length}</p>
-          </div>
-          <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ArrowRight size={14} /> חזרה</span>
-          </button>
-        </div>
-      </div>
+      <PageHeader title="ספקים" subtitle={branchName} onBack={onBack} />
 
       {/* Tabs */}
       <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '0 20px', display: 'flex', gap: 0 }}>

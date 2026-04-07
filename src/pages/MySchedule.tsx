@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, Calendar, Star } from 'lucide-react'
+import { Calendar, Star } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 
@@ -250,25 +251,7 @@ export default function MySchedule({ onBack }: Props) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50 to-white" dir="rtl">
       <div className="max-w-lg mx-auto px-4 py-6">
-        {/* Header */}
-        <motion.div variants={fadeIn(0)} initial="hidden" animate="visible" className="mb-6">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1 text-indigo-600 text-sm font-medium mb-3 hover:text-indigo-800 transition-colors"
-          >
-            <ArrowRight className="w-4 h-4" />
-            חזרה
-          </button>
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-slate-800 flex items-center justify-center gap-2">
-              <Calendar className="w-6 h-6 text-indigo-500" />
-              הסידור שלי
-            </h1>
-            {branchName && (
-              <p className="text-sm text-slate-500 mt-1">{branchName}</p>
-            )}
-          </div>
-        </motion.div>
+        <PageHeader title="הסידור שלי" subtitle={branchName} onBack={onBack} />
 
         {/* Week toggle */}
         <motion.div variants={fadeIn(0.05)} initial="hidden" animate="visible" className="mb-5">

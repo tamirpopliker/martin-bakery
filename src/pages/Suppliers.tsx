@@ -7,6 +7,7 @@ import {
   Plus, Pencil, Trash2, Search, X,
   Building2
 } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Supplier { id: number; name: string; created_at: string }
@@ -200,22 +201,7 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      {/* ─── כותרת ──────────────────────────────────────────────────────── */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div>
-              <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>ספקים</h1>
-              <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>חומרי גלם · חשבוניות ספקים</p>
-            </div>
-            <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 10, padding: '8px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>₪{totalInv.toLocaleString()}</span>
-              <span style={{ fontSize: 12, color: '#94a3b8', marginRight: 6 }}>סה"כ החודש</span>
-            </div>
-          </div>
-          <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>{'\u2190'} חזרה</button>
-        </div>
-      </div>
+      <PageHeader title="ספקים" onBack={onBack} />
 
       {/* ─── טאבים ──────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 0, padding: '0 20px', background: 'white', borderBottom: '1px solid #f1f5f9' }}>

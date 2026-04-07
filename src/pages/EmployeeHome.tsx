@@ -4,6 +4,7 @@ import { useAppUser } from '../lib/UserContext'
 import { supabase } from '../lib/supabase'
 import MySchedule from './MySchedule'
 import EmployeeConstraints from './EmployeeConstraints'
+import PageHeader from '../components/PageHeader'
 
 const fadeIn = {
   hidden: { opacity: 0, y: 18 },
@@ -79,9 +80,10 @@ export default function EmployeeHome({ onNavigate }: Props) {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
+      <PageHeader title="דף הבית" />
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '28px 16px' }}>
 
-        {/* Header - greeting */}
+        {/* Greeting */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible" style={{ marginBottom: 24 }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', margin: 0 }}>
             שלום {appUser?.name || 'עובד'}

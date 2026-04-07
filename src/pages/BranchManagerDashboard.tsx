@@ -6,7 +6,8 @@ import { calculateBranchPL, type PLResult } from '../lib/calculatePL'
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, TrendingUp, TrendingDown, Presentation, EyeOff } from 'lucide-react'
+import { TrendingUp, TrendingDown, Presentation, EyeOff } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 const fadeIn = (delay = 0) => ({
@@ -250,33 +251,23 @@ export default function BranchManagerDashboard({ onBack }: Props) {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
-      {/* Header */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px', marginBottom: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>דשבורד מנהל סניפים</h1>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>השוואת ביצועים &middot; P&amp;L &middot; KPI</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <PeriodPicker period={period} onChange={setPeriod} />
-            <button
-              onClick={() => setPresentationMode(v => !v)}
-              style={{
-                background: presentationMode ? '#6366f1' : 'none',
-                color: presentationMode ? 'white' : '#64748b',
-                border: presentationMode ? 'none' : '1px solid #e2e8f0',
-                borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}>
-              {presentationMode ? <EyeOff size={14} /> : <Presentation size={14} />}
-              {presentationMode ? 'יציאה ממצב ישיבה' : 'מצב ישיבה'}
-            </button>
-            <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ArrowRight size={14} /> חזרה</span>
-            </button>
-          </div>
+      <PageHeader title="דשבורד מנהל סניפים" onBack={onBack} action={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <PeriodPicker period={period} onChange={setPeriod} />
+          <button
+            onClick={() => setPresentationMode(v => !v)}
+            style={{
+              background: presentationMode ? '#6366f1' : 'none',
+              color: presentationMode ? 'white' : '#64748b',
+              border: presentationMode ? 'none' : '1px solid #e2e8f0',
+              borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+            {presentationMode ? <EyeOff size={14} /> : <Presentation size={14} />}
+            {presentationMode ? 'יציאה ממצב ישיבה' : 'מצב ישיבה'}
+          </button>
         </div>
-      </div>
+      } />
 
       {loading && <div style={{ textAlign: 'center', padding: '64px 0', color: '#94a3b8', fontSize: 14 }}>טוען נתונים...</div>}
 

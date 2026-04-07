@@ -3,7 +3,8 @@ import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, getOverheadPct } from '../lib/supabase'
 import { calculateBranchPL, calculateFactoryPL, type PLResult, type FactoryPLResult } from '../lib/calculatePL'
-import { ArrowRight, TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck, Building2, Layers } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck, Building2, Layers } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon, TrophyIcon } from '@/components/icons'
 import { BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { usePeriod } from '../lib/PeriodContext'
@@ -688,17 +689,12 @@ export default function CEODashboard({ onBack }: Props) {
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      {/* Header */}
-      <div style={{ background: 'white', padding: '16px 32px', display: 'flex', alignItems: 'center', gap: '16px', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
-        <Button variant="outline" size="lg" onClick={onBack} style={{ borderRadius: '12px', padding: '8px 20px', fontSize: '14px', fontWeight: 600, color: '#64748b' }}>
-          <ArrowRight size={20} />
-          חזרה
-        </Button>
-        <div>
-          <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', margin: 0 }}>דשבורד מנכ"ל</h1>
-          <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>מבט רשתי · מפעל + סניפים · {period.label}</p>
-        </div>
-        <div className="mr-auto flex items-center gap-3">
+      <PageHeader title={'דשבורד מנכ"ל'} onBack={onBack} action={<PeriodPicker period={period} onChange={setPeriod} />} />
+
+      <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
+
+        {/* View mode toggle */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
           <div style={{ display: 'flex', borderBottom: '2px solid #f1f5f9' }}>
             <button
               onClick={() => setViewMode('consolidated')}
@@ -727,11 +723,7 @@ export default function CEODashboard({ onBack }: Props) {
               מרכזי רווח
             </button>
           </div>
-          <PeriodPicker period={period} onChange={setPeriod} />
         </div>
-      </div>
-
-      <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
 
         {loading ? (
           <div className="text-center py-16 text-slate-400">טוען נתונים...</div>

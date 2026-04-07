@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ArrowRight, Plus, Pencil, Trash2, Save, Settings, Users, Target, DollarSign, Database, Download, Calendar } from 'lucide-react'
+import { Plus, Pencil, Trash2, Save, Settings, Users, Target, DollarSign, Database, Download, Calendar } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import DataImport from './DataImport'
 import DataExport from './DataExport'
 import { Card, CardContent } from '@/components/ui/card'
@@ -309,20 +310,7 @@ export default function FactorySettings({ onBack }: Props) {
   return (
     <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
-      {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div style={{ width: '40px', height: '40px', background: '#f1f5f9', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Settings size={20} color="#64748b" />
-        </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>הגדרות מפעל</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>יעדי KPI · עלויות קבועות · ניהול עובדים</p>
-        </div>
-      </div>
+      <PageHeader title="הגדרות מפעל" onBack={onBack} />
 
       {/* ─── טאבים ───────────────────────────────────────────────────────── */}
       <div className="flex px-8 bg-white border-b border-slate-200">

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { supabase, monthEnd, getWorkingDays } from '../lib/supabase'
 import { parseTimeWatchPDF, type TimeWatchRow } from '../lib/parseTimeWatch'
 import { Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save, Calendar, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { useAppUser } from '../lib/UserContext'
 
 interface Props { onBack: () => void }
@@ -364,16 +365,7 @@ export default function Labor({ onBack }: Props) {
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      {/* Header */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '16px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>לייבור מפעל</h1>
-            <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>העלאת נוכחות PDF · ניהול עובדים · עלות מעסיק x1.3</p>
-          </div>
-          <button onClick={onBack} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>{'\u2190'} חזרה</button>
-        </div>
-      </div>
+      <PageHeader title="לייבור מפעל" onBack={onBack} />
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, padding: '0 20px', background: 'white', borderBottom: '1px solid #f1f5f9', marginBottom: 16 }}>
