@@ -614,8 +614,8 @@ export default function Home() {
                     })}
                   </div>
 
-                  {/* Branch comparison dashboard */}
-                  <motion.div variants={fadeUp}>
+                  {/* Branch comparison dashboard — admin only */}
+                  {canAccessPage('branch_comparison') && <motion.div variants={fadeUp}>
                     <button onClick={() => setPage('branch_comparison')}
                       style={{ width: '100%', background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '10px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginTop: 12 }}
                       className="hover:shadow-md hover:border-[#c7d2fe]">
@@ -628,7 +628,7 @@ export default function Home() {
                       </div>
                       <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
                     </button>
-                  </motion.div>
+                  </motion.div>}
 
                   {/* Branch data import */}
                   <motion.div variants={fadeUp}>
