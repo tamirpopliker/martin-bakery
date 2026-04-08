@@ -180,8 +180,8 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
       supabase.from('shift_roles').select('id, name, color')
         .eq('branch_id', branchId).eq('is_active', true).order('name'),
       supabase.from('shift_staffing_requirements').select('shift_id, role_id, required_count'),
-      supabase.from('branch_employees').select('id, name, priority, min_shifts_per_week, training_status')
-        .eq('branch_id', branchId).eq('active', true).order('name'),
+      supabase.from('branch_employees').select('id, name, priority, min_shifts_per_week, training_status, is_manager')
+        .eq('branch_id', branchId).eq('active', true).eq('is_manager', false).order('name'),
       supabase.from('employee_role_assignments').select('employee_id, role_id'),
       supabase.from('schedule_constraints').select('employee_id, date, availability, shift_id')
         .eq('branch_id', branchId).gte('date', dateFrom).lte('date', dateTo),

@@ -521,8 +521,23 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
           return true
         })
 
+        // Also skip managers (is_manager flag)
+        const managerEmpNames = emps?.filter((e: any) => e.is_manager).map((e: any) => e.name) || []
+        const skippedManagers: string[] = []
+        rows = rows.filter(row => {
+          const isManager = managerEmpNames.some((mn: string) => row.name.includes(mn) || mn.includes(row.name))
+          if (isManager) {
+            if (!skippedManagers.includes(row.name)) skippedManagers.push(row.name)
+            return false
+          }
+          return true
+        })
+
         if (skippedGlobals.length > 0) {
           console.log(`[BranchLabor] Skipped global employees: ${skippedGlobals.join(', ')}`)
+        }
+        if (skippedManagers.length > 0) {
+          console.log(`[BranchLabor] Skipped managers: ${skippedManagers.join(', ')}`)
         }
 
         if (emps) {
@@ -547,9 +562,10 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       setParsedRows(rows)
       setUploadStatus('confirm')
       const uniqueNames = new Set(rows.map(r => r.name)).size
+      const managerNote = skippedManagers.length > 0 ? ` · דולגו ${skippedManagers.length} שורות (מנהלים)` : ''
       setUploadMsg(isDetailed
-        ? `זוהו ${uniqueNames} עובדים · ${rows.length} שורות יומיות (הזן תעריף שעתי לחישוב שכר)`
-        : `זוהו ${rows.length} עובדים — בדוק ואשר`)
+        ? `זוהו ${uniqueNames} עובדים · ${rows.length} שורות יומיות (הזן תעריף שעתי לחישוב שכר)${managerNote}`
+        : `זוהו ${rows.length} עובדים — בדוק ואשר${managerNote}`)
     } catch (err: any) {
       setUploadStatus('error')
       setUploadMsg('שגיאה: ' + (err.message || 'נסה שוב'))

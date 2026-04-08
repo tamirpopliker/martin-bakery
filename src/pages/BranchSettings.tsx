@@ -39,6 +39,7 @@ interface BranchEmployee {
   branch_id: number
   name: string
   active: boolean
+  is_manager: boolean
 }
 
 const DEFAULT_FIXED_COSTS = ['ארנונה', 'שכירות', 'גז', 'חשמל', 'מים', 'אינטרנט', 'ביטוח']
@@ -93,7 +94,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
   }
 
   async function fetchEmployees() {
-    const { data } = await supabase.from('branch_employees').select('*')
+    const { data } = await supabase.from('branch_employees').select('id, branch_id, name, active, is_manager')
       .eq('branch_id', branchId).order('name')
     if (data) setEmployees(data)
   }
@@ -192,6 +193,11 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
   async function toggleActive(emp: BranchEmployee) {
     await supabase.from('branch_employees').update({ active: !emp.active }).eq('id', emp.id)
     await fetchEmployees()
+  }
+
+  async function toggleManager(emp: BranchEmployee) {
+    await supabase.from('branch_employees').update({ is_manager: !emp.is_manager }).eq('id', emp.id)
+    setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, is_manager: !e.is_manager } : e))
   }
 
   // ─── calculations ──────────────────────────────────────────────────────
@@ -431,21 +437,49 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
               </button>
             </div>
 
+            {/* Managers section */}
+            {employees.filter(e => e.is_manager).length > 0 && (
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #e9d5ff', overflow: 'hidden', marginBottom: 16 }}>
+                <div style={{ padding: '10px 20px', fontSize: 13, fontWeight: 700, color: '#7c3aed', background: '#faf5ff', borderBottom: '1px solid #e9d5ff' }}>
+                  מנהלי סניף
+                </div>
+                {employees.filter(e => e.is_manager).map(emp => (
+                  <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid #f8fafc', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontWeight: 600, color: '#374151', fontSize: 14 }}>{emp.name}</span>
+                      <span style={{ background: '#7c3aed', color: 'white', borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>מנהל סניף</span>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#64748b', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={emp.is_manager} onChange={() => toggleManager(emp)} style={{ cursor: 'pointer' }} />
+                      מנהל
+                    </label>
+                    <button onClick={() => toggleActive(emp)}
+                      style={{ background: emp.active ? '#f0fdf4' : '#fef2f2', color: emp.active ? '#34d399' : '#ef4444', border: 'none', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                      {emp.active ? 'פעיל' : 'לא פעיל'}
+                    </button>
+                    <button onClick={() => { setEditEmpId(emp.id); setEditEmpData(emp) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Pencil size={14} color="#94a3b8" /></button>
+                    <button onClick={() => deleteEmployee(emp.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Trash2 size={14} color="#ef4444" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Employee list */}
             <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 36px 36px', padding: '10px 20px', fontSize: 11, fontWeight: 600, color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>
-                <span>#</span><span>שם</span><span style={{ textAlign: 'center' }}>סטטוס</span><span /><span />
+              <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr auto 80px 36px 36px', padding: '10px 20px', fontSize: 11, fontWeight: 600, color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>
+                <span>#</span><span>שם</span><span style={{ textAlign: 'center' }}>מנהל</span><span style={{ textAlign: 'center' }}>סטטוס</span><span /><span />
               </div>
 
-              {employees.length === 0 ? (
+              {employees.filter(e => !e.is_manager).length === 0 ? (
                 <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>לא הוגדרו עובדים</div>
-              ) : employees.map((emp, i) => (
-                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid #f8fafc', opacity: emp.active ? 1 : 0.5 }}>
+              ) : employees.filter(e => !e.is_manager).map((emp, i) => (
+                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '40px 1fr auto 80px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid #f8fafc', opacity: emp.active ? 1 : 0.5 }}>
                   {editEmpId === emp.id ? (
                     <>
                       <span style={{ fontSize: 12, color: '#64748b' }}>{i + 1}</span>
                       <input type="text" value={editEmpData.name || ''} onChange={e => setEditEmpData({ ...editEmpData, name: e.target.value })}
                         autoFocus style={{ border: '1px solid #6366f1', borderRadius: 8, padding: '6px 10px', fontSize: 14, fontFamily: 'inherit' }} />
+                      <span />
                       <span />
                       <button onClick={() => saveEmployee(emp.id)} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>&#10003;</button>
                       <button onClick={() => setEditEmpId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}>&#10005;</button>
@@ -454,6 +488,9 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
                     <>
                       <span style={{ width: 28, height: 28, background: '#f1f5f9', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#64748b' }}>{i + 1}</span>
                       <span style={{ fontWeight: 600, color: '#374151', fontSize: 14 }}>{emp.name}</span>
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={emp.is_manager} onChange={() => toggleManager(emp)} style={{ cursor: 'pointer' }} />
+                      </label>
                       <button onClick={() => toggleActive(emp)}
                         style={{ background: emp.active ? '#f0fdf4' : '#fef2f2', color: emp.active ? '#34d399' : '#ef4444', border: 'none', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                         {emp.active ? 'פעיל' : 'לא פעיל'}

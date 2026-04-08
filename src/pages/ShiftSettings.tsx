@@ -536,7 +536,7 @@ function EmployeesTab({ branchId }: { branchId: number }) {
   useEffect(() => {
     async function load() {
       const [empRes, rolesRes, assignRes] = await Promise.all([
-        supabase.from('branch_employees').select('id, name, active, priority, min_shifts_per_week, training_status').eq('branch_id', branchId).eq('active', true).order('name'),
+        supabase.from('branch_employees').select('id, name, active, priority, min_shifts_per_week, training_status, is_manager').eq('branch_id', branchId).eq('active', true).eq('is_manager', false).order('name'),
         supabase.from('shift_roles').select('*').eq('branch_id', branchId).eq('is_active', true).order('name'),
         supabase.from('employee_role_assignments').select('*'),
       ])

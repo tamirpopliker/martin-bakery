@@ -60,7 +60,7 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
   async function loadData() {
     setLoading(true)
     const [empsRes, consRes, shiftsRes, staffingRes] = await Promise.all([
-      supabase.from('branch_employees').select('id, name, training_status').eq('branch_id', branchId).eq('active', true).order('name'),
+      supabase.from('branch_employees').select('id, name, training_status, is_manager').eq('branch_id', branchId).eq('active', true).eq('is_manager', false).order('name'),
       supabase.from('schedule_constraints').select('employee_id, date, availability, shift_id')
         .eq('branch_id', branchId)
         .gte('date', weekDays[0])
