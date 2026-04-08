@@ -10,6 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button'
 import { ArrowRight, TrendingUp, TrendingDown, Store } from 'lucide-react'
 import { RevenueIcon, ProfitIcon, LaborIcon } from '@/components/icons'
+import { generateInsights, type InsightsInput } from '../lib/generateInsights'
+import InsightsCard from '../components/InsightsCard'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 /* ─── helpers ─── */
@@ -111,6 +113,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
   // KPI targets
   const [laborTarget, setLaborTarget] = useState(0)
   const [wasteTarget, setWasteTarget] = useState(3)
+  const [insights, setInsights] = useState<any[]>([])
 
   // Previous period P&L
   const [prevPl, setPrevPl] = useState<BranchPLResult | null>(null)
@@ -203,6 +206,17 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
       if (kpiRes.data?.labor_pct) setLaborTarget(kpiRes.data.labor_pct)
       if (kpiRes.data?.waste_pct) setWasteTarget(kpiRes.data.waste_pct)
 
+      // Generate insights
+      const rev = current.revenue || 0
+      const insightInput: InsightsInput = {
+        labor: { totalCost: current.laborEmployer || 0, targetPct: kpiRes.data?.labor_pct || 28, revenue: rev },
+        revenue: { actual: rev, target: kpiRes.data?.revenue_target || 0 },
+        waste: { totalAmount: current.wasteTotal || 0, targetPct: kpiRes.data?.waste_pct || 3, revenue: rev },
+        controllableProfit: { actual: current.controllableMargin || 0, target: rev * 0.30, revenue: rev },
+        factoryPurchases: { amount: current.expSuppliersInternal || 0, avgMonthly: current.expSuppliersInternal || 0, isHolidayMonth: false },
+      }
+      setInsights(generateInsights(insightInput))
+
       setTrendData(trend)
     } catch (err) {
       console.error('BranchDashboard fetch error:', err)
@@ -261,6 +275,9 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
           </div>
         ) : (
           <>
+            {/* Insights */}
+            <InsightsCard insights={insights} />
+
             {/* ROW 1 — 4 KPI Cards */}
             <motion.div variants={fadeIn(0)} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-2.5">
               {/* הכנסות */}
