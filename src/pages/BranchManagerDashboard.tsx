@@ -9,6 +9,8 @@ import PeriodPicker from '../components/PeriodPicker'
 import { TrendingUp, TrendingDown, Presentation, EyeOff } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { generateInsights, type InsightsInput } from '../lib/generateInsights'
+import InsightsCard from '../components/InsightsCard'
 
 const fadeIn = (delay = 0) => ({
   hidden: { opacity: 0, y: 10 },
@@ -78,6 +80,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   const [overheadPct, setOverheadPct] = useState(5)
   const [chartData, setChartData] = useState<any[]>([])
   const [kpiTargets, setKpiTargets] = useState<Record<number, { labor_pct: number; waste_pct: number; revenue_target: number; basket_target: number; transaction_target: number }>>({})
+  const [insights, setInsights] = useState<any[]>([])
 
   const brOH = (br: BranchData) => br.totalRevenue * overheadPct / 100
   const brGross = (br: BranchData) => br.grossProfit
@@ -164,6 +167,48 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       const kpiMap: typeof kpiTargets = {}
       ;(kpiData || []).forEach((k: any) => { kpiMap[k.branch_id] = k })
       setKpiTargets(kpiMap)
+
+      // Generate insights from aggregated branch data
+      const totalRev = current.reduce((s, br) => s + br.totalRevenue, 0)
+      const totalLabor = current.reduce((s, br) => s + br.laborEmployer, 0)
+      const totalWaste = current.reduce((s, br) => s + br.wasteTotal, 0)
+      const totalGross = current.reduce((s, br) => s + br.grossProfit, 0)
+      const totalFactoryPurchases = current.reduce((s, br) => s + (br.expSuppliersInternal || 0), 0)
+
+      // Average targets
+      const targetValues = Object.values(kpiMap)
+      const avgLaborTarget = targetValues.length > 0 ? targetValues.reduce((s: number, t: any) => s + (t?.labor_pct || 0), 0) / targetValues.length : 28
+      const avgWasteTarget = targetValues.length > 0 ? targetValues.reduce((s: number, t: any) => s + (t?.waste_pct || 0), 0) / targetValues.length : 3
+      const avgRevTarget = targetValues.reduce((s: number, t: any) => s + (t?.revenue_target || 0), 0)
+
+      const insightInput: InsightsInput = {
+        labor: {
+          totalCost: totalLabor,
+          targetPct: avgLaborTarget,
+          revenue: totalRev,
+        },
+        revenue: {
+          actual: totalRev,
+          target: avgRevTarget,
+        },
+        waste: {
+          totalAmount: totalWaste,
+          targetPct: avgWasteTarget,
+          revenue: totalRev,
+        },
+        controllableProfit: {
+          actual: totalGross,
+          target: totalRev * 0.30,
+          revenue: totalRev,
+        },
+        factoryPurchases: {
+          amount: totalFactoryPurchases,
+          avgMonthly: totalFactoryPurchases, // simplified — no historical avg
+          isHolidayMonth: false,
+        },
+      }
+
+      setInsights(generateInsights(insightInput))
 
       const now = new Date(from)
       const months: { key: string; label: string; from: string; to: string }[] = []
@@ -273,6 +318,8 @@ export default function BranchManagerDashboard({ onBack }: Props) {
 
       {!loading && (
         <div style={{ padding: '20px', maxWidth: 1200, margin: '0 auto' }}>
+
+          {insights.length > 0 && <InsightsCard insights={insights} />}
 
           {/* Hero KPI Card */}
           {branches.length > 0 && (() => {

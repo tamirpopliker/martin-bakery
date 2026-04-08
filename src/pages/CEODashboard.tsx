@@ -14,6 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
+import { generateInsights, type InsightsInput } from '../lib/generateInsights'
+import InsightsCard from '../components/InsightsCard'
 
 interface Props { onBack: () => void }
 
@@ -139,6 +141,8 @@ export default function CEODashboard({ onBack }: Props) {
   // Internal (intercompany) sales — factory to branches
   const [factoryInternalSales, setFactoryInternalSales] = useState(0)
   const [branchInternalExpenses, setBranchInternalExpenses] = useState(0)
+
+  const [insights, setInsights] = useState<any[]>([])
 
   // Sheet (drawer) state
   const [sheetType, setSheetType] = useState<KpiSheetType | null>(null)
@@ -290,6 +294,43 @@ export default function CEODashboard({ onBack }: Props) {
     setPrevTotalRev(pRev + prevFactoryPL.externalRevenue)
     setPrevTotalGross(pGross + pfGross)
     setPrevTotalOperating(pOperating + pfOperating)
+
+    // Generate per-branch insights with branch name prefix
+    const allInsights: any[] = []
+    for (const br of branchResults) {
+      const brInsightInput: InsightsInput = {
+        labor: {
+          totalCost: br.labor,
+          targetPct: tMap[br.id]?.labor_pct || 28,
+          revenue: br.revenue,
+        },
+        revenue: {
+          actual: br.revenue,
+          target: 0,
+        },
+        waste: {
+          totalAmount: br.waste,
+          targetPct: tMap[br.id]?.waste_pct || 3,
+          revenue: br.revenue,
+        },
+        controllableProfit: {
+          actual: br.grossProfit,
+          target: br.revenue * 0.30,
+          revenue: br.revenue,
+        },
+        factoryPurchases: {
+          amount: br.expInternal || 0,
+          avgMonthly: br.expInternal || 0,
+          isHolidayMonth: false,
+        },
+      }
+      const brInsights = generateInsights(brInsightInput)
+        .filter(i => i.priority <= 2)
+        .map(i => ({ ...i, title: `[${br.name}] ${i.title}` }))
+      allInsights.push(...brInsights)
+    }
+    allInsights.sort((a, b) => a.priority - b.priority)
+    setInsights(allInsights)
 
     setLoading(false)
   }
@@ -692,6 +733,8 @@ export default function CEODashboard({ onBack }: Props) {
       <PageHeader title={'דשבורד מנכ"ל'} onBack={onBack} action={<PeriodPicker period={period} onChange={setPeriod} />} />
 
       <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
+
+        {insights.length > 0 && <InsightsCard insights={insights} />}
 
         {/* View mode toggle */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
