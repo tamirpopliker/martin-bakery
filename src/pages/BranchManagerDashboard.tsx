@@ -208,7 +208,10 @@ export default function BranchManagerDashboard({ onBack }: Props) {
         },
       }
 
-      setInsights(generateInsights(insightInput))
+      const generated = generateInsights(insightInput)
+      console.log('[BranchManager] insightInput:', JSON.stringify(insightInput))
+      console.log('[BranchManager] generated insights:', generated.length, generated.map(i => i.id))
+      setInsights(generated)
 
       const now = new Date(from)
       const months: { key: string; label: string; from: string; to: string }[] = []
@@ -319,7 +322,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       {!loading && (
         <div style={{ padding: '20px', maxWidth: 1200, margin: '0 auto' }}>
 
-          {insights.length > 0 && <InsightsCard insights={insights} />}
+          <InsightsCard insights={insights} />
 
           {/* Hero KPI Card */}
           {branches.length > 0 && (() => {
