@@ -613,6 +613,97 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     })
   }
 
+  function exportToPDF() {
+    const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי']
+    const now = new Date().toLocaleString('he-IL')
+    const weekRange = `${weekDates[0].split('-').reverse().slice(0,2).join('/')} עד ${weekDates[5].split('-').reverse().join('/')}`
+
+    let dayHeaders = ''
+    for (let d = 0; d < 6; d++) {
+      const dateStr = weekDates[d].split('-').reverse().slice(0,2).join('/')
+      dayHeaders += `<div class="day-header">${DAY_NAMES[d]}<br>${dateStr}</div>`
+    }
+
+    // Build shift rows
+    let shiftRows = ''
+    // Get unique shifts across the week
+    const allShifts = [...new Set(shifts.map(s => s.id))].map(id => shifts.find(s => s.id === id)!)
+
+    for (const shift of allShifts) {
+      shiftRows += '<div class="grid">'
+      for (let d = 0; d < 6; d++) {
+        const date = weekDates[d]
+        const dow = new Date(date).getDay() // 0=Sun
+        const isActive = shift.days_of_week?.includes(dow)
+
+        if (!isActive) {
+          shiftRows += '<div class="shift-card" style="background:#fafafa;color:#ccc;text-align:center;padding:20px 8px">—</div>'
+          continue
+        }
+
+        const shiftAssigns = assignments.filter(a => a.shift_id === shift.id && a.date === date)
+        // Get required roles for this shift
+        const reqs = staffingReqs.filter(sr => sr.shift_id === shift.id)
+        const totalRequired = reqs.reduce((s, r) => s + (r.required_count || 1), 0)
+        const filled = shiftAssigns.length
+        const isComplete = filled >= totalRequired
+
+        let rolesHtml = ''
+        for (const req of reqs) {
+          const role = roles.find(r => r.id === req.role_id)
+          const assigned = shiftAssigns.filter(a => a.role_id === req.role_id)
+          const count = req.required_count || 1
+          for (let slot = 0; slot < count; slot++) {
+            const a = assigned[slot]
+            if (a) {
+              const emp = employees.find(e => e.id === a.employee_id)
+              const icon = emp?.training_status === 'mentor' ? ' ⭐' : emp?.training_status === 'trainee' ? ' 📚' : ''
+              rolesHtml += `<div class="role-label">${role?.name || ''}</div><div class="employee-name">${emp?.name || '?'}${icon}</div>`
+            } else {
+              rolesHtml += `<div class="role-label">${role?.name || ''}</div><div class="employee-name" style="color:#d1d5db">—</div>`
+            }
+          }
+        }
+
+        shiftRows += `<div class="shift-card">
+          <div class="shift-title">${shift.name} <span class="shift-hours">${(shift.start_time||'').slice(0,5)}–${(shift.end_time||'').slice(0,5)}</span></div>
+          ${rolesHtml}
+          <div class="summary ${isComplete ? 'complete' : 'incomplete'}">${filled}/${totalRequired} ${isComplete ? '✓' : '⚠'}</div>
+        </div>`
+      }
+      shiftRows += '</div>'
+    }
+
+    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+<title>סידור עבודה — ${branchName} — ${weekRange}</title>
+<style>
+  @page { size: A4 landscape; margin: 15mm; }
+  body { font-family: Arial, sans-serif; direction: rtl; font-size: 11px; }
+  h1 { font-size: 16px; text-align: center; margin-bottom: 4px; }
+  h2 { font-size: 12px; text-align: center; color: #666; margin-bottom: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 8px; }
+  .day-header { text-align: center; font-weight: bold; background: #f3f4f6; padding: 6px; border-radius: 6px; font-size: 12px; }
+  .shift-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; break-inside: avoid; }
+  .shift-title { font-weight: bold; font-size: 11px; border-bottom: 1px solid #f3f4f6; padding-bottom: 4px; margin-bottom: 6px; color: #374151; }
+  .shift-hours { font-size: 10px; color: #9ca3af; }
+  .role-label { font-size: 9px; color: #9ca3af; margin-top: 4px; }
+  .employee-name { font-size: 11px; font-weight: 500; color: #111827; padding: 2px 0; }
+  .summary { font-size: 10px; color: #6b7280; border-top: 1px solid #f3f4f6; padding-top: 4px; margin-top: 4px; text-align: left; }
+  .summary.complete { color: #059669; }
+  .summary.incomplete { color: #dc2626; }
+  .footer { margin-top: 16px; text-align: center; font-size: 10px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+</style></head><body>
+<h1>סידור עבודה שבועי</h1>
+<h2>${branchName} — ${weekRange}</h2>
+<div class="grid">${dayHeaders}</div>
+${shiftRows}
+<div class="footer">הופק ב-${now} · מערכת מרטין</div>
+</body></html>`
+
+    const win = window.open('', '_blank')
+    if (win) { win.document.write(html); win.document.close(); win.focus(); setTimeout(() => win.print(), 500) }
+  }
+
   const prevWeek = () => { if (canGoBack) setWeekStart(prev => addDays(prev, -7)) }
   const nextWeek = () => setWeekStart(prev => addDays(prev, 7))
 
@@ -638,6 +729,9 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
             </button>
             <button onClick={copyForWhatsapp} style={{ background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>
               📱
+            </button>
+            <button onClick={exportToPDF} style={{ padding: '6px 12px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, cursor: 'pointer', background: 'white' }}>
+              📄 ייצוא PDF
             </button>
           </div>
         }
