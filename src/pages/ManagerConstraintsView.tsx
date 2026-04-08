@@ -164,110 +164,115 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
         </div>
       </motion.div>
 
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginBottom: 12, fontSize: 11, color: '#64748b', flexWrap: 'wrap' }}>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#10b981', verticalAlign: 'middle', marginLeft: 3 }} /> פנוי</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', verticalAlign: 'middle', marginLeft: 3 }} /> מעדיף שלא</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#ef4444', verticalAlign: 'middle', marginLeft: 3 }} /> לא יכול</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#e5e7eb', border: '1px solid #d1d5db', verticalAlign: 'middle', marginLeft: 3 }} /> לא הגדיר</span>
+        <span style={{ color: '#94a3b8' }}>(B) בוקר &nbsp; (E) ערב</span>
+      </div>
+
       {loading ? (
         <div className="text-center py-12 text-slate-400">טוען...</div>
       ) : (
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
           {shifts.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 text-sm">
-              לא הוגדרו משמרות לסניף זה
-            </div>
+            <div className="text-center py-8 text-slate-400 text-sm">לא הוגדרו משמרות לסניף זה</div>
           ) : (
             <>
-              {/* Shift cards per day */}
-              {weekDays.slice(0, 6).map((date, dayIdx) => {
-                const dayOfWeek = new Date(date + 'T12:00:00').getDay()
-                const dayName = DAY_NAMES[dayOfWeek]
-                const shiftsForDay = getShiftsForDay(dayOfWeek)
-                if (shiftsForDay.length === 0) return null
+              {/* Weekly grid table */}
+              <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', overflow: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                      <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontSize: 12, color: '#64748b', position: 'sticky', right: 0, background: 'white', zIndex: 2, minWidth: 100 }}>עובד</th>
+                      {weekDays.slice(0, 6).map((date, i) => {
+                        const dow = new Date(date + 'T12:00:00').getDay()
+                        const shortName = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳'][dow] || DAY_NAMES[dow]
+                        return (
+                          <th key={date} style={{ padding: '10px 6px', textAlign: 'center', fontWeight: 600, fontSize: 12, color: '#475569' }}>
+                            {shortName} {formatShortDate(date)}
+                          </th>
+                        )
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const filteredEmps = viewFilter === 'problems'
+                        ? employees.filter(emp => weekDays.slice(0, 6).some(date => {
+                            const dow = new Date(date + 'T12:00:00').getDay()
+                            return getShiftsForDay(dow).some(s => getAvail(emp.id, date, s.id) === 'unavailable')
+                          }))
+                        : employees
 
-                // Check if all shifts for this day are fully covered (for filter)
-                const hasProblems = shiftsForDay.some(shift => {
-                  const summary = getShiftSummary(shift.id, date)
-                  const coverage = summary.required > 0 ? summary.available / summary.required : 1
-                  return coverage < 1
-                })
-
-                // If filtering problems only and no problems this day, skip entire day
-                if (viewFilter === 'problems' && !hasProblems) return null
-
-                return (
-                  <div key={date} style={{ marginBottom: 20 }}>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 10 }}>
-                      {dayName} {date.split('-').reverse().slice(0, 2).join('/')}
-                    </h3>
-                    {shiftsForDay.map(shift => {
-                      const summary = getShiftSummary(shift.id, date)
-                      const coverage = summary.required > 0 ? summary.available / summary.required : 1
-
-                      // If filter is 'problems' and coverage >= 1, skip
-                      if (viewFilter === 'problems' && coverage >= 1) return null
-
-                      return (
-                        <div key={shift.id} style={{
-                          background: 'white',
-                          border: coverage < 1 ? '1px solid #fecaca' : '1px solid #f1f5f9',
-                          borderRadius: 12,
-                          padding: 16,
-                          marginBottom: 10,
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                        }}>
-                          {/* Header: shift name bold + hours gray (same line) */}
-                          <div className="flex items-center gap-2" style={{ marginBottom: 12 }}>
-                            <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{shift.name}</span>
-                            <span style={{ fontSize: 12, color: '#94a3b8' }}>{shift.start_time?.slice(0, 5)}–{shift.end_time?.slice(0, 5)}</span>
-                            <span style={{ marginRight: 'auto', fontSize: 13, color: '#64748b' }}>
-                              {summary.available}/{summary.required} זמינים
-                            </span>
-                          </div>
-
-                          {/* Employee table */}
-                          <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-                            <tbody>
-                              {employees.map(emp => {
-                                const avail = getAvail(emp.id, date, shift.id)
-                                const cfg = avail === 'available'
-                                  ? { icon: '🟢', label: 'פנוי', color: '#059669' }
-                                  : avail === 'prefer_not'
-                                  ? { icon: '🟡', label: 'מעדיף שלא', color: '#d97706' }
-                                  : avail === 'unavailable'
-                                  ? { icon: '🔴', label: 'לא יכול', color: '#dc2626' }
-                                  : { icon: '⬜', label: 'לא הגדיר', color: '#9ca3af' }
-                                return (
-                                  <tr key={emp.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                                    <td style={{ padding: '6px 0', color: '#1e293b', fontWeight: 500 }}>{emp.name}</td>
-                                    <td style={{ padding: '6px 0', textAlign: 'left', color: cfg.color, fontSize: 12 }}>
-                                      {cfg.icon} {cfg.label}
-                                    </td>
-                                  </tr>
-                                )
-                              })}
-                            </tbody>
-                          </table>
-
-                          {/* Summary line */}
-                          <div style={{ marginTop: 10, fontSize: 11, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                            <span>✅ {summary.availableEmps.length} פנויים</span>
-                            <span>⚠️ {summary.preferNotEmps.length} מעדיפים שלא</span>
-                            <span>❌ {summary.unavailableEmps.length} לא יכולים</span>
-                            <span>⬜ {summary.undefinedEmps.length} לא הגדירו</span>
-                          </div>
-
-                          {/* Warning if understaffed */}
-                          {coverage < 1 && (
-                            <div style={{
-                              marginTop: 10, fontSize: 12, color: '#ef4444', fontWeight: 600,
-                              padding: '6px 10px', border: '1px solid #fecaca', borderRadius: 8,
-                            }}>
-                              חסרים {summary.required - summary.available} עובדים
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              })}
+                      return filteredEmps.map(emp => (
+                        <tr key={emp.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                          <td style={{ padding: '8px 12px', fontWeight: 500, color: '#1e293b', position: 'sticky', right: 0, background: 'white', zIndex: 1, whiteSpace: 'nowrap' }}>
+                            {emp.name}
+                          </td>
+                          {weekDays.slice(0, 6).map(date => {
+                            const dow = new Date(date + 'T12:00:00').getDay()
+                            const dayShifts = getShiftsForDay(dow)
+                            return (
+                              <td key={date} style={{ padding: '8px 4px', textAlign: 'center' }}>
+                                <div style={{ display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
+                                  {dayShifts.map(shift => {
+                                    const avail = getAvail(emp.id, date, shift.id)
+                                    const color = avail === 'available' ? '#10b981'
+                                      : avail === 'prefer_not' ? '#f59e0b'
+                                      : avail === 'unavailable' ? '#ef4444'
+                                      : undefined
+                                    const label = shift.name?.includes('בוקר') ? 'B' : shift.name?.includes('ערב') ? 'E' : shift.name?.includes('שישי') ? 'F' : '?'
+                                    return (
+                                      <span key={shift.id} title={`${shift.name}: ${avail || 'לא הגדיר'}`}
+                                        style={{
+                                          width: 14, height: 14, borderRadius: '50%', display: 'inline-block',
+                                          background: color || 'transparent',
+                                          border: color ? 'none' : '1.5px solid #d1d5db',
+                                          cursor: 'help', flexShrink: 0,
+                                        }} />
+                                    )
+                                  })}
+                                </div>
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))
+                    })()}
+                  </tbody>
+                  {/* Summary row */}
+                  <tfoot>
+                    <tr style={{ borderTop: '2px solid #f1f5f9' }}>
+                      <td style={{ padding: '8px 12px', fontSize: 11, fontWeight: 600, color: '#94a3b8', position: 'sticky', right: 0, background: '#fafafa' }}>סיכום</td>
+                      {weekDays.slice(0, 6).map(date => {
+                        const dow = new Date(date + 'T12:00:00').getDay()
+                        const dayShifts = getShiftsForDay(dow)
+                        let g = 0, y = 0, r = 0, u = 0
+                        employees.forEach(emp => {
+                          dayShifts.forEach(s => {
+                            const a = getAvail(emp.id, date, s.id)
+                            if (a === 'available') g++
+                            else if (a === 'prefer_not') y++
+                            else if (a === 'unavailable') r++
+                            else u++
+                          })
+                        })
+                        return (
+                          <td key={date} style={{ padding: '6px 4px', textAlign: 'center', fontSize: 10, color: '#94a3b8', background: '#fafafa' }}>
+                            {g > 0 && <span style={{ color: '#10b981' }}>🟢{g} </span>}
+                            {y > 0 && <span style={{ color: '#f59e0b' }}>🟡{y} </span>}
+                            {r > 0 && <span style={{ color: '#ef4444' }}>🔴{r} </span>}
+                            {u > 0 && <span style={{ color: '#9ca3af' }}>⬜{u}</span>}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
 
               {/* Weekly summary card */}
               {(() => {
