@@ -103,16 +103,18 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
     const availableEmps: string[] = []
     const preferNotEmps: string[] = []
     const unavailableEmps: string[] = []
+    const undefinedEmps: string[] = []
 
     employees.forEach(emp => {
       const avail = getAvail(emp.id, date, shiftId)
       const name = emp.name
-      if (avail === 'available' || avail === null) availableEmps.push(name)
+      if (avail === 'available') availableEmps.push(name)
       else if (avail === 'prefer_not') preferNotEmps.push(name)
       else if (avail === 'unavailable') unavailableEmps.push(name)
+      else undefinedEmps.push(name) // null = לא הגדיר
     })
 
-    return { required, available: availableEmps.length, availableEmps, preferNotEmps, unavailableEmps }
+    return { required, available: availableEmps.length, availableEmps, preferNotEmps, unavailableEmps, undefinedEmps }
   }
 
   return (
@@ -219,42 +221,43 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
                             </span>
                           </div>
 
-                          {/* Employee list by availability - dots + names */}
-                          <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {summary.availableEmps.length > 0 && (
-                              <div className="flex flex-wrap gap-2 items-center">
-                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block', flexShrink: 0 }} />
-                                <span style={{ color: '#475569' }}>{summary.availableEmps.length}</span>
-                                <span style={{ color: '#94a3b8', fontSize: 12 }}>{summary.availableEmps.join(', ')}</span>
-                              </div>
-                            )}
-                            {summary.preferNotEmps.length > 0 && (
-                              <div className="flex flex-wrap gap-2 items-center">
-                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', display: 'inline-block', flexShrink: 0 }} />
-                                <span style={{ color: '#475569' }}>{summary.preferNotEmps.length}</span>
-                                <span style={{ color: '#94a3b8', fontSize: 12 }}>{summary.preferNotEmps.join(', ')}</span>
-                              </div>
-                            )}
-                            {summary.unavailableEmps.length > 0 && (
-                              <div className="flex flex-wrap gap-2 items-center">
-                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', display: 'inline-block', flexShrink: 0 }} />
-                                <span style={{ color: '#475569' }}>{summary.unavailableEmps.length}</span>
-                                <span style={{ color: '#94a3b8', fontSize: 12 }}>{summary.unavailableEmps.join(', ')}</span>
-                              </div>
-                            )}
+                          {/* Employee table */}
+                          <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                            <tbody>
+                              {employees.map(emp => {
+                                const avail = getAvail(emp.id, date, shift.id)
+                                const cfg = avail === 'available'
+                                  ? { icon: '🟢', label: 'פנוי', color: '#059669' }
+                                  : avail === 'prefer_not'
+                                  ? { icon: '🟡', label: 'מעדיף שלא', color: '#d97706' }
+                                  : avail === 'unavailable'
+                                  ? { icon: '🔴', label: 'לא יכול', color: '#dc2626' }
+                                  : { icon: '⬜', label: 'לא הגדיר', color: '#9ca3af' }
+                                return (
+                                  <tr key={emp.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                                    <td style={{ padding: '6px 0', color: '#1e293b', fontWeight: 500 }}>{emp.name}</td>
+                                    <td style={{ padding: '6px 0', textAlign: 'left', color: cfg.color, fontSize: 12 }}>
+                                      {cfg.icon} {cfg.label}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+
+                          {/* Summary line */}
+                          <div style={{ marginTop: 10, fontSize: 11, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            <span>✅ {summary.availableEmps.length} פנויים</span>
+                            <span>⚠️ {summary.preferNotEmps.length} מעדיפים שלא</span>
+                            <span>❌ {summary.unavailableEmps.length} לא יכולים</span>
+                            <span>⬜ {summary.undefinedEmps.length} לא הגדירו</span>
                           </div>
 
-                          {/* Warning if understaffed - border-red-200 only, no red background */}
+                          {/* Warning if understaffed */}
                           {coverage < 1 && (
                             <div style={{
-                              marginTop: 10,
-                              fontSize: 12,
-                              color: '#ef4444',
-                              fontWeight: 600,
-                              padding: '6px 10px',
-                              border: '1px solid #fecaca',
-                              borderRadius: 8,
-                              background: 'white',
+                              marginTop: 10, fontSize: 12, color: '#ef4444', fontWeight: 600,
+                              padding: '6px 10px', border: '1px solid #fecaca', borderRadius: 8,
                             }}>
                               חסרים {summary.required - summary.available} עובדים
                             </div>
