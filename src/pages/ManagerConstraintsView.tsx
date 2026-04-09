@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
+import { useAppUser } from '../lib/UserContext'
 
 const fadeIn = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.35 } } }
 
@@ -11,7 +12,7 @@ type Availability = 'unavailable' | 'prefer_not' | 'available'
 type ViewFilter = 'all' | 'problems'
 
 interface Employee { id: number; name: string; training_status: string }
-interface Constraint { employee_id: number; date: string; availability: Availability; shift_id: number | null }
+interface Constraint { employee_id: number; date: string; availability: Availability; shift_id: number | null; submitted_by_name?: string | null }
 interface BranchShift { id: number; name: string; start_time: string; end_time: string; days_of_week: number[] }
 interface StaffingRequirement { shift_id: number; role_id: number; required_count: number }
 
@@ -44,6 +45,7 @@ interface Props {
 }
 
 export default function ManagerConstraintsView({ branchId, branchName, branchColor, onBack }: Props) {
+  const { appUser } = useAppUser()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [constraints, setConstraints] = useState<Constraint[]>([])
   const [shifts, setShifts] = useState<BranchShift[]>([])
@@ -51,6 +53,9 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
   const [weekOffset, setWeekOffset] = useState(0)
   const [loading, setLoading] = useState(true)
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
+  const [manualDialog, setManualDialog] = useState<{ empId: number; empName: string } | null>(null)
+  const [manualAvails, setManualAvails] = useState<Map<string, string>>(new Map())
+  const [saving, setSaving] = useState(false)
 
   const weekDays = getWeekDays(weekOffset)
   const weekLabel = `${formatShortDate(weekDays[0])} — ${formatShortDate(weekDays[6])}`
@@ -61,7 +66,7 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
     setLoading(true)
     const [empsRes, consRes, shiftsRes, staffingRes] = await Promise.all([
       supabase.from('branch_employees').select('id, name, training_status, is_manager').eq('branch_id', branchId).eq('active', true).eq('is_manager', false).order('name'),
-      supabase.from('schedule_constraints').select('employee_id, date, availability, shift_id')
+      supabase.from('schedule_constraints').select('employee_id, date, availability, shift_id, submitted_by_name')
         .eq('branch_id', branchId)
         .gte('date', weekDays[0])
         .lte('date', weekDays[6]),
@@ -115,6 +120,51 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
     })
 
     return { required, available: availableEmps.length, availableEmps, preferNotEmps, unavailableEmps, undefinedEmps }
+  }
+
+  function openManualDialog(empId: number, empName: string) {
+    const map = new Map<string, string>()
+    weekDays.slice(0, 6).forEach(date => {
+      const dow = new Date(date + 'T12:00:00').getDay()
+      getShiftsForDay(dow).forEach(shift => {
+        const avail = getAvail(empId, date, shift.id)
+        map.set(`${date}_${shift.id}`, avail || 'available')
+      })
+    })
+    setManualAvails(map)
+    setManualDialog({ empId, empName })
+  }
+
+  async function saveManualAvailability() {
+    if (!manualDialog) return
+    setSaving(true)
+    const records: { employee_id: number; branch_id: number; date: string; shift_id: number; availability: string; submitted_by_name: string; updated_at: string }[] = []
+    manualAvails.forEach((availability, key) => {
+      const [date, shiftIdStr] = key.split('_')
+      records.push({
+        employee_id: manualDialog.empId,
+        branch_id: branchId,
+        date,
+        shift_id: Number(shiftIdStr),
+        availability,
+        submitted_by_name: appUser?.name || 'מנהל',
+        updated_at: new Date().toISOString(),
+      })
+    })
+
+    for (const r of records) {
+      await supabase.from('schedule_constraints')
+        .delete()
+        .eq('employee_id', r.employee_id)
+        .eq('date', r.date)
+        .eq('shift_id', r.shift_id)
+      await supabase.from('schedule_constraints').insert(r)
+    }
+
+    setSaving(false)
+    setManualDialog(null)
+    alert(`✅ הזמינות של ${manualDialog.empName} נשמרה בהצלחה`)
+    loadData()
   }
 
   return (
@@ -211,6 +261,14 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
                         <tr key={emp.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                           <td style={{ padding: '8px 12px', fontWeight: 500, color: '#1e293b', position: 'sticky', right: 0, background: 'white', zIndex: 1, whiteSpace: 'nowrap' }}>
                             {emp.name}
+                            {(appUser?.role === 'admin' || appUser?.role === 'branch' || appUser?.role === 'scheduler') && (
+                              <button
+                                onClick={() => openManualDialog(emp.id, emp.name)}
+                                title="הגש זמינות"
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#6366f1', marginRight: 4 }}>
+                                ✏️
+                              </button>
+                            )}
                           </td>
                           {weekDays.slice(0, 6).map(date => {
                             const dow = new Date(date + 'T12:00:00').getDay()
@@ -225,8 +283,9 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
                                       : avail === 'unavailable' ? '#ef4444'
                                       : undefined
                                     const label = shift.name?.includes('בוקר') ? 'B' : shift.name?.includes('ערב') ? 'E' : shift.name?.includes('שישי') ? 'F' : '?'
+                                    const constraint = constraints.find(c => c.employee_id === emp.id && c.date === date && (c.shift_id === shift.id || c.shift_id === null))
                                     return (
-                                      <span key={shift.id} title={`${shift.name}: ${avail || 'לא הגדיר'}`}
+                                      <span key={shift.id} title={`${shift.name}: ${avail || 'לא הגדיר'}${constraint?.submitted_by_name ? ` (הוגש ע"י ${constraint.submitted_by_name})` : ''}`}
                                         style={{
                                           width: 14, height: 14, borderRadius: '50%', display: 'inline-block',
                                           background: color || 'transparent',
@@ -367,6 +426,70 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
           )}
         </motion.div>
       )}
+
+      {manualDialog && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={() => setManualDialog(null)}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 500, width: '100%', maxHeight: '80vh', overflow: 'auto' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>הגשת זמינות עבור {manualDialog.empName}</h3>
+            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 16 }}>{weekLabel}</p>
+
+            {weekDays.slice(0, 6).map((date) => {
+              const dow = new Date(date + 'T12:00:00').getDay()
+              const dayShifts = getShiftsForDay(dow)
+              if (dayShifts.length === 0) return null
+              const dayName = DAY_NAMES[dow]
+              return (
+                <div key={date} style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', marginBottom: 6 }}>
+                    {dayName} {formatShortDate(date)}
+                  </div>
+                  {dayShifts.map(shift => {
+                    const key = `${date}_${shift.id}`
+                    const val = manualAvails.get(key) || 'available'
+                    return (
+                      <div key={shift.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, paddingRight: 12 }}>
+                        <span style={{ fontSize: 12, color: '#64748b', minWidth: 100 }}>{shift.name} {(shift.start_time||'').slice(0,5)}</span>
+                        {(['available', 'prefer_not', 'unavailable'] as const).map(opt => {
+                          const cfg = opt === 'available' ? { label: '🟢', bg: '#ecfdf5', border: '#a7f3d0' }
+                            : opt === 'prefer_not' ? { label: '🟡', bg: '#fffbeb', border: '#fde68a' }
+                            : { label: '🔴', bg: '#fef2f2', border: '#fecaca' }
+                          return (
+                            <button key={opt} onClick={() => {
+                              const next = new Map(manualAvails)
+                              next.set(key, opt)
+                              setManualAvails(next)
+                            }}
+                              style={{
+                                width: 32, height: 32, borderRadius: 8, border: `2px solid ${val === opt ? cfg.border : '#e5e7eb'}`,
+                                background: val === opt ? cfg.bg : 'white', cursor: 'pointer', fontSize: 14,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              }}>
+                              {cfg.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button onClick={() => setManualDialog(null)}
+                style={{ padding: '8px 16px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
+                ביטול
+              </button>
+              <button onClick={saveManualAvailability} disabled={saving}
+                style={{ padding: '8px 16px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                {saving ? 'שומר...' : 'שמור זמינות'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
