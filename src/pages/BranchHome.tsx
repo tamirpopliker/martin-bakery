@@ -154,7 +154,7 @@ export default function BranchHome({ branch, onBack }: Props) {
     <ScheduleHistory branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-team')} onNavigate={(p, data) => { setPageData(data); setPage(p as BranchPage) }} />
   )
   if (page === 'employees') return (
-    <BranchEmployees branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
+    <BranchEmployees branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} onNavigate={(p) => setPage(p as BranchPage)} />
   )
   if (page === 'branch-employees') return (
     <BranchEmployees branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-team')} onNavigate={(p) => setPage(p as BranchPage)} />
