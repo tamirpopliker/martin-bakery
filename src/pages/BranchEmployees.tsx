@@ -53,13 +53,45 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   const [importLoading, setImportLoading] = useState(false)
   const [importSaving, setImportSaving] = useState(false)
   const [importMsg, setImportMsg] = useState<string | null>(null)
+  // App connection status: email → 'connected' | 'pending' | 'none'
+  const [appStatus, setAppStatus] = useState<Map<string, string>>(new Map())
+  // Email input for connect dialog
+  const [connectDialog, setConnectDialog] = useState<{ empId: number; name: string; email: string } | null>(null)
+  const [connectEmail, setConnectEmail] = useState('')
 
   async function fetchEmployees() {
     const { data, error } = await supabase.from('branch_employees').select('*')
       .eq('branch_id', branchId).order('name')
     console.log('[BranchEmployees] fetch:', { branchId, data, error })
     if (data) setEmployees(data)
+
+    // Load app_users for this branch to determine connection status
+    const { data: appUsers } = await supabase.from('app_users').select('email, auth_uid')
+      .eq('branch_id', branchId)
+    const statusMap = new Map<string, string>()
+    appUsers?.forEach((au: any) => {
+      const email = au.email?.toLowerCase()
+      if (email) statusMap.set(email, au.auth_uid ? 'connected' : 'pending')
+    })
+    setAppStatus(statusMap)
+
     setLoading(false)
+  }
+
+  function getEmpStatus(emp: Employee): 'connected' | 'pending' | 'none' {
+    if (!emp.email) return 'none'
+    return (appStatus.get(emp.email.toLowerCase()) as any) || 'none'
+  }
+
+  async function connectToApp(empId: number, name: string, email: string) {
+    if (!email.trim()) return
+    // Save email to branch_employees if not set
+    await supabase.from('branch_employees').update({ email: email.trim().toLowerCase() }).eq('id', empId)
+    // Send invitation
+    await sendInvite(email.trim().toLowerCase(), name)
+    // Update local status
+    setAppStatus(prev => { const m = new Map(prev); m.set(email.trim().toLowerCase(), 'pending'); return m })
+    setConnectDialog(null)
   }
 
   useEffect(() => { fetchEmployees() }, [branchId])
@@ -225,8 +257,8 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
         ) : (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <Card className="shadow-sm" style={{ overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 60px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
-                <span>שם</span><span>סטטוס</span><span>עריכה</span><span>הזמנה</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 60px 60px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                <span>שם</span><span>אפליקציה</span><span>סטטוס</span><span>עריכה</span><span>הזמנה</span>
               </div>
               {employees.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
@@ -234,8 +266,20 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
                   <div>אין עובדים. לחץ "הוסף עובד" כדי להתחיל.</div>
                 </div>
               ) : employees.map(emp => (
-                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 60px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: emp.active ? 1 : 0.5 }}>
+                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 60px 60px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: emp.active ? 1 : 0.5 }}>
                   <span style={{ fontWeight: '600', color: '#0f172a' }}>{emp.name}</span>
+                  {/* App connection status */}
+                  {(() => {
+                    const status = getEmpStatus(emp)
+                    if (status === 'connected') return <span style={{ fontSize: 11, color: '#10b981' }}>🟢 מחובר</span>
+                    if (status === 'pending') return <span style={{ fontSize: 11, color: '#f59e0b' }}>🟡 ממתין</span>
+                    return (
+                      <button onClick={() => { setConnectDialog({ empId: emp.id, name: emp.name, email: emp.email || '' }); setConnectEmail(emp.email || '') }}
+                        style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 8px', fontSize: 11, color: '#6366f1', cursor: 'pointer', fontWeight: 600 }}>
+                        📱 חבר
+                      </button>
+                    )
+                  })()}
                   <button onClick={() => toggleActive(emp)}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600', color: emp.active ? '#34d399' : '#94a3b8' }}>
                     {emp.active ? <ToggleRight size={18} color="#34d399" /> : <ToggleLeft size={18} color="#94a3b8" />}
@@ -307,6 +351,34 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
       </Sheet>
 
       {/* Single Invite Modal */}
+      {/* Connect to app dialog */}
+      {connectDialog && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setConnectDialog(null)}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, width: 380, direction: 'rtl' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>חיבור לאפליקציה</h3>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>הזן מייל Google עבור {connectDialog.name}</p>
+            <input
+              type="email"
+              placeholder="example@gmail.com"
+              value={connectEmail}
+              onChange={e => setConnectEmail(e.target.value)}
+              style={{ width: '100%', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '10px 14px', fontSize: 14, boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 16, direction: 'ltr' }}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setConnectDialog(null)}
+                style={{ padding: '8px 16px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>ביטול</button>
+              <button onClick={() => connectToApp(connectDialog.empId, connectDialog.name, connectEmail)}
+                disabled={!connectEmail.trim() || inviteSending}
+                style={{ padding: '8px 16px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: !connectEmail.trim() ? 0.5 : 1 }}>
+                {inviteSending ? 'שולח...' : 'שלח הזמנה 📱'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {inviteModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => { setInviteModal(null); setInviteSuccess(null) }}>
