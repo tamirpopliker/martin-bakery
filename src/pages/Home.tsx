@@ -205,6 +205,12 @@ export default function Home() {
     if (schedulerBranch) {
       return <BranchHome branch={{ id: schedulerBranch.id, name: schedulerBranch.name, color: schedulerBranch.color }} onBack={() => {}} />
     }
+    // Branches not loaded yet — show loading
+    if (branchList.length === 0) {
+      return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+        <div style={{ textAlign: 'center', color: '#94a3b8' }}>טוען...</div>
+      </div>
+    }
   }
 
   // ─── Page routing with floating home button ────────────────────────────────
