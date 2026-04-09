@@ -55,6 +55,18 @@ serve(async (req) => {
       }
     }
 
+    // ── Create auth user via invite ──
+    try {
+      await adminClient.auth.admin.inviteUserByEmail(email.trim().toLowerCase(), {
+        data: { full_name: name },
+        redirectTo: 'https://martin-bakery.vercel.app',
+      })
+      console.log(`Auth invite sent to ${email}`)
+    } catch (authErr: any) {
+      // User may already exist in auth — that's OK
+      console.log(`Auth invite skipped (may already exist): ${authErr?.message || authErr}`)
+    }
+
     // ── Send invitation email via Resend ──
     const apiKey = Deno.env.get('RESEND_API_KEY')
     if (!apiKey) {
