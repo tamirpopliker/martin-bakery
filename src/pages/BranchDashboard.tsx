@@ -7,8 +7,8 @@ import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Button } from '@/components/ui/button'
-import { ArrowRight, TrendingUp, TrendingDown, Store } from 'lucide-react'
+import { TrendingUp, TrendingDown } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { RevenueIcon, ProfitIcon, LaborIcon } from '@/components/icons'
 import { generateInsights, type InsightsInput } from '../lib/generateInsights'
 import InsightsCard from '../components/InsightsCard'
@@ -250,22 +250,12 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
   return (
     <div dir="rtl">
       {/* HEADER */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: branchColor + '20' }}>
-          <Store size={20} style={{ color: branchColor }} />
-        </div>
-        <div>
-          <h1 className="text-xl font-extrabold text-slate-900 m-0">דשבורד סניף — {branchName}</h1>
-          <p className="text-[13px] text-slate-400 m-0">KPI · הכנסות · הוצאות · {period.label}</p>
-        </div>
-        <div className="mr-auto">
-          <PeriodPicker period={period} onChange={setPeriod} />
-        </div>
-      </div>
+      <PageHeader
+        title="דשבורד סניף"
+        subtitle={branchName}
+        onBack={onBack}
+        action={<PeriodPicker period={period} onChange={setPeriod} />}
+      />
 
       {/* BODY */}
       <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>

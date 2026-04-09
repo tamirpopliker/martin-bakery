@@ -4,10 +4,10 @@ import { supabase } from '../lib/supabase'
 import { fetchGlobalEmployees, getWorkingDays, countWorkingDaysInRange, type GlobalEmployee } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Plus, Trash2, Pencil, Users, UserPlus, Clock, ChevronDown, ChevronUp, X, Briefcase, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Pencil, Users, UserPlus, Clock, ChevronDown, ChevronUp, X, Briefcase, AlertTriangle } from 'lucide-react'
 import { LaborIcon } from '@/components/icons'
 import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import PageHeader from '../components/PageHeader'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 type Department = 'creams' | 'dough' | 'packaging' | 'cleaning'
@@ -290,29 +290,23 @@ export default function DepartmentLabor({ department, onBack }: Props) {
     <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div style={{ width: '40px', height: '40px', background: cfg.bg, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <LaborIcon size={20} color={cfg.color} />
-        </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>לייבור — {cfg.label}</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>הזנת שעות עבודה · עלות מעסיק ×1.3</p>
-        </div>
-        <div style={{ marginRight: 'auto', display: 'flex', gap: '16px' }}>
-          <div style={{ background: cfg.bg, border: `1px solid ${cfg.color}33`, borderRadius: '10px', padding: '8px 16px', textAlign: 'center' }}>
-            <div style={{ fontSize: '18px', fontWeight: '800', color: cfg.color }}>{fmtM(totalCost)}</div>
-            <div style={{ fontSize: '11px', color: '#64748b' }}>סה"כ החודש</div>
+      <PageHeader
+        title="לייבור מחלקה"
+        subtitle={cfg.label}
+        onBack={onBack}
+        action={
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <div style={{ background: cfg.bg, border: `1px solid ${cfg.color}33`, borderRadius: '10px', padding: '8px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: '18px', fontWeight: '800', color: cfg.color }}>{fmtM(totalCost)}</div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>סה"כ החודש</div>
+            </div>
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: '18px', fontWeight: '800', color: '#374151' }}>{totalHours.toFixed(1)}</div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>שעות כולל</div>
+            </div>
           </div>
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 16px', textAlign: 'center' }}>
-            <div style={{ fontSize: '18px', fontWeight: '800', color: '#374151' }}>{totalHours.toFixed(1)}</div>
-            <div style={{ fontSize: '11px', color: '#64748b' }}>שעות כולל</div>
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* ─── טאבים ───────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', padding: '0 32px', background: 'white', borderBottom: '1px solid #e2e8f0' }}>

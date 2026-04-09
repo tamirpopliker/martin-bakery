@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
-import { ArrowRight, Plus, Pencil, Users } from 'lucide-react'
+import { Plus, Pencil, Users } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import PageHeader from '../components/PageHeader'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Props { onBack: () => void }
@@ -136,28 +136,17 @@ export default function FactoryEmployees({ onBack }: Props) {
     <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} /> חזרה
-        </Button>
-        <div style={{ width: '40px', height: '40px', background: '#818cf820', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Users size={20} color="#818cf8" />
-        </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>
-            עובדי מפעל — {currentDeptLabel}
-          </h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
-            {activeCount} פעילים · {inactiveCount} מושבתים
-          </p>
-        </div>
-        <div style={{ marginRight: 'auto' }}>
+      <PageHeader
+        title="עובדי מפעל"
+        subtitle={`${currentDeptLabel} · ${activeCount} פעילים · ${inactiveCount} מושבתים`}
+        onBack={onBack}
+        action={
           <button onClick={() => setShowAddEmp(v => !v)}
             style={{ display: 'flex', alignItems: 'center', gap: '6px', background: showAddEmp ? '#64748b' : '#0f172a', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
             <Plus size={16} /> {showAddEmp ? 'ביטול' : 'הוסף עובד'}
           </button>
-        </div>
-      </div>
+        }
+      />
 
       <div style={{ padding: '24px 32px', maxWidth: '960px', margin: '0 auto' }}>
 

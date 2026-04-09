@@ -3,10 +3,10 @@ import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { ArrowRight, Plus, Pencil, Trash2, CheckCircle, XCircle, TrendingUp } from 'lucide-react'
+import { Plus, Pencil, Trash2, CheckCircle, XCircle, TrendingUp } from 'lucide-react'
 import { RevenueIcon } from '@/components/icons'
 import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import PageHeader from '../components/PageHeader'
 
 // ─── טיפוסים ───────────────────────────────────────────────────────────────
 type Department = 'creams' | 'dough' | 'packaging'
@@ -226,36 +226,22 @@ export default function DailyProduction({ department, onBack }: Props) {
     <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* ─── כותרת ─────────────────────────────────────────────── */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-
-        <div style={{ width: '40px', height: '40px', background: cfg.bg, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <RevenueIcon size={20} color={cfg.color} />
-        </div>
-
-        <div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>
-            {cfg.isQty ? 'כמויות אריזה' : 'ייצור יומי'} — {cfg.label}
-          </h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
-            {cfg.isQty ? 'הזנת כמויות אריזה יומיות' : 'הזנת סכום ייצור יומי במחיר עלות'}
-          </p>
-        </div>
-
-        {/* אינדיקטור היום */}
-        <div style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '8px',
-          background: todayEntered ? '#f0fdf4' : '#fff1f2',
-          border: `1px solid ${todayEntered ? '#bbf7d0' : '#fecdd3'}`,
-          borderRadius: '10px', padding: '8px 16px' }}>
-          {todayEntered
-            ? <><CheckCircle size={18} color="#34d399" /><span style={{ color: '#34d399', fontWeight: '700', fontSize: '14px' }}>הוזן היום ✓</span></>
-            : <><XCircle    size={18} color="#fb7185" /><span style={{ color: '#fb7185', fontWeight: '700', fontSize: '14px' }}>לא הוזן היום</span></>
-          }
-        </div>
-      </div>
+      <PageHeader
+        title={cfg.isQty ? 'כמויות אריזה' : 'ייצור יומי'}
+        subtitle={cfg.label}
+        onBack={onBack}
+        action={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px',
+            background: todayEntered ? '#f0fdf4' : '#fff1f2',
+            border: `1px solid ${todayEntered ? '#bbf7d0' : '#fecdd3'}`,
+            borderRadius: '10px', padding: '8px 16px' }}>
+            {todayEntered
+              ? <><CheckCircle size={18} color="#34d399" /><span style={{ color: '#34d399', fontWeight: '700', fontSize: '14px' }}>הוזן היום ✓</span></>
+              : <><XCircle    size={18} color="#fb7185" /><span style={{ color: '#fb7185', fontWeight: '700', fontSize: '14px' }}>לא הוזן היום</span></>
+            }
+          </div>
+        }
+      />
 
       <div className="page-container" style={{ padding: '28px 32px', maxWidth: '960px', margin: '0 auto' }}>
 

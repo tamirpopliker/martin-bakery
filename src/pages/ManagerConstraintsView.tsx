@@ -447,29 +447,30 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
                   {dayShifts.map(shift => {
                     const key = `${date}_${shift.id}`
                     const val = manualAvails.get(key) || 'available'
+                    const cycle = ['available', 'prefer_not', 'unavailable'] as const
+                    const nextVal = cycle[(cycle.indexOf(val as any) + 1) % 3]
+                    const cfg = val === 'available'
+                      ? { bg: '#ecfdf5', border: '#a7f3d0', text: '#065f46', label: '✓ פנוי' }
+                      : val === 'prefer_not'
+                      ? { bg: '#fffbeb', border: '#fde68a', text: '#92400e', label: '~ מעדיף שלא' }
+                      : { bg: '#fef2f2', border: '#fecaca', text: '#991b1b', label: '✕ לא יכול' }
                     return (
-                      <div key={shift.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, paddingRight: 12 }}>
-                        <span style={{ fontSize: 12, color: '#64748b', minWidth: 100 }}>{shift.name} {(shift.start_time||'').slice(0,5)}</span>
-                        {(['available', 'prefer_not', 'unavailable'] as const).map(opt => {
-                          const cfg = opt === 'available' ? { label: '🟢', bg: '#ecfdf5', border: '#a7f3d0' }
-                            : opt === 'prefer_not' ? { label: '🟡', bg: '#fffbeb', border: '#fde68a' }
-                            : { label: '🔴', bg: '#fef2f2', border: '#fecaca' }
-                          return (
-                            <button key={opt} onClick={() => {
-                              const next = new Map(manualAvails)
-                              next.set(key, opt)
-                              setManualAvails(next)
-                            }}
-                              style={{
-                                width: 32, height: 32, borderRadius: 8, border: `2px solid ${val === opt ? cfg.border : '#e5e7eb'}`,
-                                background: val === opt ? cfg.bg : 'white', cursor: 'pointer', fontSize: 14,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              }}>
-                              {cfg.label}
-                            </button>
-                          )
-                        })}
-                      </div>
+                      <button key={shift.id} onClick={() => {
+                        const next = new Map(manualAvails)
+                        next.set(key, nextVal)
+                        setManualAvails(next)
+                      }}
+                        style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          width: '100%', padding: '10px 14px', marginBottom: 6, borderRadius: 10,
+                          border: `1.5px solid ${cfg.border}`, background: cfg.bg, cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}>
+                        <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>
+                          {shift.name} <span style={{ color: '#94a3b8', fontWeight: 400 }}>{(shift.start_time||'').slice(0,5)}</span>
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: cfg.text }}>{cfg.label}</span>
+                      </button>
                     )
                   })}
                 </div>

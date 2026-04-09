@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, TrendingUp, Trash2, Wrench, ClipboardList, LayoutDashboard, FlaskConical, Croissant, Package, Truck } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { TrendingUp, Trash2, Wrench, ClipboardList, LayoutDashboard, FlaskConical, Croissant, Package, Truck } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import DailyProduction from './DailyProduction'
 import FactoryWaste from './FactoryWaste'
 import FactoryRepairs from './FactoryRepairs'
@@ -78,19 +78,11 @@ export default function DepartmentHome({ department, onBack }: Props) {
     <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
-      <div className="bg-white px-8 py-5 flex items-center gap-4 shadow-sm border-b border-slate-200 flex-wrap">
-        <Button variant="outline" size="lg" onClick={onBack} className="rounded-xl gap-2.5 px-6 text-[15px] font-bold text-slate-500 hover:text-slate-900">
-          <ArrowRight size={22} />
-          חזרה
-        </Button>
-        <div style={{ width: '44px', height: '44px', background: cfg.color, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 4px 14px ${cfg.color}55` }}>
-          <cfg.Icon size={22} color="white" />
-        </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>מחלקת {cfg.label}</h1>
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>{cfg.subtitle}</p>
-        </div>
-      </div>
+      <PageHeader
+        title={`מחלקת ${cfg.label}`}
+        subtitle={cfg.subtitle}
+        onBack={onBack}
+      />
 
       {/* ─── כרטיסי מודולים ──────────────────────────────────────────────── */}
       <div className="page-container" style={{ padding: '36px', maxWidth: '960px', margin: '0 auto' }}>
