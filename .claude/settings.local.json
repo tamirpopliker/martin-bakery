@@ -178,7 +178,15 @@
       "Bash(grep -v \"//\")",
       "Bash(ls -la dist/assets/index-*.js)",
       "Bash(grep -c \"onNavigate\" dist/assets/index-*.js)",
-      "Bash(grep -o \"onNavigate[^,;\\)]*\" dist/assets/index-*.js)"
+      "Bash(grep -o \"onNavigate[^,;\\)]*\" dist/assets/index-*.js)",
+      "Bash(grep -n \"onNavigate\\(\" \"C:/Users/USER/martin-bakery/dist/assets/\"index-*.js)",
+      "Bash(grep -c \"onNavigate\\(\" \"C:/Users/USER/martin-bakery/dist/assets/\"index-*.js)",
+      "Bash(cut -c109300-109400 \"C:/Users/USER/martin-bakery/dist/assets/\"index-*.js)",
+      "Bash(grep -ob onNavigate dist/assets/index-*.js)",
+      "Bash(dd if=dist/assets/index-w1IYteax.js bs=1 skip=2277000 count=120)",
+      "Bash(grep -v \"^--$\")",
+      "Bash(npx vercel:*)",
+      "Bash(grep -n \"onNavigate }\" src/pages/*.tsx src/pages/*.ts)"
     ]
   }
 }

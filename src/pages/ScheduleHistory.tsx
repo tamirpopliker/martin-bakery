@@ -43,7 +43,7 @@ function formatShortDate(iso: string): string {
   return `${parseInt(parts[2])}/${parseInt(parts[1])}`
 }
 
-export default function ScheduleHistory({ branchId, branchName, branchColor, onBack, onNavigate }: Props) {
+export default function ScheduleHistory({ branchId, branchName, branchColor, onBack, onNavigate = () => {} }: Props) {
   const [publications, setPublications] = useState<Publication[]>([])
   const [loading, setLoading] = useState(true)
 

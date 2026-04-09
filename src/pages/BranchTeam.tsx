@@ -39,7 +39,7 @@ const categories = [
   },
 ]
 
-export default function BranchTeam({ branchName, branchColor, onBack, onNavigate }: Props) {
+export default function BranchTeam({ branchName, branchColor, onBack, onNavigate = () => {} }: Props) {
   const { appUser } = useAppUser()
   const isManagerOrAdmin = appUser?.role === 'admin' || appUser?.role === 'branch'
   return (

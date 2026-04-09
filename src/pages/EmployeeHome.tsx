@@ -15,7 +15,7 @@ interface Props {
   onNavigate?: (page: string) => void
 }
 
-export default function EmployeeHome({ onNavigate }: Props) {
+export default function EmployeeHome({ onNavigate = () => {} }: Props) {
   const { appUser, logout } = useAppUser()
   const [branchName, setBranchName] = useState('')
   const [page, setPage] = useState<string | null>(null)

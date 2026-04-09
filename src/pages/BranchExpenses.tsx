@@ -73,7 +73,7 @@ function AutocompleteInput({ value, onChange, options, placeholder, color }: {
   )
 }
 
-export default function BranchExpenses({ branchId, branchName, branchColor, onBack, onNavigate }: Props) {
+export default function BranchExpenses({ branchId, branchName, branchColor, onBack, onNavigate = () => {} }: Props) {
   const { period, setPeriod, from, to } = usePeriod()
   const [entries, setEntries]         = useState<Entry[]>([])
   const [suppliers, setSuppliers]     = useState<Supplier[]>([])

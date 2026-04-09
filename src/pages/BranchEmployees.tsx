@@ -11,6 +11,7 @@ interface Props {
   branchName: string
   branchColor: string
   onBack: () => void
+  onNavigate?: (page: string) => void
 }
 
 interface Employee {
@@ -31,7 +32,7 @@ const S = {
   input: { width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box' as const, fontFamily: 'inherit' },
 }
 
-export default function BranchEmployees({ branchId, branchName, branchColor, onBack }: Props) {
+export default function BranchEmployees({ branchId, branchName, branchColor, onBack, onNavigate = () => {} }: Props) {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [sheetOpen, setSheetOpen] = useState(false)

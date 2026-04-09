@@ -197,7 +197,7 @@ export default function Home() {
   }, [from, to])
 
   // Employee role gets their own dedicated home page (after all hooks)
-  if (appUser?.role === 'employee') return <EmployeeHome onNavigate={(p) => setPage(p)} />
+  if (appUser?.role === 'employee') return <EmployeeHome onNavigate={(p: string) => setPage(p)} />
 
   // Scheduler goes directly to their branch's team management page
   if (appUser?.role === 'scheduler' && appUser.branch_id) {
