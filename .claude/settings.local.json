@@ -173,7 +173,8 @@
       "Bash(npx tsc:*)",
       "Bash(curl -s -X POST \"https://nlklndgmtmwoacipjyek.supabase.co/functions/v1/invite-existing-users\" -H \"Content-Type: application/json\" -d '{}')",
       "Bash(python3 -m json.tool)",
-      "Bash(curl -s -X POST https://nlklndgmtmwoacipjyek.supabase.co/functions/v1/invite-existing-users -H 'Content-Type: application/json' -d {})"
+      "Bash(curl -s -X POST https://nlklndgmtmwoacipjyek.supabase.co/functions/v1/invite-existing-users -H 'Content-Type: application/json' -d {})",
+      "Bash(grep -rn \"onNavigate[^?]\\(\" src/pages/*.tsx)"
     ]
   }
 }

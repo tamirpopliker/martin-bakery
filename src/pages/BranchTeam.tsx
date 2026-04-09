@@ -7,7 +7,7 @@ interface Props {
   branchName: string
   branchColor: string
   onBack: () => void
-  onNavigate: (page: string) => void
+  onNavigate?: (page: string) => void
 }
 
 const categories = [
@@ -55,7 +55,7 @@ export default function BranchTeam({ branchName, branchColor, onBack, onNavigate
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3" style={{ gap: 12 }}>
               {cat.items.map(item => (
-                <button key={item.page + item.label} onClick={() => onNavigate(item.page)}
+                <button key={item.page + item.label} onClick={() => onNavigate?.(item.page)}
                   onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#c7d2fe' }}
                   onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#f1f5f9' }}
                   style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px', textAlign: 'right', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', transition: 'all 0.18s', display: 'flex', alignItems: 'center', gap: 12 }}>

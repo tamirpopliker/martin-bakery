@@ -12,7 +12,7 @@ const fadeIn = {
 }
 
 interface Props {
-  onNavigate: (page: string) => void
+  onNavigate?: (page: string) => void
 }
 
 export default function EmployeeHome({ onNavigate }: Props) {
@@ -74,7 +74,7 @@ export default function EmployeeHome({ onNavigate }: Props) {
     if (p === 'my-schedule' || p === 'employee-constraints') {
       setPage(p)
     } else {
-      onNavigate(p)
+      onNavigate?.(p)
     }
   }
 
