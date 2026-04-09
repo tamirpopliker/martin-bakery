@@ -27,25 +27,23 @@ interface MenuItem {
   subtitle: string
   Icon: any
   depts: Department[] // באילו מחלקות הפריט מופיע
-  cardBg: string      // רקע רך לכרטיס
-  cardBorder: string   // צבע גבול
 }
 
 // ─── קונפיגורציה ────────────────────────────────────────────────────────────
 const DEPT_CONFIG: Record<Department, { label: string; color: string; Icon: any; subtitle: string }> = {
-  creams:    { label: 'קרמים',       color: '#818cf8', Icon: FlaskConical, subtitle: 'ייצור · פחת · תיקונים · לייבור · דשבורד' },
-  dough:     { label: 'בצקים',       color: '#c084fc', Icon: Croissant,    subtitle: 'ייצור · פחת · תיקונים · לייבור · דשבורד' },
-  packaging: { label: 'אריזה',       color: '#0ea5e9', Icon: Package,      subtitle: 'כמויות · פחת · תיקונים · לייבור' },
-  cleaning:  { label: 'ניקיון/נהג',  color: '#64748b', Icon: Truck,        subtitle: 'תיקונים · לייבור' },
+  creams:    { label: 'קרמים',       color: '#6366f1', Icon: FlaskConical, subtitle: 'ייצור · פחת · תיקונים · לייבור · דשבורד' },
+  dough:     { label: 'בצקים',       color: '#6366f1', Icon: Croissant,    subtitle: 'ייצור · פחת · תיקונים · לייבור · דשבורד' },
+  packaging: { label: 'אריזה',       color: '#6366f1', Icon: Package,      subtitle: 'כמויות · פחת · תיקונים · לייבור' },
+  cleaning:  { label: 'ניקיון/נהג',  color: '#6366f1', Icon: Truck,        subtitle: 'תיקונים · לייבור' },
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { page: 'production', label: 'ייצור יומי',   subtitle: 'הזנת נתוני ייצור יומיים',           Icon: TrendingUp,       depts: ['creams', 'dough'],                         cardBg: '#eff6ff', cardBorder: '#bfdbfe' },
-  { page: 'production', label: 'כמויות יומיות', subtitle: 'הזנת כמויות אריזה',                 Icon: TrendingUp,       depts: ['packaging'],                                cardBg: '#eff6ff', cardBorder: '#bfdbfe' },
-  { page: 'waste',      label: 'פחת',           subtitle: 'מעקב פחת חומרי גלם וסחורה',        Icon: Trash2,           depts: ['creams', 'dough', 'packaging'],              cardBg: '#fef2f2', cardBorder: '#fecaca' },
-  { page: 'repairs',    label: 'תיקונים',       subtitle: 'תיקונים · רכישות ציוד',              Icon: Wrench,           depts: ['creams', 'dough', 'packaging', 'cleaning'],  cardBg: '#fff7ed', cardBorder: '#fed7aa' },
-  { page: 'labor',      label: 'לייבור',        subtitle: 'שעות עבודה · עלות מעסיק',            Icon: ClipboardList,    depts: ['creams', 'dough', 'packaging', 'cleaning'],  cardBg: '#fffbeb', cardBorder: '#fde68a' },
-  { page: 'dashboard',  label: 'דשבורד',        subtitle: 'KPI · גרפים · פירוט יומי',           Icon: LayoutDashboard,  depts: ['creams', 'dough'],                           cardBg: '#eef2ff', cardBorder: '#c7d2fe' },
+  { page: 'production', label: 'ייצור יומי',   subtitle: 'הזנת נתוני ייצור יומיים',           Icon: TrendingUp,       depts: ['creams', 'dough'] },
+  { page: 'production', label: 'כמויות יומיות', subtitle: 'הזנת כמויות אריזה',                 Icon: TrendingUp,       depts: ['packaging'] },
+  { page: 'waste',      label: 'פחת',           subtitle: 'מעקב פחת חומרי גלם וסחורה',        Icon: Trash2,           depts: ['creams', 'dough', 'packaging'] },
+  { page: 'repairs',    label: 'תיקונים',       subtitle: 'תיקונים · רכישות ציוד',              Icon: Wrench,           depts: ['creams', 'dough', 'packaging', 'cleaning'] },
+  { page: 'labor',      label: 'לייבור',        subtitle: 'שעות עבודה · עלות מעסיק',            Icon: ClipboardList,    depts: ['creams', 'dough', 'packaging', 'cleaning'] },
+  { page: 'dashboard',  label: 'דשבורד',        subtitle: 'KPI · גרפים · פירוט יומי',           Icon: LayoutDashboard,  depts: ['creams', 'dough'] },
 ]
 
 // ─── קומפוננטה ──────────────────────────────────────────────────────────────
@@ -75,7 +73,7 @@ export default function DepartmentHome({ department, onBack }: Props) {
 
   // ─── מסך Hub ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
       <PageHeader
@@ -103,22 +101,21 @@ export default function DepartmentHome({ department, onBack }: Props) {
                   onMouseLeave={() => setHovCard(null)}
                   style={{
                     width: '100%',
-                    background: isHov ? cfg.color : item.cardBg,
-                    border: `2px solid ${isHov ? cfg.color : item.cardBorder}`,
-                    borderRadius: '22px', padding: '32px',
-                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '18px',
+                    background: 'white',
+                    border: `1px solid ${isHov ? '#c7d2fe' : '#e2e8f0'}`,
+                    borderRadius: 12, padding: 20,
+                    display: 'flex', alignItems: 'center', gap: 14,
+                    boxShadow: isHov ? '0 4px 12px rgba(0,0,0,0.06)' : '0 1px 3px rgba(0,0,0,0.04)',
                     cursor: 'pointer', transition: 'all 0.18s',
-                    transform: isHov ? 'translateY(-4px)' : 'none',
-                    boxShadow: isHov ? `0 16px 40px ${cfg.color}35` : '0 2px 8px rgba(0,0,0,0.06)',
-                    textAlign: 'right',
+                    textAlign: 'right', cursor: 'pointer', transition: 'all 0.15s',
                   }}
                 >
-                  <div style={{ width: '60px', height: '60px', background: isHov ? 'rgba(255,255,255,0.22)' : cfg.color + '18', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon size={30} color={isHov ? 'white' : cfg.color} />
+                  <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Icon size={18} color="#6366f1" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '19px', fontWeight: '800', color: isHov ? 'white' : '#0f172a' }}>{item.label}</div>
-                    <div style={{ fontSize: '14px', color: isHov ? 'rgba(255,255,255,0.7)' : '#64748b', marginTop: '5px' }}>{item.subtitle}</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>{item.label}</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{item.subtitle}</div>
                   </div>
                 </button>
               </motion.div>
