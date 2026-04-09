@@ -203,7 +203,7 @@ export default function Home() {
   if (appUser?.role === 'scheduler' && appUser.branch_id) {
     const schedulerBranch = branchList.find(b => b.id === appUser.branch_id)
     if (schedulerBranch) {
-      return <BranchHome branch={{ id: schedulerBranch.id, name: schedulerBranch.name, color: schedulerBranch.color }} onBack={() => {}} />
+      return <BranchHome branch={{ id: schedulerBranch.id, name: schedulerBranch.name, color: schedulerBranch.color }} onBack={() => supabase.auth.signOut()} />
     }
     // Branches not loaded yet — show loading
     if (branchList.length === 0) {
