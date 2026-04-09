@@ -249,7 +249,7 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
             <Plus size={16} /> הוסף עובד
           </button>
           {onNavigate && (
-            <button onClick={() => onNavigate('employee-archive')}
+            <button onClick={() => onNavigate?.('employee-archive')}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px 18px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
               📦 ארכיון
             </button>
