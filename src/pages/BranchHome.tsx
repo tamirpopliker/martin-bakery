@@ -15,6 +15,7 @@ import BranchCreditCustomers from './BranchCreditCustomers'
 import BranchSuppliers from './BranchSuppliers'
 import BranchOrders from './BranchOrders'
 import BranchEmployees from './BranchEmployees'
+import EmployeeArchive from './EmployeeArchive'
 import BranchTeam from './BranchTeam'
 import ManagerConstraintsView from './ManagerConstraintsView'
 import ShiftSettings from './ShiftSettings'
@@ -54,6 +55,7 @@ type BranchPage =
   | 'orders'
   | 'employees'
   | 'branch-employees'
+  | 'employee-archive'
   | 'branch-team'
   | 'manager-constraints'
   | 'shift-settings'
@@ -155,7 +157,10 @@ export default function BranchHome({ branch, onBack }: Props) {
     <BranchEmployees branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
   if (page === 'branch-employees') return (
-    <BranchEmployees branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-team')} />
+    <BranchEmployees branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-team')} onNavigate={(p) => setPage(p as BranchPage)} />
+  )
+  if (page === 'employee-archive') return (
+    <EmployeeArchive branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-employees')} />
   )
   if (page === 'data_import') return (
     <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
