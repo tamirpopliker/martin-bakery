@@ -225,8 +225,8 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
         ) : (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <Card className="shadow-sm" style={{ overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 70px 80px 60px 60px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
-                <span>שם</span><span>₪/שעה</span><span>בונוס</span><span>סטטוס</span><span>עריכה</span><span>הזמנה</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 60px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                <span>שם</span><span>סטטוס</span><span>עריכה</span><span>הזמנה</span>
               </div>
               {employees.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
@@ -234,10 +234,8 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
                   <div>אין עובדים. לחץ "הוסף עובד" כדי להתחיל.</div>
                 </div>
               ) : employees.map(emp => (
-                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 70px 80px 60px 60px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: emp.active ? 1 : 0.5 }}>
+                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 60px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: emp.active ? 1 : 0.5 }}>
                   <span style={{ fontWeight: '600', color: '#0f172a' }}>{emp.name}</span>
-                  <span style={{ fontWeight: '700', color: branchColor }}>{emp.hourly_rate ? `₪${emp.hourly_rate}` : '—'}</span>
-                  <span style={{ fontWeight: '600', color: emp.retention_bonus ? '#f59e0b' : '#94a3b8', fontSize: '12px' }}>{emp.retention_bonus ? `₪${emp.retention_bonus}` : '—'}</span>
                   <button onClick={() => toggleActive(emp)}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: '600', color: emp.active ? '#34d399' : '#94a3b8' }}>
                     {emp.active ? <ToggleRight size={18} color="#34d399" /> : <ToggleLeft size={18} color="#94a3b8" />}
