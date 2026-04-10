@@ -99,9 +99,15 @@ export default function EmployeeConstraints({ onBack }: Props) {
   const [roles, setRoles] = useState<ShiftRole[]>([])
   const [assignments, setAssignments] = useState<EmployeeRoleAssignment[]>([])
   const [rolesLoading, setRolesLoading] = useState(false)
+  const [isManager, setIsManager] = useState(false)
 
   const weekDays = getWeekDays(weekOffset)
   const weekLabel = `שבוע — ${formatShortDate(weekDays[0])} עד ${formatShortDate(weekDays[6])}`
+
+  // ─── Force non-managers to availability tab ────────────
+  useEffect(() => {
+    if (!isManager && activeTab === 'roles') setActiveTab('availability')
+  }, [isManager, activeTab])
 
   // ─── Employee resolution ───────────────────────────────
   useEffect(() => {
@@ -109,18 +115,28 @@ export default function EmployeeConstraints({ onBack }: Props) {
   }, [appUser])
 
   async function resolveEmployee() {
+    if (appUser?.role === 'admin') setIsManager(true)
     if (appUser?.employee_id) {
-      setResolvedEmpId(appUser.employee_id)
-      return
+      const { data: empData } = await supabase
+        .from('branch_employees')
+        .select('id, is_manager')
+        .eq('id', appUser.employee_id)
+        .maybeSingle()
+      if (empData) {
+        setResolvedEmpId(empData.id)
+        if (empData.is_manager) setIsManager(true)
+        return
+      }
     }
     if (appUser?.email) {
       const { data } = await supabase
         .from('branch_employees')
-        .select('id')
+        .select('id, is_manager')
         .eq('email', appUser.email)
         .maybeSingle()
       if (data) {
         setResolvedEmpId(data.id)
+        if (data.is_manager) setIsManager(true)
         return
       }
     }
@@ -294,7 +310,8 @@ export default function EmployeeConstraints({ onBack }: Props) {
       <div className="max-w-lg mx-auto px-4 py-6">
         <PageHeader title="הזמינות שלי" subtitle={branchName} onBack={onBack} />
 
-        {/* Tab toggle */}
+        {/* Tab toggle — only show if manager/admin */}
+        {isManager && (
         <motion.div variants={fadeIn(0.05)} initial="hidden" animate="visible" className="flex items-center justify-center gap-2 mb-5">
           <div className="bg-slate-100 rounded-xl p-1 flex gap-1">
             <button
@@ -319,6 +336,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
             </button>
           </div>
         </motion.div>
+        )}
 
         {noEmployee ? (
           <div className="text-center py-12">
@@ -631,27 +649,35 @@ export default function EmployeeConstraints({ onBack }: Props) {
               }}>
                 {roles.map((role, idx) => {
                   const isAssigned = assignments.some(a => a.role_id === role.id)
+                  const canEdit = isManager
                   return (
                     <div key={role.id}
                       className="flex items-center gap-3 px-4 py-3"
                       style={{ borderBottom: idx < roles.length - 1 ? '1px solid #f1f5f9' : undefined }}>
                       <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: role.color }} />
                       <span className="flex-1 text-sm font-semibold text-slate-700">{role.name}</span>
-                      {/* Toggle switch */}
-                      <button
-                        onClick={() => toggleRole(role.id)}
-                        className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none"
-                        style={{
-                          background: isAssigned ? '#6366f1' : '#e2e8f0',
-                        }}
-                      >
-                        <span
-                          className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200"
+                      {canEdit ? (
+                        <button
+                          onClick={() => toggleRole(role.id)}
+                          className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none"
                           style={{
-                            transform: isAssigned ? 'translateX(-6px)' : 'translateX(-26px)',
+                            background: isAssigned ? '#6366f1' : '#e2e8f0',
                           }}
-                        />
-                      </button>
+                        >
+                          <span
+                            className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200"
+                            style={{
+                              transform: isAssigned ? 'translateX(-6px)' : 'translateX(-26px)',
+                            }}
+                          />
+                        </button>
+                      ) : (
+                        isAssigned ? (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#eef2ff', color: '#6366f1' }}>פעיל</span>
+                        ) : (
+                          <span className="text-xs text-slate-300">—</span>
+                        )
+                      )}
                     </div>
                   )
                 })}
