@@ -411,9 +411,9 @@ export default function InternalSalesUpload({ onBack }: Props) {
                 <thead><tr>
                   <th style={{ ...S.th, width: 36 }}>#</th>
                   <th style={S.th}>מוצר</th>
-                  <th style={{ ...S.th, width: 110 }}>מחלקה</th>
                   <th style={{ ...S.th, width: 80 }}>כמות</th>
-                  <th style={{ ...S.th, width: 90 }}>מחיר</th>
+                  <th style={{ ...S.th, width: 110 }}>מחלקה</th>
+                  <th style={{ ...S.th, width: 100 }}>מחיר מכירה</th>
                   <th style={{ ...S.th, width: 100 }}>סה"כ</th>
                 </tr></thead>
                 <tbody>
@@ -422,19 +422,16 @@ export default function InternalSalesUpload({ onBack }: Props) {
                       <td style={{ ...S.td, color: '#94a3b8', fontSize: 12 }}>{i + 1}</td>
                       <td style={S.td}>{item.product_name}</td>
                       <td style={S.td}>
+                        <input type="number" value={item.quantity} onChange={e => updateItem(i, 'quantity', Number(e.target.value) || 0)}
+                          style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: '3px 6px', fontSize: 12, width: '100%', textAlign: 'left' }} />
+                      </td>
+                      <td style={S.td}>
                         <select value={item.department} onChange={e => updateItem(i, 'department', e.target.value)}
                           style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: '3px 6px', fontSize: 12, width: '100%', background: 'white' }}>
                           {DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
                         </select>
                       </td>
-                      <td style={S.td}>
-                        <input type="number" value={item.quantity} onChange={e => updateItem(i, 'quantity', Number(e.target.value) || 0)}
-                          style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: '3px 6px', fontSize: 12, width: '100%', textAlign: 'left' }} />
-                      </td>
-                      <td style={S.td}>
-                        <input type="number" step="0.01" value={item.unit_price} onChange={e => updateItem(i, 'unit_price', Number(e.target.value) || 0)}
-                          style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: '3px 6px', fontSize: 12, width: '100%', textAlign: 'left' }} />
-                      </td>
+                      <td style={S.td}>₪{Number(item.unit_price).toFixed(2)}</td>
                       <td style={{ ...S.td, fontWeight: 600 }}>{fmtMoney(item.total_price)}</td>
                     </tr>
                   ))}
