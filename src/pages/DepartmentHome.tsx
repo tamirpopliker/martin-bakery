@@ -7,6 +7,7 @@ import FactoryWaste from './FactoryWaste'
 import FactoryRepairs from './FactoryRepairs'
 import DepartmentLabor from './DepartmentLabor'
 import DepartmentDashboard from './DepartmentDashboard'
+import ProductionHistory from '../components/ProductionHistory'
 
 // ─── אנימציות ─────────────────────────────────────────────────────────────────
 const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }
@@ -122,6 +123,18 @@ export default function DepartmentHome({ department, onBack }: Props) {
             )
           })}
         </motion.div>
+
+        {/* ─── היסטוריית ייצור ─── */}
+        {(department === 'creams' || department === 'dough') && (
+          <motion.div variants={fadeUp} style={{ marginTop: 28 }}>
+            <div style={{
+              background: 'white', borderRadius: 12, border: '1px solid #e2e8f0',
+              padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            }}>
+              <ProductionHistory department={department === 'creams' ? 'קרמים' : 'בצקים'} />
+            </div>
+          </motion.div>
+        )}
       </div>
     </div>
   )

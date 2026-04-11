@@ -237,8 +237,14 @@ export default function CEODashboard({ onBack }: Props) {
     setRevWebsite(totalWebsite)
     setBranchSuppliers(branchPLs.reduce((s, pl) => s + pl.externalSuppliers, 0))
 
+    // Fetch production report costs for the period
+    const { data: prodReportData } = await supabase.from('production_reports')
+      .select('total_cost').gte('report_date', from).lt('report_date', to)
+    const totalProdReportCost = (prodReportData || []).reduce((s: number, r: any) => s + Number(r.total_cost), 0)
+
     // Build expense breakdown from PL data
     const totalExpByType: Record<string, number> = {}
+    if (totalProdReportCost > 0) totalExpByType['production'] = totalProdReportCost
     for (const pl of branchPLs) {
       totalExpByType['supplier'] = (totalExpByType['supplier'] || 0) + pl.factoryPurchases + pl.externalSuppliers
       totalExpByType['repair'] = (totalExpByType['repair'] || 0) + pl.repairs
@@ -252,7 +258,7 @@ export default function CEODashboard({ onBack }: Props) {
     const typeLabels: Record<string, string> = {
       supplier: 'ספקים/מלאי', inventory: 'ספקים/מלאי', repair: 'תיקונים',
       infrastructure: 'תשתיות', delivery: 'משלוחים', other: 'אחר',
-      labor: 'לייבור', waste: 'פחת', fixed: 'עלויות קבועות',
+      labor: 'לייבור', waste: 'פחת', fixed: 'עלויות קבועות', production: 'עלות ייצור',
     }
     const merged: Record<string, number> = {}
     for (const [k, v] of Object.entries(totalExpByType)) {

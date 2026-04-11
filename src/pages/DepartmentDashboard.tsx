@@ -94,6 +94,8 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
   const [targets, setTargets]     = useState<KpiTarget>(DEFAULT_TARGETS)
   const [globalEmps, setGlobalEmps] = useState<GlobalEmployee[]>([])
   const [workingDaysMonth, setWorkingDaysMonth] = useState(26)
+  const [prodReportCost, setProdReportCost] = useState(0)
+  const [prevProdReportCost, setPrevProdReportCost] = useState(0)
 
   // --- Data fetching ---
   async function fetchRange(from: string, to: string, globalNames: Set<string> = new Set()): Promise<DayData[]> {
@@ -149,6 +151,16 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
       setPrevDays(prv)
       setGlobalEmps(gEmps)
       setWorkingDaysMonth(wDays)
+
+      // Fetch production report costs
+      const deptName = department === 'creams' ? 'קרמים' : 'בצקים'
+      const [prCur, prPrev] = await Promise.all([
+        supabase.from('production_reports').select('total_cost').eq('department', deptName).gte('report_date', from).lt('report_date', to),
+        supabase.from('production_reports').select('total_cost').eq('department', deptName).gte('report_date', prevFrom).lt('report_date', prevTo),
+      ])
+      setProdReportCost((prCur.data || []).reduce((s: number, r: any) => s + Number(r.total_cost), 0))
+      setPrevProdReportCost((prPrev.data || []).reduce((s: number, r: any) => s + Number(r.total_cost), 0))
+
       if (kpiRes.data) {
         setTargets({
           labor_pct: Number(kpiRes.data.labor_pct) || DEFAULT_TARGETS.labor_pct,
@@ -241,13 +253,16 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
             <DiffBadge current={totalSales} previous={prevSales} />
           </div>
 
-          {/* 2. Production cost */}
+          {/* 2. Production cost (from reports) */}
           <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>ייצור (כמות)</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>עלות ייצור</div>
             <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>
-              {fmtMoney(totalProd)}
+              {prodReportCost > 0 ? fmtMoney(prodReportCost) : fmtMoney(totalProd)}
             </div>
-            <DiffBadge current={totalProd} previous={prevProd} />
+            {prodReportCost > 0
+              ? <DiffBadge current={prodReportCost} previous={prevProdReportCost} inverse />
+              : <DiffBadge current={totalProd} previous={prevProd} />
+            }
           </div>
 
           {/* 3. Labor % */}

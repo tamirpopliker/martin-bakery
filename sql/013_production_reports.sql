@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS production_reports (
   quantity NUMERIC NOT NULL DEFAULT 0,
   unit_price NUMERIC NOT NULL DEFAULT 0,
   total_cost NUMERIC NOT NULL DEFAULT 0,
+  uploaded_at TIMESTAMPTZ DEFAULT now(),
+  uploaded_by TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
