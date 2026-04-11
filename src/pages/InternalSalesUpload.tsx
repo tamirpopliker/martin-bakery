@@ -248,25 +248,29 @@ export default function InternalSalesUpload({ onBack }: Props) {
     const lastDay = new Date(y, m, 0).getDate()
     const to = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
-    let q = supabase.from('internal_sales').select('*')
-      .gte('order_date', from).lte('order_date', to).order('order_date', { ascending: false })
-    if (filterBranch !== 'all') q = q.eq('branch_id', Number(filterBranch))
-    if (filterStatus !== 'all') q = q.eq('status', filterStatus)
-
-    const { data } = await q
-
-    if (filterDept !== 'all' && data) {
-      // Filter sales that have at least one item matching the department
-      const saleIds = data.map((s: any) => s.id)
-      if (saleIds.length > 0) {
-        const { data: items } = await supabase.from('internal_sale_items')
-          .select('sale_id').eq('department', filterDept).in('sale_id', saleIds)
-        const matchingIds = new Set((items || []).map((i: any) => i.sale_id))
-        setSales(data.filter((s: any) => matchingIds.has(s.id)))
-      } else {
-        setSales([])
-      }
+    if (filterDept !== 'all') {
+      // Use inner join to filter by item department
+      let q = supabase.from('internal_sales')
+        .select('*, internal_sale_items!inner(department)')
+        .eq('internal_sale_items.department', filterDept)
+        .gte('order_date', from).lte('order_date', to)
+        .order('order_date', { ascending: false })
+      if (filterBranch !== 'all') q = q.eq('branch_id', Number(filterBranch))
+      if (filterStatus !== 'all') q = q.eq('status', filterStatus)
+      const { data } = await q
+      // Deduplicate (inner join can return duplicates if multiple items match)
+      const seen = new Set<number>()
+      const unique = (data || []).filter((s: any) => {
+        if (seen.has(s.id)) return false
+        seen.add(s.id); return true
+      })
+      setSales(unique)
     } else {
+      let q = supabase.from('internal_sales').select('*')
+        .gte('order_date', from).lte('order_date', to).order('order_date', { ascending: false })
+      if (filterBranch !== 'all') q = q.eq('branch_id', Number(filterBranch))
+      if (filterStatus !== 'all') q = q.eq('status', filterStatus)
+      const { data } = await q
       setSales(data || [])
     }
     setHistLoading(false)
