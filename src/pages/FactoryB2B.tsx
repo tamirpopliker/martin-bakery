@@ -1,418 +1,472 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { useAppUser } from '../lib/UserContext'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
+import { Upload, FileText, Plus, Pencil, Trash2, Search, X, CheckCircle, AlertTriangle, History, Check } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
-import { RevenueIcon } from '@/components/icons'
-import { detectBranchId, getBranchNameById } from '../lib/internalCustomers'
-import { useBranches } from '../lib/BranchContext'
 import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 
-// ─── טיפוסים ────────────────────────────────────────────────────────────────
-interface Props { onBack: () => void }
-
-type SaleTab = 'b2b'
-
-interface Entry {
-  id: number
-  date: string
-  customer: string
-  amount: number
-  doc_number: string
-  notes: string
-  is_internal?: boolean
-  target_branch_id?: number | null
-  branch_status?: string | null
-}
-
-interface TabConfig {
-  label: string
-  subtitle: string
-  color: string
-  bg: string
-  table: string
-  filterCol: string
-  filterVal: string
-}
-
-// ─── Animation variants ─────────────────────────────────────────────────────
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
-// ─── קונפיגורציה לכל טאב ─────────────────────────────────────────────────────
-const TAB_CONFIG: Record<SaleTab, TabConfig> = {
-  b2b:    { label: 'מכירות חיצוניות (B2B)', subtitle: 'לקוחות עסקיים חיצוניים', color: '#818cf8', bg: '#e0e7ff', table: 'factory_b2b_sales', filterCol: 'sale_type', filterVal: 'b2b' },
+interface Props { onBack: () => void }
+
+interface ExtSale {
+  id: number
+  customer_name: string
+  invoice_number: string | null
+  invoice_date: string
+  total_before_vat: number
+  uploaded_by: string | null
+  created_at: string
 }
 
-// ─── Autocomplete ────────────────────────────────────────────────────────────
-function AutocompleteInput({ value, onChange, suggestions, placeholder, color }: {
-  value: string; onChange: (v: string) => void
-  suggestions: string[]; placeholder: string; color: string
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const filtered = suggestions.filter(s => s.toLowerCase().includes(value.toLowerCase()) && s !== value)
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
-
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <input type="text" value={value} placeholder={placeholder}
-        onChange={e => { onChange(e.target.value); setOpen(true) }}
-        onFocus={() => setOpen(true)}
-        style={{ border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const, textAlign: 'right' }}
-      />
-      {open && filtered.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', right: 0, left: 0, zIndex: 50, background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', marginTop: '4px', overflow: 'hidden' }}>
-          {filtered.slice(0, 6).map(s => (
-            <div key={s} onMouseDown={() => { onChange(s); setOpen(false) }}
-              style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '14px', color: '#374151', borderBottom: '1px solid #f1f5f9' }}
-            >{s}</div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+interface ParsedInvoice {
+  customer_name: string
+  invoice_number: string
+  invoice_date: string // DD/MM/YYYY
+  total_before_vat: number
+  fileName: string
+  status: 'parsed' | 'duplicate' | 'saved' | 'error'
+  duplicateId?: number
+  error?: string
 }
 
-// ─── קומפוננטה ראשית ─────────────────────────────────────────────────────────
+const S = {
+  container: { padding: '24px 32px', maxWidth: 1060, margin: '0 auto' } as React.CSSProperties,
+  card: { background: 'white', borderRadius: 14, border: '1px solid #e2e8f0', padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' } as React.CSSProperties,
+  btn: { border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer' } as React.CSSProperties,
+  th: { fontSize: 12, fontWeight: 600, color: '#64748b', padding: '10px 8px', textAlign: 'right' as const, borderBottom: '2px solid #e2e8f0' },
+  td: { fontSize: 13, color: '#1e293b', padding: '10px 8px', borderBottom: '1px solid #f1f5f9' },
+  input: { border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, width: '100%', boxSizing: 'border-box' as const } as React.CSSProperties,
+  label: { fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 } as React.CSSProperties,
+  tab: (active: boolean) => ({
+    padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+    border: 'none', borderBottom: active ? '2px solid #0f172a' : '2px solid transparent',
+    background: 'none', color: active ? '#0f172a' : '#94a3b8',
+  } as React.CSSProperties),
+}
+
+const fmtMoney = (n: number) => '₪' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+const fmtDate = (d: string) => { const [y, m, dd] = d.split('-'); return `${dd}/${m}/${y}` }
+const parseDateToDB = (d: string) => { const p = d.split('/'); return p.length === 3 ? `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}` : d }
+const getCurrentMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
+
 export default function FactoryB2B({ onBack }: Props) {
-  const [tab, setTab]                   = useState<SaleTab>('b2b')
-  const cfg = TAB_CONFIG[tab]
+  const { appUser } = useAppUser()
   const { period, setPeriod, from, to } = usePeriod()
-  const { branches }                    = useBranches()
-  const [selectedBranch, setSelectedBranch] = useState<number | null>(null)
+  const [tab, setTab] = useState<'manual' | 'pdf' | 'history'>('manual')
 
-  const [entries, setEntries]           = useState<Entry[]>([])
-  const [allCustomers, setAllCustomers] = useState<string[]>([])
-  const [searchFilter, setSearchFilter] = useState('')
-  const [editId, setEditId]             = useState<number | null>(null)
-  const [editData, setEditData]         = useState<Partial<Entry>>({})
-  const [loading, setLoading]           = useState(false)
-  const [showRanking, setShowRanking]   = useState(false)
+  // ─── Manual add state ───
+  const [manualCustomer, setManualCustomer] = useState('')
+  const [manualInvoice, setManualInvoice] = useState('')
+  const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0])
+  const [manualAmount, setManualAmount] = useState('')
+  const [manualSaving, setManualSaving] = useState(false)
 
-  // טופס
-  const [date, setDate]                 = useState(new Date().toISOString().split('T')[0])
-  const [customer, setCustomer]         = useState('')
-  const [amount, setAmount]             = useState('')
-  const [docNumber, setDocNumber]       = useState('')
-  const [notes, setNotes]               = useState('')
+  // ─── PDF state ───
+  const [pdfParsing, setPdfParsing] = useState(false)
+  const [parsedInvoices, setParsedInvoices] = useState<ParsedInvoice[]>([])
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  // ─── שליפות ──────────────────────────────────────────────────────────────
-  async function fetchEntries() {
-    const { data } = await supabase
-      .from(cfg.table)
-      .select('*')
-      .eq(cfg.filterCol, cfg.filterVal)
-      .gte('date', from)
-      .lt('date', to)
-      .order('date', { ascending: false })
-    if (data) setEntries(data)
+  // ─── History state ───
+  const [sales, setSales] = useState<ExtSale[]>([])
+  const [histLoading, setHistLoading] = useState(false)
+  const [histSearch, setHistSearch] = useState('')
+  const [editId, setEditId] = useState<number | null>(null)
+  const [editData, setEditData] = useState<Partial<ExtSale>>({})
+  const [deleteConfirm, setDeleteConfirm] = useState<ExtSale | null>(null)
+
+  // ─── Load history ───
+  const loadHistory = useCallback(async () => {
+    setHistLoading(true)
+    const { data } = await supabase.from('external_sales').select('*')
+      .gte('invoice_date', from).lt('invoice_date', to)
+      .order('invoice_date', { ascending: false })
+    setSales(data || [])
+    setHistLoading(false)
+  }, [from, to])
+
+  useEffect(() => { if (tab === 'history') loadHistory() }, [tab, loadHistory])
+
+  // ─── Manual add ───
+  async function addManual() {
+    if (!manualCustomer || !manualAmount || !manualDate) return
+    setManualSaving(true)
+    await supabase.from('external_sales').insert({
+      customer_name: manualCustomer,
+      invoice_number: manualInvoice || null,
+      invoice_date: manualDate,
+      total_before_vat: parseFloat(manualAmount),
+      uploaded_by: appUser?.name || null,
+    })
+    setManualCustomer(''); setManualInvoice(''); setManualAmount('')
+    setManualSaving(false)
+    alert('נשמר בהצלחה')
   }
 
-  async function fetchCustomers() {
-    // אחד את רשימת הלקוחות מכל הטבלאות
-    const [res1, res2] = await Promise.all([
-      supabase.from('factory_sales').select('customer'),
-      supabase.from('factory_b2b_sales').select('customer'),
-    ])
-    const all = [...(res1.data || []), ...(res2.data || [])]
-    const unique = [...new Set(all.map((r: any) => r.customer).filter(Boolean))] as string[]
-    setAllCustomers(unique.sort())
-  }
+  // ─── PDF upload + extraction ───
+  async function handlePDFs(files: FileList) {
+    setPdfParsing(true)
+    const results: ParsedInvoice[] = []
 
-  useEffect(() => {
-    fetchEntries()
-    fetchCustomers()
-    setSearchFilter('')
-    setEditId(null)
-  }, [tab, from, to])
+    for (const file of Array.from(files)) {
+      try {
+        const base64 = await fileToBase64(file)
+        const { data, error } = await supabase.functions.invoke('extract-invoice', {
+          body: { pdf_base64: base64 },
+        })
 
-  // ─── CRUD ─────────────────────────────────────────────────────────────────
-  async function addEntry() {
-    if (!amount || !date || !customer) return
+        if (error || !data?.success) {
+          results.push({
+            customer_name: '', invoice_number: '', invoice_date: '', total_before_vat: 0,
+            fileName: file.name, status: 'error', error: data?.error || error?.message || 'שגיאה לא ידועה',
+          })
+          continue
+        }
 
-    // warn if free-text matches a branch but user didn't pick from branch buttons
-    if (!selectedBranch) {
-      const fallbackBranch = detectBranchId(customer)
-      if (fallbackBranch !== null) {
-        const proceed = confirm('נראה שהלקוח תואם סניף פנימי. האם להמשיך בלי לבחור סניף?')
-        if (!proceed) return
+        const inv = data.data
+        // Check duplicate
+        let status: ParsedInvoice['status'] = 'parsed'
+        let duplicateId: number | undefined
+        if (inv.invoice_number) {
+          const { data: existing } = await supabase.from('external_sales')
+            .select('id').eq('invoice_number', inv.invoice_number).maybeSingle()
+          if (existing) { status = 'duplicate'; duplicateId = existing.id }
+        }
+
+        results.push({
+          customer_name: inv.customer_name || '',
+          invoice_number: inv.invoice_number || '',
+          invoice_date: inv.invoice_date || '',
+          total_before_vat: Number(inv.total_before_vat) || 0,
+          fileName: file.name,
+          status,
+          duplicateId,
+        })
+      } catch (err) {
+        results.push({
+          customer_name: '', invoice_number: '', invoice_date: '', total_before_vat: 0,
+          fileName: file.name, status: 'error', error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
 
-    setLoading(true)
-    const payload: any = {
-      date, customer,
-      amount: parseFloat(amount),
-      doc_number: docNumber,
-      notes,
-      [cfg.filterCol]: cfg.filterVal,
-      is_internal: selectedBranch !== null,
-      target_branch_id: selectedBranch,
-      branch_status: selectedBranch !== null ? 'pending' : null,
+    setParsedInvoices(results)
+    setPdfParsing(false)
+  }
+
+  function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = reader.result as string
+        resolve(result.split(',')[1]) // strip data:...;base64, prefix
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  function updateParsed(idx: number, field: string, value: string | number) {
+    setParsedInvoices(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p))
+  }
+
+  async function saveParsedInvoice(idx: number, overwrite: boolean = false) {
+    const inv = parsedInvoices[idx]
+    if (!inv.customer_name || !inv.invoice_date) return
+
+    const dbDate = parseDateToDB(inv.invoice_date)
+    const payload = {
+      customer_name: inv.customer_name,
+      invoice_number: inv.invoice_number || null,
+      invoice_date: dbDate,
+      total_before_vat: inv.total_before_vat,
+      uploaded_by: appUser?.name || null,
     }
-    await supabase.from(cfg.table).insert(payload)
-    if (!allCustomers.includes(customer)) setAllCustomers(p => [...p, customer].sort())
-    setAmount(''); setDocNumber(''); setNotes(''); setSelectedBranch(null)
-    await fetchEntries()
-    setLoading(false)
+
+    if (overwrite && inv.duplicateId) {
+      await supabase.from('external_sales').update(payload).eq('id', inv.duplicateId)
+    } else {
+      await supabase.from('external_sales').insert(payload)
+    }
+
+    setParsedInvoices(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p))
   }
 
-  async function deleteEntry(id: number) {
-    if (!confirm('למחוק רשומה זו?')) return
-    await supabase.from(cfg.table).delete().eq('id', id)
-    await fetchEntries()
+  function skipParsed(idx: number) {
+    setParsedInvoices(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p))
   }
 
+  // ─── History CRUD ───
   async function saveEdit(id: number) {
-    const updates: any = { ...editData }
-    // אם שם הלקוח שונה — בדוק מחדש אם פנימי
-    if (editData.customer) {
-      const branchId = detectBranchId(editData.customer)
-      updates.is_internal = branchId !== null
-      updates.target_branch_id = branchId
-      updates.branch_status = branchId !== null ? 'pending' : null
-    }
-    await supabase.from(cfg.table).update(updates).eq('id', id)
-    setEditId(null)
-    await fetchEntries()
+    await supabase.from('external_sales').update(editData).eq('id', id)
+    setEditId(null); loadHistory()
   }
 
-  // ─── חישובים ─────────────────────────────────────────────────────────────
-  const filtered = searchFilter
-    ? entries.filter(e => e.customer.toLowerCase().includes(searchFilter.toLowerCase()) || e.doc_number?.includes(searchFilter))
-    : entries
-
-  const total = filtered.reduce((s, e) => s + Number(e.amount), 0)
-
-  // דירוג לקוחות
-  const ranking = Object.values(
-    entries.reduce((acc: Record<string, { name: string; total: number; count: number }>, e) => {
-      if (!acc[e.customer]) acc[e.customer] = { name: e.customer, total: 0, count: 0 }
-      acc[e.customer].total += Number(e.amount)
-      acc[e.customer].count++
-      return acc
-    }, {})
-  ).sort((a, b) => b.total - a.total)
-
-  const grandTotal = entries.reduce((s, e) => s + Number(e.amount), 0)
-
-  // detect if free-text customer matches a branch name
-  const matchingBranches = !selectedBranch && customer.trim()
-    ? branches.filter(b => b.name.includes(customer.trim()) || customer.trim().includes(b.name))
-    : []
-
-  // ─── סגנונות ─────────────────────────────────────────────────────────────
-  const S = {
-    label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
-    input: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
+  async function handleDelete(sale: ExtSale) {
+    await supabase.from('external_sales').delete().eq('id', sale.id)
+    setDeleteConfirm(null); loadHistory()
   }
+
+  const filteredSales = histSearch
+    ? sales.filter(s => s.customer_name.includes(histSearch) || s.invoice_number?.includes(histSearch))
+    : sales
+  const totalSales = filteredSales.reduce((s, e) => s + Number(e.total_before_vat), 0)
 
   return (
-    <div className="min-h-screen" style={{ direction: 'rtl', background: '#f8fafc' }}>
+    <motion.div dir="rtl" variants={fadeIn} initial="hidden" animate="visible">
+      <PageHeader title="מכירות חיצוניות (B2B)" subtitle="חשבוניות מס · לקוחות עסקיים" onBack={onBack} />
+      <div style={S.container}>
 
-      <PageHeader title="מכירות חיצוניות (B2B)" subtitle="לקוחות עסקיים חיצוניים" onBack={onBack} />
-
-      <div className="page-container" style={{ padding: '28px 32px', maxWidth: '960px', margin: '0 auto' }}>
-
-        {/* ─── תיאור ────────────────────────────────────────────────────── */}
-        <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '12px 18px', marginBottom: '20px', fontSize: 13, color: '#0f172a', fontWeight: 600, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-          {cfg.subtitle}
-          <span style={{ fontWeight: 400, color: '#94a3b8', marginRight: '8px' }}>— ללא מע״מ, נכנסות להכנסות ברווח נשלט</span>
-        </div>
-
-        {/* ─── טופס הוספה ───────────────────────────────────────────────── */}
-        <Card className="shadow-sm mb-5">
-          <CardContent className="p-6">
-          <h2 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת מכירה — {cfg.label}</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
-
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>תאריך</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={S.input} />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column' as const, gridColumn: 'span 2' }}>
-              <label style={S.label}>מכירה לסניף (פנימי)</label>
-              <div className="flex flex-row gap-2 flex-wrap mb-2">
-                {branches.map(b => (
-                  <Button key={b.id} type="button" size="sm"
-                    variant={selectedBranch === b.id ? 'default' : 'outline'}
-                    className={selectedBranch === b.id ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : ''}
-                    onClick={() => {
-                      setSelectedBranch(b.id)
-                      setCustomer(b.name)
-                    }}
-                  >
-                    {b.name}
-                  </Button>
-                ))}
-              </div>
-              <label style={S.label}>לקוח חיצוני:</label>
-              <AutocompleteInput value={customer} onChange={(v) => { setCustomer(v); setSelectedBranch(null) }} suggestions={allCustomers}
-                placeholder="שם לקוח..."
-                color={cfg.color} />
-              {matchingBranches.length > 0 && (
-                <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                  <div className="mb-1 font-semibold">נראה שזו רכישה פנימית — האם לבחור סניף?</div>
-                  <div className="flex flex-row gap-2 flex-wrap">
-                    {matchingBranches.map(b => (
-                      <Button key={b.id} type="button" size="sm" variant="outline"
-                        className="border-amber-400 text-amber-800 hover:bg-amber-100"
-                        onClick={() => {
-                          setSelectedBranch(b.id)
-                          setCustomer(b.name)
-                        }}
-                      >
-                        {b.name}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>סכום ללא מע״מ (₪)</label>
-              <input type="number" placeholder="0" value={amount}
-                onChange={e => setAmount(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addEntry()}
-                style={{ ...S.input, textAlign: 'right' as const }} />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>מספר תעודה <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
-              <input type="text" placeholder="מס׳ תעודה" value={docNumber}
-                onChange={e => setDocNumber(e.target.value)} style={S.input} />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>הערות <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
-              <input type="text" placeholder="הערה..." value={notes}
-                onChange={e => setNotes(e.target.value)} style={S.input} />
-            </div>
-
-          </div>
-          <button onClick={addEntry} disabled={loading || !amount || !customer}
-            style={{ background: loading || !amount || !customer ? '#e2e8f0' : '#6366f1', color: loading || !amount || !customer ? '#94a3b8' : 'white', border: 'none', borderRadius: 8, padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={18} />הוסף
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e2e8f0', marginBottom: 20 }}>
+          <button style={S.tab(tab === 'manual')} onClick={() => setTab('manual')}>
+            <Plus size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> הוספה ידנית
           </button>
-          </CardContent>
-        </Card>
-
-        {/* ─── פילטרים + דירוג ──────────────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
-          <PeriodPicker period={period} onChange={setPeriod} />
-          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-            <Search size={15} color="#94a3b8" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-            <input type="text" placeholder="חפש לפי לקוח..." value={searchFilter}
-              onChange={e => setSearchFilter(e.target.value)}
-              style={{ ...S.input, paddingRight: '36px' }} />
-            {searchFilter && <button onClick={() => setSearchFilter('')} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer' }}><X size={14} color="#94a3b8" /></button>}
-          </div>
-          <button onClick={() => setShowRanking(v => !v)}
-            style={{ background: showRanking ? '#6366f1' : 'white', color: showRanking ? 'white' : '#64748b', border: showRanking ? 'none' : '1px solid #e2e8f0', borderRadius: 8, padding: '8px 16px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-            דירוג לקוחות
+          <button style={S.tab(tab === 'pdf')} onClick={() => setTab('pdf')}>
+            <Upload size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> העלאת PDF
+          </button>
+          <button style={S.tab(tab === 'history')} onClick={() => setTab('history')}>
+            <History size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> היסטוריה
           </button>
         </div>
 
-        {/* ─── דירוג לקוחות ────────────────────────────────────────────── */}
-        {showRanking && ranking.length > 0 && (
-          <motion.div variants={fadeIn} initial="hidden" animate="visible">
-          <Card className="shadow-sm mb-4">
+        {/* ═══ MANUAL TAB ═══ */}
+        {tab === 'manual' && (
+          <Card className="shadow-sm">
             <CardContent className="p-6">
-            <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>דירוג לקוחות — {period.label}</h3>
-            {ranking.map((r, i) => {
-              const pctVal = grandTotal > 0 ? (r.total / grandTotal) * 100 : 0
-              return (
-                <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                  <span style={{ width: '22px', height: '22px', background: i < 3 ? '#6366f1' : '#f1f5f9', color: i < 3 ? 'white' : '#64748b', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
-                    {i + 1}
-                  </span>
-                  <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px', flex: 1 }}>{r.name}</span>
-                  <div style={{ width: '140px', background: '#f1f5f9', borderRadius: '20px', height: '8px', overflow: 'hidden' }}>
-                    <div style={{ width: `${pctVal}%`, background: '#6366f1', height: '100%', borderRadius: '20px' }} />
-                  </div>
-                  <span style={{ fontWeight: '700', color: '#6366f1', fontSize: '14px', minWidth: '80px', textAlign: 'left' as const }}>
-                    ₪{r.total.toLocaleString()}
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#94a3b8', minWidth: '40px' }}>{pctVal.toFixed(1)}%</span>
-                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>{r.count} עסקאות</span>
-                </div>
-              )
-            })}
+              <h2 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700, color: '#374151' }}>הוספת מכירה</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+                <div><label style={S.label}>שם לקוח</label>
+                  <input type="text" value={manualCustomer} onChange={e => setManualCustomer(e.target.value)} placeholder="שם הלקוח..." style={S.input} /></div>
+                <div><label style={S.label}>מספר חשבונית</label>
+                  <input type="text" value={manualInvoice} onChange={e => setManualInvoice(e.target.value)} placeholder="אופציונלי" style={S.input} /></div>
+                <div><label style={S.label}>תאריך</label>
+                  <input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)} style={S.input} /></div>
+                <div><label style={S.label}>סה"כ לפני מע"מ (₪)</label>
+                  <input type="number" value={manualAmount} onChange={e => setManualAmount(e.target.value)} placeholder="0"
+                    onKeyDown={e => e.key === 'Enter' && addManual()} style={S.input} /></div>
+              </div>
+              <button onClick={addManual} disabled={manualSaving || !manualCustomer || !manualAmount}
+                style={{ ...S.btn, background: !manualCustomer || !manualAmount ? '#e2e8f0' : '#0f172a', color: !manualCustomer || !manualAmount ? '#94a3b8' : 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Plus size={16} /> הוסף
+              </button>
             </CardContent>
           </Card>
-          </motion.div>
         )}
 
-        {/* ─── טבלת רשומות ──────────────────────────────────────────────── */}
-        <motion.div variants={fadeIn} initial="hidden" animate="visible">
-        <div className="table-scroll"><Card className="shadow-sm">
-          <CardContent className="p-6">
-          <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 130px 36px 36px', padding: '10px 20px', background: 'white', borderRadius: '10px 10px 0 0', borderBottom: '1px solid #f1f5f9', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
-            <span>תאריך</span><span>לקוח</span><span>תעודה</span><span style={{ textAlign: 'left' }}>סכום</span><span /><span />
-          </div>
+        {/* ═══ PDF TAB ═══ */}
+        {tab === 'pdf' && (
+          <div style={S.card}>
+            {parsedInvoices.length === 0 && !pdfParsing && (
+              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                <FileText size={48} color="#94a3b8" style={{ marginBottom: 16 }} />
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>העלאת חשבוניות PDF</h3>
+                <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 24px', maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
+                  העלה חשבוניות מס — המערכת תחלץ אוטומטית שם לקוח, מספר חשבונית, תאריך וסכום
+                </p>
+                <input ref={fileRef} type="file" accept=".pdf" multiple style={{ display: 'none' }}
+                  onChange={e => { if (e.target.files?.length) handlePDFs(e.target.files) }} />
+                <button onClick={() => fileRef.current?.click()}
+                  style={{ ...S.btn, background: '#0f172a', color: 'white', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <Upload size={16} /> בחר קבצים
+                </button>
+              </div>
+            )}
 
-          {filtered.length === 0 ? (
-            <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>אין רשומות לחודש זה</div>
-          ) : filtered.map((entry, i) => (
-            <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 130px 36px 36px', alignItems: 'center', padding: '13px 20px', borderBottom: '1px solid #f8fafc', background: 'transparent' }}>
-              {editId === entry.id ? (
-                <>
-                  <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
-                  <AutocompleteInput value={editData.customer || ''} onChange={v => setEditData({ ...editData, customer: v })} suggestions={allCustomers} placeholder="לקוח" color="#6366f1" />
-                  <input type="text" value={editData.doc_number || ''} onChange={e => setEditData({ ...editData, doc_number: e.target.value })} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                  <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                  <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
-                  <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
-                </>
-              ) : (
-                <>
-                  <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(entry.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
-                  <div>
-                    <div style={{ fontWeight: '600', color: '#374151', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      {entry.customer}
-                      {entry.is_internal && (
-                        <span style={{
-                          fontSize: '10px', fontWeight: '700', padding: '2px 8px', borderRadius: '6px',
-                          background: entry.branch_status === 'approved' ? '#dcfce7' : entry.branch_status === 'disputed' ? '#fef3c7' : '#e0e7ff',
-                          color: entry.branch_status === 'approved' ? '#16a34a' : entry.branch_status === 'disputed' ? '#d97706' : '#4f46e5',
-                        }}>
-                          פנימי · {entry.branch_status === 'approved' ? 'אושר' : entry.branch_status === 'disputed' ? 'נערך' : 'ממתין'}
-                          {entry.target_branch_id ? ` · ${getBranchNameById(entry.target_branch_id) || ''}` : ''}
-                        </span>
-                      )}
-                    </div>
-                    {entry.notes && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{entry.notes}</div>}
+            {pdfParsing && (
+              <div style={{ textAlign: 'center', padding: '48px 0', color: '#64748b' }}>
+                <div style={{ fontSize: 14 }}>מעבד חשבוניות... ⏳</div>
+              </div>
+            )}
+
+            {parsedInvoices.length > 0 && !pdfParsing && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                    תצוגה מקדימה — {parsedInvoices.length} חשבוניות
+                  </h3>
+                  <button onClick={() => { setParsedInvoices([]); if (fileRef.current) fileRef.current.value = '' }}
+                    style={{ ...S.btn, background: '#f1f5f9', color: '#64748b' }}>נקה</button>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr>
+                    <th style={S.th}>קובץ</th>
+                    <th style={S.th}>שם לקוח</th>
+                    <th style={S.th}>מס' חשבונית</th>
+                    <th style={S.th}>תאריך</th>
+                    <th style={{ ...S.th, width: 110 }}>סה"כ לפני מע"מ</th>
+                    <th style={{ ...S.th, width: 120 }}></th>
+                  </tr></thead>
+                  <tbody>
+                    {parsedInvoices.map((inv, i) => (
+                      <tr key={i} style={{ background: inv.status === 'error' ? '#fef2f2' : inv.status === 'duplicate' ? '#fefce8' : inv.status === 'saved' ? '#f0fdf4' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
+                        <td style={{ ...S.td, fontSize: 11, color: '#94a3b8', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{inv.fileName}</td>
+                        <td style={S.td}>
+                          {inv.status === 'saved' ? inv.customer_name : (
+                            <input type="text" value={inv.customer_name} onChange={e => updateParsed(i, 'customer_name', e.target.value)}
+                              style={{ ...S.input, padding: '4px 8px', fontSize: 12 }} />
+                          )}
+                        </td>
+                        <td style={S.td}>
+                          {inv.status === 'saved' ? inv.invoice_number : (
+                            <input type="text" value={inv.invoice_number} onChange={e => updateParsed(i, 'invoice_number', e.target.value)}
+                              style={{ ...S.input, padding: '4px 8px', fontSize: 12 }} />
+                          )}
+                        </td>
+                        <td style={S.td}>
+                          {inv.status === 'saved' ? inv.invoice_date : (
+                            <input type="text" value={inv.invoice_date} onChange={e => updateParsed(i, 'invoice_date', e.target.value)}
+                              placeholder="DD/MM/YYYY" style={{ ...S.input, padding: '4px 8px', fontSize: 12, width: 100 }} />
+                          )}
+                        </td>
+                        <td style={{ ...S.td, fontWeight: 600 }}>
+                          {inv.status === 'saved' ? fmtMoney(inv.total_before_vat) : (
+                            <input type="number" step="0.01" value={inv.total_before_vat} onChange={e => updateParsed(i, 'total_before_vat', Number(e.target.value) || 0)}
+                              style={{ ...S.input, padding: '4px 8px', fontSize: 12, width: 90 }} />
+                          )}
+                        </td>
+                        <td style={S.td}>
+                          {inv.status === 'error' && (
+                            <span style={{ fontSize: 11, color: '#dc2626' }}>❌ {inv.error}</span>
+                          )}
+                          {inv.status === 'saved' && (
+                            <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✅ נשמר</span>
+                          )}
+                          {inv.status === 'parsed' && (
+                            <button onClick={() => saveParsedInvoice(i)}
+                              style={{ ...S.btn, padding: '4px 12px', fontSize: 11, background: '#0f172a', color: 'white' }}>
+                              שמור
+                            </button>
+                          )}
+                          {inv.status === 'duplicate' && (
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button onClick={() => saveParsedInvoice(i, true)}
+                                style={{ ...S.btn, padding: '3px 8px', fontSize: 10, background: '#f59e0b', color: 'white' }}>עדכן</button>
+                              <button onClick={() => skipParsed(i)}
+                                style={{ ...S.btn, padding: '3px 8px', fontSize: 10, background: '#f1f5f9', color: '#64748b' }}>דלג</button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {parsedInvoices.some(i => i.status === 'duplicate') && (
+                  <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', marginTop: 12, fontSize: 13, color: '#a16207' }}>
+                    ⚠ חשבוניות מסומנות בצהוב כבר קיימות במערכת
                   </div>
-                  <span style={{ fontSize: '13px', color: '#94a3b8' }}>{entry.doc_number || '—'}</span>
-                  <span style={{ fontWeight: '800', color: '#6366f1', fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString()}</span>
-                  <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
-                  <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
-                </>
-              )}
-            </div>
-          ))}
+                )}
+              </>
+            )}
+          </div>
+        )}
 
-          {filtered.length > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', background: '#fafafa', borderTop: '1px solid #f1f5f9', borderRadius: '0 0 12px 12px' }}>
-              <span style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>סה"כ — {filtered.length} רשומות</span>
-              <span style={{ fontSize: '20px', fontWeight: '800', color: '#6366f1' }}>₪{total.toLocaleString()}</span>
+        {/* ═══ HISTORY TAB ═══ */}
+        {tab === 'history' && (
+          <div style={S.card}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <PeriodPicker period={period} onChange={setPeriod} />
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <label style={S.label}>חיפוש</label>
+                <div style={{ position: 'relative' }}>
+                  <Search size={14} color="#94a3b8" style={{ position: 'absolute', right: 10, top: 10 }} />
+                  <input type="text" placeholder="לקוח או מספר חשבונית..." value={histSearch} onChange={e => setHistSearch(e.target.value)}
+                    style={{ ...S.input, paddingRight: 32 }} />
+                </div>
+              </div>
             </div>
-          )}
-          </CardContent>
-        </Card></div>
-        </motion.div>
 
+            {histLoading ? (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: '#94a3b8' }}>טוען...</div>
+            ) : filteredSales.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: '#94a3b8' }}>אין מכירות בתקופה זו</div>
+            ) : (
+              <>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr>
+                    <th style={S.th}>תאריך</th>
+                    <th style={S.th}>חשבונית</th>
+                    <th style={S.th}>לקוח</th>
+                    <th style={{ ...S.th, width: 110 }}>סה"כ</th>
+                    <th style={{ ...S.th, width: 80 }}></th>
+                  </tr></thead>
+                  <tbody>
+                    {filteredSales.map((s, i) => {
+                      const isEditing = editId === s.id
+                      return (
+                        <tr key={s.id} style={{ background: i % 2 === 0 ? 'white' : '#fafbfc' }}>
+                          <td style={S.td}>
+                            {isEditing
+                              ? <input type="date" value={editData.invoice_date || s.invoice_date} onChange={e => setEditData(p => ({ ...p, invoice_date: e.target.value }))} style={{ ...S.input, width: 130, padding: '4px 8px' }} />
+                              : fmtDate(s.invoice_date)
+                            }
+                          </td>
+                          <td style={S.td}>
+                            {isEditing
+                              ? <input type="text" value={editData.invoice_number ?? s.invoice_number ?? ''} onChange={e => setEditData(p => ({ ...p, invoice_number: e.target.value }))} style={{ ...S.input, width: 100, padding: '4px 8px' }} />
+                              : (s.invoice_number || '—')
+                            }
+                          </td>
+                          <td style={S.td}>
+                            {isEditing
+                              ? <input type="text" value={editData.customer_name ?? s.customer_name} onChange={e => setEditData(p => ({ ...p, customer_name: e.target.value }))} style={{ ...S.input, padding: '4px 8px' }} />
+                              : <span style={{ fontWeight: 500 }}>{s.customer_name}</span>
+                            }
+                          </td>
+                          <td style={{ ...S.td, fontWeight: 600 }}>
+                            {isEditing
+                              ? <input type="number" step="0.01" value={editData.total_before_vat ?? s.total_before_vat} onChange={e => setEditData(p => ({ ...p, total_before_vat: Number(e.target.value) }))} style={{ ...S.input, width: 90, padding: '4px 8px' }} />
+                              : fmtMoney(s.total_before_vat)
+                            }
+                          </td>
+                          <td style={S.td}>
+                            {isEditing ? (
+                              <div style={{ display: 'flex', gap: 3 }}>
+                                <button onClick={() => saveEdit(s.id)} style={{ ...S.btn, padding: '3px 6px', fontSize: 11, background: '#0f172a', color: 'white' }}><Check size={12} /></button>
+                                <button onClick={() => setEditId(null)} style={{ ...S.btn, padding: '3px 6px', fontSize: 11, background: '#f1f5f9', color: '#64748b' }}><X size={12} /></button>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', gap: 3 }}>
+                                <button onClick={() => { setEditId(s.id); setEditData({}) }} style={{ ...S.btn, padding: '3px 6px', fontSize: 11, background: '#f1f5f9', color: '#6366f1' }}><Pencil size={12} /></button>
+                                <button onClick={() => setDeleteConfirm(s)} style={{ ...S.btn, padding: '3px 6px', fontSize: 11, background: '#fef2f2', color: '#ef4444' }}><Trash2 size={12} /></button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 8px', borderTop: '2px solid #e2e8f0', marginTop: 4 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{filteredSales.length} רשומות</span>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>סה"כ: {fmtMoney(totalSales)}</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
-    </div>
+
+      {/* Delete confirm */}
+      {deleteConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setDeleteConfirm(null)}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 380, margin: '0 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>מחיקת חשבונית</h3>
+            <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 20px' }}>
+              למחוק חשבונית {deleteConfirm.invoice_number || ''} של {deleteConfirm.customer_name}?
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => handleDelete(deleteConfirm)} style={{ ...S.btn, background: '#ef4444', color: 'white' }}>מחק</button>
+              <button onClick={() => setDeleteConfirm(null)} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </motion.div>
   )
 }
