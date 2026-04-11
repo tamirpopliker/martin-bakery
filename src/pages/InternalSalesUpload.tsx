@@ -85,6 +85,7 @@ export default function InternalSalesUpload({ onBack }: Props) {
   const [filterMonth, setFilterMonth] = useState(getCurrentMonth())
   const [filterBranch, setFilterBranch] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [filterDept, setFilterDept] = useState<string>('all')
   const [viewSale, setViewSale] = useState<SaleRow | null>(null)
   const [viewItems, setViewItems] = useState<SaleItemRow[]>([])
   const [viewLoading, setViewLoading] = useState(false)
@@ -250,9 +251,23 @@ export default function InternalSalesUpload({ onBack }: Props) {
     if (filterStatus !== 'all') q = q.eq('status', filterStatus)
 
     const { data } = await q
-    setSales(data || [])
+
+    if (filterDept !== 'all' && data) {
+      // Filter sales that have at least one item matching the department
+      const saleIds = data.map((s: any) => s.id)
+      if (saleIds.length > 0) {
+        const { data: items } = await supabase.from('internal_sale_items')
+          .select('sale_id').eq('department', filterDept).in('sale_id', saleIds)
+        const matchingIds = new Set((items || []).map((i: any) => i.sale_id))
+        setSales(data.filter((s: any) => matchingIds.has(s.id)))
+      } else {
+        setSales([])
+      }
+    } else {
+      setSales(data || [])
+    }
     setHistLoading(false)
-  }, [filterMonth, filterBranch, filterStatus])
+  }, [filterMonth, filterBranch, filterStatus, filterDept])
 
   useEffect(() => { if (tab === 'history') loadHistory() }, [tab, loadHistory])
 
@@ -484,6 +499,14 @@ export default function InternalSalesUpload({ onBack }: Props) {
                   style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 12px', fontSize: 13, background: 'white' }}>
                   <option value="all">כל הסניפים</option>
                   {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 }}>מחלקה</label>
+                <select value={filterDept} onChange={e => setFilterDept(e.target.value)}
+                  style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 12px', fontSize: 13, background: 'white' }}>
+                  <option value="all">כל המחלקות</option>
+                  {DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
               <div>
