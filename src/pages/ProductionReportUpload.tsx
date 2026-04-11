@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle, ChevronLeft, History } from 'lucide-react'
+import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle, ChevronLeft, History, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import PageHeader from '../components/PageHeader'
@@ -83,6 +83,14 @@ export default function ProductionReportUpload({ onBack }: Props) {
   const [detailRows, setDetailRows] = useState<DetailRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
 
+  // ─── Edit/Delete state ───
+  const [editDate, setEditDate] = useState<string | null>(null)
+  const [editDept, setEditDept] = useState<string | null>(null)
+  const [editRows, setEditRows] = useState<DetailRow[]>([])
+  const [editLoading, setEditLoading] = useState(false)
+  const [editSaving, setEditSaving] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ date: string; dept: string } | null>(null)
+
   // ─── History fetch ───
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true)
@@ -143,6 +151,61 @@ export default function ProductionReportUpload({ onBack }: Props) {
     setDetailDate(null)
     setDetailDept(null)
     setDetailRows([])
+  }
+
+  // ─── Delete handler ───
+  async function handleDelete(date: string, dept: string) {
+    await supabase.from('production_reports').delete()
+      .eq('report_date', date).eq('department', dept)
+    setDeleteConfirm(null)
+    loadHistory()
+  }
+
+  // ─── Edit handlers ───
+  async function openEdit(date: string, dept: string) {
+    setEditDate(date)
+    setEditDept(dept)
+    setEditLoading(true)
+    const { data } = await supabase.from('production_reports')
+      .select('id, product_name, department, quantity, unit_price, total_cost')
+      .eq('report_date', date).eq('department', dept)
+      .order('id')
+    setEditRows(data || [])
+    setEditLoading(false)
+  }
+
+  function updateEditRow(idx: number, field: string, value: string | number) {
+    setEditRows(prev => prev.map((r, i) => {
+      if (i !== idx) return r
+      const updated = { ...r, [field]: value }
+      if (field === 'quantity' || field === 'unit_price') {
+        updated.total_cost = (Number(updated.quantity) || 0) * (Number(updated.unit_price) || 0)
+      }
+      return updated
+    }))
+  }
+
+  async function saveEdit() {
+    setEditSaving(true)
+    for (const row of editRows) {
+      await supabase.from('production_reports').update({
+        department: row.department,
+        quantity: row.quantity,
+        unit_price: row.unit_price,
+        total_cost: row.total_cost,
+      }).eq('id', row.id)
+    }
+    setEditSaving(false)
+    setEditDate(null)
+    setEditDept(null)
+    setEditRows([])
+    loadHistory()
+  }
+
+  function closeEdit() {
+    setEditDate(null)
+    setEditDept(null)
+    setEditRows([])
   }
 
   // ─── Upload logic ───
@@ -412,7 +475,7 @@ export default function ProductionReportUpload({ onBack }: Props) {
                   <th style={S.th}>מחלקה</th>
                   <th style={S.th}>מוצרים</th>
                   <th style={S.th}>סה"כ עלות</th>
-                  <th style={{ ...S.th, width: 70 }}></th>
+                  <th style={{ ...S.th, width: 150 }}></th>
                 </tr></thead>
                 <tbody>
                   {historyGroups.map((g, i) => (
@@ -428,10 +491,22 @@ export default function ProductionReportUpload({ onBack }: Props) {
                       <td style={S.td}>{g.product_count}</td>
                       <td style={{ ...S.td, fontWeight: 600 }}>{fmtMoney(g.total_cost)}</td>
                       <td style={S.td}>
-                        <button onClick={() => openDetail(g.report_date, g.department)}
-                          style={{ ...S.btn, padding: '4px 12px', fontSize: 12, background: '#f1f5f9', color: '#374151' }}>
-                          פתח
-                        </button>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button onClick={() => openDetail(g.report_date, g.department)}
+                            style={{ ...S.btn, padding: '4px 10px', fontSize: 12, background: '#f1f5f9', color: '#374151' }}>
+                            פתח
+                          </button>
+                          <button onClick={() => openEdit(g.report_date, g.department)}
+                            style={{ ...S.btn, padding: '4px 8px', fontSize: 12, background: '#f1f5f9', color: '#6366f1' }}
+                            title="עריכה">
+                            <Pencil size={13} />
+                          </button>
+                          <button onClick={() => setDeleteConfirm({ date: g.report_date, dept: g.department })}
+                            style={{ ...S.btn, padding: '4px 8px', fontSize: 12, background: '#fef2f2', color: '#ef4444' }}
+                            title="מחיקה">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -499,6 +574,103 @@ export default function ProductionReportUpload({ onBack }: Props) {
           </div>
         )}
       </div>
+
+      {/* ═══════════════ DELETE CONFIRM DIALOG ═══════════════ */}
+      {deleteConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setDeleteConfirm(null)}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 380, margin: '0 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>מחיקת דוח</h3>
+            <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 20px', lineHeight: 1.6 }}>
+              האם למחוק את דוח המחלקה <strong>{deleteConfirm.dept}</strong> מתאריך <strong>{formatDateHe(deleteConfirm.date)}</strong>?
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
+              <button onClick={() => handleDelete(deleteConfirm.date, deleteConfirm.dept)}
+                style={{ ...S.btn, background: '#ef4444', color: 'white', padding: '8px 20px' }}>מחק</button>
+              <button onClick={() => setDeleteConfirm(null)}
+                style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0', padding: '8px 20px' }}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════ EDIT MODAL ═══════════════ */}
+      {editDate && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={closeEdit}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 800, width: '100%', maxHeight: '80vh', overflow: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                  עריכת דוח — {formatDateHe(editDate)}
+                </h3>
+                <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
+                  מחלקה: {editDept} · {editRows.length} מוצרים
+                </p>
+              </div>
+            </div>
+
+            {editLoading ? (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: '#94a3b8', fontSize: 14 }}>טוען...</div>
+            ) : (
+              <>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr>
+                    <th style={{ ...S.th, width: 40 }}>#</th>
+                    <th style={S.th}>שם מוצר</th>
+                    <th style={{ ...S.th, width: 120 }}>מחלקה</th>
+                    <th style={{ ...S.th, width: 90 }}>כמות</th>
+                    <th style={{ ...S.th, width: 100 }}>מחיר</th>
+                    <th style={{ ...S.th, width: 100 }}>סה"כ</th>
+                  </tr></thead>
+                  <tbody>
+                    {editRows.map((row, i) => (
+                      <tr key={row.id} style={{ background: i % 2 === 0 ? 'white' : '#fafbfc' }}>
+                        <td style={{ ...S.td, color: '#94a3b8', fontSize: 12 }}>{i + 1}</td>
+                        <td style={S.td}>{row.product_name}</td>
+                        <td style={S.td}>
+                          <select value={row.department} onChange={(e) => updateEditRow(i, 'department', e.target.value)}
+                            style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 8px', fontSize: 13, width: '100%', background: 'white' }}>
+                            {DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                          </select>
+                        </td>
+                        <td style={S.td}>
+                          <input type="number" value={row.quantity} onChange={(e) => updateEditRow(i, 'quantity', Number(e.target.value) || 0)}
+                            style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 8px', fontSize: 13, width: '100%', textAlign: 'left' }} />
+                        </td>
+                        <td style={S.td}>
+                          <input type="number" step="0.01" value={row.unit_price} onChange={(e) => updateEditRow(i, 'unit_price', Number(e.target.value) || 0)}
+                            style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 8px', fontSize: 13, width: '100%', textAlign: 'left' }} />
+                        </td>
+                        <td style={{ ...S.td, fontWeight: 600 }}>
+                          {fmtMoney(row.total_cost)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot><tr>
+                    <td colSpan={5} style={{ ...S.td, fontWeight: 700, borderTop: '2px solid #e2e8f0', textAlign: 'left' }}>סה"כ</td>
+                    <td style={{ ...S.td, fontWeight: 700, borderTop: '2px solid #e2e8f0', fontSize: 15 }}>
+                      {fmtMoney(editRows.reduce((s, r) => s + Number(r.total_cost), 0))}
+                    </td>
+                  </tr></tfoot>
+                </table>
+
+                <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-start' }}>
+                  <button onClick={saveEdit} disabled={editSaving}
+                    style={{ ...S.btn, background: editSaving ? '#94a3b8' : '#0f172a', color: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <CheckCircle size={16} /> {editSaving ? 'שומר...' : 'שמור שינויים'}
+                  </button>
+                  <button onClick={closeEdit}
+                    style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>ביטול</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </motion.div>
   )
 }
