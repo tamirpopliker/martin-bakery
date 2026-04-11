@@ -300,8 +300,16 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
 
   function getAvailColor(empId: number, date: string, shiftId?: number): string {
     const av = getEmployeeAvailability(empId, date, shiftId)
-    if (!av) return AVAIL_COLORS.available // Default: available (green) if not set
+    if (!av) return UNKNOWN_COLOR // No availability submitted
     return AVAIL_COLORS[av]
+  }
+
+  function getShiftHours(shiftId: number): number {
+    const shift = shifts.find(s => s.id === shiftId)
+    if (!shift || !shift.start_time || !shift.end_time) return 0
+    const [sh, sm] = shift.start_time.split(':').map(Number)
+    const [eh, em] = shift.end_time.split(':').map(Number)
+    return (eh + em / 60) - (sh + sm / 60)
   }
 
   function isEmployeeAssignedOnDate(empId: number, date: string): boolean {
@@ -309,6 +317,12 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
   }
 
   async function addAssignment(shiftId: number, roleId: number, date: string, employeeId: number) {
+    // Warn if employee already assigned on this day (manual override)
+    const alreadyOnDay = assignments.some(a => a.employee_id === employeeId && a.date === date)
+    if (alreadyOnDay) {
+      const empName = getEmployeeName(employeeId)
+      if (!confirm(`⚠️ ${empName} כבר משובץ/ת במשמרת אחרת ביום הזה. להמשיך בכל זאת?`)) return
+    }
     // Optimistic update
     const tempId = -Date.now()
     const newAssignment: ShiftAssignment = { id: tempId, shift_id: shiftId, employee_id: employeeId, role_id: roleId, date }
@@ -358,8 +372,8 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
       return { emp, avail, alreadyAssigned }
     }).sort((a, b) => {
       const order: Record<string, number> = { available: 0, prefer_not: 1, unavailable: 2 }
-      const aOrder = a.avail ? (order[a.avail] ?? 0) : 0  // null = available (first)
-      const bOrder = b.avail ? (order[b.avail] ?? 0) : 0
+      const aOrder = a.avail ? (order[a.avail] ?? 3) : 3  // null = no submission (last)
+      const bOrder = b.avail ? (order[b.avail] ?? 3) : 3
       if (aOrder !== bOrder) return aOrder - bOrder
       if (a.alreadyAssigned !== b.alreadyAssigned) return a.alreadyAssigned ? 1 : -1
       return 0
@@ -416,8 +430,8 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
       .lte('date', weekDates[5])
 
     const newAssignments: { branch_id: number; shift_id: number; employee_id: number; role_id: number; date: string }[] = []
-    const empShiftCount: Record<number, number> = {}
-    employees.forEach(e => { empShiftCount[e.id] = 0 })
+    const empWeeklyHours: Record<number, number> = {}
+    employees.forEach(e => { empWeeklyHours[e.id] = 0 })
     const empDayAssigned: Record<string, boolean> = {}
 
     for (let dayIdx = 0; dayIdx < 6; dayIdx++) {
@@ -426,48 +440,44 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
 
       for (const shift of dayShifts) {
         const adjustedReqs = getAdjustedRequired(shift.id, date)
+        const shiftHours = getShiftHours(shift.id)
 
         for (const req of adjustedReqs) {
           for (let slot = 0; slot < req.count; slot++) {
             const eligible = employees.filter(emp => {
+              // Must have the required role
               if (!roleAssignments.some(ra => ra.employee_id === emp.id && ra.role_id === req.roleId)) return false
+              // Only 'available' gets auto-scheduled (prefer_not / unavailable / no submission = skip)
               const avail = getEmployeeAvailability(emp.id, date, shift.id)
-              if (avail === 'unavailable') return false
+              if (avail !== 'available') return false
+              // Not already in this shift
               const alreadyInShift = newAssignments.some(a =>
                 a.employee_id === emp.id && a.shift_id === shift.id && a.date === date)
               if (alreadyInShift) return false
+              // Not already assigned on this day (max 1 shift per day)
+              if (empDayAssigned[`${emp.id}_${date}`]) return false
               return true
             })
 
-            const scored = eligible.map(emp => {
-              let score = 0
-              const avail = getEmployeeAvailability(emp.id, date, shift.id)
-              if (avail === 'available' || avail === null) score += 50
-              else if (avail === 'prefer_not') score += 20
-              const p = emp.priority || 2
-              if (p === 1) score += 40
-              else if (p === 2) score += 20
-              const minReq = emp.min_shifts_per_week || 0
-              if (minReq > 0 && empShiftCount[emp.id] < minReq) score += 30
-              score += Math.max(0, 10 - empShiftCount[emp.id] * 2)
-              if (empDayAssigned[`${emp.id}_${date}`]) score -= 20
-              return { emp, score }
+            // Sort: higher priority first (lower number), then fewer weekly hours
+            eligible.sort((a, b) => {
+              const aPriority = a.priority || 2
+              const bPriority = b.priority || 2
+              if (aPriority !== bPriority) return aPriority - bPriority
+              return (empWeeklyHours[a.id] || 0) - (empWeeklyHours[b.id] || 0)
             })
 
-            scored.sort((a, b) => b.score - a.score)
-
             // Rule: trainee needs a mentor in the same shift
-            const filteredScored = scored.filter(({ emp }) => {
+            const filteredEligible = eligible.filter(emp => {
               if (emp.training_status !== 'trainee') return true
-              // Check if a mentor is already assigned to this shift
               return newAssignments.some(a =>
                 a.shift_id === shift.id && a.date === date &&
                 employees.find(e => e.id === a.employee_id)?.training_status === 'mentor'
               )
             })
 
-            if (filteredScored.length > 0 && filteredScored[0].score > 0) {
-              const chosen = filteredScored[0].emp
+            if (filteredEligible.length > 0) {
+              const chosen = filteredEligible[0]
               newAssignments.push({
                 branch_id: branchId,
                 shift_id: shift.id,
@@ -475,7 +485,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
                 role_id: req.roleId,
                 date,
               })
-              empShiftCount[chosen.id] = (empShiftCount[chosen.id] || 0) + 1
+              empWeeklyHours[chosen.id] = (empWeeklyHours[chosen.id] || 0) + shiftHours
               empDayAssigned[`${chosen.id}_${date}`] = true
             }
           }
