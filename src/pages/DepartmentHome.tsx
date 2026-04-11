@@ -15,7 +15,7 @@ const fadeUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, tra
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 type Department = 'creams' | 'dough' | 'packaging' | 'cleaning'
-type DeptPage = 'production' | 'waste' | 'repairs' | 'labor' | 'dashboard'
+type DeptPage = 'production' | 'labor' | 'dashboard'
 
 interface Props {
   department: Department
@@ -41,8 +41,6 @@ const DEPT_CONFIG: Record<Department, { label: string; color: string; Icon: any;
 const MENU_ITEMS: MenuItem[] = [
   { page: 'production', label: 'ייצור יומי',   subtitle: 'הזנת נתוני ייצור יומיים',           Icon: TrendingUp,       depts: ['creams', 'dough'] },
   { page: 'production', label: 'כמויות יומיות', subtitle: 'הזנת כמויות אריזה',                 Icon: TrendingUp,       depts: ['packaging'] },
-  { page: 'waste',      label: 'פחת',           subtitle: 'מעקב פחת חומרי גלם וסחורה',        Icon: Trash2,           depts: ['creams', 'dough', 'packaging'] },
-  { page: 'repairs',    label: 'תיקונים',       subtitle: 'תיקונים · רכישות ציוד',              Icon: Wrench,           depts: ['creams', 'dough', 'packaging', 'cleaning'] },
   { page: 'labor',      label: 'לייבור',        subtitle: 'שעות עבודה · עלות מעסיק',            Icon: ClipboardList,    depts: ['creams', 'dough', 'packaging', 'cleaning'] },
   { page: 'dashboard',  label: 'דשבורד',        subtitle: 'KPI · גרפים · פירוט יומי',           Icon: LayoutDashboard,  depts: ['creams', 'dough'] },
 ]
@@ -58,12 +56,6 @@ export default function DepartmentHome({ department, onBack }: Props) {
   // ─── ניתוב פנימי ────────────────────────────────────────────────────────────
   if (page === 'production') return (
     <DailyProduction department={department} onBack={() => setPage(null)} />
-  )
-  if (page === 'waste') return (
-    <FactoryWaste department={department} onBack={() => setPage(null)} />
-  )
-  if (page === 'repairs') return (
-    <FactoryRepairs department={department} onBack={() => setPage(null)} />
   )
   if (page === 'labor') return (
     <DepartmentLabor department={department} onBack={() => setPage(null)} />
