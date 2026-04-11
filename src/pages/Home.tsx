@@ -31,12 +31,13 @@ import DepartmentHome from './DepartmentHome'
 import UserManagement from './UserManagement'
 import ReportsAlerts from './ReportsAlerts'
 import DataImport from './DataImport'
+import ProductionReportUpload from './ProductionReportUpload'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
   AlertTriangle, ClipboardList, Truck, UserCog, Activity,
   Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
-  LayoutDashboard, X, Users
+  LayoutDashboard, X, Users, FileSpreadsheet
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
@@ -52,6 +53,7 @@ const PANEL_FACTORY = [
   { label: 'ספקים',         subtitle: 'חשבוניות · ניהול ספקים',        Icon: ClipboardList, color: '#34d399', page: 'suppliers' },
   { label: 'דשבורד מפעל',  subtitle: 'KPI · רווח · גרפים',           Icon: ProfitIcon,    color: '#6366f1', page: 'factory_dashboard' },
   { label: 'עובדים',        subtitle: 'ניהול עובדי מפעל',              Icon: Users,        color: '#8b5cf6', page: 'factory_employees' },
+  { label: 'דוח ייצור מרוכז', subtitle: 'העלאת דוח ייצור מ-Excel',    Icon: FileSpreadsheet, color: '#10b981', page: 'production_report_upload' },
   { label: 'הגדרות מפעל',  subtitle: 'יעדים · עלויות קבועות',        Icon: Settings,     color: '#64748b', page: 'settings' },
 ]
 
@@ -242,6 +244,7 @@ export default function Home() {
     if (page === 'factory_b2b')          return <FactoryB2B onBack={() => setPage(null)} />
     if (page === 'settings')             return <FactorySettings onBack={() => setPage(null)} />
     if (page === 'factory_employees')  return <FactoryEmployees onBack={() => setPage(null)} />
+    if (page === 'production_report_upload') return <ProductionReportUpload onBack={() => setPage(null)} />
     if (page === 'ceo_dashboard')        return <CEODashboard onBack={() => setPage(null)} />
     if (page === 'data_import')          return <DataImport onBack={() => setPage(null)} />
     if (page === 'branch_import')        return <DataImport onBack={() => setPage(null)} branchOnly />
