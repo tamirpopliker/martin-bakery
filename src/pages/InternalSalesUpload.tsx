@@ -318,8 +318,16 @@ export default function InternalSalesUpload({ onBack }: Props) {
   }
 
   async function handleDelete(sale: SaleRow) {
+    // For completed orders — also remove linked factory_sales + branch_expenses
+    if (sale.status === 'completed' && sale.order_number) {
+      await supabase.from('factory_sales').delete()
+        .eq('doc_number', sale.order_number).eq('is_internal', true)
+      await supabase.from('branch_expenses').delete()
+        .eq('branch_id', sale.branch_id).eq('from_factory', true)
+        .ilike('description', `%${sale.order_number}%`)
+    }
     await supabase.from('internal_sales').delete().eq('id', sale.id)
-    setDeleteConfirm(null); loadHistory()
+    setDeleteConfirm(null); loadHistory(); loadModifiedCount()
   }
 
   async function completeModified(sale: SaleRow) {
@@ -630,6 +638,11 @@ export default function InternalSalesUpload({ onBack }: Props) {
                                 צפה ואשר
                               </button>
                             )}
+                            {s.status === 'completed' && appUser?.role === 'admin' && (
+                              <button onClick={() => setDeleteConfirm(s)} style={{ ...S.btn, padding: '3px 8px', fontSize: 11, background: '#fef2f2', color: '#ef4444' }} title="מחיקה">
+                                <Trash2 size={13} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -846,8 +859,11 @@ export default function InternalSalesUpload({ onBack }: Props) {
           <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 380, margin: '0 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }}
             onClick={e => e.stopPropagation()}>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>מחיקת הזמנה</h3>
-            <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 20px' }}>
-              למחוק הזמנה {deleteConfirm.order_number || ''} מתאריך {fmtDate(deleteConfirm.order_date)}?
+            <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 20px', lineHeight: 1.6 }}>
+              {deleteConfirm.status === 'completed'
+                ? 'מחיקת תעודה מושלמת תסיר גם את ההכנסה מהמפעל וההוצאה מהסניף. האם להמשיך?'
+                : `למחוק הזמנה ${deleteConfirm.order_number || ''} מתאריך ${fmtDate(deleteConfirm.order_date)}?`
+              }
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => handleDelete(deleteConfirm)} style={{ ...S.btn, background: '#ef4444', color: 'white' }}>מחק</button>
