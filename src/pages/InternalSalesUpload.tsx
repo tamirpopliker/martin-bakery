@@ -26,6 +26,8 @@ interface SaleRow {
   branch_id: number
   status: string
   total_amount: number
+  confirmed_by: string | null
+  completed_at: string | null
   created_at: string
 }
 
@@ -43,7 +45,7 @@ interface SaleItemRow {
 const DEPT_OPTIONS = ['בצקים', 'קרמים', 'אחר']
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   pending:   { label: 'ממתין',   color: '#a16207', bg: '#fefce8' },
-  modified:  { label: 'עודכן ע"י סניף', color: '#9333ea', bg: '#faf5ff' },
+  modified:  { label: '⚠️ עודכן ע"י סניף', color: '#c2410c', bg: '#fff7ed' },
   completed: { label: 'הושלם',   color: '#166534', bg: '#f0fdf4' },
 }
 
@@ -94,6 +96,7 @@ export default function InternalSalesUpload({ onBack }: Props) {
   const [editLoading, setEditLoading] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<SaleRow | null>(null)
+  const [modifiedCount, setModifiedCount] = useState(0)
 
   // ─── Parse Excel ───
   function parseExcel(file: File) {
@@ -271,6 +274,14 @@ export default function InternalSalesUpload({ onBack }: Props) {
 
   useEffect(() => { if (tab === 'history') loadHistory() }, [tab, loadHistory])
 
+  // Fetch modified count on mount + after changes
+  const loadModifiedCount = useCallback(async () => {
+    const { count } = await supabase.from('internal_sales')
+      .select('id', { count: 'exact', head: true }).eq('status', 'modified')
+    setModifiedCount(count || 0)
+  }, [])
+  useEffect(() => { loadModifiedCount() }, [loadModifiedCount])
+
   async function openView(sale: SaleRow) {
     setViewSale(sale); setViewLoading(true)
     const { data } = await supabase.from('internal_sale_items').select('*').eq('sale_id', sale.id).order('id')
@@ -344,6 +355,25 @@ export default function InternalSalesUpload({ onBack }: Props) {
     })
 
     loadHistory()
+    loadModifiedCount()
+  }
+
+  async function rejectModified(sale: SaleRow) {
+    // Reset quantities back to original (quantity_supplied) and set back to pending
+    const { data: saleItems } = await supabase.from('internal_sale_items').select('*').eq('sale_id', sale.id)
+    if (saleItems) {
+      for (const item of saleItems) {
+        await supabase.from('internal_sale_items').update({
+          quantity_confirmed: null,
+          total_price: Number(item.quantity_supplied) * Number(item.unit_price),
+        }).eq('id', item.id)
+      }
+      const originalTotal = saleItems.reduce((s: number, i: any) => s + Number(i.quantity_supplied) * Number(i.unit_price), 0)
+      await supabase.from('internal_sales').update({
+        status: 'pending', total_amount: originalTotal, confirmed_by: null,
+      }).eq('id', sale.id)
+    }
+    setViewSale(null); setViewItems([]); loadHistory(); loadModifiedCount()
   }
 
   const branchName = (id: number) => branches.find(b => b.id === id)?.name || `סניף ${id}`
@@ -363,6 +393,25 @@ export default function InternalSalesUpload({ onBack }: Props) {
             <History size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> היסטוריה
           </button>
         </div>
+
+        {/* ─── Modified orders banner ─── */}
+        {modifiedCount > 0 && (
+          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 12, padding: '12px 18px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>⚠️</span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#c2410c' }}>
+                  {modifiedCount} תעודות עודכנו על ידי סניפים וממתינות לאישורך
+                </div>
+                <div style={{ fontSize: 12, color: '#ea580c' }}>יש לבדוק את השינויים ולאשר או לדחות</div>
+              </div>
+            </div>
+            <button onClick={() => { setTab('history'); setFilterStatus('modified'); setViewSale(null); setEditSale(null) }}
+              style={{ ...S.btn, background: '#c2410c', color: 'white', padding: '8px 18px', fontSize: 13 }}>
+              צפה עכשיו
+            </button>
+          </div>
+        )}
 
         {/* ═══ UPLOAD TAB ═══ */}
         {tab === 'upload' && step === 'upload' && (
@@ -538,20 +587,31 @@ export default function InternalSalesUpload({ onBack }: Props) {
                 <tbody>
                   {sales.map((s, i) => {
                     const st = STATUS_LABELS[s.status] || STATUS_LABELS.pending
+                    const isModified = s.status === 'modified'
                     return (
-                      <tr key={s.id} style={{ background: s.status === 'modified' ? '#faf5ff' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
+                      <tr key={s.id} style={{ background: isModified ? '#fff7ed' : i % 2 === 0 ? 'white' : '#fafbfc', borderRight: isModified ? '3px solid #ea580c' : 'none' }}>
                         <td style={S.td}>{fmtDate(s.order_date)}</td>
                         <td style={S.td}>{s.order_number || '—'}</td>
-                        <td style={S.td}>{branchName(s.branch_id)}</td>
+                        <td style={S.td}>
+                          {branchName(s.branch_id)}
+                          {isModified && s.confirmed_by && (
+                            <div style={{ fontSize: 11, color: '#ea580c', marginTop: 2 }}>עודכן ע"י: {s.confirmed_by}</div>
+                          )}
+                        </td>
                         <td style={{ ...S.td, fontWeight: 600 }}>{fmtMoney(s.total_amount)}</td>
                         <td style={S.td}>
                           <span style={{ background: st.bg, color: st.color, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
                             {st.label}
                           </span>
+                          {isModified && (
+                            <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', marginTop: 4, animation: 'pulse 2s infinite' }}>
+                              🔴 דורש אישורך
+                            </div>
+                          )}
                         </td>
                         <td style={S.td}>
                           <div style={{ display: 'flex', gap: 4 }}>
-                            <button onClick={() => openView(s)} style={{ ...S.btn, padding: '3px 8px', fontSize: 11, background: '#f1f5f9', color: '#374151' }} title="צפייה">
+                            <button onClick={() => openView(s)} style={{ ...S.btn, padding: '3px 8px', fontSize: 11, background: isModified ? '#fff7ed' : '#f1f5f9', color: '#374151', border: isModified ? '1px solid #fed7aa' : 'none' }} title="צפייה">
                               <Eye size={13} />
                             </button>
                             {s.status === 'pending' && (
@@ -564,10 +624,10 @@ export default function InternalSalesUpload({ onBack }: Props) {
                                 </button>
                               </>
                             )}
-                            {s.status === 'modified' && (
-                              <button onClick={() => completeModified(s)}
-                                style={{ ...S.btn, padding: '3px 10px', fontSize: 11, background: '#0f172a', color: 'white' }}>
-                                אשר ושלם
+                            {isModified && (
+                              <button onClick={() => openView(s)}
+                                style={{ ...S.btn, padding: '3px 10px', fontSize: 11, background: '#c2410c', color: 'white' }}>
+                                צפה ואשר
                               </button>
                             )}
                           </div>
@@ -581,16 +641,19 @@ export default function InternalSalesUpload({ onBack }: Props) {
           </div>
         )}
 
-        {/* View detail */}
+        {/* View detail / Comparison view for modified */}
         {tab === 'history' && viewSale && (
           <div style={S.card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                  הזמנה {viewSale.order_number || ''} — {fmtDate(viewSale.order_date)}
+                  {viewSale.status === 'modified' ? '⚠️ השוואת שינויים — ' : ''}הזמנה {viewSale.order_number || ''} — {fmtDate(viewSale.order_date)}
                 </h3>
                 <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
                   {branchName(viewSale.branch_id)} · {viewItems.length} מוצרים
+                  {viewSale.status === 'modified' && viewSale.confirmed_by && (
+                    <span style={{ color: '#ea580c', marginRight: 8 }}> · עודכן ע"י: {viewSale.confirmed_by}</span>
+                  )}
                 </p>
               </div>
               <button onClick={() => { setViewSale(null); setViewItems([]) }}
@@ -598,45 +661,115 @@ export default function InternalSalesUpload({ onBack }: Props) {
                 <ChevronLeft size={14} /> חזרה
               </button>
             </div>
+
+            {viewSale.status === 'modified' && (
+              <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#c2410c', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertTriangle size={16} />
+                הסניף עדכן כמויות בהזמנה זו. בדוק את ההפרשים ואשר או דחה.
+              </div>
+            )}
+
             {viewLoading ? <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>טוען...</div> : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr>
-                  <th style={{ ...S.th, width: 36 }}>#</th>
-                  <th style={S.th}>מוצר</th>
-                  <th style={S.th}>מחלקה</th>
-                  <th style={S.th}>כמות סופקה</th>
-                  {viewItems.some(i => i.quantity_confirmed !== null) && <th style={S.th}>כמות אושרה</th>}
-                  <th style={S.th}>מחיר</th>
-                  <th style={S.th}>סה"כ</th>
-                </tr></thead>
-                <tbody>
-                  {viewItems.map((item, i) => {
-                    const modified = item.quantity_confirmed !== null && item.quantity_confirmed !== item.quantity_supplied
-                    return (
-                      <tr key={item.id} style={{ background: modified ? '#faf5ff' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
-                        <td style={{ ...S.td, color: '#94a3b8', fontSize: 12 }}>{i + 1}</td>
-                        <td style={S.td}>{item.product_name}</td>
-                        <td style={S.td}>{item.department}</td>
-                        <td style={{ ...S.td, textDecoration: modified ? 'line-through' : 'none', color: modified ? '#94a3b8' : '#1e293b' }}>{item.quantity_supplied}</td>
-                        {viewItems.some(it => it.quantity_confirmed !== null) && (
-                          <td style={{ ...S.td, fontWeight: modified ? 700 : 400, color: modified ? '#7c3aed' : '#1e293b' }}>
-                            {item.quantity_confirmed ?? '—'}
+              <>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr>
+                    <th style={{ ...S.th, width: 36 }}>#</th>
+                    <th style={S.th}>מוצר</th>
+                    <th style={S.th}>כמות מקורית (מפעל)</th>
+                    {viewItems.some(i => i.quantity_confirmed !== null) && (
+                      <>
+                        <th style={S.th}>כמות מעודכנת (סניף)</th>
+                        <th style={{ ...S.th, width: 80 }}>הפרש</th>
+                      </>
+                    )}
+                    <th style={S.th}>מחיר</th>
+                    <th style={S.th}>סה"כ {viewItems.some(i => i.quantity_confirmed !== null) ? 'מעודכן' : ''}</th>
+                  </tr></thead>
+                  <tbody>
+                    {viewItems.map((item, i) => {
+                      const hasConfirmed = item.quantity_confirmed !== null
+                      const changed = hasConfirmed && item.quantity_confirmed !== item.quantity_supplied
+                      const diff = hasConfirmed ? Number(item.quantity_confirmed) - Number(item.quantity_supplied) : 0
+                      const effectiveQty = hasConfirmed ? Number(item.quantity_confirmed) : Number(item.quantity_supplied)
+                      return (
+                        <tr key={item.id} style={{ background: changed ? '#fff7ed' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
+                          <td style={{ ...S.td, color: '#94a3b8', fontSize: 12 }}>{i + 1}</td>
+                          <td style={S.td}>{item.product_name}</td>
+                          <td style={{ ...S.td, color: changed ? '#94a3b8' : '#1e293b', textDecoration: changed ? 'line-through' : 'none' }}>
+                            {item.quantity_supplied}
                           </td>
-                        )}
-                        <td style={S.td}>{fmtMoney(item.unit_price)}</td>
-                        <td style={{ ...S.td, fontWeight: 600 }}>{fmtMoney(item.total_price)}</td>
+                          {viewItems.some(it => it.quantity_confirmed !== null) && (
+                            <>
+                              <td style={{ ...S.td, fontWeight: changed ? 700 : 400, color: changed ? '#c2410c' : '#1e293b' }}>
+                                {hasConfirmed ? (
+                                  changed ? (
+                                    <span>{item.quantity_supplied} → {item.quantity_confirmed} {diff < 0 ? '↓' : '↑'}</span>
+                                  ) : item.quantity_confirmed
+                                ) : '—'}
+                              </td>
+                              <td style={{ ...S.td, fontWeight: 600, color: diff < 0 ? '#dc2626' : diff > 0 ? '#16a34a' : '#94a3b8', fontSize: 12 }}>
+                                {changed ? (diff > 0 ? `+${diff}` : String(diff)) : '—'}
+                              </td>
+                            </>
+                          )}
+                          <td style={S.td}>₪{Number(item.unit_price).toFixed(2)}</td>
+                          <td style={{ ...S.td, fontWeight: 600 }}>{fmtMoney(effectiveQty * Number(item.unit_price))}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    {viewItems.some(i => i.quantity_confirmed !== null) && (() => {
+                      const originalTotal = viewItems.reduce((s, i) => s + Number(i.quantity_supplied) * Number(i.unit_price), 0)
+                      const updatedTotal = viewItems.reduce((s, i) => s + (i.quantity_confirmed !== null ? Number(i.quantity_confirmed) : Number(i.quantity_supplied)) * Number(i.unit_price), 0)
+                      const totalDiff = updatedTotal - originalTotal
+                      const colCount = 5
+                      return (
+                        <>
+                          <tr>
+                            <td colSpan={colCount} style={{ ...S.td, fontWeight: 600, borderTop: '2px solid #e2e8f0', textAlign: 'left', color: '#94a3b8' }}>סה"כ מקורי</td>
+                            <td colSpan={2} style={{ ...S.td, borderTop: '2px solid #e2e8f0', color: '#94a3b8' }}>{fmtMoney(originalTotal)}</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={colCount} style={{ ...S.td, fontWeight: 700, textAlign: 'left' }}>סה"כ מעודכן</td>
+                            <td colSpan={2} style={{ ...S.td, fontWeight: 700, fontSize: 15 }}>{fmtMoney(updatedTotal)}</td>
+                          </tr>
+                          {totalDiff !== 0 && (
+                            <tr>
+                              <td colSpan={colCount} style={{ ...S.td, fontWeight: 600, textAlign: 'left', color: totalDiff < 0 ? '#dc2626' : '#16a34a' }}>הפרש</td>
+                              <td colSpan={2} style={{ ...S.td, fontWeight: 700, color: totalDiff < 0 ? '#dc2626' : '#16a34a' }}>
+                                {totalDiff > 0 ? '+' : ''}{fmtMoney(totalDiff)}
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      )
+                    })()}
+                    {!viewItems.some(i => i.quantity_confirmed !== null) && (
+                      <tr>
+                        <td colSpan={3} style={{ ...S.td, fontWeight: 700, borderTop: '2px solid #e2e8f0', textAlign: 'left' }}>סה"כ</td>
+                        <td colSpan={2} style={{ ...S.td, fontWeight: 700, borderTop: '2px solid #e2e8f0', fontSize: 15 }}>
+                          {fmtMoney(viewItems.reduce((s, i) => s + Number(i.total_price), 0))}
+                        </td>
                       </tr>
-                    )
-                  })}
-                </tbody>
-                <tfoot><tr>
-                  <td colSpan={viewItems.some(i => i.quantity_confirmed !== null) ? 6 : 5}
-                    style={{ ...S.td, fontWeight: 700, borderTop: '2px solid #e2e8f0', textAlign: 'left' }}>סה"כ</td>
-                  <td style={{ ...S.td, fontWeight: 700, borderTop: '2px solid #e2e8f0', fontSize: 15 }}>
-                    {fmtMoney(viewItems.reduce((s, i) => s + Number(i.total_price), 0))}
-                  </td>
-                </tr></tfoot>
-              </table>
+                    )}
+                  </tfoot>
+                </table>
+
+                {/* Action buttons for modified orders */}
+                {viewSale.status === 'modified' && (
+                  <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+                    <button onClick={() => { completeModified(viewSale); setViewSale(null); setViewItems([]) }}
+                      style={{ ...S.btn, background: '#0f172a', color: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <CheckCircle size={16} /> אשר ושלם
+                    </button>
+                    <button onClick={() => rejectModified(viewSale)}
+                      style={{ ...S.btn, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      ✕ דחה שינויים
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
