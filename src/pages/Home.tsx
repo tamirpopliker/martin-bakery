@@ -103,33 +103,21 @@ export default function Home() {
   const showBranches = appUser?.role === 'admin' || (appUser?.role === 'branch' && filteredBranches.length > 0)
   const showManage = appUser?.role === 'admin' && managePanelItems.length > 0
 
-  // Modified internal sales badges
-  const [modifiedSales, setModifiedSales] = useState<{ total: number; byDept: Record<string, number> }>({ total: 0, byDept: {} })
+  // Modified internal sales badge (internal_sales only)
+  const [modifiedCount, setModifiedCount] = useState(0)
 
   useEffect(() => {
     async function loadModified() {
-      const { data } = await supabase.from('internal_sales')
-        .select('id').eq('status', 'modified')
-      if (!data) return
-      const saleIds = data.map(s => s.id)
-      if (saleIds.length === 0) { setModifiedSales({ total: 0, byDept: {} }); return }
-      const { data: items } = await supabase.from('internal_sale_items')
-        .select('department, sale_id').in('sale_id', saleIds)
-      const byDept: Record<string, number> = {}
-      const salesPerDept = new Map<string, Set<number>>()
-      for (const item of (items || [])) {
-        const dept = item.department || 'אחר'
-        if (!salesPerDept.has(dept)) salesPerDept.set(dept, new Set())
-        salesPerDept.get(dept)!.add(item.sale_id)
-      }
-      for (const [dept, saleSet] of salesPerDept) byDept[dept] = saleSet.size
-      setModifiedSales({ total: data.length, byDept })
+      const { count } = await supabase.from('internal_sales')
+        .select('id', { count: 'exact', head: true }).eq('status', 'modified')
+      setModifiedCount(count || 0)
     }
     loadModified()
 
-    // Realtime subscription
-    const channel = supabase.channel('internal-sales-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'internal_sales' }, () => loadModified())
+    // Realtime subscription — fires on any status change
+    const channel = supabase.channel('internal-sales-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'internal_sales', filter: 'status=eq.modified' }, () => loadModified())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'internal_sales' }, () => loadModified())
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [])
@@ -601,10 +589,7 @@ export default function Home() {
                   className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
                   {filteredPanelFactory.map(item => {
                     const Icon = item.Icon
-                    // Badge logic for modified internal sales
-                    const deptMap: Record<string, string> = { dept_creams: 'קרמים', dept_dough: 'בצקים' }
-                    const badgeCount = item.page === 'internal_sales' ? modifiedSales.total
-                      : deptMap[item.page] ? (modifiedSales.byDept[deptMap[item.page]] || 0) : 0
+                    const badgeCount = item.page === 'internal_sales' ? modifiedCount : 0
                     return (
                       <motion.div key={item.page} variants={fadeUp}>
                         <button onClick={() => setPage(item.page)}
