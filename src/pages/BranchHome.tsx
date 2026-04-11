@@ -98,13 +98,15 @@ export default function BranchHome({ branch, onBack }: Props) {
   // ─── טעינת הזמנות ממתינות ──────────────────────────────────────────────────
   useEffect(() => {
     async function loadPendingCount() {
-      const [fs, b2b] = await Promise.all([
+      const [fs, b2b, internal] = await Promise.all([
         supabase.from('factory_sales').select('id', { count: 'exact', head: true })
           .eq('target_branch_id', branch.id).eq('branch_status', 'pending'),
         supabase.from('factory_b2b_sales').select('id', { count: 'exact', head: true })
           .eq('target_branch_id', branch.id).eq('branch_status', 'pending'),
+        supabase.from('internal_sales').select('id', { count: 'exact', head: true })
+          .eq('branch_id', branch.id).eq('status', 'pending'),
       ])
-      setPendingOrders((fs.count || 0) + (b2b.count || 0))
+      setPendingOrders((fs.count || 0) + (b2b.count || 0) + (internal.count || 0))
     }
     loadPendingCount()
   }, [branch.id])

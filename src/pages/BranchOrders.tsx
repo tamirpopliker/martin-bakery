@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { Package, CheckCircle, Pencil, Check, X, AlertTriangle, CheckSquare, Square } from 'lucide-react'
+import { Package, CheckCircle, Pencil, Check, X, AlertTriangle, CheckSquare, Square, Eye, ChevronDown, ChevronUp } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -57,6 +57,70 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
   const [bulkLoading, setBulkLoading]   = useState(false)
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set())
 
+  // ─── Internal sales state ───
+  const [internalOrders, setInternalOrders] = useState<any[]>([])
+  const [internalExpanded, setInternalExpanded] = useState(true)
+  const [viewInternal, setViewInternal] = useState<any | null>(null)
+  const [viewInternalItems, setViewInternalItems] = useState<any[]>([])
+  const [editInternalItems, setEditInternalItems] = useState<any[]>([])
+  const [editingInternal, setEditingInternal] = useState(false)
+
+  async function fetchInternalOrders() {
+    const { data } = await supabase.from('internal_sales')
+      .select('*')
+      .eq('branch_id', branchId)
+      .in('status', ['pending', 'modified'])
+      .order('order_date', { ascending: false })
+    setInternalOrders(data || [])
+  }
+
+  async function openInternalOrder(sale: any) {
+    setViewInternal(sale)
+    const { data } = await supabase.from('internal_sale_items').select('*').eq('sale_id', sale.id).order('id')
+    setViewInternalItems(data || [])
+    setEditInternalItems((data || []).map((r: any) => ({ ...r, qty_edit: r.quantity_confirmed ?? r.quantity_supplied })))
+    setEditingInternal(false)
+  }
+
+  async function confirmInternalOrder(noChanges: boolean) {
+    if (!viewInternal) return
+    if (noChanges) {
+      // Confirm as-is
+      for (const item of editInternalItems) {
+        await supabase.from('internal_sale_items').update({
+          quantity_confirmed: item.quantity_supplied,
+          total_price: item.quantity_supplied * item.unit_price,
+        }).eq('id', item.id)
+      }
+      await supabase.from('internal_sales').update({
+        status: 'completed',
+        confirmed_by: 'branch',
+        completed_at: new Date().toISOString(),
+      }).eq('id', viewInternal.id)
+    } else {
+      // Save with modifications
+      let hasChanges = false
+      for (const item of editInternalItems) {
+        const qty = Number(item.qty_edit) || 0
+        if (qty !== item.quantity_supplied) hasChanges = true
+        await supabase.from('internal_sale_items').update({
+          quantity_confirmed: qty,
+          total_price: qty * item.unit_price,
+        }).eq('id', item.id)
+      }
+      const newTotal = editInternalItems.reduce((s: number, i: any) => s + (Number(i.qty_edit) || 0) * Number(i.unit_price), 0)
+      await supabase.from('internal_sales').update({
+        status: hasChanges ? 'modified' : 'completed',
+        total_amount: newTotal,
+        confirmed_by: 'branch',
+        ...(hasChanges ? {} : { completed_at: new Date().toISOString() }),
+      }).eq('id', viewInternal.id)
+    }
+    setViewInternal(null)
+    setViewInternalItems([])
+    fetchInternalOrders()
+  }
+
   // ─── שליפת הזמנות ──────────────────────────────────────────────────────────
   async function fetchOrders() {
     setLoading(true)
@@ -88,6 +152,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
 
   useEffect(() => {
     fetchOrders()
+    fetchInternalOrders()
     setEditId(null)
   }, [from, to])
 
@@ -220,6 +285,129 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
       <PageHeader title="הזמנות מהמפעל" subtitle={branchName} onBack={onBack} />
 
       <div style={{ padding: '0 24px', maxWidth: '960px', margin: '0 auto' }}>
+
+        {/* ─── Internal Sales (new workflow) ──────────────────────────── */}
+        {internalOrders.length > 0 && !viewInternal && (
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <button onClick={() => setInternalExpanded(!internalExpanded)}
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', background: '#faf5ff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Package size={18} color="#7c3aed" />
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                  תעודות משלוח ממתינות ({internalOrders.length})
+                </span>
+              </div>
+              {internalExpanded ? <ChevronUp size={16} color="#94a3b8" /> : <ChevronDown size={16} color="#94a3b8" />}
+            </button>
+            {internalExpanded && (
+              <div style={{ padding: '0' }}>
+                {internalOrders.map((s: any) => (
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderTop: '1px solid #f1f5f9' }}>
+                    <div>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                        תעודה {s.order_number || '—'}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#94a3b8', marginRight: 8 }}>
+                        {new Date(s.order_date + 'T12:00:00').toLocaleDateString('he-IL')}
+                      </span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginRight: 12 }}>
+                        ₪{Number(s.total_amount).toLocaleString()}
+                      </span>
+                      {s.status === 'modified' && (
+                        <span style={{ fontSize: 11, fontWeight: 600, background: '#faf5ff', color: '#7c3aed', padding: '2px 8px', borderRadius: 6, marginRight: 8 }}>עודכן — ממתין למפעל</span>
+                      )}
+                    </div>
+                    <button onClick={() => openInternalOrder(s)}
+                      style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Eye size={14} /> צפה ואשר
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Internal order detail/confirm view */}
+        {viewInternal && (
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e2e8f0', padding: 24, marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                  תעודה {viewInternal.order_number || ''} — {new Date(viewInternal.order_date + 'T12:00:00').toLocaleDateString('he-IL')}
+                </h3>
+                <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>{viewInternalItems.length} מוצרים</p>
+              </div>
+              <button onClick={() => { setViewInternal(null); setViewInternalItems([]); setEditingInternal(false) }}
+                style={{ background: '#f1f5f9', color: '#374151', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                חזרה
+              </button>
+            </div>
+
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <th style={{ fontSize: 12, fontWeight: 600, color: '#64748b', padding: '8px', textAlign: 'right', borderBottom: '2px solid #e2e8f0' }}>מוצר</th>
+                <th style={{ fontSize: 12, fontWeight: 600, color: '#64748b', padding: '8px', textAlign: 'right', borderBottom: '2px solid #e2e8f0', width: 90 }}>כמות סופקה</th>
+                <th style={{ fontSize: 12, fontWeight: 600, color: '#64748b', padding: '8px', textAlign: 'right', borderBottom: '2px solid #e2e8f0', width: 100 }}>כמות אושרה</th>
+                <th style={{ fontSize: 12, fontWeight: 600, color: '#64748b', padding: '8px', textAlign: 'right', borderBottom: '2px solid #e2e8f0', width: 80 }}>מחיר</th>
+                <th style={{ fontSize: 12, fontWeight: 600, color: '#64748b', padding: '8px', textAlign: 'right', borderBottom: '2px solid #e2e8f0', width: 90 }}>סה"כ</th>
+              </tr></thead>
+              <tbody>
+                {editInternalItems.map((item: any, i: number) => (
+                  <tr key={item.id} style={{ background: i % 2 === 0 ? 'white' : '#fafbfc' }}>
+                    <td style={{ fontSize: 13, padding: '8px', borderBottom: '1px solid #f1f5f9' }}>{item.product_name}</td>
+                    <td style={{ fontSize: 13, padding: '8px', borderBottom: '1px solid #f1f5f9' }}>{item.quantity_supplied}</td>
+                    <td style={{ fontSize: 13, padding: '8px', borderBottom: '1px solid #f1f5f9' }}>
+                      {editingInternal ? (
+                        <input type="number" value={item.qty_edit}
+                          onChange={e => setEditInternalItems(prev => prev.map((r: any, j: number) => j === i ? { ...r, qty_edit: Number(e.target.value) || 0 } : r))}
+                          style={{ border: '1px solid #e2e8f0', borderRadius: 6, padding: '3px 6px', fontSize: 13, width: '100%', textAlign: 'left' }} />
+                      ) : (
+                        <span>{item.qty_edit}</span>
+                      )}
+                    </td>
+                    <td style={{ fontSize: 13, padding: '8px', borderBottom: '1px solid #f1f5f9' }}>₪{Number(item.unit_price).toLocaleString()}</td>
+                    <td style={{ fontSize: 13, padding: '8px', borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>
+                      ₪{((editingInternal ? Number(item.qty_edit) : item.quantity_supplied) * Number(item.unit_price)).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr>
+                <td colSpan={4} style={{ padding: '10px 8px', fontWeight: 700, borderTop: '2px solid #e2e8f0', textAlign: 'left' }}>סה"כ</td>
+                <td style={{ padding: '10px 8px', fontWeight: 700, borderTop: '2px solid #e2e8f0', fontSize: 15 }}>
+                  ₪{editInternalItems.reduce((s: number, i: any) => s + (editingInternal ? Number(i.qty_edit) : i.quantity_supplied) * Number(i.unit_price), 0).toLocaleString()}
+                </td>
+              </tr></tfoot>
+            </table>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              {!editingInternal ? (
+                <>
+                  <button onClick={() => confirmInternalOrder(true)}
+                    style={{ background: '#0f172a', color: 'white', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CheckCircle size={14} /> אשר הזמנה
+                  </button>
+                  <button onClick={() => setEditingInternal(true)}
+                    style={{ background: 'white', color: '#6366f1', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Pencil size={14} /> ערוך כמויות
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => confirmInternalOrder(false)}
+                    style={{ background: '#0f172a', color: 'white', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CheckCircle size={14} /> שמור ואשר
+                  </button>
+                  <button onClick={() => setEditingInternal(false)}
+                    style={{ background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    ביטול
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ─── Pending alert ─────────────────────────────────────────── */}
         {pendingCount > 0 && (
