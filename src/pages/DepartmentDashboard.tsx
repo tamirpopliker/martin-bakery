@@ -96,6 +96,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
   const [workingDaysMonth, setWorkingDaysMonth] = useState(26)
   const [prodReportCost, setProdReportCost] = useState(0)
   const [prevProdReportCost, setPrevProdReportCost] = useState(0)
+  const [topProducts, setTopProducts] = useState<{ product_name: string; total_qty: number; unit_price: number }[]>([])
 
   // --- Data fetching ---
   async function fetchRange(from: string, to: string, globalNames: Set<string> = new Set()): Promise<DayData[]> {
@@ -160,6 +161,28 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
       ])
       setProdReportCost((prCur.data || []).reduce((s: number, r: any) => s + Number(r.total_cost), 0))
       setPrevProdReportCost((prPrev.data || []).reduce((s: number, r: any) => s + Number(r.total_cost), 0))
+
+      // Top products by quantity sold
+      const { data: topItems } = await supabase.from('internal_sale_items')
+        .select('product_name, quantity_supplied, unit_price, sale_id')
+        .eq('department', deptName)
+      if (topItems && topItems.length > 0) {
+        // Filter by date range via sales
+        const saleIds = [...new Set(topItems.map(i => i.sale_id))]
+        const { data: salesInRange } = await supabase.from('internal_sales')
+          .select('id').in('id', saleIds).gte('order_date', from).lt('order_date', to).eq('status', 'completed')
+        const validIds = new Set((salesInRange || []).map((s: any) => s.id))
+        const filtered = topItems.filter(i => validIds.has(i.sale_id))
+        const grouped = new Map<string, { qty: number; price: number }>()
+        for (const item of filtered) {
+          const e = grouped.get(item.product_name)
+          if (e) { e.qty += Number(item.quantity_supplied) }
+          else { grouped.set(item.product_name, { qty: Number(item.quantity_supplied), price: Number(item.unit_price) }) }
+        }
+        setTopProducts([...grouped.entries()]
+          .map(([name, v]) => ({ product_name: name, total_qty: v.qty, unit_price: v.price }))
+          .sort((a, b) => b.total_qty - a.total_qty).slice(0, 5))
+      }
 
       if (kpiRes.data) {
         setTargets({
@@ -528,6 +551,27 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                   <span />
                   <span style={{ fontSize: 15, color: '#6366f1' }}>{fmtMoney(globalLaborCost)}</span>
                 </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Top Products ── */}
+        {topProducts.length > 0 && (
+          <motion.div variants={fadeIn} initial="hidden" animate="visible" style={{ marginTop: 10 }}>
+            <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 12px' }}>מוצרים נמכרים ביותר</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 90px', gap: 0 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', padding: '6px 0', borderBottom: '1px solid #e2e8f0' }}>מוצר</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', padding: '6px 0', borderBottom: '1px solid #e2e8f0', textAlign: 'center' }}>כמות</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', padding: '6px 0', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>מחיר</span>
+                {topProducts.map((p, i) => (
+                  <div key={i} style={{ display: 'contents' }}>
+                    <span style={{ fontSize: 13, padding: '8px 0', borderBottom: '1px solid #f8fafc', color: '#374151' }}>{p.product_name}</span>
+                    <span style={{ fontSize: 13, padding: '8px 0', borderBottom: '1px solid #f8fafc', textAlign: 'center', fontWeight: 600 }}>{p.total_qty}</span>
+                    <span style={{ fontSize: 13, padding: '8px 0', borderBottom: '1px solid #f8fafc', textAlign: 'left', color: '#64748b' }}>{fmtMoney(p.unit_price)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </motion.div>
         )}

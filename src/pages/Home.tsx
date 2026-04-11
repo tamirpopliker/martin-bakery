@@ -33,12 +33,13 @@ import ReportsAlerts from './ReportsAlerts'
 import DataImport from './DataImport'
 import ProductionReportUpload from './ProductionReportUpload'
 import InternalSalesUpload from './InternalSalesUpload'
+import ProductCatalog from './ProductCatalog'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
   AlertTriangle, ClipboardList, Truck, UserCog, Activity,
   Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
-  LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft
+  LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft, ShoppingCart
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
@@ -55,6 +56,7 @@ const PANEL_FACTORY = [
   { label: 'דשבורד מפעל',  subtitle: 'KPI · רווח · גרפים',           Icon: ProfitIcon,    color: '#6366f1', page: 'factory_dashboard' },
   { label: 'עובדים',        subtitle: 'ניהול עובדי מפעל',              Icon: Users,        color: '#8b5cf6', page: 'factory_employees' },
   { label: 'מכירות פנימיות', subtitle: 'תעודות משלוח לסניפים',        Icon: ArrowRightLeft,  color: '#f59e0b', page: 'internal_sales' },
+  { label: 'קטלוג מוצרים',  subtitle: 'מחירים · מחלקות · היסטוריה',  Icon: ShoppingCart,    color: '#8b5cf6', page: 'product_catalog' },
   { label: 'דוח ייצור מרוכז', subtitle: 'העלאת דוח ייצור מ-Excel',    Icon: FileSpreadsheet, color: '#10b981', page: 'production_report_upload' },
   { label: 'הגדרות מפעל',  subtitle: 'יעדים · עלויות קבועות',        Icon: Settings,     color: '#64748b', page: 'settings' },
 ]
@@ -248,6 +250,7 @@ export default function Home() {
     if (page === 'factory_employees')  return <FactoryEmployees onBack={() => setPage(null)} />
     if (page === 'production_report_upload') return <ProductionReportUpload onBack={() => setPage(null)} />
     if (page === 'internal_sales') return <InternalSalesUpload onBack={() => setPage(null)} />
+    if (page === 'product_catalog') return <ProductCatalog onBack={() => setPage(null)} />
     if (page === 'ceo_dashboard')        return <CEODashboard onBack={() => setPage(null)} />
     if (page === 'data_import')          return <DataImport onBack={() => setPage(null)} />
     if (page === 'branch_import')        return <DataImport onBack={() => setPage(null)} branchOnly />

@@ -362,6 +362,36 @@ export default function InternalSalesUpload({ onBack }: Props) {
       from_factory: true,
     })
 
+    // Sync products catalog
+    if (saleItems) {
+      for (const item of saleItems) {
+        const price = Number(item.unit_price)
+        const dept = item.department || null
+        const { data: existing } = await supabase.from('products')
+          .select('id, current_price').eq('product_name', item.product_name).maybeSingle()
+        if (existing) {
+          await supabase.from('products').update({
+            last_price: existing.current_price,
+            current_price: price,
+            department: dept,
+            price_updated_at: new Date().toISOString(),
+          }).eq('id', existing.id)
+        } else {
+          await supabase.from('products').insert({
+            product_name: item.product_name,
+            department: dept,
+            current_price: price,
+            price_updated_at: new Date().toISOString(),
+          })
+        }
+        // Update department mapping
+        if (dept) {
+          await supabase.from('product_department_mapping')
+            .upsert({ product_name: item.product_name, department: dept }, { onConflict: 'product_name' })
+        }
+      }
+    }
+
     loadHistory()
     loadModifiedCount()
   }

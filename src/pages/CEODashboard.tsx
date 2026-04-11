@@ -143,6 +143,7 @@ export default function CEODashboard({ onBack }: Props) {
   const [branchInternalExpenses, setBranchInternalExpenses] = useState(0)
 
   const [insights, setInsights] = useState<any[]>([])
+  const [priceAlerts, setPriceAlerts] = useState<{ product_name: string; current_price: number; last_price: number; pct: number }[]>([])
 
   // Sheet (drawer) state
   const [sheetType, setSheetType] = useState<KpiSheetType | null>(null)
@@ -337,6 +338,23 @@ export default function CEODashboard({ onBack }: Props) {
     }
     allInsights.sort((a, b) => a.priority - b.priority)
     setInsights(allInsights)
+
+    // Price alerts — products with >10% price change
+    const { data: prods } = await supabase.from('products').select('product_name, current_price, last_price')
+      .not('last_price', 'is', null)
+    if (prods) {
+      const alerts = prods.filter((p: any) => {
+        if (!p.last_price || p.last_price === 0) return false
+        const pct = Math.abs((p.current_price - p.last_price) / p.last_price * 100)
+        return pct > 10
+      }).map((p: any) => ({
+        product_name: p.product_name,
+        current_price: Number(p.current_price),
+        last_price: Number(p.last_price),
+        pct: ((p.current_price - p.last_price) / p.last_price * 100),
+      })).sort((a: any, b: any) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 10)
+      setPriceAlerts(alerts)
+    }
 
     setLoading(false)
   }
@@ -741,6 +759,32 @@ export default function CEODashboard({ onBack }: Props) {
       <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
 
         {insights.length > 0 && <InsightsCard insights={insights} />}
+
+        {/* Price Alerts */}
+        {priceAlerts.length > 0 && (
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', padding: 20, marginTop: 10, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 16 }}>⚠️</span> שינויי מחירים חריגים (&gt;10%)
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 70px', gap: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', padding: '6px 0', borderBottom: '1px solid #e2e8f0' }}>מוצר</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', padding: '6px 0', borderBottom: '1px solid #e2e8f0' }}>מחיר קודם</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', padding: '6px 0', borderBottom: '1px solid #e2e8f0' }}>מחיר נוכחי</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', padding: '6px 0', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>שינוי</span>
+              {priceAlerts.map((a, i) => (
+                <div key={i} style={{ display: 'contents' }}>
+                  <span style={{ fontSize: 13, padding: '8px 0', borderBottom: '1px solid #f8fafc' }}>{a.product_name}</span>
+                  <span style={{ fontSize: 13, padding: '8px 0', borderBottom: '1px solid #f8fafc', color: '#94a3b8' }}>₪{a.last_price.toFixed(2)}</span>
+                  <span style={{ fontSize: 13, padding: '8px 0', borderBottom: '1px solid #f8fafc', fontWeight: 600 }}>₪{a.current_price.toFixed(2)}</span>
+                  <span style={{ fontSize: 12, padding: '8px 0', borderBottom: '1px solid #f8fafc', fontWeight: 700, textAlign: 'left',
+                    color: a.pct > 0 ? '#dc2626' : '#16a34a' }}>
+                    {a.pct > 0 ? '↑' : '↓'} {Math.abs(a.pct).toFixed(1)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* View mode toggle */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
