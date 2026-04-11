@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { FlaskConical, Croissant, Package, Truck } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import DepartmentHome from './DepartmentHome'
+import { useAppUser } from '../lib/UserContext'
 
 const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }
 const fadeUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } } }
@@ -19,22 +20,36 @@ const DEPTS: { key: Department; label: string; subtitle: string; Icon: any; colo
 ]
 
 export default function FactoryDepartments({ onBack }: Props) {
+  const { appUser } = useAppUser()
   const [selected, setSelected] = useState<Department | null>(null)
   const [hovCard, setHovCard] = useState<Department | null>(null)
+
+  // Department managers see only their department; admin/regular factory see all
+  const isDeptManager = appUser?.role === 'factory' && !!appUser?.managed_department
+  const visibleDepts = isDeptManager
+    ? DEPTS.filter(d => d.key === appUser.managed_department)
+    : DEPTS
+
+  // If dept manager has only one department, skip the hub and go directly
+  if (isDeptManager && visibleDepts.length === 1 && !selected) {
+    return <DepartmentHome department={visibleDepts[0].key} onBack={onBack} />
+  }
 
   if (selected) {
     return <DepartmentHome department={selected} onBack={() => setSelected(null)} />
   }
 
+  const subtitle = visibleDepts.map(d => d.label).join(' · ')
+
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
-      <PageHeader title="מחלקות" subtitle="קרמים · בצקים · אריזה · ניקיון/נהג" onBack={onBack} />
+      <PageHeader title="מחלקות" subtitle={subtitle} onBack={onBack} />
 
       <div style={{ padding: '36px', maxWidth: 960, margin: '0 auto' }}>
         <motion.div
           style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}
           variants={staggerContainer} initial="hidden" animate="visible">
-          {DEPTS.map(dept => {
+          {visibleDepts.map(dept => {
             const Icon = dept.Icon
             const isHov = hovCard === dept.key
             return (
