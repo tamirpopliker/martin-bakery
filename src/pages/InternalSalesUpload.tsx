@@ -71,7 +71,7 @@ export default function InternalSalesUpload({ onBack }: Props) {
   // ─── Upload state ───
   const [step, setStep] = useState<'upload' | 'preview' | 'saving' | 'done'>('upload')
   const [orderNumber, setOrderNumber] = useState('')
-  const [orderDate, setOrderDate] = useState('')
+  const [orderDate, setOrderDate] = useState(() => new Date().toISOString().split('T')[0])
   const [selectedBranch, setSelectedBranch] = useState<number>(0)
   const [items, setItems] = useState<ParsedItem[]>([])
   const [zeroItems, setZeroItems] = useState<string[]>([])
@@ -126,7 +126,7 @@ export default function InternalSalesUpload({ onBack }: Props) {
             if (parts.length === 3) dateStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
           }
         }
-        setOrderDate(dateStr)
+        if (dateStr) setOrderDate(dateStr)
 
         // Parse items from row 7+
         const parsed: ParsedItem[] = []
@@ -231,7 +231,7 @@ export default function InternalSalesUpload({ onBack }: Props) {
   }
 
   function resetUpload() {
-    setStep('upload'); setItems([]); setOrderNumber(''); setOrderDate('')
+    setStep('upload'); setItems([]); setOrderNumber(''); setOrderDate(new Date().toISOString().split('T')[0])
     setSelectedBranch(0); setError(''); setZeroItems([]); setDuplicateOrder(null)
     if (fileRef.current) fileRef.current.value = ''
   }
