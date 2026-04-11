@@ -53,7 +53,7 @@ const PANEL_FACTORY = [
   { label: 'מכירות חיצוניות',  subtitle: 'לקוחות עסקיים · B2B',                 Icon: TrendingUp,      color: '#6366f1', page: 'factory_b2b' },
   { label: 'לייבור מרוכז',     subtitle: 'העלאת דוח נוכחות PDF · כל המחלקות',   Icon: HardHat,         color: '#f59e0b', page: 'labor' },
   { label: 'דוח ייצור מרוכז',  subtitle: 'העלאת דוח ייצור מ-Excel',             Icon: FileSpreadsheet, color: '#10b981', page: 'production_report_upload' },
-  { label: 'ציוד ותיקונים',    subtitle: 'תיקונים · ציוד · כל המחלקות',         Icon: Wrench,          color: '#64748b', page: 'factory_equipment' },
+  { label: 'פחת / תיקונים / ציוד', subtitle: 'פחת · תיקונים · ציוד · כל המחלקות', Icon: Wrench,          color: '#64748b', page: 'factory_equipment' },
   { label: 'ספקים',             subtitle: 'חשבוניות · ניהול ספקים',              Icon: ClipboardList,   color: '#34d399', page: 'suppliers' },
   { label: 'דשבורד מפעל',      subtitle: 'KPI · רווח · גרפים',                  Icon: ProfitIcon,      color: '#6366f1', page: 'factory_dashboard' },
   { label: 'קטלוג מוצרים',     subtitle: 'מחירים · מחלקות · היסטוריה',          Icon: ShoppingCart,     color: '#8b5cf6', page: 'product_catalog' },
