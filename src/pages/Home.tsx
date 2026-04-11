@@ -103,6 +103,37 @@ export default function Home() {
   const showBranches = appUser?.role === 'admin' || (appUser?.role === 'branch' && filteredBranches.length > 0)
   const showManage = appUser?.role === 'admin' && managePanelItems.length > 0
 
+  // Modified internal sales badges
+  const [modifiedSales, setModifiedSales] = useState<{ total: number; byDept: Record<string, number> }>({ total: 0, byDept: {} })
+
+  useEffect(() => {
+    async function loadModified() {
+      const { data } = await supabase.from('internal_sales')
+        .select('id').eq('status', 'modified')
+      if (!data) return
+      const saleIds = data.map(s => s.id)
+      if (saleIds.length === 0) { setModifiedSales({ total: 0, byDept: {} }); return }
+      const { data: items } = await supabase.from('internal_sale_items')
+        .select('department, sale_id').in('sale_id', saleIds)
+      const byDept: Record<string, number> = {}
+      const salesPerDept = new Map<string, Set<number>>()
+      for (const item of (items || [])) {
+        const dept = item.department || 'אחר'
+        if (!salesPerDept.has(dept)) salesPerDept.set(dept, new Set())
+        salesPerDept.get(dept)!.add(item.sale_id)
+      }
+      for (const [dept, saleSet] of salesPerDept) byDept[dept] = saleSet.size
+      setModifiedSales({ total: data.length, byDept })
+    }
+    loadModified()
+
+    // Realtime subscription
+    const channel = supabase.channel('internal-sales-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'internal_sales' }, () => loadModified())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
   // KPI data
   const [factoryRevenue, setFactoryRevenue] = useState(0)
   const [factoryGross, setFactoryGross]     = useState(0)
@@ -570,17 +601,31 @@ export default function Home() {
                   className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
                   {filteredPanelFactory.map(item => {
                     const Icon = item.Icon
+                    // Badge logic for modified internal sales
+                    const deptMap: Record<string, string> = { dept_creams: 'קרמים', dept_dough: 'בצקים' }
+                    const badgeCount = item.page === 'internal_sales' ? modifiedSales.total
+                      : deptMap[item.page] ? (modifiedSales.byDept[deptMap[item.page]] || 0) : 0
                     return (
                       <motion.div key={item.page} variants={fadeUp}>
                         <button onClick={() => setPage(item.page)}
-                          style={{ width: '100%', background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+                          style={{ width: '100%', background: 'white', border: badgeCount > 0 ? '1px solid #fed7aa' : '1px solid #f1f5f9', borderRadius: 12, padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', position: 'relative' }}
                           className="hover:shadow-md hover:border-[#c7d2fe]">
+                          {badgeCount > 0 && (
+                            <div style={{ position: 'absolute', top: -6, left: -6, background: '#ef4444', color: 'white', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, boxShadow: '0 1px 4px rgba(239,68,68,0.4)' }}>
+                              {badgeCount}
+                            </div>
+                          )}
                           <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             <Icon size={18} color="#6366f1" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>{item.label}</div>
                             <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{item.subtitle}</div>
+                            {badgeCount > 0 && (
+                              <div style={{ fontSize: 11, color: '#ea580c', fontWeight: 600, marginTop: 2 }}>
+                                {badgeCount} הזמנות ממתינות לאישורך
+                              </div>
+                            )}
                           </div>
                           <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
                         </button>
