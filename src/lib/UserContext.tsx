@@ -115,7 +115,8 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
     const dept = getDeptFromPage(pageKey)
     if (dept !== null || pageKey === 'factory_dashboard' || pageKey === 'factory_b2b' ||
         pageKey === 'labor' || pageKey === 'suppliers' || pageKey === 'production_report_upload' ||
-        pageKey === 'internal_sales' || pageKey === 'product_catalog') {
+        pageKey === 'internal_sales' || pageKey === 'product_catalog' ||
+        pageKey === 'factory_departments' || pageKey === 'factory_equipment') {
       if (user.role === 'branch') return false
 
       // Department manager: can access factory pages except the OTHER main dept

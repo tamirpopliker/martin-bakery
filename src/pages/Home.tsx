@@ -34,31 +34,31 @@ import DataImport from './DataImport'
 import ProductionReportUpload from './ProductionReportUpload'
 import InternalSalesUpload from './InternalSalesUpload'
 import ProductCatalog from './ProductCatalog'
+import FactoryDepartments from './FactoryDepartments'
+import FactoryEquipment from './FactoryEquipment'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
   AlertTriangle, ClipboardList, Truck, UserCog, Activity,
   Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
-  LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft, ShoppingCart
+  LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft, ShoppingCart, Wrench, Building2
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
 // ─── קבועים ─────────────────────────────────────────────────────────────────
 
 const PANEL_FACTORY = [
-  { label: 'קרמים',        subtitle: 'ייצור · פחת · תיקונים',         Icon: FlaskConical, color: '#818cf8', page: 'dept_creams' },
-  { label: 'בצקים',        subtitle: 'ייצור · פחת · תיקונים',         Icon: Croissant,    color: '#8b5cf6', page: 'dept_dough' },
-  { label: 'אריזה',        subtitle: 'כמויות · תיקונים · לייבור',     Icon: Package,      color: '#0ea5e9', page: 'dept_packaging' },
-  { label: 'ניקיון/נהג',   subtitle: 'תיקונים · לייבור',              Icon: Truck,        color: '#64748b', page: 'dept_cleaning' },
-  { label: 'לייבור מרוכז', subtitle: 'העלאת דוח נוכחות PDF · כל המחלקות',       Icon: HardHat,      color: '#f59e0b', page: 'labor' },
-  { label: 'מכירות חיצוניות', subtitle: 'לקוחות עסקיים · B2B',         Icon: TrendingUp,   color: '#6366f1', page: 'factory_b2b' },
-  { label: 'ספקים',         subtitle: 'חשבוניות · ניהול ספקים',        Icon: ClipboardList, color: '#34d399', page: 'suppliers' },
-  { label: 'דשבורד מפעל',  subtitle: 'KPI · רווח · גרפים',           Icon: ProfitIcon,    color: '#6366f1', page: 'factory_dashboard' },
-  { label: 'עובדים',        subtitle: 'ניהול עובדי מפעל',              Icon: Users,        color: '#8b5cf6', page: 'factory_employees' },
-  { label: 'מכירות פנימיות', subtitle: 'תעודות משלוח לסניפים',        Icon: ArrowRightLeft,  color: '#f59e0b', page: 'internal_sales' },
-  { label: 'קטלוג מוצרים',  subtitle: 'מחירים · מחלקות · היסטוריה',  Icon: ShoppingCart,    color: '#8b5cf6', page: 'product_catalog' },
-  { label: 'דוח ייצור מרוכז', subtitle: 'העלאת דוח ייצור מ-Excel',    Icon: FileSpreadsheet, color: '#10b981', page: 'production_report_upload' },
-  { label: 'הגדרות מפעל',  subtitle: 'יעדים · עלויות קבועות',        Icon: Settings,     color: '#64748b', page: 'settings' },
+  { label: 'מחלקות',           subtitle: 'קרמים · בצקים · אריזה · ניקיון/נהג',  Icon: Building2,       color: '#6366f1', page: 'factory_departments' },
+  { label: 'מכירות פנימיות',   subtitle: 'תעודות משלוח לסניפים',                Icon: ArrowRightLeft,  color: '#f59e0b', page: 'internal_sales' },
+  { label: 'מכירות חיצוניות',  subtitle: 'לקוחות עסקיים · B2B',                 Icon: TrendingUp,      color: '#6366f1', page: 'factory_b2b' },
+  { label: 'לייבור מרוכז',     subtitle: 'העלאת דוח נוכחות PDF · כל המחלקות',   Icon: HardHat,         color: '#f59e0b', page: 'labor' },
+  { label: 'דוח ייצור מרוכז',  subtitle: 'העלאת דוח ייצור מ-Excel',             Icon: FileSpreadsheet, color: '#10b981', page: 'production_report_upload' },
+  { label: 'ציוד ותיקונים',    subtitle: 'תיקונים · ציוד · כל המחלקות',         Icon: Wrench,          color: '#64748b', page: 'factory_equipment' },
+  { label: 'ספקים',             subtitle: 'חשבוניות · ניהול ספקים',              Icon: ClipboardList,   color: '#34d399', page: 'suppliers' },
+  { label: 'דשבורד מפעל',      subtitle: 'KPI · רווח · גרפים',                  Icon: ProfitIcon,      color: '#6366f1', page: 'factory_dashboard' },
+  { label: 'קטלוג מוצרים',     subtitle: 'מחירים · מחלקות · היסטוריה',          Icon: ShoppingCart,     color: '#8b5cf6', page: 'product_catalog' },
+  { label: 'עובדים',            subtitle: 'ניהול עובדי מפעל',                    Icon: Users,           color: '#8b5cf6', page: 'factory_employees' },
+  { label: 'הגדרות מפעל',      subtitle: 'יעדים · עלויות קבועות',               Icon: Settings,        color: '#64748b', page: 'settings' },
 ]
 
 const PANEL_MANAGE = [
@@ -277,6 +277,8 @@ export default function Home() {
     if (page === 'system_settings')      return <UserManagement onBack={() => setPage(null)} initialTab="settings" />
     if (page === 'reports_alerts')       return <ReportsAlerts onBack={() => setPage(null)} />
 
+    if (page === 'factory_departments') return <FactoryDepartments onBack={() => setPage(null)} />
+    if (page === 'factory_equipment')  return <FactoryEquipment onBack={() => setPage(null)} />
     if (page === 'dept_creams')    return <DepartmentHome department="creams"    onBack={() => setPage(null)} />
     if (page === 'dept_dough')     return <DepartmentHome department="dough"     onBack={() => setPage(null)} />
     if (page === 'dept_packaging') return <DepartmentHome department="packaging" onBack={() => setPage(null)} />

@@ -26,7 +26,7 @@ interface PriceHistoryEntry {
   quantity: number
 }
 
-const DEPT_OPTIONS = ['בצקים', 'קרמים', 'אחר']
+const DEPT_OPTIONS = ['בצקים', 'קרמים', 'אריזה', 'ניקיון', 'שונות']
 
 const S = {
   container: { padding: '24px 32px', maxWidth: 1060, margin: '0 auto' } as React.CSSProperties,
