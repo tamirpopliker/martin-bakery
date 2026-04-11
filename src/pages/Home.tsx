@@ -51,7 +51,7 @@ const PANEL_FACTORY = [
   { label: 'אריזה',        subtitle: 'כמויות · תיקונים · לייבור',     Icon: Package,      color: '#0ea5e9', page: 'dept_packaging' },
   { label: 'ניקיון/נהג',   subtitle: 'תיקונים · לייבור',              Icon: Truck,        color: '#64748b', page: 'dept_cleaning' },
   { label: 'לייבור מרוכז', subtitle: 'העלאת דוח נוכחות PDF · כל המחלקות',       Icon: HardHat,      color: '#f59e0b', page: 'labor' },
-  { label: 'מכירות',        subtitle: 'קרמים · בצקים · B2B · שונות',  Icon: TrendingUp,   color: '#6366f1', page: 'factory_b2b' },
+  { label: 'מכירות חיצוניות', subtitle: 'לקוחות עסקיים · B2B',         Icon: TrendingUp,   color: '#6366f1', page: 'factory_b2b' },
   { label: 'ספקים',         subtitle: 'חשבוניות · ניהול ספקים',        Icon: ClipboardList, color: '#34d399', page: 'suppliers' },
   { label: 'דשבורד מפעל',  subtitle: 'KPI · רווח · גרפים',           Icon: ProfitIcon,    color: '#6366f1', page: 'factory_dashboard' },
   { label: 'עובדים',        subtitle: 'ניהול עובדי מפעל',              Icon: Users,        color: '#8b5cf6', page: 'factory_employees' },

@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Props { onBack: () => void }
 
-type SaleTab = 'creams' | 'dough' | 'b2b' | 'misc'
+type SaleTab = 'b2b'
 
 interface Entry {
   id: number
@@ -43,13 +43,8 @@ const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, tra
 
 // ─── קונפיגורציה לכל טאב ─────────────────────────────────────────────────────
 const TAB_CONFIG: Record<SaleTab, TabConfig> = {
-  creams: { label: 'קרמים',       subtitle: 'מכירות מחלקת קרמים',              color: '#818cf8', bg: '#dbeafe', table: 'factory_sales',     filterCol: 'department', filterVal: 'creams' },
-  dough:  { label: 'בצקים',       subtitle: 'מכירות מחלקת בצקים',              color: '#c084fc', bg: '#ede9fe', table: 'factory_sales',     filterCol: 'department', filterVal: 'dough'  },
-  b2b:    { label: 'B2B',         subtitle: 'לקוחות עסקיים חיצוניים',          color: '#818cf8', bg: '#e0e7ff', table: 'factory_b2b_sales', filterCol: 'sale_type',  filterVal: 'b2b'    },
-  misc:   { label: 'שונות',       subtitle: 'חומרי גלם לסניפים במחיר עלות',   color: '#34d399', bg: '#d1fae5', table: 'factory_b2b_sales', filterCol: 'sale_type',  filterVal: 'misc'   },
+  b2b:    { label: 'מכירות חיצוניות (B2B)', subtitle: 'לקוחות עסקיים חיצוניים', color: '#818cf8', bg: '#e0e7ff', table: 'factory_b2b_sales', filterCol: 'sale_type', filterVal: 'b2b' },
 }
-
-const TABS: SaleTab[] = ['creams', 'dough', 'b2b', 'misc']
 
 // ─── Autocomplete ────────────────────────────────────────────────────────────
 function AutocompleteInput({ value, onChange, suggestions, placeholder, color }: {
@@ -88,7 +83,7 @@ function AutocompleteInput({ value, onChange, suggestions, placeholder, color }:
 
 // ─── קומפוננטה ראשית ─────────────────────────────────────────────────────────
 export default function FactoryB2B({ onBack }: Props) {
-  const [tab, setTab]                   = useState<SaleTab>('creams')
+  const [tab, setTab]                   = useState<SaleTab>('b2b')
   const cfg = TAB_CONFIG[tab]
   const { period, setPeriod, from, to } = usePeriod()
   const { branches }                    = useBranches()
@@ -223,18 +218,7 @@ export default function FactoryB2B({ onBack }: Props) {
   return (
     <div className="min-h-screen" style={{ direction: 'rtl', background: '#f8fafc' }}>
 
-      <PageHeader title={`מכירות — ${cfg.label}`} onBack={onBack} />
-
-      {/* ─── טאבים ───────────────────────────────────────────────────────── */}
-      <div className="flex px-8 bg-white border-b border-slate-200">
-        {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`py-3.5 px-6 bg-transparent border-0 border-b-2 cursor-pointer text-sm ${tab === t ? 'font-bold' : 'font-medium'}`}
-            style={{ borderBottomColor: tab === t ? '#6366f1' : 'transparent', color: tab === t ? '#6366f1' : '#94a3b8' }}>
-            {TAB_CONFIG[t].label}
-          </button>
-        ))}
-      </div>
+      <PageHeader title="מכירות חיצוניות (B2B)" subtitle="לקוחות עסקיים חיצוניים" onBack={onBack} />
 
       <div className="page-container" style={{ padding: '28px 32px', maxWidth: '960px', margin: '0 auto' }}>
 

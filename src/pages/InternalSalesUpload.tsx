@@ -42,7 +42,7 @@ interface SaleItemRow {
   total_price: number
 }
 
-const DEPT_OPTIONS = ['בצקים', 'קרמים', 'אחר']
+const DEPT_OPTIONS = ['בצקים', 'קרמים', 'שונות', 'אחר']
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   pending:   { label: 'ממתין',   color: '#a16207', bg: '#fefce8' },
   modified:  { label: '⚠️ עודכן ע"י סניף', color: '#c2410c', bg: '#fff7ed' },
