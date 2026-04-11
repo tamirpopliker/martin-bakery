@@ -119,9 +119,11 @@ export default function FactoryB2B({ onBack }: Props) {
         })
 
         if (error || !data?.success) {
+          const errMsg = data?.error || error?.message || 'שגיאה לא ידועה'
+          const details = data?.details ? ` (${data.details.slice(0, 100)})` : ''
           results.push({
             customer_name: '', invoice_number: '', invoice_date: '', total_before_vat: 0,
-            fileName: file.name, status: 'error', error: data?.error || error?.message || 'שגיאה לא ידועה',
+            fileName: file.name, status: 'error', error: errMsg + details,
           })
           continue
         }

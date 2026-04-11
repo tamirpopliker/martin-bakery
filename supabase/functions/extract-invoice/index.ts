@@ -34,6 +34,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'pdfs-2024-09-25',
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
@@ -66,10 +67,10 @@ serve(async (req) => {
     })
 
     if (!response.ok) {
-      const err = await response.text()
-      console.error('Anthropic API error:', response.status, err)
-      return new Response(JSON.stringify({ error: `API error: ${response.status}` }), {
-        status: 500,
+      const errBody = await response.text()
+      console.error('Anthropic API error:', response.status, errBody)
+      return new Response(JSON.stringify({ error: `Anthropic API ${response.status}`, details: errBody }), {
+        status: 200, // Return 200 so frontend can read the error
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -81,7 +82,7 @@ serve(async (req) => {
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       return new Response(JSON.stringify({ error: 'Could not parse response', raw: text }), {
-        status: 422,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -94,7 +95,7 @@ serve(async (req) => {
   } catch (err) {
     console.error('Error:', err)
     return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
