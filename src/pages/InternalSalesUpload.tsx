@@ -137,7 +137,7 @@ export default function InternalSalesUpload({ onBack }: Props) {
           if (!nameCell || !nameCell.v || String(nameCell.v).trim() === '') break
           const product_name = String(nameCell.v).trim()
           const qty = Number(ws[`D${rowIdx}`]?.v || 0)
-          const price = Number(ws[`E${rowIdx}`]?.v || 0)
+          const price = Number(ws[`F${rowIdx}`]?.v || 0)
           const total = Number(ws[`G${rowIdx}`]?.v || 0) || qty * price
 
           if (qty === 0) {
