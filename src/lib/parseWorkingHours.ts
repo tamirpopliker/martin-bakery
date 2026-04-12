@@ -113,9 +113,29 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
       const key = `${name}|${dateStr}`
       if (seenKeys.has(key)) continue
 
-      // Extract all X.XX numbers from the segment
-      // Numbers are concatenated like "8.002.000.030.00" so we match \d+\.\d{2} greedily
-      const nums = seg.match(/\d+\.\d{2}/g)
+      // Truncate segment at the next date or at summary keywords to avoid
+      // picking up footer/summary numbers
+      let cleanSeg = seg
+      // Remove everything after next date pattern (if another date follows in same segment)
+      const nextDateInSeg = cleanSeg.substring(11).search(/\d{2}\/\d{2}\/\d{4}/)
+      if (nextDateInSeg >= 0) cleanSeg = cleanSeg.substring(0, 11 + nextDateInSeg)
+      // Also truncate at summary keywords
+      for (const kw of ['סיכום', 'סה"כ', 'רגילות', 'רמה', 'חריגות', 'עמוד', 'CashOnTab']) {
+        const kwPos = cleanSeg.indexOf(kw)
+        if (kwPos > 15) cleanSeg = cleanSeg.substring(0, kwPos)
+      }
+      // Also truncate at Hebrew branch names (אברהם, הפועלים, יעקב) — data ends there
+      const branchPos = cleanSeg.search(/[א-ת]{2,}/)
+      // But only if it's after the time fields (position > 25)
+      const hebrewAfterData = cleanSeg.substring(25).search(/[א-ת]{2,}/)
+      if (hebrewAfterData >= 0) cleanSeg = cleanSeg.substring(0, 25 + hebrewAfterData)
+
+      // Remove time patterns HH:MM (e.g. "06:03", "16:05") so they don't
+      // bleed into hour decimals (e.g. "12:558.00" → "558.00" = wrong)
+      const noTimes = cleanSeg.replace(/\d{2}:\d{2}/g, ' ')
+
+      // Extract all X.XX numbers from the cleaned segment
+      const nums = noTimes.match(/\d+\.\d{2}/g)
       if (!nums || nums.length < 1) continue
 
       const values = nums.map(n => parseFloat(n))

@@ -6,7 +6,7 @@ import PeriodPicker from '../components/PeriodPicker'
 import PageHeader from '../components/PageHeader'
 import { Plus, Pencil, Trash2, CheckCircle, AlertTriangle, FileText, Eye, HelpCircle, BarChart3 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts'
-import { parseWorkingHoursPDF } from '../lib/parseWorkingHours'
+import * as XLSX from 'xlsx'
 
 interface Props {
   branchId: number
@@ -42,7 +42,97 @@ interface Entry {
 
 const EMPLOYER_FACTOR = 1.3
 
-// ─── טעינת pdf.js ─────────────────────────────────────────────────────────────
+// ─── פרסור Excel CashOnTab ─────────────────────────────────────────────────────
+function parseExcelCashOnTab(file: File): Promise<{ rows: ParsedRow[]; rawLines: string[] }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('שגיאה בקריאת הקובץ'))
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer)
+        const wb = XLSX.read(data, { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const allRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 })
+
+        const rows: ParsedRow[] = []
+        const rawLines: string[] = []
+        let currentName = ''
+        let inDataSection = false
+
+        for (let i = 0; i < allRows.length; i++) {
+          const row = allRows[i]
+          if (!row || row.length === 0) continue
+
+          const firstCell = String(row[0] || '')
+          rawLines.push(row.map(c => c ?? '').join(' | '))
+
+          // Employee header: "קוד עובד: XX" in col A, "שם עובד: NAME" in col C
+          if (firstCell.includes('קוד עובד')) {
+            const nameCell = String(row[2] || row[1] || '')
+            const nameMatch = nameCell.match(/שם\s*עובד:\s*(.+)/)
+            currentName = nameMatch ? nameMatch[1].trim() : nameCell.replace(/שם\s*עובד:?\s*/, '').trim()
+            inDataSection = false
+            continue
+          }
+
+          // Header row — next rows are data
+          if (firstCell === 'תאריך' && String(row[1] || '') === 'יום') {
+            inDataSection = true
+            continue
+          }
+
+          // Summary — stop data section
+          if (firstCell.includes('סיכום לעובד') || firstCell.includes('סה"כ ימי')) {
+            inDataSection = false
+            continue
+          }
+
+          // Data row: date is Excel serial number
+          if (!inDataSection || !currentName) continue
+          const dateVal = row[0]
+          if (typeof dateVal !== 'number' || dateVal < 40000) continue
+
+          // Convert Excel serial to YYYY-MM-DD
+          const jsDate = new Date((dateVal - 25569) * 86400 * 1000)
+          const dateStr = jsDate.toISOString().split('T')[0]
+
+          // Columns: 0=date, 1=day, 2=entry_date, 3=entry_time, 4=exit_date, 5=exit_time,
+          // 6=type, 7=null, 8=note, 9=total_hours, 10=regular, 11=level1, 12=level2, 13=exceptions
+          const totalHours = parseFloat(String(row[9] || '0')) || 0
+          const hours100 = parseFloat(String(row[10] || '0')) || 0
+          const hours125 = parseFloat(String(row[11] || '0')) || 0
+          const hours150 = parseFloat(String(row[12] || '0')) || 0
+          const isIncomplete = row[5] == null || row[5] === '' || row[5] === 0
+
+          rows.push({
+            name: currentName,
+            date: dateStr,
+            hours_100: hours100,
+            cost_100: 0,
+            hours_125: hours125,
+            cost_125: 0,
+            hours_150: hours150,
+            cost_150: 0,
+            total_hours: totalHours,
+            gross_salary: 0,
+            employer_cost: 0,
+            hourly_rate: 0,
+            retention_bonus: 0,
+            selected: true,
+            incomplete: isIncomplete && totalHours === 0,
+          })
+        }
+
+        resolve({ rows, rawLines })
+      } catch (err) {
+        reject(err)
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+// Legacy placeholder — no longer used
 function loadPdfJs(): Promise<any> {
   return new Promise((resolve, reject) => {
     if ((window as any).pdfjsLib) { resolve((window as any).pdfjsLib); return }
@@ -456,41 +546,12 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   async function handleFile(file: File) {
     if (!file) return
     setUploadStatus('parsing')
-    setUploadMsg('טוען pdf.js ומחלץ...')
+    setUploadMsg('קורא קובץ Excel...')
     setParsedRows([]); setRawLines([]); setShowRaw(false)
 
     try {
-      const items = await extractPdfItems(file)
-
-      // Try מרוכז format first
-      let { rows, rawLines: lines } = parseCashOnTab(items)
-      let isDetailed = false
-
-      // If מרוכז didn't find anything, try מפורט (summary-based)
-      if (rows.length === 0) {
-        const { employees, rawPages } = await parseWorkingHoursPDF(file)
-        lines = rawPages
-
-        if (employees.length > 0) {
-          isDetailed = true
-          rows = employees.map(emp => ({
-            name: emp.name,
-            date: emp.date,
-            hours_100: emp.hours_100,
-            cost_100: 0,
-            hours_125: emp.hours_125,
-            cost_125: 0,
-            hours_150: emp.hours_150,
-            cost_150: 0,
-            total_hours: emp.total_hours,
-            gross_salary: 0,
-            employer_cost: 0,
-            hourly_rate: 0,
-            retention_bonus: 0,
-            selected: true,
-          }))
-        }
-      }
+      let { rows, rawLines: lines } = await parseExcelCashOnTab(file)
+      const isDetailed = rows.some(r => r.date !== '')
 
       setRawLines(lines)
 
@@ -752,7 +813,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
         {(['upload','manual','history','daily_report'] as const).map(key => (
           <button key={key} onClick={() => setTab(key)}
             style={{ padding: '12px 20px', background: 'none', border: 'none', borderBottom: tab === key ? '2px solid #0f172a' : '2px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: tab === key ? '700' : '500', color: tab === key ? '#0f172a' : '#94a3b8' }}>
-            {key === 'upload' ? 'העלאת CashOnTab' : key === 'manual' ? 'הזנה ידנית' : key === 'history' ? 'היסטוריה' : 'דוח יומי'}
+            {key === 'upload' ? 'העלאת Excel' : key === 'manual' ? 'הזנה ידנית' : key === 'history' ? 'היסטוריה' : 'דוח יומי'}
           </button>
         ))}
       </div>
@@ -764,7 +825,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
           <>
             <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px', marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                  <h2 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#374151' }}>העלאת דוח שעות CashOnTab</h2>
+                  <h2 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#374151' }}>העלאת דוח שעות Excel</h2>
                   <div style={{ position: 'relative' }}>
                     <button onClick={() => setHelpOpen(p => !p)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
@@ -783,7 +844,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                             'להציג חלוקה לשעות נוספות: "כן"',
                             'בחר סניפים: סמן את הסניף הרלוונטי',
                             'הגדר תאריך התחלה וסיום (למשל 15-31 לחודש)',
-                            'בחר פורמט: PDF → לחץ "הפק דו״ח"',
+                            'בחר פורמט: Excel → לחץ "הפק דו״ח"',
                             'שמור את הקובץ → חזור לכאן והעלה',
                           ].map((step, i) => (
                             <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px', fontSize: '13px', color: '#374151', lineHeight: '1.5' }}>
@@ -796,7 +857,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                     )}
                   </div>
                 </div>
-                <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#94a3b8' }}>PDF דוח נוכחות מפורט מאוטוסופט — פרסור אוטומטי ללא שרת</p>
+                <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#94a3b8' }}>דוח נוכחות מ-CashOnTab בפורמט Excel — פרסור אוטומטי</p>
 
                 <div style={{ marginBottom: '16px' }}>
                   <label style={S.label}>תאריך לשמירה</label>
@@ -804,17 +865,17 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                 </div>
 
                 {/* אזור גרירה/העלאה */}
-                <label htmlFor="pdf-upload"
+                <label htmlFor="excel-upload"
                   onDragOver={e => e.preventDefault()}
                   onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
                   style={{ display: 'block', border: `2px dashed ${uploadStatus === 'confirm' ? '#34d399' : '#cbd5e1'}`, borderRadius: '16px', padding: '36px', textAlign: 'center', cursor: 'pointer', background: uploadStatus === 'parsing' ? '#f8fafc' : uploadStatus === 'confirm' ? '#f0fdf4' : 'white', transition: 'all 0.2s' }}>
-                  <input id="pdf-upload" type="file" accept=".pdf" style={{ display: 'none' }}
+                  <input id="excel-upload" type="file" accept=".xls,.xlsx" style={{ display: 'none' }}
                     onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); (e.target as HTMLInputElement).value = '' }} />
                   <FileText size={38} color={uploadStatus === 'confirm' ? '#34d399' : branchColor} style={{ marginBottom: '10px' }} />
                   <div style={{ fontSize: '15px', fontWeight: '700', color: '#374151', marginBottom: '4px' }}>
-                    {uploadStatus === 'parsing' ? 'מעבד קובץ...' : uploadStatus === 'confirm' ? 'קובץ נקלט בהצלחה' : 'גרור PDF לכאן או לחץ להעלאה'}
+                    {uploadStatus === 'parsing' ? 'מעבד קובץ...' : uploadStatus === 'confirm' ? 'קובץ נקלט בהצלחה' : 'בחר קובץ Excel (.xls / .xlsx)'}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>דוח נוכחות מפורט מ-CashOnTab</div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>דוח נוכחות מ-CashOnTab בפורמט Excel</div>
                 </label>
 
                 {/* סטטוס */}
