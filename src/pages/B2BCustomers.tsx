@@ -75,7 +75,7 @@ export default function B2BCustomers({ onBack }: Props) {
   const [editInvId, setEditInvId] = useState<number | null>(null)
   const [deleteInv, setDeleteInv] = useState<Invoice | null>(null)
   const [paymentInv, setPaymentInv] = useState<Invoice | null>(null)
-  const [payForm, setPayForm] = useState({ amount: '', payment_date: new Date().toISOString().split('T')[0], payment_method: 'העברה בנקאית', notes: '' })
+  const [payForm, setPayForm] = useState({ amount: '', payment_date: new Date().toISOString().split('T')[0], payment_method: 'העברה בנקאית', receipt_number: '', notes: '' })
   const [pdfParsing, setPdfParsing] = useState(false)
   const [parsedPdfs, setParsedPdfs] = useState<any[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
@@ -148,10 +148,14 @@ export default function B2BCustomers({ onBack }: Props) {
     const invs = (data || []).map((inv: any) => ({ ...inv, customer_name: inv.b2b_customers?.name || '?' }))
     const ids = invs.map((i: any) => i.id)
     if (ids.length > 0) {
-      const { data: pays } = await supabase.from('b2b_payments').select('invoice_id, amount').in('invoice_id', ids)
+      const { data: pays } = await supabase.from('b2b_payments').select('invoice_id, amount, receipt_number').in('invoice_id', ids)
       const payMap = new Map<number, number>()
-      for (const p of (pays || [])) payMap.set(p.invoice_id, (payMap.get(p.invoice_id) || 0) + Number(p.amount))
-      for (const inv of invs) inv.paid_amount = payMap.get(inv.id) || 0
+      const receiptMap = new Map<number, string>()
+      for (const p of (pays || [])) {
+        payMap.set(p.invoice_id, (payMap.get(p.invoice_id) || 0) + Number(p.amount))
+        if (p.receipt_number) receiptMap.set(p.invoice_id, p.receipt_number)
+      }
+      for (const inv of invs) { inv.paid_amount = payMap.get(inv.id) || 0; (inv as any).receipt_number = receiptMap.get(inv.id) || null }
     }
     setInvoices(invs); setInvLoading(false)
   }, [invMonth, invStatus])
@@ -178,11 +182,11 @@ export default function B2BCustomers({ onBack }: Props) {
   async function savePayment() {
     if (!paymentInv || !payForm.amount) return
     const amount = parseFloat(payForm.amount)
-    await supabase.from('b2b_payments').insert({ invoice_id: paymentInv.id, payment_date: payForm.payment_date, amount, payment_method: payForm.payment_method, notes: payForm.notes || null })
+    await supabase.from('b2b_payments').insert({ invoice_id: paymentInv.id, payment_date: payForm.payment_date, amount, payment_method: payForm.payment_method, receipt_number: payForm.receipt_number || null, notes: payForm.notes || null })
     const totalPaid = (paymentInv.paid_amount || 0) + amount
     const newStatus = totalPaid >= paymentInv.total_with_vat ? 'paid' : 'partial'
     await supabase.from('b2b_invoices').update({ status: newStatus }).eq('id', paymentInv.id)
-    setPaymentInv(null); setPayForm({ amount: '', payment_date: new Date().toISOString().split('T')[0], payment_method: 'העברה בנקאית', notes: '' }); loadInvoices(); loadCustomers()
+    setPaymentInv(null); setPayForm({ amount: '', payment_date: new Date().toISOString().split('T')[0], payment_method: 'העברה בנקאית', receipt_number: '', notes: '' }); loadInvoices(); loadCustomers()
   }
 
   // PDF upload
@@ -299,8 +303,12 @@ export default function B2BCustomers({ onBack }: Props) {
 
   // Excel export
   function exportExcel() {
-    const header = 'תאריך,חשבונית,לקוח,סניף,לפני מע"מ,כולל מע"מ,פירעון,סטטוס\n'
-    const rows = invoices.map(inv => `${inv.invoice_date},${inv.invoice_number || ''},${inv.customer_name || ''},${branchName(inv.branch_id)},${inv.total_before_vat},${inv.total_with_vat},${inv.due_date || ''},${STATUS_LABELS[inv.status]?.label || inv.status}`).join('\n')
+    const header = 'תאריך,חשבונית,לקוח,סניף,לפני מע"מ,כולל מע"מ,פירעון,סטטוס,שולם,סכום ששולם,מספר קבלה,יתרה פתוחה\n'
+    const rows = invoices.map(inv => {
+      const paid = inv.paid_amount || 0
+      const remaining = inv.total_with_vat - paid
+      return `${inv.invoice_date},${inv.invoice_number || ''},${inv.customer_name || ''},${branchName(inv.branch_id)},${inv.total_before_vat},${inv.total_with_vat},${inv.due_date || ''},${STATUS_LABELS[inv.status]?.label || inv.status},${inv.status === 'paid' ? 'כן' : 'לא'},${paid},${(inv as any).receipt_number || ''},${remaining > 0 ? remaining : 0}`
+    }).join('\n')
     const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `b2b_invoices_${invMonth}.csv`; a.click()
   }
@@ -376,13 +384,14 @@ export default function B2BCustomers({ onBack }: Props) {
 
             {invLoading ? <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>טוען...</div> : filteredInv.length === 0 ? <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>אין חשבוניות</div> : (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr><th style={S.th}>תאריך</th><th style={S.th}>חשבונית</th><th style={S.th}>לקוח</th><th style={S.th}>סכום</th><th style={S.th}>פירעון</th><th style={S.th}>סטטוס</th><th style={{ ...S.th, width: 130 }}></th></tr></thead>
+                <thead><tr><th style={S.th}>תאריך</th><th style={S.th}>חשבונית</th><th style={S.th}>לקוח</th><th style={S.th}>סכום</th><th style={S.th}>קבלה</th><th style={S.th}>פירעון</th><th style={S.th}>סטטוס</th><th style={{ ...S.th, width: 130 }}></th></tr></thead>
                 <tbody>{filteredInv.map((inv, i) => { const st = STATUS_LABELS[inv.status] || STATUS_LABELS.open; const remaining = inv.total_with_vat - (inv.paid_amount || 0); return (
                   <tr key={inv.id} style={{ background: inv.status === 'overdue' ? '#fef2f2' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
                     <td style={S.td}>{fmtDate(inv.invoice_date)}</td>
                     <td style={S.td}>{inv.invoice_number || '—'}</td>
                     <td style={{ ...S.td, fontWeight: 500, cursor: 'pointer', color: '#6366f1' }} onClick={() => { const c = customers.find(cc => cc.id === inv.customer_id); if (c) { setTab('customers'); openCustDetail(c) } }}>{inv.customer_name}</td>
                     <td style={{ ...S.td, fontWeight: 600 }}>{fmtM(inv.total_with_vat)}{(inv.paid_amount || 0) > 0 ? <div style={{ fontSize: 11, color: '#16a34a' }}>שולם: {fmtM(inv.paid_amount!)}</div> : null}</td>
+                    <td style={{ ...S.td, fontSize: 12, color: '#94a3b8' }}>{(inv as any).receipt_number || '—'}</td>
                     <td style={S.td}>{fmtDate(inv.due_date || '')}</td>
                     <td style={S.td}><span style={{ background: st.bg, color: st.color, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{st.label}</span></td>
                     <td style={S.td}>
@@ -611,6 +620,7 @@ export default function B2BCustomers({ onBack }: Props) {
               <div><label style={S.label}>סכום</label><input type="number" step="0.01" value={payForm.amount} onChange={e => setPayForm(p => ({ ...p, amount: e.target.value }))} style={S.input} /></div>
               <div><label style={S.label}>תאריך</label><input type="date" value={payForm.payment_date} onChange={e => setPayForm(p => ({ ...p, payment_date: e.target.value }))} style={S.input} /></div>
               <div><label style={S.label}>אמצעי תשלום</label><select value={payForm.payment_method} onChange={e => setPayForm(p => ({ ...p, payment_method: e.target.value }))} style={S.input}>{PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
+              <div><label style={S.label}>מספר קבלה</label><input value={payForm.receipt_number} onChange={e => setPayForm(p => ({ ...p, receipt_number: e.target.value }))} placeholder="אופציונלי" style={S.input} /></div>
               <div><label style={S.label}>הערה</label><input value={payForm.notes} onChange={e => setPayForm(p => ({ ...p, notes: e.target.value }))} style={S.input} /></div>
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
