@@ -88,113 +88,86 @@ export async function parseWorkingHoursPDF(file: File): Promise<{
     const branchHint = branchMatch ? branchMatch[1].trim() : ''
 
     // ── Extract data rows ──
-    // Data rows start with DD/MM/YYYY and contain hours data
-    // Pattern: DD/MM/YYYYHH:MM  DAY_LETTERHH:MM or DD/MM/YYYYHH:MM  DAY_LETTER (no exit = incomplete)
-    // Then: REGULAR.HH LEVEL1.HH LEVEL2.HH EXCEPTIONS.HH ... TOTAL.HH ... TYPE BRANCH
-    const dataRowRegex = /(\d{2}\/\d{2}\/\d{4})(\d{2}:\d{2})\s{0,3}([א-ת])([\d:]{5})?([\d.]+)\s*([\d.]+)\s*([\d.]+)\s*([\d.]+)\s+([\d.]+)\s+(\d)([א-ת\s]+?)(\d+)(?=\d{2}\/\d{2}\/\d{4}|סיכום|$)/g
+    // Split page text on date patterns to isolate each data row
+    // Data row example: "09/04/202606:03  ה16:058.002.000.030.00                       10.03                 0אברהם אבינו1"
+    // Numbers are concatenated: 8.002.000.030.00 = [8.00, 2.00, 0.03, 0.00]
+    const segments = pageText.split(/(?=\d{2}\/\d{2}\/\d{4})/)
 
-    let match
-    while ((match = dataRowRegex.exec(pageText)) !== null) {
-      const dateRaw = match[1] // DD/MM/YYYY
-      const entryTime = match[2]
-      const dayLetter = match[3]
-      const exitTime = match[4] || '' // may be missing
-      const regular = parseFloat(match[5]) || 0
-      const level1 = parseFloat(match[6]) || 0
-      const level2 = parseFloat(match[7]) || 0
-      const exceptions = parseFloat(match[8]) || 0
-      const totalHours = parseFloat(match[9]) || 0
-      const reportType = match[10]
-      const branchName = match[11]?.trim() || ''
+    for (const seg of segments) {
+      const dateM = seg.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
+      if (!dateM) continue
 
-      const [dd, mm, yyyy] = dateRaw.split('/')
-      const dateStr = `${yyyy}-${mm}-${dd}`
+      const dateStr = `${dateM[3]}-${dateM[2]}-${dateM[1]}`
+
+      // Skip header dates (מתאריך / עד תאריך / print timestamp)
+      const segPos = pageText.indexOf(seg)
+      if (segPos > 0) {
+        const before = pageText.substring(Math.max(0, segPos - 15), segPos)
+        if (before.includes('מתאריך') || before.includes('עד') || before.includes('תאריך')) continue
+      }
+      // Skip very short segments (timestamp at top of page)
+      if (seg.length < 30) continue
+      // Skip summary lines
+      if (seg.includes('סיכום') || seg.includes('סה"כ ימי')) continue
 
       const key = `${name}|${dateStr}`
       if (seenKeys.has(key)) continue
-      seenKeys.add(key)
 
-      const isIncomplete = totalHours === 0 && !exitTime
+      // Extract all X.XX numbers from the segment
+      // Numbers are concatenated like "8.002.000.030.00" so we match \d+\.\d{2} greedily
+      const nums = seg.match(/\d+\.\d{2}/g)
+      if (!nums || nums.length < 1) continue
 
-      employees.push({
-        name,
-        date: dateStr,
-        total_hours: Math.round(totalHours * 100) / 100,
-        hours_100: Math.round(regular * 100) / 100,
-        hours_125: Math.round(level1 * 100) / 100,
-        hours_150: Math.round(level2 * 100) / 100,
-        branch: branchName || branchHint.split(',')[0]?.trim() || undefined,
-        incomplete: isIncomplete || undefined,
-      })
-    }
+      const values = nums.map(n => parseFloat(n))
 
-    // ── Fallback: simpler regex if the strict one didn't match ──
-    if (!employees.some(e => e.name === name)) {
-      // Try line-by-line approach on the concatenated text
-      // Split on date patterns to find data segments
-      const segments = pageText.split(/(?=\d{2}\/\d{2}\/\d{4})/)
+      // The first 4 numbers are: regular, level1, level2, exceptions
+      // Then after whitespace: total_hours
+      // Pattern: REG.HHLVL1.HHLVL2.HHEXC.HH   TOTAL.HH
+      let regular = 0, level1 = 0, level2 = 0, exceptions = 0, totalH = 0
 
-      for (const seg of segments) {
-        const dateM = seg.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
-        if (!dateM) continue
+      if (values.length >= 5) {
+        // Standard: [regular, level1, level2, exceptions, total]
+        regular = values[0]
+        level1 = values[1]
+        level2 = values[2]
+        exceptions = values[3]
+        totalH = values[4]
+      } else if (values.length === 4) {
+        regular = values[0]
+        level1 = values[1]
+        level2 = values[2]
+        totalH = values[3]
+      } else if (values.length >= 1) {
+        // Incomplete report — just total or just regular
+        totalH = values[values.length - 1]
+        regular = values[0]
+      }
 
-        const dateStr = `${dateM[3]}-${dateM[2]}-${dateM[1]}`
-
-        // Skip if it looks like a header date (מתאריך/עד תאריך)
-        if (pageText.indexOf(seg) > 0) {
-          const before = pageText.substring(Math.max(0, pageText.indexOf(seg) - 10), pageText.indexOf(seg))
-          if (before.includes('מתאריך') || before.includes('עד')) continue
-        }
-        // Skip the print date at top (usually short segment)
-        if (seg.length < 20) continue
-
-        const key = `${name}|${dateStr}`
-        if (seenKeys.has(key)) continue
-
-        // Extract numbers from the segment
-        const nums = seg.match(/\d+\.\d{2}/g)
-        if (!nums || nums.length < 3) continue
-
-        // In the data row, the pattern is: regular, level1, level2, exceptions, ..., total
-        // The total is usually the largest or the one after a gap
-        const values = nums.map(n => parseFloat(n))
-
-        // Find total: it's typically > sum of components
-        let regular = values[0] || 0
-        let level1 = values[1] || 0
-        let level2 = values[2] || 0
-        let totalH = 0
-
-        // Look for the total hours value (should be close to regular + level1 + level2)
-        for (let i = 3; i < values.length; i++) {
-          const v = values[i]
-          const expectedTotal = regular + level1 + level2
-          if (Math.abs(v - expectedTotal) < 1 && v > 0) {
+      // Validate: total should be >= regular
+      // If total seems wrong, recalculate
+      if (totalH < regular && values.length >= 5) {
+        // Maybe the order is different, try finding total as the value closest to sum
+        const expectedSum = regular + level1 + level2
+        for (const v of values) {
+          if (Math.abs(v - expectedSum) < 0.5 && v > 0) {
             totalH = v
             break
           }
         }
-
-        // If no matching total found, use the largest value that's > regular
-        if (totalH === 0) {
-          for (const v of values) {
-            if (v >= regular && v < 24) totalH = Math.max(totalH, v)
-          }
-        }
-
-        const isIncomplete = totalH === 0
-
-        seenKeys.add(key)
-        employees.push({
-          name,
-          date: dateStr,
-          total_hours: Math.round(totalH * 100) / 100,
-          hours_100: Math.round(regular * 100) / 100,
-          hours_125: Math.round(level1 * 100) / 100,
-          hours_150: Math.round(level2 * 100) / 100,
-          incomplete: isIncomplete || undefined,
-        })
       }
+
+      const isIncomplete = totalH === 0
+      seenKeys.add(key)
+
+      employees.push({
+        name,
+        date: dateStr,
+        total_hours: Math.round(totalH * 100) / 100,
+        hours_100: Math.round(regular * 100) / 100,
+        hours_125: Math.round(level1 * 100) / 100,
+        hours_150: Math.round(level2 * 100) / 100,
+        incomplete: isIncomplete || undefined,
+      })
     }
   }
 
