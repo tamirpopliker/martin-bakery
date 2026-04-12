@@ -179,7 +179,7 @@ export default function B2BCustomers({ onBack }: Props) {
           // Try to match customer
           const matchCust = customers.find(c => c.name.includes(inv.customer_name) || inv.customer_name?.includes(c.name))
           const dateStr = inv.invoice_date ? (() => { const p = inv.invoice_date.split('/'); return p.length === 3 ? `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}` : inv.invoice_date })() : new Date().toISOString().split('T')[0]
-          results.push({ ...inv, fileName: file.name, customer_id: matchCust?.id || 0, invoice_date_db: dateStr, status: 'parsed' })
+          results.push({ ...inv, fileName: file.name, customer_id: matchCust?.id || 0, branch_id: matchCust?.branch_id || 0, invoice_date_db: dateStr, status: 'parsed' })
         } else { results.push({ fileName: file.name, status: 'error', error: data?.error || 'שגיאה' }) }
       } catch { results.push({ fileName: file.name, status: 'error', error: 'שגיאה בקריאת הקובץ' }) }
     }
@@ -212,7 +212,18 @@ export default function B2BCustomers({ onBack }: Props) {
       if (existing) { if (!confirm(`חשבונית ${inv.invoice_number} כבר קיימת. לעדכן?`)) return; await supabase.from('b2b_invoices').update({ customer_id: customerId, invoice_date: dateDb, due_date: dueDate.toISOString().split('T')[0], total_before_vat: Number(inv.total_before_vat) || 0, total_with_vat: Number(inv.total_before_vat) * 1.17 || 0 }).eq('id', existing.id); setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p)); loadInvoices(); return }
     }
 
-    await supabase.from('b2b_invoices').insert({ customer_id: customerId, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDate.toISOString().split('T')[0], total_before_vat: Number(inv.total_before_vat) || 0, total_with_vat: Number(inv.total_before_vat) * 1.17 || 0, branch_id: null, status: 'open', uploaded_by: appUser?.name })
+    const branchId = inv.branch_id || null
+    const amount = Number(inv.total_before_vat) || 0
+
+    await supabase.from('b2b_invoices').insert({ customer_id: customerId, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDate.toISOString().split('T')[0], total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', uploaded_by: appUser?.name })
+
+    // Record revenue: branch_revenue for branches, external_sales for factory
+    if (branchId) {
+      await supabase.from('branch_revenue').insert({ branch_id: branchId, date: dateDb, source: 'credit_b2b', amount, doc_number: inv.invoice_number || null })
+    } else {
+      await supabase.from('external_sales').insert({ customer_name: inv.customer_name || '', invoice_number: inv.invoice_number || null, invoice_date: dateDb, total_before_vat: amount, uploaded_by: appUser?.name })
+    }
+
     setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p)); loadInvoices()
   }
 
@@ -225,7 +236,7 @@ export default function B2BCustomers({ onBack }: Props) {
 
     const today = new Date().toISOString().split('T')[0]
     let totalOpen = 0; let overdueCount = 0; let totalDays = 0; let dayCount = 0
-    const custMap = new Map<number, { name: string; count: number; total: number; oldest: string }>()
+    const custMap = new Map<number, { name: string; count: number; total: number; oldest: string; branch_id: number | null }>()
     const overdueList: any[] = []
     const branchMap = new Map<number | null, number>()
 
@@ -238,7 +249,7 @@ export default function B2BCustomers({ onBack }: Props) {
       const daysOpen = Math.floor((Date.now() - new Date(inv.invoice_date).getTime()) / 86400000)
       totalDays += daysOpen; dayCount++
       // By customer
-      const cm = custMap.get(inv.customer_id) || { name: inv.b2b_customers?.name || '?', count: 0, total: 0, oldest: inv.invoice_date }
+      const cm = custMap.get(inv.customer_id) || { name: inv.b2b_customers?.name || '?', count: 0, total: 0, oldest: inv.invoice_date, branch_id: inv.branch_id }
       cm.count++; cm.total += remaining; if (inv.invoice_date < cm.oldest) cm.oldest = inv.invoice_date
       custMap.set(inv.customer_id, cm)
       // Overdue
@@ -394,6 +405,7 @@ export default function B2BCustomers({ onBack }: Props) {
                     <th style={S.th}>מס' חשבונית</th>
                     <th style={S.th}>תאריך</th>
                     <th style={{ ...S.th, width: 110 }}>סה"כ לפני מע"מ</th>
+                    <th style={S.th}>סניף/מפעל</th>
                     <th style={{ ...S.th, width: 80 }}></th>
                   </tr></thead>
                   <tbody>
@@ -401,9 +413,9 @@ export default function B2BCustomers({ onBack }: Props) {
                       <tr key={i} style={{ background: p.status === 'error' ? '#fef2f2' : p.status === 'saved' ? '#f0fdf4' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
                         <td style={{ ...S.td, fontSize: 11, color: '#94a3b8', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.fileName}</td>
                         {p.status === 'error' ? (
-                          <td colSpan={5} style={{ ...S.td, color: '#dc2626', fontSize: 12 }}>❌ {p.error}</td>
+                          <td colSpan={6} style={{ ...S.td, color: '#dc2626', fontSize: 12 }}>❌ {p.error}</td>
                         ) : p.status === 'saved' ? (
-                          <td colSpan={5} style={{ ...S.td, color: '#16a34a', fontSize: 13, fontWeight: 600 }}>✅ נשמר בהצלחה</td>
+                          <td colSpan={6} style={{ ...S.td, color: '#16a34a', fontSize: 13, fontWeight: 600 }}>✅ נשמר בהצלחה</td>
                         ) : (<>
                           <td style={{ ...S.td, fontWeight: 600, color: '#0f172a' }}>
                             <input type="text" value={p.customer_name || ''} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, customer_name: e.target.value } : pp))}
@@ -427,6 +439,13 @@ export default function B2BCustomers({ onBack }: Props) {
                           <td style={{ ...S.td, fontWeight: 600 }}>
                             <input type="number" step="0.01" value={p.total_before_vat || ''} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, total_before_vat: Number(e.target.value) } : pp))}
                               style={{ ...S.input, padding: '4px 8px', fontSize: 12, width: 90 }} />
+                          </td>
+                          <td style={S.td}>
+                            <select value={p.branch_id ?? 0} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, branch_id: Number(e.target.value) } : pp))}
+                              style={{ ...S.input, padding: '4px 8px', fontSize: 12, width: 120 }}>
+                              <option value={0}>מפעל</option>
+                              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </select>
                           </td>
                         </>)}
                         <td style={S.td}>
@@ -491,9 +510,9 @@ export default function B2BCustomers({ onBack }: Props) {
             {reportData.byCustomer.length > 0 && (<>
               <h4 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 8px' }}>חובות לפי לקוח</h4>
               <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 20 }}>
-                <thead><tr><th style={S.th}>לקוח</th><th style={S.th}>חשבוניות פתוחות</th><th style={S.th}>סה"כ חוב</th><th style={S.th}>הישנה ביותר</th></tr></thead>
+                <thead><tr><th style={S.th}>לקוח</th><th style={S.th}>סניף/מפעל</th><th style={S.th}>חשבוניות פתוחות</th><th style={S.th}>סה"כ חוב</th><th style={S.th}>הישנה ביותר</th></tr></thead>
                 <tbody>{reportData.byCustomer.map((c, i) => (
-                  <tr key={i} style={{ background: i % 2 === 0 ? 'white' : '#fafbfc' }}><td style={{ ...S.td, fontWeight: 500 }}>{c.name}</td><td style={S.td}>{c.count}</td><td style={{ ...S.td, fontWeight: 600, color: '#dc2626' }}>{fmtM(c.total)}</td><td style={S.td}>{fmtDate(c.oldest)}</td></tr>
+                  <tr key={i} style={{ background: i % 2 === 0 ? 'white' : '#fafbfc' }}><td style={{ ...S.td, fontWeight: 500 }}>{c.name}</td><td style={{ ...S.td, fontSize: 12, color: '#94a3b8' }}>{branchName(c.branch_id)}</td><td style={S.td}>{c.count}</td><td style={{ ...S.td, fontWeight: 600, color: '#dc2626' }}>{fmtM(c.total)}</td><td style={S.td}>{fmtDate(c.oldest)}</td></tr>
                 ))}</tbody>
               </table>
             </>)}
