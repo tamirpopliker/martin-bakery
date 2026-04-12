@@ -36,12 +36,13 @@ import InternalSalesUpload from './InternalSalesUpload'
 import ProductCatalog from './ProductCatalog'
 import FactoryDepartments from './FactoryDepartments'
 import FactoryEquipment from './FactoryEquipment'
+import B2BCustomers from './B2BCustomers'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
   AlertTriangle, ClipboardList, Truck, UserCog, Activity,
   Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
-  LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft, ShoppingCart, Wrench, Building2
+  LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft, ShoppingCart, Wrench, Building2, CreditCard
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
@@ -62,6 +63,7 @@ const PANEL_FACTORY = [
 ]
 
 const PANEL_MANAGE = [
+  { label: 'לקוחות הקפה (B2B)', subtitle: 'חשבוניות · תשלומים · מעקב חובות', Icon: CreditCard, color: '#dc2626', page: 'b2b_customers' },
   { label: 'דשבורד מנכ"ל', subtitle: 'מבט רשתי · כל הסניפים', Icon: TrophyIcon,   color: '#f59e0b', page: 'ceo_dashboard' },
   { label: 'דוחות והתראות', subtitle: 'לוג דוחות · כללי התראה', Icon: Mail,         color: '#f59e0b', page: 'reports_alerts' },
   { label: 'הגדרות מערכת', subtitle: 'העמסת מטה · הגדרות כלליות', Icon: Settings, color: '#64748b', page: 'system_settings' },
@@ -139,6 +141,18 @@ export default function Home() {
   const [prevOperatingProfit, setPrevOperatingProfit] = useState(0)
   const [totalLabor, setTotalLabor] = useState(0)
   const [prevTotalLabor, setPrevTotalLabor] = useState(0)
+
+  // B2B overdue badge
+  const [overdueCount, setOverdueCount] = useState(0)
+  useEffect(() => {
+    async function loadOverdue() {
+      const { count } = await supabase.from('b2b_invoices').select('id', { count: 'exact', head: true }).eq('status', 'overdue')
+      setOverdueCount(count || 0)
+    }
+    loadOverdue()
+    const ch = supabase.channel('b2b-overdue').on('postgres_changes', { event: '*', schema: 'public', table: 'b2b_invoices' }, () => loadOverdue()).subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [])
   const [factoryLabor, setFactoryLabor] = useState(0)
   const [revenueSheetOpen, setRevenueSheetOpen] = useState(false)
   const [laborSheetOpen, setLaborSheetOpen] = useState(false)
@@ -290,6 +304,7 @@ export default function Home() {
     if (page === 'system_settings')      return <UserManagement onBack={() => setPage(null)} initialTab="settings" />
     if (page === 'reports_alerts')       return <ReportsAlerts onBack={() => setPage(null)} />
 
+    if (page === 'b2b_customers') return <B2BCustomers onBack={() => setPage(null)} />
     if (page === 'factory_departments') return <FactoryDepartments onBack={() => setPage(null)} />
     if (page === 'factory_equipment')  return <FactoryEquipment onBack={() => setPage(null)} />
     if (page === 'dept_creams')    return <DepartmentHome department="creams"    onBack={() => setPage(null)} />
@@ -760,23 +775,29 @@ export default function Home() {
                 <motion.div variants={staggerContainer} initial="hidden" animate="visible"
                   className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
                   {[
+                    { label: 'לקוחות הקפה (B2B)', subtitle: 'חשבוניות · תשלומים · מעקב חובות', Icon: CreditCard, color: '#dc2626', page: 'b2b_customers' },
                     { label: 'ניהול משתמשים', subtitle: 'הרשאות · משתמשים · סניפים', Icon: UserCog, color: '#8b5cf6', page: 'user_management' },
                     { label: 'דוחות והתראות', subtitle: 'לוג דוחות · כללי התראה', Icon: Mail, color: '#f59e0b', page: 'reports_alerts' },
                     { label: 'הגדרות מערכת', subtitle: 'העמסת מטה · הגדרות כלליות', Icon: Settings, color: '#64748b', page: 'system_settings' },
                     { label: 'ייבוא נתונים', subtitle: 'CSV מ-Base44 · העלאה', Icon: Database, color: '#818cf8', page: 'data_import' },
                   ].map(item => {
                     const Icon = item.Icon
+                    const badge = item.page === 'b2b_customers' ? overdueCount : 0
                     return (
                       <motion.div key={item.page} variants={fadeUp}>
                         <button onClick={() => setPage(item.page)}
-                          style={{ width: '100%', background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+                          style={{ width: '100%', background: 'white', border: badge > 0 ? '1px solid #fecaca' : '1px solid #f1f5f9', borderRadius: 12, padding: '12px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', position: 'relative' }}
                           className="hover:shadow-md hover:border-[#c7d2fe]">
+                          {badge > 0 && (
+                            <div style={{ position: 'absolute', top: -6, left: -6, background: '#ef4444', color: 'white', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{badge}</div>
+                          )}
                           <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             <Icon size={18} color="#6366f1" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>{item.label}</div>
                             <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{item.subtitle}</div>
+                            {badge > 0 && <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 2 }}>{badge} חשבוניות באיחור</div>}
                           </div>
                           <ChevronLeft size={14} color="#cbd5e1" className="shrink-0" />
                         </button>
