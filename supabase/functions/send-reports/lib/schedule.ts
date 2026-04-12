@@ -34,8 +34,8 @@ export function getReportSchedule(now: Date): ReportSchedule {
   // Saturday = skip
   const isSkipDay = dayOfWeek === 6
 
-  // Daily: Sun–Fri (already filtered by cron, but double-check)
-  const sendDaily = !isSkipDay
+  // Daily reports disabled — only weekly and monthly active
+  const sendDaily = false
 
   // Weekly: Sunday only — covers previous Sun–Fri
   const sendWeekly = dayOfWeek === 0

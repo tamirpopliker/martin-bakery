@@ -3,6 +3,7 @@ import { getAccessibleDepartments } from '../lib/recipients.ts'
 import { type ReportSchedule } from '../lib/schedule.ts'
 import {
   getFactoryProduction, getFactoryWaste, getFactoryLabor,
+  getInternalSales, getExternalSales, getProductionReportsCost,
   nextDay, subtractDays, formatHebrewDate, formatShortDate,
   DEPARTMENT_NAMES, logReport,
 } from '../lib/db.ts'
@@ -21,7 +22,13 @@ export async function sendFactoryWeeklyReport(user: Recipient, schedule: ReportS
   const from = weekStart
   const to = nextDay(weekEnd)
 
-  // 30-day range for averages (from week end)
+  // Previous week for comparison
+  const prevWeekStart = subtractDays(weekStart, 7)
+  const prevWeekEnd = subtractDays(weekEnd, 7)
+  const prevFrom = prevWeekStart
+  const prevTo = nextDay(prevWeekEnd)
+
+  // 30-day range for averages
   const avg30From = subtractDays(weekEnd, 30)
 
   // ── Fetch data per department ──
@@ -54,6 +61,25 @@ export async function sendFactoryWeeklyReport(user: Recipient, schedule: ReportS
     })
   }
 
+  // ── New data sources ──
+  const [internalSales, externalSales, prodReports,
+    prevInternalSales, prevExternalSales, prevProdReports] = await Promise.all([
+    getInternalSales(from, to),
+    getExternalSales(from, to),
+    getProductionReportsCost(from, to),
+    getInternalSales(prevFrom, prevTo),
+    getExternalSales(prevFrom, prevTo),
+    getProductionReportsCost(prevFrom, prevTo),
+  ])
+
+  const totalInternalSales = internalSales.reduce((s: number, r: any) => s + Number(r.total_amount), 0)
+  const totalExternalSales = externalSales.reduce((s: number, r: any) => s + Number(r.total_before_vat), 0)
+  const totalProdCost = prodReports.reduce((s: number, r: any) => s + Number(r.total_cost), 0)
+
+  const prevTotalInternal = prevInternalSales.reduce((s: number, r: any) => s + Number(r.total_amount), 0)
+  const prevTotalExternal = prevExternalSales.reduce((s: number, r: any) => s + Number(r.total_before_vat), 0)
+  const prevTotalProdCost = prevProdReports.reduce((s: number, r: any) => s + Number(r.total_cost), 0)
+
   // ── Totals ──
   const totalProduction = deptData.reduce((s, d) => s + d.production, 0)
   const totalWaste = deptData.reduce((s, d) => s + d.waste, 0)
@@ -61,10 +87,19 @@ export async function sendFactoryWeeklyReport(user: Recipient, schedule: ReportS
   const totalHours = deptData.reduce((s, d) => s + d.laborHours, 0)
   const wastePct = totalProduction > 0 ? (totalWaste / totalProduction) * 100 : 0
   const productivity = totalHours > 0 ? totalProduction / totalHours : 0
+  const totalRevenue = totalInternalSales + totalExternalSales
 
   const avgProd30Daily = deptData.reduce((s, d) => s + d.prod30Avg, 0)
   const avgHours30Daily = deptData.reduce((s, d) => s + d.hours30Avg, 0)
   const avgProductivity30 = avgHours30Daily > 0 ? avgProd30Daily / avgHours30Daily : 0
+
+  // Previous week totals for comparison
+  let prevLaborCost = 0
+  for (const dept of departments) {
+    const prevLabor = await getFactoryLabor(dept, prevFrom, prevTo)
+    prevLaborCost += prevLabor.reduce((s, r) => s + Number(r.employer_cost), 0)
+  }
+  const prevTotalRevenue = prevTotalInternal + prevTotalExternal
 
   // ── Daily productivity chart ──
   const weekDays: Array<{ label: string; productivity: number }> = []
@@ -85,7 +120,7 @@ export async function sendFactoryWeeklyReport(user: Recipient, schedule: ReportS
 
   const productivityChartUrl = factoryProductivityChart(weekDays, Math.round(avgProductivity30))
 
-  // ── Production by product chart ──
+  // ── Production by department chart ──
   const prodChartData = deptData
     .filter(d => d.production > 0)
     .map(d => ({ label: d.name, amount: Math.round(d.production), color: DEPT_COLORS[d.dept] || '#64748b' }))
@@ -104,7 +139,27 @@ export async function sendFactoryWeeklyReport(user: Recipient, schedule: ReportS
     }),
   )
 
-  // ── AI ──
+  // ── KPI comparison vs previous week ──
+  const pctChange = (cur: number, prev: number) => prev > 0 ? ((cur - prev) / prev * 100).toFixed(1) : '—'
+  const changeArrow = (cur: number, prev: number, inverse = false) => {
+    if (prev === 0) return ''
+    const pct = ((cur - prev) / prev * 100)
+    const isGood = inverse ? pct < 0 : pct > 0
+    return `<span style="color:${isGood ? '#16a34a' : '#dc2626'};font-weight:700">${pct > 0 ? '↑' : '↓'} ${Math.abs(pct).toFixed(1)}%</span>`
+  }
+
+  const comparisonTable = dataTable(
+    ['מדד', 'השבוע', 'שבוע שעבר', 'שינוי'],
+    [
+      ['הכנסות (פנימיות+חיצוניות)', fmtCurrency(totalRevenue), fmtCurrency(prevTotalRevenue), changeArrow(totalRevenue, prevTotalRevenue)],
+      ['מכירות פנימיות', fmtCurrency(totalInternalSales), fmtCurrency(prevTotalInternal), changeArrow(totalInternalSales, prevTotalInternal)],
+      ['מכירות חיצוניות (B2B)', fmtCurrency(totalExternalSales), fmtCurrency(prevTotalExternal), changeArrow(totalExternalSales, prevTotalExternal)],
+      ['עלות ייצור', fmtCurrency(totalProdCost), fmtCurrency(prevTotalProdCost), changeArrow(totalProdCost, prevTotalProdCost, true)],
+      ['עלות עובדים', fmtCurrency(totalLaborCost), fmtCurrency(prevLaborCost), changeArrow(totalLaborCost, prevLaborCost, true)],
+    ],
+  )
+
+  // ── AI Insights ──
   const insights = await generateInsights('factory', {
     production: Math.round(totalProduction),
     wastePct: wastePct.toFixed(1),
@@ -113,17 +168,23 @@ export async function sendFactoryWeeklyReport(user: Recipient, schedule: ReportS
     prodAvg30: Math.round(avgProductivity30),
     laborCost: Math.round(totalLaborCost),
     laborAvg30: Math.round(deptData.reduce((s, d) => s + d.labor30Avg, 0) * 6),
+    internalSales: Math.round(totalInternalSales),
+    externalSales: Math.round(totalExternalSales),
+    productionCost: Math.round(totalProdCost),
   }, 3)
 
   // ── Build HTML ──
   const kpis = kpiRow([
     { label: 'ייצור שבועי', value: fmtCurrency(totalProduction), target: `ממוצע ${fmtCurrency(avgProd30Daily * 6)}`, isGood: totalProduction >= avgProd30Daily * 5 },
+    { label: 'מכירות כולל', value: fmtCurrency(totalRevenue), target: `שבוע שעבר ${fmtCurrency(prevTotalRevenue)}`, isGood: totalRevenue >= prevTotalRevenue },
     { label: 'פסולת %', value: fmtPct(wastePct), target: 'ממוצע 30 יום', isGood: wastePct <= 5 },
     { label: 'פריון', value: `${fmtCurrency(productivity)}/ש׳`, target: `ממוצע ${fmtCurrency(avgProductivity30)}`, isGood: productivity >= avgProductivity30 },
   ])
 
   const body = `
     ${kpis}
+    ${sectionHeader('השוואה לשבוע קודם')}
+    ${comparisonTable}
     ${sectionHeader('ייצור לפי מחלקות — שבועי')}
     ${prodTable}
     ${sectionHeader('ייצור לפי מוצרים')}

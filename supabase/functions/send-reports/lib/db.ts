@@ -169,6 +169,59 @@ export async function getFactoryKpiTargets(department: string) {
   return data || { labor_pct: 25, waste_pct: 5, repairs_pct: 3, gross_profit_pct: 40, production_pct: 45, operating_profit_pct: 30 }
 }
 
+// ─── New data sources ──────────────────────────────────────────────────────────
+
+/** Internal sales (factory → branches) */
+export async function getInternalSales(from: string, to: string) {
+  const { data } = await db
+    .from('internal_sales')
+    .select('order_date, total_amount, branch_id, status')
+    .gte('order_date', from).lt('order_date', to)
+    .eq('status', 'completed')
+  return data || []
+}
+
+/** Internal sales for a specific branch */
+export async function getBranchInternalPurchases(branchId: number, from: string, to: string) {
+  const { data } = await db
+    .from('internal_sales')
+    .select('order_date, total_amount, status')
+    .eq('branch_id', branchId)
+    .eq('status', 'completed')
+    .gte('order_date', from).lt('order_date', to)
+  return data || []
+}
+
+/** External B2B sales */
+export async function getExternalSales(from: string, to: string) {
+  const { data } = await db
+    .from('external_sales')
+    .select('invoice_date, total_before_vat')
+    .gte('invoice_date', from).lt('invoice_date', to)
+  return data || []
+}
+
+/** Production reports cost */
+export async function getProductionReportsCost(from: string, to: string, department?: string) {
+  let q = db.from('production_reports')
+    .select('report_date, total_cost, department')
+    .gte('report_date', from).lt('report_date', to)
+  if (department) q = q.eq('department', department)
+  const { data } = await q
+  return data || []
+}
+
+/** Branch expenses (from_factory) */
+export async function getBranchFactoryExpenses(branchId: number, from: string, to: string) {
+  const { data } = await db
+    .from('branch_expenses')
+    .select('date, amount')
+    .eq('branch_id', branchId)
+    .eq('from_factory', true)
+    .gte('date', from).lt('date', to)
+  return data || []
+}
+
 export async function logReport(
   reportType: string, email: string, role: string, reportDate: string,
   status: 'sent' | 'failed' = 'sent', errorMessage?: string
