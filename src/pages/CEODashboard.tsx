@@ -108,6 +108,8 @@ export default function CEODashboard({ onBack }: Props) {
   const { branches: BRANCHES } = useBranches()
   const [loading, setLoading] = useState(false)
   const [branches, setBranches] = useState<BranchData[]>([])
+  const [revenueExpanded, setRevenueExpanded] = useState(false)
+  const [revBreakdown, setRevBreakdown] = useState<{ source: string; emoji: string; factory: number; byBranch: Record<number, number> }[]>([])
   const [prevTotalRev, setPrevTotalRev] = useState(0)
   const [prevTotalGross, setPrevTotalGross] = useState(0)
   const [prevTotalOperating, setPrevTotalOperating] = useState(0)
@@ -238,6 +240,38 @@ export default function CEODashboard({ onBack }: Props) {
     setRevCredit(totalCredit)
     setRevWebsite(totalWebsite)
     setBranchSuppliers(branchPLs.reduce((s, pl) => s + pl.externalSuppliers, 0))
+
+    // ── Revenue breakdown by source per entity ──
+    const revBd: { source: string; emoji: string; factory: number; byBranch: Record<number, number> }[] = [
+      { source: 'קופה', emoji: '💳', factory: 0, byBranch: {} },
+      { source: 'אתר', emoji: '🌐', factory: 0, byBranch: {} },
+      { source: 'B2B הקפה', emoji: '🤝', factory: 0, byBranch: {} },
+      { source: 'מכירות פנימיות', emoji: '🏭', factory: 0, byBranch: {} },
+      { source: 'מכירות חיצוניות', emoji: '📦', factory: 0, byBranch: {} },
+    ]
+    // Branch revenue by source
+    for (let bi = 0; bi < BRANCHES.length; bi++) {
+      const br = BRANCHES[bi]
+      const chData = channelData[bi].data || []
+      for (const r of chData) {
+        const amt = Number(r.amount)
+        if (r.source === 'cashier') { revBd[0].byBranch[br.id] = (revBd[0].byBranch[br.id] || 0) + amt }
+        else if (r.source === 'website') { revBd[1].byBranch[br.id] = (revBd[1].byBranch[br.id] || 0) + amt }
+        else if (r.source === 'credit' || r.source === 'credit_b2b') { revBd[2].byBranch[br.id] = (revBd[2].byBranch[br.id] || 0) + amt }
+      }
+    }
+    // B2B invoices by branch
+    const { data: b2bInvData } = await supabase.from('b2b_invoices').select('branch_id, total_before_vat').gte('invoice_date', from).lt('invoice_date', to)
+    for (const inv of (b2bInvData || [])) {
+      if (inv.branch_id) { revBd[2].byBranch[inv.branch_id] = (revBd[2].byBranch[inv.branch_id] || 0) + Number(inv.total_before_vat) }
+      else { revBd[2].factory += Number(inv.total_before_vat) }
+    }
+    // Factory internal + external sales
+    const { data: intSalesData } = await supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', from).lt('order_date', to)
+    revBd[3].factory = (intSalesData || []).reduce((s: number, r: any) => s + Number(r.total_amount), 0)
+    const { data: extSalesData } = await supabase.from('external_sales').select('total_before_vat').gte('invoice_date', from).lt('invoice_date', to)
+    revBd[4].factory = (extSalesData || []).reduce((s: number, r: any) => s + Number(r.total_before_vat), 0)
+    setRevBreakdown(revBd)
 
     // Fetch production report costs for the period
     const { data: prodReportData } = await supabase.from('production_reports')
@@ -987,13 +1021,33 @@ export default function CEODashboard({ onBack }: Props) {
                             const brVals = branches.map(br => row.getBr(br))
                             const total = row.factory + brVals.reduce((s, v) => s + v, 0)
                             const totalRev = fRev + branches.reduce((s, br) => s + br.revenue, 0)
+                            const isRevRow = row.label === 'הכנסות'
                             return (
-                              <TableRow key={row.label} style={row.bold ? { background: '#fafafa' } : { borderBottom: '1px solid #f8fafc' }}>
-                                <TableCell className={`text-[12px] ${row.bold ? 'font-bold text-slate-800' : 'text-slate-600'}`}>{row.label}</TableCell>
+                              <>{/* dg fragment */}
+                              <TableRow key={row.label} style={{ ...(row.bold ? { background: '#fafafa' } : { borderBottom: '1px solid #f8fafc' }), ...(isRevRow ? { cursor: 'pointer' } : {}) }}
+                                onClick={isRevRow ? () => setRevenueExpanded(p => !p) : undefined}>
+                                <TableCell className={`text-[12px] ${row.bold ? 'font-bold text-slate-800' : 'text-slate-600'}`}>
+                                  {isRevRow ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{row.label} <span style={{ fontSize: 10, color: '#94a3b8' }}>{revenueExpanded ? '▲' : '▼'}</span></span> : row.label}
+                                </TableCell>
                                 {renderCell(row.factory, fRev, row.kpiKey, getFactoryTarget(row.kpiKey), row.bold, row.color, false)}
                                 {branches.map((br, i) => renderCell(brVals[i], br.revenue, row.kpiKey, getBrTarget(br.id, row.kpiKey), row.bold, row.color, false))}
                                 {renderCell(total, totalRev, row.kpiKey, null, row.bold, row.color, true)}
                               </TableRow>
+                              {isRevRow && revenueExpanded && revBreakdown.map(src => {
+                                const srcTotal = src.factory + branches.reduce((s, br) => s + (src.byBranch[br.id] || 0), 0)
+                                if (srcTotal === 0 && src.factory === 0) return null
+                                return (
+                                  <TableRow key={src.source} style={{ background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
+                                    <TableCell className="text-[11px] text-slate-400" style={{ paddingRight: 24 }}>{src.emoji} {src.source}</TableCell>
+                                    <TableCell className="text-[11px] text-center text-slate-500">{src.factory > 0 ? fmtN(src.factory) : '—'}</TableCell>
+                                    {branches.map(br => (
+                                      <TableCell key={br.id} className="text-[11px] text-center text-slate-500">{(src.byBranch[br.id] || 0) > 0 ? fmtN(src.byBranch[br.id]) : '—'}</TableCell>
+                                    ))}
+                                    <TableCell className="text-[11px] text-center font-semibold text-slate-600">{srcTotal > 0 ? fmtN(srcTotal) : '—'}</TableCell>
+                                  </TableRow>
+                                )
+                              })}
+                              </>
                             )
                           })}
                         </TableBody>
