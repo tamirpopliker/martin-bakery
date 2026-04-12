@@ -224,6 +224,19 @@ export default function Home() {
   // Employee role gets their own dedicated home page (after all hooks)
   if (appUser?.role === 'employee') return <EmployeeHome onNavigate={(p: string) => setPage(p)} />
 
+  // Branch manager goes directly to their branch home
+  if (appUser?.role === 'branch' && appUser.branch_id) {
+    const branchData = branchList.find(b => b.id === appUser.branch_id)
+    if (branchData) {
+      return <BranchHome branch={{ id: branchData.id, name: branchData.name, color: branchData.color }} onBack={() => supabase.auth.signOut()} />
+    }
+    if (branchList.length === 0) {
+      return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+        <div style={{ textAlign: 'center', color: '#94a3b8' }}>טוען...</div>
+      </div>
+    }
+  }
+
   // Scheduler goes directly to their branch's team management page
   if (appUser?.role === 'scheduler' && appUser.branch_id) {
     const schedulerBranch = branchList.find(b => b.id === appUser.branch_id)

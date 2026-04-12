@@ -204,8 +204,9 @@ export default function BranchHome({ branch, onBack }: Props) {
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
-      <PageHeader title={`סניף ${branch.name}`} subtitle={today} onBack={onBack}
-        action={appUser?.role === 'scheduler' ? (
+      <PageHeader title={`סניף ${branch.name}`} subtitle={today}
+        onBack={appUser?.role === 'branch' || appUser?.role === 'scheduler' ? undefined : onBack}
+        action={(appUser?.role === 'branch' || appUser?.role === 'scheduler') ? (
           <button onClick={() => { supabase.auth.signOut() }} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
             התנתק
           </button>
