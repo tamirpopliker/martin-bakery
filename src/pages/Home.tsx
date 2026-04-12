@@ -582,6 +582,29 @@ export default function Home() {
             </motion.div>
           )}
 
+          {/* Card: לקוחות הקפה — admin only, direct link */}
+          {appUser?.role === 'admin' && (
+            <motion.div variants={fadeUp}>
+              <button onClick={() => setPage('b2b_customers')}
+                style={{ width: '100%', border: overdueCount > 0 ? '1px solid #fecaca' : '1px solid #f1f5f9', borderRadius: '12px', padding: '14px', background: 'white', cursor: 'pointer', textAlign: 'right', transition: 'all 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', position: 'relative' }}
+                className="hover:shadow-md hover:border-[#c7d2fe]">
+                {overdueCount > 0 && (
+                  <div style={{ position: 'absolute', top: -6, left: -6, background: '#ef4444', color: 'white', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{overdueCount}</div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <CreditCard size={16} color="#dc2626" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>לקוחות הקפה (B2B)</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: '1px' }}>חשבוניות · תשלומים · מעקב חובות</div>
+                    {overdueCount > 0 && <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, marginTop: 2 }}>{overdueCount} חשבוניות באיחור</div>}
+                  </div>
+                </div>
+              </button>
+            </motion.div>
+          )}
+
           {/* Card 4: ניהול — admin only */}
           {appUser?.role === 'admin' && (
             <motion.div variants={fadeUp}>
