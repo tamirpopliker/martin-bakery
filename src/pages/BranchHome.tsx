@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight } from 'lucide-react'
+import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PageHeader from '../components/PageHeader'
 import { useAppUser } from '../lib/UserContext'
@@ -23,6 +23,7 @@ import WeeklySchedule from './WeeklySchedule'
 import ScheduleHistory from './ScheduleHistory'
 import BranchDashboard from './BranchDashboard'
 import DataImport from './DataImport'
+import BranchCommunication from './BranchCommunication'
 // calculateBranchPL moved to BranchManagerDashboard
 
 // ─── אנימציות ─────────────────────────────────────────────────────────────────
@@ -61,6 +62,7 @@ type BranchPage =
   | 'shift-settings'
   | 'weekly-schedule'
   | 'schedule-history'
+  | 'communication'
 
 interface MenuItem {
   page: BranchPage
@@ -81,6 +83,7 @@ const MENU_ITEMS: MenuItem[] = [
   { page: 'waste',     label: 'פחת',             subtitle: 'סחורה · חומרי גלם',         Icon: Trash2,      ready: true },
   { page: 'suppliers', label: 'ספקים',           subtitle: 'ניהול · קטגוריות',           Icon: Building2,   ready: true },
   { page: 'customers', label: 'לקוחות הקפה',    subtitle: 'חובות · תשלומים',            Icon: TrendingUp,  ready: true },
+  { page: 'communication', label: 'מרכז תקשורת', subtitle: 'הודעות · משימות · עדכונים', Icon: MessageSquare, ready: true },
   { page: 'orders',    label: 'הזמנות מהמפעל',  subtitle: 'אישור · עריכה · חומרי גלם', Icon: Package,     ready: true },
   // BranchPL removed — P&L now integrated in BranchDashboard
   { page: 'settings',     label: 'הגדרות סניף',    subtitle: 'KPI · עלויות קבועות · עובדים', Icon: Settings,    ready: true },
@@ -94,6 +97,25 @@ export default function BranchHome({ branch, onBack }: Props) {
   const [pageData, setPageData] = useState<any>(null)
   const [hovCard, setHovCard] = useState<BranchPage | null>(null)
   const [pendingOrders, setPendingOrders] = useState(0)
+  const [unreadMessages, setUnreadMessages] = useState(0)
+
+  // ─── טעינת הודעות לא נקראות ──────────────────────────────────────────────────
+  useEffect(() => {
+    async function loadUnreadMsgs() {
+      if (!appUser?.employee_id) return
+      const { data: msgs } = await supabase.from('branch_messages').select('id').eq('branch_id', branch.id)
+      if (!msgs || msgs.length === 0) { setUnreadMessages(0); return }
+      const { data: reads } = await supabase.from('message_reads').select('message_id').eq('employee_id', appUser.employee_id).in('message_id', msgs.map(m => m.id))
+      const readIds = new Set((reads || []).map(r => r.message_id))
+      setUnreadMessages(msgs.filter(m => !readIds.has(m.id)).length)
+    }
+    loadUnreadMsgs()
+    const ch = supabase.channel(`unread-msgs-${branch.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'branch_messages', filter: `branch_id=eq.${branch.id}` }, () => loadUnreadMsgs())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reads' }, () => loadUnreadMsgs())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [branch.id, appUser?.employee_id])
 
   // ─── טעינת הזמנות ממתינות ──────────────────────────────────────────────────
   useEffect(() => {
@@ -136,6 +158,9 @@ export default function BranchHome({ branch, onBack }: Props) {
   )
   if (page === 'suppliers') return (
     <BranchSuppliers branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
+  )
+  if (page === 'communication') return (
+    <BranchCommunication branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
   if (page === 'orders') return (
     <BranchOrders branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
@@ -258,6 +283,11 @@ export default function BranchHome({ branch, onBack }: Props) {
                   {item.page === 'orders' && pendingOrders > 0 && (
                     <span style={{ position: 'absolute', top: 10, left: 10, background: '#fb7185', color: 'white', fontSize: 12, fontWeight: 800, minWidth: 24, height: 24, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px', boxShadow: '0 2px 8px rgba(251,113,133,0.4)' }}>
                       {pendingOrders}
+                    </span>
+                  )}
+                  {item.page === 'communication' && unreadMessages > 0 && (
+                    <span style={{ position: 'absolute', top: 10, left: 10, background: '#3b82f6', color: 'white', fontSize: 12, fontWeight: 800, minWidth: 24, height: 24, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px', boxShadow: '0 2px 8px rgba(59,130,246,0.4)' }}>
+                      {unreadMessages}
                     </span>
                   )}
                   <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
