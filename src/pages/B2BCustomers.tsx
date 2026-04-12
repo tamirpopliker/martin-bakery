@@ -10,7 +10,26 @@ const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, tra
 
 interface Props { onBack: () => void }
 
-interface Customer { id: number; name: string; company_number: string | null; phone: string | null; address: string | null; branch_id: number | null; credit_limit: number; notes: string | null; open_balance?: number }
+interface Customer { id: number; name: string; company_number: string | null; phone: string | null; address: string | null; branch_id: number | null; credit_limit: number; payment_terms: string | null; notes: string | null; open_balance?: number }
+
+const PAYMENT_TERMS_OPTIONS = ['מיידי', 'שוטף', 'שוטף + 30', 'שוטף + 60', 'שוטף + 90']
+
+function calcDueDate(invoiceDate: string, terms: string | null): string {
+  const d = new Date(invoiceDate + 'T12:00:00')
+  if (!terms || terms === 'מיידי') return invoiceDate
+  // End of invoice month
+  const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+  if (terms === 'שוטף') return endOfMonth.toISOString().split('T')[0]
+  const match = terms.match(/שוטף\s*\+\s*(\d+)/)
+  if (match) {
+    const days = parseInt(match[1])
+    endOfMonth.setDate(endOfMonth.getDate() + days)
+    return endOfMonth.toISOString().split('T')[0]
+  }
+  // Fallback: +30 days
+  d.setDate(d.getDate() + 30)
+  return d.toISOString().split('T')[0]
+}
 interface Invoice { id: number; customer_id: number; invoice_number: string | null; invoice_date: string; due_date: string | null; total_before_vat: number; total_with_vat: number; status: string; branch_id: number | null; uploaded_by: string | null; customer_name?: string; paid_amount?: number }
 interface Payment { id: number; invoice_id: number; payment_date: string; amount: number; notes: string | null }
 
@@ -46,7 +65,7 @@ export default function B2BCustomers({ onBack }: Props) {
   const [custLoading, setCustLoading] = useState(false)
   const [showAddCust, setShowAddCust] = useState(false)
   const [editCustId, setEditCustId] = useState<number | null>(null)
-  const [custForm, setCustForm] = useState({ name: '', company_number: '', phone: '', address: '', branch_id: 0, credit_limit: '', notes: '' })
+  const [custForm, setCustForm] = useState({ name: '', company_number: '', phone: '', address: '', branch_id: 0, credit_limit: '', payment_terms: 'שוטף + 30', notes: '' })
   const [viewCust, setViewCust] = useState<Customer | null>(null)
   const [custInvoices, setCustInvoices] = useState<Invoice[]>([])
   const [custPayments, setCustPayments] = useState<Payment[]>([])
@@ -97,10 +116,10 @@ export default function B2BCustomers({ onBack }: Props) {
   useEffect(() => { loadCustomers() }, [loadCustomers])
 
   async function saveCust() {
-    const payload = { name: custForm.name, company_number: custForm.company_number || null, phone: custForm.phone || null, address: custForm.address || null, branch_id: custForm.branch_id || null, credit_limit: parseFloat(custForm.credit_limit) || 0, notes: custForm.notes || null }
+    const payload = { name: custForm.name, company_number: custForm.company_number || null, phone: custForm.phone || null, address: custForm.address || null, branch_id: custForm.branch_id || null, credit_limit: parseFloat(custForm.credit_limit) || 0, payment_terms: custForm.payment_terms || null, notes: custForm.notes || null }
     if (editCustId) { await supabase.from('b2b_customers').update(payload).eq('id', editCustId); setEditCustId(null) }
     else { await supabase.from('b2b_customers').insert(payload) }
-    setCustForm({ name: '', company_number: '', phone: '', address: '', branch_id: 0, credit_limit: '', notes: '' }); setShowAddCust(false); loadCustomers()
+    setCustForm({ name: '', company_number: '', phone: '', address: '', branch_id: 0, credit_limit: '', payment_terms: 'שוטף + 30', notes: '' }); setShowAddCust(false); loadCustomers()
   }
 
   async function deleteCust(id: number) { if (!confirm('למחוק לקוח זה?')) return; await supabase.from('b2b_customers').delete().eq('id', id); loadCustomers() }
@@ -141,7 +160,8 @@ export default function B2BCustomers({ onBack }: Props) {
   useEffect(() => { if (tab === 'invoices') loadInvoices() }, [tab, loadInvoices])
 
   async function saveInvoice() {
-    const dueDate = invForm.due_date || (() => { const d = new Date(invForm.invoice_date); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0] })()
+    const cust = customers.find(c => c.id === invForm.customer_id)
+    const dueDate = invForm.due_date || calcDueDate(invForm.invoice_date, cust?.payment_terms || null)
     const payload = { customer_id: invForm.customer_id, invoice_number: invForm.invoice_number || null, invoice_date: invForm.invoice_date, due_date: dueDate, total_before_vat: parseFloat(invForm.total_before_vat) || 0, total_with_vat: parseFloat(invForm.total_with_vat) || 0, branch_id: invForm.branch_id || null, status: 'open', uploaded_by: appUser?.name || null }
     if (editInvId) { await supabase.from('b2b_invoices').update(payload).eq('id', editInvId); setEditInvId(null) }
     else {
@@ -203,18 +223,19 @@ export default function B2BCustomers({ onBack }: Props) {
       const p = inv.invoice_date.split('/')
       if (p.length === 3) dateDb = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`
     }
-    const dueDate = new Date(dateDb); dueDate.setDate(dueDate.getDate() + 30)
+    const cust = customers.find(c => c.id === customerId)
+    const dueDateStr = calcDueDate(dateDb, cust?.payment_terms || null)
 
     // Duplicate check
     if (inv.invoice_number) {
       const { data: existing } = await supabase.from('b2b_invoices').select('id').eq('invoice_number', inv.invoice_number).maybeSingle()
-      if (existing) { if (!confirm(`חשבונית ${inv.invoice_number} כבר קיימת. לעדכן?`)) return; await supabase.from('b2b_invoices').update({ customer_id: customerId, invoice_date: dateDb, due_date: dueDate.toISOString().split('T')[0], total_before_vat: Number(inv.total_before_vat) || 0, total_with_vat: Number(inv.total_before_vat) * 1.17 || 0 }).eq('id', existing.id); setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p)); loadInvoices(); return }
+      if (existing) { if (!confirm(`חשבונית ${inv.invoice_number} כבר קיימת. לעדכן?`)) return; await supabase.from('b2b_invoices').update({ customer_id: customerId, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: Number(inv.total_before_vat) || 0, total_with_vat: Number(inv.total_before_vat) * 1.17 || 0 }).eq('id', existing.id); setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p)); loadInvoices(); return }
     }
 
     const branchId = inv.branch_id || null
     const amount = Number(inv.total_before_vat) || 0
 
-    await supabase.from('b2b_invoices').insert({ customer_id: customerId, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDate.toISOString().split('T')[0], total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', uploaded_by: appUser?.name })
+    await supabase.from('b2b_invoices').insert({ customer_id: customerId, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', uploaded_by: appUser?.name })
 
     // Record revenue: branch_revenue for branches, external_sales for factory
     if (branchId) {
@@ -238,10 +259,10 @@ export default function B2BCustomers({ onBack }: Props) {
     if (inv.invoice_date && inv.invoice_date.includes('/')) {
       const p = inv.invoice_date.split('/'); if (p.length === 3) dateDb = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`
     }
-    const dueDate = new Date(dateDb); dueDate.setDate(dueDate.getDate() + 30)
+    const dueDateStr = calcDueDate(dateDb, 'שוטף + 30') // New customer defaults to שוטף + 30
     const branchId = inv.branch_id || null
     const amount = Number(inv.total_before_vat) || 0
-    await supabase.from('b2b_invoices').insert({ customer_id: newCust.id, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDate.toISOString().split('T')[0], total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', uploaded_by: appUser?.name })
+    await supabase.from('b2b_invoices').insert({ customer_id: newCust.id, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', uploaded_by: appUser?.name })
     if (branchId) { await supabase.from('branch_revenue').insert({ branch_id: branchId, date: dateDb, source: 'credit_b2b', amount, doc_number: inv.invoice_number || null }) }
     else { await supabase.from('external_sales').insert({ customer_name: customerName, invoice_number: inv.invoice_number || null, invoice_date: dateDb, total_before_vat: amount, uploaded_by: appUser?.name }) }
     setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p)); loadInvoices()
@@ -321,6 +342,7 @@ export default function B2BCustomers({ onBack }: Props) {
                   <div><label style={S.label}>כתובת</label><input value={custForm.address} onChange={e => setCustForm(p => ({ ...p, address: e.target.value }))} style={S.input} /></div>
                   <div><label style={S.label}>סניף</label><select value={custForm.branch_id} onChange={e => setCustForm(p => ({ ...p, branch_id: Number(e.target.value) }))} style={S.input}><option value={0}>מפעל</option>{branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
                   <div><label style={S.label}>מסגרת אשראי</label><input type="number" value={custForm.credit_limit} onChange={e => setCustForm(p => ({ ...p, credit_limit: e.target.value }))} style={S.input} /></div>
+                  <div><label style={S.label}>תנאי תשלום</label><select value={custForm.payment_terms} onChange={e => setCustForm(p => ({ ...p, payment_terms: e.target.value }))} style={S.input}>{PAYMENT_TERMS_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
                   <div style={{ gridColumn: 'span 2' }}><label style={S.label}>הערות</label><input value={custForm.notes} onChange={e => setCustForm(p => ({ ...p, notes: e.target.value }))} style={S.input} /></div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -331,18 +353,19 @@ export default function B2BCustomers({ onBack }: Props) {
             )}
             {custLoading ? <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>טוען...</div> : customers.length === 0 ? <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>אין לקוחות</div> : (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr><th style={S.th}>שם</th><th style={S.th}>ח.פ</th><th style={S.th}>טלפון</th><th style={S.th}>סניף</th><th style={S.th}>מסגרת</th><th style={S.th}>יתרה פתוחה</th><th style={{ ...S.th, width: 70 }}></th></tr></thead>
+                <thead><tr><th style={S.th}>שם</th><th style={S.th}>ח.פ</th><th style={S.th}>טלפון</th><th style={S.th}>סניף</th><th style={S.th}>תנאי תשלום</th><th style={S.th}>מסגרת</th><th style={S.th}>יתרה פתוחה</th><th style={{ ...S.th, width: 70 }}></th></tr></thead>
                 <tbody>{customers.map((c, i) => (
                   <tr key={c.id} style={{ background: i % 2 === 0 ? 'white' : '#fafbfc', cursor: 'pointer' }} onClick={() => openCustDetail(c)}>
                     <td style={{ ...S.td, fontWeight: 600 }}>{c.name}</td>
                     <td style={{ ...S.td, color: '#94a3b8' }}>{c.company_number || '—'}</td>
                     <td style={S.td}>{c.phone || '—'}</td>
                     <td style={S.td}>{branchName(c.branch_id)}</td>
+                    <td style={{ ...S.td, fontSize: 12 }}>{c.payment_terms || 'שוטף + 30'}</td>
                     <td style={S.td}>{c.credit_limit ? fmtM(c.credit_limit) : '—'}</td>
                     <td style={{ ...S.td, fontWeight: 600, color: (c.open_balance || 0) > 0 ? '#dc2626' : '#16a34a' }}>{(c.open_balance || 0) > 0 ? fmtM(c.open_balance!) : '—'}</td>
                     <td style={S.td} onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 3 }}>
-                        <button onClick={() => { setEditCustId(c.id); setCustForm({ name: c.name, company_number: c.company_number || '', phone: c.phone || '', address: c.address || '', branch_id: c.branch_id || 0, credit_limit: String(c.credit_limit || ''), notes: c.notes || '' }); setShowAddCust(true) }} style={{ ...S.btn, padding: '3px 6px', fontSize: 11, background: '#f1f5f9', color: '#6366f1' }}><Pencil size={12} /></button>
+                        <button onClick={() => { setEditCustId(c.id); setCustForm({ name: c.name, company_number: c.company_number || '', phone: c.phone || '', address: c.address || '', branch_id: c.branch_id || 0, credit_limit: String(c.credit_limit || ''), payment_terms: c.payment_terms || 'שוטף + 30', notes: c.notes || '' }); setShowAddCust(true) }} style={{ ...S.btn, padding: '3px 6px', fontSize: 11, background: '#f1f5f9', color: '#6366f1' }}><Pencil size={12} /></button>
                         <button onClick={() => deleteCust(c.id)} style={{ ...S.btn, padding: '3px 6px', fontSize: 11, background: '#fef2f2', color: '#ef4444' }}><Trash2 size={12} /></button>
                       </div>
                     </td>
