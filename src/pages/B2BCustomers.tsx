@@ -38,7 +38,8 @@ const getCurrentMonth = () => { const d = new Date(); return `${d.getFullYear()}
 export default function B2BCustomers({ onBack }: Props) {
   const { appUser } = useAppUser()
   const { branches } = useBranches()
-  const [tab, setTab] = useState<'customers' | 'invoices' | 'reports'>('customers')
+  const [tab, setTab] = useState<'customers' | 'invoices' | 'reports'>('invoices')
+  const [newCustConfirm, setNewCustConfirm] = useState<{ idx: number; name: string } | null>(null)
 
   // ═══ CUSTOMERS STATE ═══
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -93,7 +94,7 @@ export default function B2BCustomers({ onBack }: Props) {
     setCustLoading(false)
   }, [])
 
-  useEffect(() => { if (tab === 'customers' && !viewCust) loadCustomers() }, [tab, loadCustomers, viewCust])
+  useEffect(() => { loadCustomers() }, [loadCustomers])
 
   async function saveCust() {
     const payload = { name: custForm.name, company_number: custForm.company_number || null, phone: custForm.phone || null, address: custForm.address || null, branch_id: custForm.branch_id || null, credit_limit: parseFloat(custForm.credit_limit) || 0, notes: custForm.notes || null }
@@ -190,13 +191,11 @@ export default function B2BCustomers({ onBack }: Props) {
     const inv = parsedPdfs[idx]
     let customerId = inv.customer_id
 
-    // If no customer selected (0 = "לקוח חדש"), create from extracted name
-    if (!customerId && inv.customer_name) {
-      const { data: newCust } = await supabase.from('b2b_customers').insert({ name: inv.customer_name }).select().single()
-      if (newCust) { customerId = newCust.id; loadCustomers() }
-      else { alert('שגיאה ביצירת לקוח'); return }
+    // If no customer selected — show confirmation modal
+    if (!customerId) {
+      if (inv.customer_name) { setNewCustConfirm({ idx, name: inv.customer_name }); return }
+      else { alert('יש לבחור לקוח או להזין שם'); return }
     }
-    if (!customerId) { alert('יש לבחור לקוח או להזין שם'); return }
 
     // Re-parse date from DD/MM/YYYY if changed
     let dateDb = inv.invoice_date_db
@@ -224,6 +223,27 @@ export default function B2BCustomers({ onBack }: Props) {
       await supabase.from('external_sales').insert({ customer_name: inv.customer_name || '', invoice_number: inv.invoice_number || null, invoice_date: dateDb, total_before_vat: amount, uploaded_by: appUser?.name })
     }
 
+    setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p)); loadInvoices()
+  }
+
+  async function confirmCreateCustomerAndSave(idx: number, customerName: string) {
+    const { data: newCust } = await supabase.from('b2b_customers').insert({ name: customerName }).select().single()
+    if (!newCust) { alert('שגיאה ביצירת לקוח'); return }
+    setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, customer_id: newCust.id } : p))
+    setNewCustConfirm(null)
+    loadCustomers()
+    // Now save with the new customer ID
+    const inv = parsedPdfs[idx]
+    let dateDb = inv.invoice_date_db
+    if (inv.invoice_date && inv.invoice_date.includes('/')) {
+      const p = inv.invoice_date.split('/'); if (p.length === 3) dateDb = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`
+    }
+    const dueDate = new Date(dateDb); dueDate.setDate(dueDate.getDate() + 30)
+    const branchId = inv.branch_id || null
+    const amount = Number(inv.total_before_vat) || 0
+    await supabase.from('b2b_invoices').insert({ customer_id: newCust.id, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDate.toISOString().split('T')[0], total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', uploaded_by: appUser?.name })
+    if (branchId) { await supabase.from('branch_revenue').insert({ branch_id: branchId, date: dateDb, source: 'credit_b2b', amount, doc_number: inv.invoice_number || null }) }
+    else { await supabase.from('external_sales').insert({ customer_name: customerName, invoice_number: inv.invoice_number || null, invoice_date: dateDb, total_before_vat: amount, uploaded_by: appUser?.name }) }
     setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p)); loadInvoices()
   }
 
@@ -280,9 +300,9 @@ export default function B2BCustomers({ onBack }: Props) {
       <PageHeader title="לקוחות הקפה (B2B)" subtitle="חשבוניות · תשלומים · מעקב חובות" onBack={onBack} />
       <div style={S.container}>
         <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e2e8f0', marginBottom: 20 }}>
-          <button style={S.tab(tab === 'customers')} onClick={() => { setTab('customers'); setViewCust(null) }}><Users size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> לקוחות</button>
           <button style={S.tab(tab === 'invoices')} onClick={() => setTab('invoices')}><Receipt size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> חשבוניות</button>
           <button style={S.tab(tab === 'reports')} onClick={() => setTab('reports')}><BarChart3 size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> דוחות וחובות</button>
+          <button style={S.tab(tab === 'customers')} onClick={() => { setTab('customers'); setViewCust(null) }}><Users size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> לקוחות</button>
         </div>
 
         {/* ═══ CUSTOMERS TAB ═══ */}
@@ -570,6 +590,21 @@ export default function B2BCustomers({ onBack }: Props) {
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => deleteInvoice(deleteInv)} style={{ ...S.btn, background: '#ef4444', color: 'white' }}>מחק</button>
               <button onClick={() => setDeleteInv(null)} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* New customer confirmation */}
+      {newCustConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setNewCustConfirm(null)}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 400, margin: '0 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>לקוח חדש</h3>
+            <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 20px', lineHeight: 1.6 }}>
+              הלקוח <strong style={{ color: '#0f172a' }}>"{newCustConfirm.name}"</strong> לא קיים במערכת. האם ליצור אותו?
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => confirmCreateCustomerAndSave(newCustConfirm.idx, newCustConfirm.name)} style={{ ...S.btn, background: '#0f172a', color: 'white' }}>צור ושמור</button>
+              <button onClick={() => setNewCustConfirm(null)} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>ביטול</button>
             </div>
           </div>
         </div>
