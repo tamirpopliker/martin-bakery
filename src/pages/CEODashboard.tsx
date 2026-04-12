@@ -151,6 +151,7 @@ export default function CEODashboard({ onBack }: Props) {
 
   async function fetchData() {
     setLoading(true)
+    try {
 
     const oh = await getOverheadPct()
     setOverheadPct(oh)
@@ -356,10 +357,14 @@ export default function CEODashboard({ onBack }: Props) {
       setPriceAlerts(alerts)
     }
 
-    setLoading(false)
+    } catch (err) {
+      console.error('[CEODashboard] fetchData error:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { fetchData() }, [from, to])
+  useEffect(() => { if (BRANCHES.length > 0) fetchData() }, [from, to, BRANCHES.length])
 
   const totalRevenue    = branches.reduce((s, b) => s + b.revenue, 0)
   const totalExpenses   = branches.reduce((s, b) => s + b.expenses, 0)
