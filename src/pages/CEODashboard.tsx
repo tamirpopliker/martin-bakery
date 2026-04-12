@@ -247,7 +247,6 @@ export default function CEODashboard({ onBack }: Props) {
       { source: 'אתר', emoji: '🌐', factory: 0, byBranch: {} },
       { source: 'B2B הקפה', emoji: '🤝', factory: 0, byBranch: {} },
       { source: 'מכירות פנימיות', emoji: '🏭', factory: 0, byBranch: {} },
-      { source: 'מכירות חיצוניות', emoji: '📦', factory: 0, byBranch: {} },
     ]
     // Branch revenue by source
     for (let bi = 0; bi < BRANCHES.length; bi++) {
@@ -269,8 +268,9 @@ export default function CEODashboard({ onBack }: Props) {
     // Factory internal + external sales
     const { data: intSalesData } = await supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', from).lt('order_date', to)
     revBd[3].factory = (intSalesData || []).reduce((s: number, r: any) => s + Number(r.total_amount), 0)
+    // External sales → merged into B2B הקפה (index 2)
     const { data: extSalesData } = await supabase.from('external_sales').select('total_before_vat').gte('invoice_date', from).lt('invoice_date', to)
-    revBd[4].factory = (extSalesData || []).reduce((s: number, r: any) => s + Number(r.total_before_vat), 0)
+    revBd[2].factory += (extSalesData || []).reduce((s: number, r: any) => s + Number(r.total_before_vat), 0)
     setRevBreakdown(revBd)
 
     // Fetch production report costs for the period
