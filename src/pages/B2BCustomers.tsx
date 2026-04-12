@@ -187,9 +187,32 @@ export default function B2BCustomers({ onBack }: Props) {
   }
 
   async function saveParsedInvoice(idx: number) {
-    const inv = parsedPdfs[idx]; if (!inv.customer_id) { alert('יש לבחור לקוח'); return }
-    const dueDate = new Date(inv.invoice_date_db); dueDate.setDate(dueDate.getDate() + 30)
-    await supabase.from('b2b_invoices').insert({ customer_id: inv.customer_id, invoice_number: inv.invoice_number || null, invoice_date: inv.invoice_date_db, due_date: dueDate.toISOString().split('T')[0], total_before_vat: Number(inv.total_before_vat) || 0, total_with_vat: Number(inv.total_before_vat) * 1.17 || 0, branch_id: null, status: 'open', uploaded_by: appUser?.name })
+    const inv = parsedPdfs[idx]
+    let customerId = inv.customer_id
+
+    // If no customer selected (0 = "לקוח חדש"), create from extracted name
+    if (!customerId && inv.customer_name) {
+      const { data: newCust } = await supabase.from('b2b_customers').insert({ name: inv.customer_name }).select().single()
+      if (newCust) { customerId = newCust.id; loadCustomers() }
+      else { alert('שגיאה ביצירת לקוח'); return }
+    }
+    if (!customerId) { alert('יש לבחור לקוח או להזין שם'); return }
+
+    // Re-parse date from DD/MM/YYYY if changed
+    let dateDb = inv.invoice_date_db
+    if (inv.invoice_date && inv.invoice_date.includes('/')) {
+      const p = inv.invoice_date.split('/')
+      if (p.length === 3) dateDb = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`
+    }
+    const dueDate = new Date(dateDb); dueDate.setDate(dueDate.getDate() + 30)
+
+    // Duplicate check
+    if (inv.invoice_number) {
+      const { data: existing } = await supabase.from('b2b_invoices').select('id').eq('invoice_number', inv.invoice_number).maybeSingle()
+      if (existing) { if (!confirm(`חשבונית ${inv.invoice_number} כבר קיימת. לעדכן?`)) return; await supabase.from('b2b_invoices').update({ customer_id: customerId, invoice_date: dateDb, due_date: dueDate.toISOString().split('T')[0], total_before_vat: Number(inv.total_before_vat) || 0, total_with_vat: Number(inv.total_before_vat) * 1.17 || 0 }).eq('id', existing.id); setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p)); loadInvoices(); return }
+    }
+
+    await supabase.from('b2b_invoices').insert({ customer_id: customerId, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDate.toISOString().split('T')[0], total_before_vat: Number(inv.total_before_vat) || 0, total_with_vat: Number(inv.total_before_vat) * 1.17 || 0, branch_id: null, status: 'open', uploaded_by: appUser?.name })
     setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p)); loadInvoices()
   }
 
@@ -362,23 +385,60 @@ export default function B2BCustomers({ onBack }: Props) {
             {pdfParsing && <div style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>מעבד חשבוניות... ⏳</div>}
             {parsedPdfs.length > 0 && !pdfParsing && (
               <div style={{ background: '#f8fafc', borderRadius: 10, padding: 16, marginBottom: 16, border: '1px solid #f1f5f9' }}>
-                <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700 }}>חשבוניות שנקלטו מ-PDF</h4>
-                {parsedPdfs.map((p, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 11, color: '#94a3b8', width: 100, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.fileName}</span>
-                    {p.status === 'error' ? <span style={{ color: '#dc2626', fontSize: 12 }}>❌ {p.error}</span> : p.status === 'saved' ? <span style={{ color: '#16a34a', fontSize: 12, fontWeight: 600 }}>✅ נשמר</span> : (
-                      <>
-                        <select value={p.customer_id} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, customer_id: Number(e.target.value) } : pp))} style={{ ...S.input, width: 150, padding: '4px 8px', fontSize: 12 }}>
-                          <option value={0}>בחר לקוח...</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                        <span style={{ fontSize: 12 }}>{p.invoice_number || '—'}</span>
-                        <span style={{ fontSize: 12 }}>{fmtM(p.total_before_vat || 0)}</span>
-                        <button onClick={() => saveParsedInvoice(i)} style={{ ...S.btn, padding: '3px 10px', fontSize: 11, background: '#0f172a', color: 'white' }}>שמור</button>
-                      </>
-                    )}
-                  </div>
-                ))}
-                <button onClick={() => setParsedPdfs([])} style={{ ...S.btn, background: '#f1f5f9', color: '#64748b', padding: '6px 14px', fontSize: 12, marginTop: 8 }}>סגור</button>
+                <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700 }}>תצוגה מקדימה — {parsedPdfs.length} חשבוניות</h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr>
+                    <th style={S.th}>קובץ</th>
+                    <th style={S.th}>שם לקוח</th>
+                    <th style={S.th}>שיוך ללקוח</th>
+                    <th style={S.th}>מס' חשבונית</th>
+                    <th style={S.th}>תאריך</th>
+                    <th style={{ ...S.th, width: 110 }}>סה"כ לפני מע"מ</th>
+                    <th style={{ ...S.th, width: 80 }}></th>
+                  </tr></thead>
+                  <tbody>
+                    {parsedPdfs.map((p, i) => (
+                      <tr key={i} style={{ background: p.status === 'error' ? '#fef2f2' : p.status === 'saved' ? '#f0fdf4' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
+                        <td style={{ ...S.td, fontSize: 11, color: '#94a3b8', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.fileName}</td>
+                        {p.status === 'error' ? (
+                          <td colSpan={5} style={{ ...S.td, color: '#dc2626', fontSize: 12 }}>❌ {p.error}</td>
+                        ) : p.status === 'saved' ? (
+                          <td colSpan={5} style={{ ...S.td, color: '#16a34a', fontSize: 13, fontWeight: 600 }}>✅ נשמר בהצלחה</td>
+                        ) : (<>
+                          <td style={{ ...S.td, fontWeight: 600, color: '#0f172a' }}>
+                            <input type="text" value={p.customer_name || ''} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, customer_name: e.target.value } : pp))}
+                              style={{ ...S.input, padding: '4px 8px', fontSize: 12, fontWeight: 600 }} />
+                          </td>
+                          <td style={S.td}>
+                            <select value={p.customer_id} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, customer_id: Number(e.target.value) } : pp))}
+                              style={{ ...S.input, padding: '4px 8px', fontSize: 12, width: 140 }}>
+                              <option value={0}>לקוח חדש</option>
+                              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                          </td>
+                          <td style={S.td}>
+                            <input type="text" value={p.invoice_number || ''} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, invoice_number: e.target.value } : pp))}
+                              style={{ ...S.input, padding: '4px 8px', fontSize: 12, width: 100 }} />
+                          </td>
+                          <td style={S.td}>
+                            <input type="text" value={p.invoice_date || ''} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, invoice_date: e.target.value } : pp))}
+                              placeholder="DD/MM/YYYY" style={{ ...S.input, padding: '4px 8px', fontSize: 12, width: 100 }} />
+                          </td>
+                          <td style={{ ...S.td, fontWeight: 600 }}>
+                            <input type="number" step="0.01" value={p.total_before_vat || ''} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, total_before_vat: Number(e.target.value) } : pp))}
+                              style={{ ...S.input, padding: '4px 8px', fontSize: 12, width: 90 }} />
+                          </td>
+                        </>)}
+                        <td style={S.td}>
+                          {p.status === 'parsed' && (
+                            <button onClick={() => saveParsedInvoice(i)} style={{ ...S.btn, padding: '4px 12px', fontSize: 12, background: '#0f172a', color: 'white' }}>שמור</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <button onClick={() => setParsedPdfs([])} style={{ ...S.btn, background: '#f1f5f9', color: '#64748b', padding: '6px 14px', fontSize: 12, marginTop: 12 }}>סגור</button>
               </div>
             )}
 
