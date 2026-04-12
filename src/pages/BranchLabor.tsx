@@ -496,6 +496,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
       // Auto-fill hourly_rate + retention_bonus from branch_employees
       // Also filter out global employees (managers with fixed monthly salary)
+      let skippedManagers: string[] = []
       if (rows.length > 0) {
         const { data: emps } = await supabase.from('branch_employees').select('*')
           .eq('branch_id', branchId).eq('active', true)
@@ -523,7 +524,6 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
 
         // Also skip managers (is_manager flag)
         const managerEmpNames = emps?.filter((e: any) => e.is_manager).map((e: any) => e.name) || []
-        const skippedManagers: string[] = []
         rows = rows.filter(row => {
           const isManager = managerEmpNames.some((mn: string) => row.name.includes(mn) || mn.includes(row.name))
           if (isManager) {
