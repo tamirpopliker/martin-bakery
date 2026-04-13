@@ -57,7 +57,7 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
   const [schedLoading, setSchedLoading] = useState(false)
   const [showAddSched, setShowAddSched] = useState(false)
   const [editSchedId, setEditSchedId] = useState<number | null>(null)
-  const [schedForm, setSchedForm] = useState({ title: '', body: '', type: 'info', recipient_type: 'all', recipient_id: 0, recipient_role: '', schedule_type: 'weekly', days_of_week: [] as number[], send_time: '07:00', is_active: true })
+  const [schedForm, setSchedForm] = useState({ title: '', body: '', type: 'info', recipient_type: 'all', recipient_id: 0, recipient_role: '', schedule_type: 'weekly', days_of_week: [] as number[], send_time: '07:00', is_active: true, specific_date: '', day_of_month: 28, days_before_holiday: 1 })
   const [schedLogView, setSchedLogView] = useState<number | null>(null)
   const [schedLogs, setSchedLogs] = useState<any[]>([])
 
@@ -70,7 +70,23 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
   ]
 
   const DAY_NAMES = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש']
-  const SCHED_LABELS: Record<string, string> = { once: 'חד פעמי', weekly: 'שבועי', biweekly: 'דו-שבועי', monthly: 'חודשי' }
+  const SCHED_LABELS: Record<string, string> = { once: 'חד פעמי', weekly: 'שבועי', biweekly: 'דו-שבועי', monthly: 'חודשי', before_holiday: 'לפני חג', birthday: 'יום הולדת' }
+
+  function scheduleSummary(): string {
+    const t = schedForm.send_time || '07:00'
+    if (schedForm.schedule_type === 'once') {
+      return schedForm.specific_date ? `תישלח ב-${schedForm.specific_date.split('-').reverse().join('/')} בשעה ${t}` : `תישלח פעם אחת בשעה ${t}`
+    }
+    if (schedForm.schedule_type === 'weekly' || schedForm.schedule_type === 'biweekly') {
+      const days = schedForm.days_of_week.sort().map(d => DAY_NAMES[d]).join(', ')
+      const prefix = schedForm.schedule_type === 'biweekly' ? 'כל שבועיים ב' : 'כל '
+      return days ? `תישלח ${prefix}${days} בשעה ${t}` : 'בחר ימים'
+    }
+    if (schedForm.schedule_type === 'monthly') return `תישלח ב-${schedForm.day_of_month} לכל חודש בשעה ${t}`
+    if (schedForm.schedule_type === 'before_holiday') return `תישלח ${schedForm.days_before_holiday} ימים לפני כל חג בשעה ${t}`
+    if (schedForm.schedule_type === 'birthday') return `תישלח ביום הולדת כל עובד בשעה ${t}`
+    return ''
+  }
 
   // Load employees for dropdown
   useEffect(() => {
@@ -230,7 +246,7 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
     }
     if (editSchedId) { await supabase.from('scheduled_messages').update(payload).eq('id', editSchedId); setEditSchedId(null) }
     else { await supabase.from('scheduled_messages').insert(payload) }
-    setShowAddSched(false); setSchedForm({ title: '', body: '', type: 'info', recipient_type: 'all', recipient_id: 0, recipient_role: '', schedule_type: 'weekly', days_of_week: [], send_time: '07:00', is_active: true }); loadScheduled()
+    setShowAddSched(false); setSchedForm({ title: '', body: '', type: 'info', recipient_type: 'all', recipient_id: 0, recipient_role: '', schedule_type: 'weekly', days_of_week: [], send_time: '07:00', is_active: true, specific_date: '', day_of_month: 28, days_before_holiday: 1 }); loadScheduled()
   }
 
   async function toggleSchedActive(id: number, current: boolean) {
@@ -251,10 +267,13 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
   }
 
   function describeSchedule(s: any): string {
-    if (s.schedule_type === 'once') return `חד פעמי ב-${s.send_time}`
-    if (s.schedule_type === 'monthly') return `ב-28 לכל חודש ב-${s.send_time}`
+    const t = s.send_time || '07:00'
+    if (s.schedule_type === 'once') return `חד פעמי ב-${t}`
+    if (s.schedule_type === 'monthly') return `ב-${s.day_of_month || 28} לכל חודש ב-${t}`
+    if (s.schedule_type === 'before_holiday') return `${s.days_before_holiday || 1} ימים לפני חג ב-${t}`
+    if (s.schedule_type === 'birthday') return `ביום הולדת עובד ב-${t}`
     const days = (s.days_of_week || []).map((d: number) => DAY_NAMES[d]).join(', ')
-    return `כל ${days || 'יום'} ב-${s.send_time}${s.schedule_type === 'biweekly' ? ' (דו-שבועי)' : ''}`
+    return `כל ${days || 'יום'} ב-${t}${s.schedule_type === 'biweekly' ? ' (דו-שבועי)' : ''}`
   }
 
   function getRecipientLabel(msg: Message): string | null {
@@ -516,7 +535,7 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>הודעות קבועות</h3>
-              <button onClick={() => { setShowAddSched(true); setEditSchedId(null); setSchedForm({ title: '', body: '', type: 'info', recipient_type: 'all', recipient_id: 0, recipient_role: '', schedule_type: 'weekly', days_of_week: [], send_time: '07:00', is_active: true }) }}
+              <button onClick={() => { setShowAddSched(true); setEditSchedId(null); setSchedForm({ title: '', body: '', type: 'info', recipient_type: 'all', recipient_id: 0, recipient_role: '', schedule_type: 'weekly', days_of_week: [], send_time: '07:00', is_active: true, specific_date: '', day_of_month: 28, days_before_holiday: 1 }) }}
                 style={{ ...S.btn, background: '#0f172a', color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Plus size={14} /> הודעה קבועה
               </button>
@@ -553,12 +572,14 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
                       </div>
                     </div>
                     <div>
-                      <label style={S.label}>תזמון</label>
+                      <label style={S.label}>תדירות</label>
                       <select value={schedForm.schedule_type} onChange={e => setSchedForm(p => ({ ...p, schedule_type: e.target.value }))} style={S.input}>
                         <option value="once">חד פעמי</option>
                         <option value="weekly">שבועי</option>
                         <option value="biweekly">דו-שבועי</option>
                         <option value="monthly">חודשי</option>
+                        <option value="before_holiday">לפני חג</option>
+                        <option value="birthday">יום הולדת עובד</option>
                       </select>
                     </div>
                     <div>
@@ -567,9 +588,16 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
                     </div>
                   </div>
 
+                  {/* Dynamic schedule fields */}
+                  {schedForm.schedule_type === 'once' && (
+                    <div><label style={S.label}>תאריך</label>
+                      <input type="date" value={schedForm.specific_date} onChange={e => setSchedForm(p => ({ ...p, specific_date: e.target.value }))} style={{ ...S.input, width: 180 }} />
+                    </div>
+                  )}
+
                   {(schedForm.schedule_type === 'weekly' || schedForm.schedule_type === 'biweekly') && (
                     <div>
-                      <label style={S.label}>ימים</label>
+                      <label style={S.label}>ימים בשבוע</label>
                       <div style={{ display: 'flex', gap: 4 }}>
                         {DAY_NAMES.map((d, i) => (
                           <button key={i} onClick={() => setSchedForm(p => ({ ...p, days_of_week: p.days_of_week.includes(i) ? p.days_of_week.filter(x => x !== i) : [...p.days_of_week, i] }))}
@@ -578,6 +606,29 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
                           </button>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {schedForm.schedule_type === 'monthly' && (
+                    <div><label style={S.label}>תאריך בחודש</label>
+                      <select value={schedForm.day_of_month} onChange={e => setSchedForm(p => ({ ...p, day_of_month: Number(e.target.value) }))} style={{ ...S.input, width: 100 }}>
+                        {Array.from({ length: 28 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  {schedForm.schedule_type === 'before_holiday' && (
+                    <div><label style={S.label}>כמה ימים לפני החג</label>
+                      <select value={schedForm.days_before_holiday} onChange={e => setSchedForm(p => ({ ...p, days_before_holiday: Number(e.target.value) }))} style={{ ...S.input, width: 100 }}>
+                        <option value={1}>יום אחד</option><option value={2}>יומיים</option><option value={3}>שלושה ימים</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Schedule summary */}
+                  {scheduleSummary() && (
+                    <div style={{ background: '#eff6ff', borderRadius: 8, padding: '8px 14px', fontSize: 13, color: '#1d4ed8', fontWeight: 500 }}>
+                      📅 {scheduleSummary()}
                     </div>
                   )}
 
@@ -657,7 +708,7 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
                   {s.next_send_at && <div style={{ fontSize: 12, color: '#94a3b8' }}>שליחה הבאה: {new Date(s.next_send_at).toLocaleDateString('he-IL')} {s.send_time}</div>}
                   <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
                     <button onClick={() => viewSchedLog(s.id)} style={{ ...S.btn, padding: '4px 10px', fontSize: 11, background: '#f1f5f9', color: '#374151' }}>היסטוריה</button>
-                    <button onClick={() => { setEditSchedId(s.id); setSchedForm({ title: s.title, body: s.body || '', type: s.type, recipient_type: s.recipient_type || 'all', recipient_id: s.recipient_id || 0, recipient_role: s.recipient_role || '', schedule_type: s.schedule_type, days_of_week: s.days_of_week || [], send_time: s.send_time || '07:00', is_active: s.is_active }); setShowAddSched(true) }}
+                    <button onClick={() => { setEditSchedId(s.id); setSchedForm({ title: s.title, body: s.body || '', type: s.type, recipient_type: s.recipient_type || 'all', recipient_id: s.recipient_id || 0, recipient_role: s.recipient_role || '', schedule_type: s.schedule_type, days_of_week: s.days_of_week || [], send_time: s.send_time || '07:00', is_active: s.is_active, specific_date: '', day_of_month: 28, days_before_holiday: 1 }); setShowAddSched(true) }}
                       style={{ ...S.btn, padding: '4px 8px', fontSize: 11, background: '#f1f5f9', color: '#6366f1' }}><Pencil size={12} /></button>
                     <button onClick={() => deleteSched(s.id)} style={{ ...S.btn, padding: '4px 8px', fontSize: 11, background: '#fef2f2', color: '#ef4444' }}><Trash2 size={12} /></button>
                   </div>
