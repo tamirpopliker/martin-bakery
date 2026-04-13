@@ -200,7 +200,7 @@ export default function B2BCustomers({ onBack }: Props) {
           const inv = data.data
           const matchCust = customers.find(c => c.name.includes(inv.customer_name) || inv.customer_name?.includes(c.name))
           const dateStr = inv.invoice_date ? (() => { const p = inv.invoice_date.split('/'); return p.length === 3 ? `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}` : inv.invoice_date })() : new Date().toISOString().split('T')[0]
-          results.push({ ...inv, fileName: file.name, customer_id: matchCust?.id || 0, branch_id: matchCust?.branch_id || 0, invoice_date_db: dateStr, status: 'parsed' })
+          results.push({ ...inv, fileName: file.name, customer_id: matchCust?.id || 0, branch_id: matchCust?.branch_id || 0, invoice_date_db: dateStr, status: 'parsed', selected: true })
         } else { results.push({ fileName: file.name, status: 'error', error: data?.error || 'שגיאה' }) }
       } catch { results.push({ fileName: file.name, status: 'error', error: 'שגיאה בקריאת הקובץ' }) }
     }
@@ -356,13 +356,28 @@ export default function B2BCustomers({ onBack }: Props) {
             )}
 
             {pdfParsing && <div style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>מעבד חשבוניות... ⏳</div>}
-            {parsedPdfs.length > 0 && !pdfParsing && (
+            {parsedPdfs.length > 0 && !pdfParsing && (() => {
+              const activePdfs = parsedPdfs.filter(p => p.status === 'parsed')
+              const selectedCount = activePdfs.filter(p => p.selected).length
+              const allSelected = activePdfs.length > 0 && selectedCount === activePdfs.length
+              const someSelected = selectedCount > 0 && selectedCount < activePdfs.length
+              return (
               <div style={{ background: '#f8fafc', borderRadius: 10, padding: 16, marginBottom: 16, border: '1px solid #f1f5f9' }}>
                 <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700 }}>תצוגה מקדימה — {parsedPdfs.length} חשבוניות</h4>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead><tr><th style={S.th}>קובץ</th><th style={S.th}>שם לקוח</th><th style={S.th}>שיוך</th><th style={S.th}>חשבונית</th><th style={S.th}>תאריך</th><th style={S.th}>סכום</th><th style={S.th}>סניף</th><th style={{ ...S.th, width: 70 }}></th></tr></thead>
+                  <thead><tr>
+                    <th style={{ ...S.th, width: 32 }}>
+                      <input type="checkbox" checked={allSelected} ref={el => { if (el) el.indeterminate = someSelected }}
+                        onChange={() => setParsedPdfs(prev => prev.map(p => p.status === 'parsed' ? { ...p, selected: !allSelected } : p))}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }} />
+                    </th>
+                    <th style={S.th}>קובץ</th><th style={S.th}>שם לקוח</th><th style={S.th}>שיוך</th><th style={S.th}>חשבונית</th><th style={S.th}>תאריך</th><th style={S.th}>סכום</th><th style={S.th}>סניף</th><th style={{ ...S.th, width: 36 }}></th>
+                  </tr></thead>
                   <tbody>{parsedPdfs.map((p, i) => (
-                    <tr key={i} style={{ background: p.status === 'error' ? '#fef2f2' : p.status === 'saved' ? '#f0fdf4' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
+                    <tr key={i} style={{ background: p.status === 'error' ? '#fef2f2' : p.status === 'saved' ? '#f0fdf4' : !p.selected ? '#f8fafc' : i % 2 === 0 ? 'white' : '#fafbfc', opacity: p.status === 'parsed' && !p.selected ? 0.5 : 1, textDecoration: p.status === 'parsed' && !p.selected ? 'line-through' : 'none' }}>
+                      <td style={S.td}>
+                        {p.status === 'parsed' && <input type="checkbox" checked={p.selected ?? true} onChange={() => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, selected: !pp.selected } : pp))} style={{ cursor: 'pointer', width: 16, height: 16 }} />}
+                      </td>
                       <td style={{ ...S.td, fontSize: 11, color: '#94a3b8', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.fileName}</td>
                       {p.status === 'error' ? <td colSpan={6} style={{ ...S.td, color: '#dc2626', fontSize: 12 }}>❌ {p.error}</td>
                       : p.status === 'saved' ? <td colSpan={6} style={{ ...S.td, color: '#16a34a', fontWeight: 600 }}>✅ נשמר</td>
@@ -374,13 +389,24 @@ export default function B2BCustomers({ onBack }: Props) {
                         <td style={{ ...S.td, fontWeight: 600 }}><input type="number" step="0.01" value={p.total_before_vat || ''} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, total_before_vat: Number(e.target.value) } : pp))} style={{ ...S.input, padding: '4px 8px', fontSize: 12, width: 80 }} /></td>
                         <td style={S.td}><select value={p.branch_id ?? 0} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, branch_id: Number(e.target.value) } : pp))} style={{ ...S.input, padding: '4px 8px', fontSize: 12 }}><option value={0}>מפעל</option>{branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></td>
                       </>)}
-                      <td style={S.td}>{p.status === 'parsed' && <button onClick={() => saveParsedInvoice(i)} style={{ ...S.btn, padding: '4px 12px', fontSize: 12, background: '#0f172a', color: 'white' }}>שמור</button>}</td>
+                      <td style={S.td}>{p.status === 'parsed' && <button onClick={() => setParsedPdfs(prev => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}><Trash2 size={13} color="#94a3b8" /></button>}</td>
                     </tr>
                   ))}</tbody>
                 </table>
-                <button onClick={() => setParsedPdfs([])} style={{ ...S.btn, background: '#f1f5f9', color: '#64748b', padding: '6px 14px', fontSize: 12, marginTop: 8 }}>סגור</button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
+                  {selectedCount > 0 ? (
+                    <button onClick={async () => { for (let i = 0; i < parsedPdfs.length; i++) { if (parsedPdfs[i].selected && parsedPdfs[i].status === 'parsed') await saveParsedInvoice(i) } }}
+                      style={{ ...S.btn, background: '#6366f1', color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <CheckCircle size={14} /> שמור {selectedCount} חשבוניות נבחרות
+                    </button>
+                  ) : (
+                    <button disabled style={{ ...S.btn, background: '#e2e8f0', color: '#94a3b8', cursor: 'not-allowed' }}>בחר לפחות חשבונית אחת</button>
+                  )}
+                  <button onClick={() => setParsedPdfs([])} style={{ ...S.btn, background: '#f1f5f9', color: '#64748b', padding: '6px 14px', fontSize: 12 }}>סגור</button>
+                </div>
               </div>
-            )}
+              )
+            })()}
 
             {invLoading ? <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>טוען...</div> : filteredInv.length === 0 ? <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>אין חשבוניות</div> : (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -396,7 +422,7 @@ export default function B2BCustomers({ onBack }: Props) {
                     <td style={S.td}><span style={{ background: st.bg, color: st.color, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{st.label}</span></td>
                     <td style={S.td}>
                       <div style={{ display: 'flex', gap: 3 }}>
-                        {inv.status !== 'paid' && <button onClick={() => { setPaymentInv({ ...inv, paid_amount: inv.paid_amount || 0 }); setPayForm({ amount: String(remaining.toFixed(2)), payment_date: new Date().toISOString().split('T')[0], payment_method: 'העברה בנקאית', notes: '' }) }} style={{ ...S.btn, padding: '3px 8px', fontSize: 10, background: '#f0fdf4', color: '#16a34a' }}>💰 תשלום</button>}
+                        {inv.status !== 'paid' && <button onClick={() => { setPaymentInv({ ...inv, paid_amount: inv.paid_amount || 0 }); setPayForm({ amount: String(remaining.toFixed(2)), payment_date: new Date().toISOString().split('T')[0], payment_method: 'העברה בנקאית', receipt_number: '', notes: '' }) }} style={{ ...S.btn, padding: '3px 8px', fontSize: 10, background: '#f0fdf4', color: '#16a34a' }}>💰 תשלום</button>}
                         <button onClick={() => setDeleteInv(inv)} style={{ ...S.btn, padding: '3px 6px', fontSize: 11, background: '#fef2f2', color: '#ef4444' }}><Trash2 size={12} /></button>
                       </div>
                     </td>
@@ -586,7 +612,7 @@ export default function B2BCustomers({ onBack }: Props) {
                     <td style={{ ...S.td, fontWeight: 600, color: remaining > 0 ? '#dc2626' : '#16a34a' }}>{remaining > 0 ? fmtM(remaining) : '—'}</td>
                     <td style={S.td}>{fmtDate(inv.due_date || '')}</td>
                     <td style={S.td}><span style={{ background: st.bg, color: st.color, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{st.label}</span></td>
-                    <td style={S.td}>{inv.status !== 'paid' && <button onClick={() => { setPaymentInv({ ...inv, paid_amount: inv.paid_amount || 0 }); setPayForm({ amount: String(remaining.toFixed(2)), payment_date: new Date().toISOString().split('T')[0], payment_method: 'העברה בנקאית', notes: '' }) }} style={{ ...S.btn, padding: '3px 8px', fontSize: 10, background: '#f0fdf4', color: '#16a34a' }}>💰</button>}</td>
+                    <td style={S.td}>{inv.status !== 'paid' && <button onClick={() => { setPaymentInv({ ...inv, paid_amount: inv.paid_amount || 0 }); setPayForm({ amount: String(remaining.toFixed(2)), payment_date: new Date().toISOString().split('T')[0], payment_method: 'העברה בנקאית', receipt_number: '', notes: '' }) }} style={{ ...S.btn, padding: '3px 8px', fontSize: 10, background: '#f0fdf4', color: '#16a34a' }}>💰</button>}</td>
                   </tr>
                 ) })}</tbody>
               </table>
