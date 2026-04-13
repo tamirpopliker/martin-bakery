@@ -454,7 +454,8 @@ export default function BranchManagerDashboard({ onBack }: Props) {
               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>הכנסות לפי סניף</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {branches.map(br => {
-                  const profitPct = br.totalRevenue > 0 ? (br.grossProfit / br.totalRevenue) * 100 : 0
+                  const totalAllRev = branches.reduce((s, b) => s + b.totalRevenue, 0)
+                  const revSharePct = totalAllRev > 0 ? (br.totalRevenue / totalAllRev) * 100 : 0
                   const barW = (br.totalRevenue / maxRevenue) * 100
                   return (
                     <div key={br.id}>
@@ -462,8 +463,8 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                         <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{br.name}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ fontSize: 13, fontWeight: 500, color: '#0f172a' }}>{fmtM(br.totalRevenue)}</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: profitPct >= 0 ? '#34d399' : '#ef4444' }}>
-                            {profitPct.toFixed(1)}%
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1' }}>
+                            {revSharePct.toFixed(1)}%
                           </span>
                         </div>
                       </div>
