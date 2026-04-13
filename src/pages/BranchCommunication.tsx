@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Pin, Check, Trash2, Pencil } from 'lucide-react'
+import { Plus, Pin, Check, Trash2, Pencil, Paperclip, X, Download } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import PageHeader from '../components/PageHeader'
@@ -14,6 +14,7 @@ interface Message {
   type: string; created_by: string | null; created_at: string
   is_pinned: boolean; recipient_type: string; recipient_id: number | null; recipient_role: string | null
   read_count?: number; target_count?: number
+  attachments?: { id: number; file_name: string; file_url: string; file_size: number }[]
 }
 
 interface Employee { id: number; name: string }
@@ -45,6 +46,8 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
   const [showAdd, setShowAdd] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState({ title: '', body: '', type: 'info', is_pinned: false, recipient_type: 'all', recipient_id: 0, recipient_role: '' })
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [myReads, setMyReads] = useState<Set<number>>(new Set())
   const [totalEmps, setTotalEmps] = useState(0)
 
@@ -96,6 +99,12 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
       }
     }
 
+    // Load attachments
+    if (msgIds.length > 0) {
+      const { data: atts } = await supabase.from('message_attachments').select('*').in('message_id', msgIds)
+      for (const m of msgs) m.attachments = (atts || []).filter(a => a.message_id === m.id)
+    }
+
     const { count } = await supabase.from('branch_employees').select('id', { count: 'exact', head: true })
       .eq('branch_id', branchId).eq('active', true).eq('is_manager', false)
     setTotalEmps(count || 0)
@@ -122,14 +131,32 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
       recipient_id: form.recipient_type === 'specific' ? form.recipient_id || null : null,
       recipient_role: form.recipient_type === 'role' ? form.recipient_role || null : null,
     }
-    if (editId) { await supabase.from('branch_messages').update(payload).eq('id', editId); setEditId(null) }
-    else { await supabase.from('branch_messages').insert(payload) }
+    if (editId) {
+      await supabase.from('branch_messages').update(payload).eq('id', editId); setEditId(null)
+    } else {
+      const { data: inserted } = await supabase.from('branch_messages').insert(payload).select().single()
+      // Upload files
+      if (inserted && selectedFiles.length > 0) {
+        for (const file of selectedFiles) {
+          const path = `${branchId}/${inserted.id}/${Date.now()}_${file.name}`
+          const { error: upErr } = await supabase.storage.from('message-attachments').upload(path, file)
+          if (!upErr) {
+            const { data: urlData } = supabase.storage.from('message-attachments').getPublicUrl(path)
+            await supabase.from('message_attachments').insert({
+              message_id: inserted.id, file_name: file.name,
+              file_url: urlData.publicUrl, file_size: file.size,
+            })
+          }
+        }
+      }
+    }
     resetForm(); loadMessages()
   }
 
   function resetForm() {
     setForm({ title: '', body: '', type: 'info', is_pinned: false, recipient_type: 'all', recipient_id: 0, recipient_role: '' })
-    setShowAdd(false)
+    setSelectedFiles([]); setShowAdd(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   async function deleteMsg(id: number) { if (!confirm('למחוק הודעה זו?')) return; await supabase.from('branch_messages').delete().eq('id', id); loadMessages() }
@@ -254,8 +281,26 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
                     style={{ ...S.btn, padding: '6px 14px', fontSize: 12, background: form.is_pinned ? '#fef3c7' : 'white', color: form.is_pinned ? '#b45309' : '#94a3b8', border: `1px solid ${form.is_pinned ? '#f59e0b' : '#e2e8f0'}` }}>
                     <Pin size={13} style={{ marginLeft: 4 }} /> {form.is_pinned ? 'מוצמד' : 'הצמד'}
                   </button>
+                  <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xlsx" multiple style={{ display: 'none' }}
+                    onChange={e => { if (e.target.files) setSelectedFiles(prev => [...prev, ...Array.from(e.target.files!)]) }} />
+                  <button onClick={() => fileInputRef.current?.click()}
+                    style={{ ...S.btn, padding: '6px 14px', fontSize: 12, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>
+                    <Paperclip size={13} style={{ marginLeft: 4 }} /> צרף קובץ
+                  </button>
                 </div>
               </div>
+              {selectedFiles.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                  {selectedFiles.map((f, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f1f5f9', borderRadius: 8, padding: '4px 10px', fontSize: 12 }}>
+                      <span style={{ color: '#374151' }}>{f.name}</span>
+                      <span style={{ color: '#94a3b8' }}>({(f.size / 1024).toFixed(0)}KB)</span>
+                      <button onClick={() => setSelectedFiles(prev => prev.filter((_, j) => j !== i))}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={12} color="#94a3b8" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
               <button onClick={saveMessage} disabled={!form.title || (form.recipient_type === 'specific' && !form.recipient_id) || (form.recipient_type === 'role' && !form.recipient_role)}
@@ -311,6 +356,17 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
 
                 {msg.body && (
                   <div style={{ fontSize: 14, color: '#374151', lineHeight: 1.7, marginBottom: 10, whiteSpace: 'pre-wrap' }}>{msg.body}</div>
+                )}
+
+                {msg.attachments && msg.attachments.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                    {msg.attachments.map(att => (
+                      <a key={att.id} href={att.file_url} target="_blank" rel="noopener noreferrer"
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f1f5f9', borderRadius: 8, padding: '4px 10px', fontSize: 12, color: '#6366f1', textDecoration: 'none', fontWeight: 500 }}>
+                        <Download size={12} /> {att.file_name} <span style={{ color: '#94a3b8' }}>({(att.file_size / 1024).toFixed(0)}KB)</span>
+                      </a>
+                    ))}
+                  </div>
                 )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
