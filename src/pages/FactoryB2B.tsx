@@ -55,8 +55,9 @@ const getCurrentMonth = () => { const d = new Date(); return `${d.getFullYear()}
 
 export default function FactoryB2B({ onBack }: Props) {
   const { appUser } = useAppUser()
+  const isAdmin = appUser?.role === 'admin'
   const { period, setPeriod, from, to } = usePeriod()
-  const [tab, setTab] = useState<'manual' | 'pdf' | 'history'>('manual')
+  const [tab, setTab] = useState<'manual' | 'pdf' | 'history'>(isAdmin ? 'manual' : 'history')
 
   // ─── Manual add state ───
   const [manualCustomer, setManualCustomer] = useState('')
@@ -88,7 +89,7 @@ export default function FactoryB2B({ onBack }: Props) {
     setHistLoading(false)
   }, [from, to])
 
-  useEffect(() => { if (tab === 'history') loadHistory() }, [tab, loadHistory])
+  useEffect(() => { if (tab === 'history' || !isAdmin) loadHistory() }, [tab, loadHistory, isAdmin])
 
   // ─── Manual add ───
   async function addManual() {
@@ -223,20 +224,22 @@ export default function FactoryB2B({ onBack }: Props) {
       <div style={S.container}>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e2e8f0', marginBottom: 20 }}>
-          <button style={S.tab(tab === 'manual')} onClick={() => setTab('manual')}>
-            <Plus size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> הוספה ידנית
-          </button>
-          <button style={S.tab(tab === 'pdf')} onClick={() => setTab('pdf')}>
-            <Upload size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> העלאת PDF
-          </button>
-          <button style={S.tab(tab === 'history')} onClick={() => setTab('history')}>
-            <History size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> היסטוריה
-          </button>
-        </div>
+        {isAdmin ? (
+          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e2e8f0', marginBottom: 20 }}>
+            <button style={S.tab(tab === 'manual')} onClick={() => setTab('manual')}>
+              <Plus size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> הוספה ידנית
+            </button>
+            <button style={S.tab(tab === 'pdf')} onClick={() => setTab('pdf')}>
+              <Upload size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> העלאת PDF
+            </button>
+            <button style={S.tab(tab === 'history')} onClick={() => setTab('history')}>
+              <History size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> היסטוריה
+            </button>
+          </div>
+        ) : null}
 
         {/* ═══ MANUAL TAB ═══ */}
-        {tab === 'manual' && (
+        {tab === 'manual' && isAdmin && (
           <Card className="shadow-sm">
             <CardContent className="p-6">
               <h2 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700, color: '#374151' }}>הוספת מכירה</h2>
@@ -260,7 +263,7 @@ export default function FactoryB2B({ onBack }: Props) {
         )}
 
         {/* ═══ PDF TAB ═══ */}
-        {tab === 'pdf' && (
+        {tab === 'pdf' && isAdmin && (
           <div style={S.card}>
             {parsedInvoices.length === 0 && !pdfParsing && (
               <div style={{ textAlign: 'center', padding: '40px 0' }}>
@@ -367,7 +370,7 @@ export default function FactoryB2B({ onBack }: Props) {
         )}
 
         {/* ═══ HISTORY TAB ═══ */}
-        {tab === 'history' && (
+        {(tab === 'history' || !isAdmin) && (
           <div style={S.card}>
             <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <PeriodPicker period={period} onChange={setPeriod} />
@@ -393,7 +396,7 @@ export default function FactoryB2B({ onBack }: Props) {
                     <th style={S.th}>חשבונית</th>
                     <th style={S.th}>לקוח</th>
                     <th style={{ ...S.th, width: 110 }}>סה"כ</th>
-                    <th style={{ ...S.th, width: 80 }}></th>
+                    {isAdmin && <th style={{ ...S.th, width: 80 }}></th>}
                   </tr></thead>
                   <tbody>
                     {filteredSales.map((s, i) => {
@@ -424,6 +427,7 @@ export default function FactoryB2B({ onBack }: Props) {
                               : fmtMoney(s.total_before_vat)
                             }
                           </td>
+                          {isAdmin && (
                           <td style={S.td}>
                             {isEditing ? (
                               <div style={{ display: 'flex', gap: 3 }}>
@@ -437,6 +441,7 @@ export default function FactoryB2B({ onBack }: Props) {
                               </div>
                             )}
                           </td>
+                          )}
                         </tr>
                       )
                     })}
