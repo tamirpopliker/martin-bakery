@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Pin, Check, Trash2, Pencil, Paperclip, X, Download } from 'lucide-react'
+import { Plus, Pin, Check, Trash2, Pencil, Paperclip, X, Download, Clock, ToggleLeft, ToggleRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import PageHeader from '../components/PageHeader'
@@ -50,6 +50,27 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [myReads, setMyReads] = useState<Set<number>>(new Set())
   const [totalEmps, setTotalEmps] = useState(0)
+  const [commTab, setCommTab] = useState<'feed' | 'scheduled'>('feed')
+
+  // Scheduled messages state
+  const [schedMsgs, setSchedMsgs] = useState<any[]>([])
+  const [schedLoading, setSchedLoading] = useState(false)
+  const [showAddSched, setShowAddSched] = useState(false)
+  const [editSchedId, setEditSchedId] = useState<number | null>(null)
+  const [schedForm, setSchedForm] = useState({ title: '', body: '', type: 'info', recipient_type: 'all', recipient_id: 0, recipient_role: '', schedule_type: 'weekly', days_of_week: [] as number[], send_time: '07:00', is_active: true })
+  const [schedLogView, setSchedLogView] = useState<number | null>(null)
+  const [schedLogs, setSchedLogs] = useState<any[]>([])
+
+  const TEMPLATES = [
+    { name: 'תזכורת ספירת מלאי', title: 'תזכורת — ספירת מלאי', body: 'נא לבצע ספירת מלאי לפני סוף המשמרת', type: 'task', schedule_type: 'weekly', days_of_week: [4], send_time: '15:00' },
+    { name: 'הכנות לשישי', title: 'הכנות ליום שישי', body: 'נא לוודא הכנות לשישי: מלאי, ניקיון, סידור', type: 'task', schedule_type: 'weekly', days_of_week: [4], send_time: '16:00' },
+    { name: 'פתיחת שבוע', title: 'בוקר טוב — פתיחת שבוע', body: 'שבוע חדש, בהצלחה לכולם!', type: 'info', schedule_type: 'weekly', days_of_week: [0], send_time: '07:00' },
+    { name: 'סגירת חודש', title: 'תזכורת — סגירת חודש', body: 'נא לוודא שכל הנתונים מעודכנים לפני סגירת חודש', type: 'task', schedule_type: 'monthly', days_of_week: [], send_time: '09:00' },
+    { name: 'ברכת חג', title: 'חג שמח!', body: 'מאחלים חג שמח לכל הצוות', type: 'praise', schedule_type: 'once', days_of_week: [], send_time: '08:00' },
+  ]
+
+  const DAY_NAMES = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש']
+  const SCHED_LABELS: Record<string, string> = { once: 'חד פעמי', weekly: 'שבועי', biweekly: 'דו-שבועי', monthly: 'חודשי' }
 
   // Load employees for dropdown
   useEffect(() => {
@@ -168,6 +189,74 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
     setMyReads(prev => new Set([...prev, msgId])); loadMessages()
   }
 
+  // ═══ SCHEDULED MESSAGES ═══
+  const loadScheduled = useCallback(async () => {
+    setSchedLoading(true)
+    const { data } = await supabase.from('scheduled_messages').select('*').eq('branch_id', branchId).order('created_at', { ascending: false })
+    setSchedMsgs(data || [])
+    setSchedLoading(false)
+  }, [branchId])
+
+  useEffect(() => { if (commTab === 'scheduled' && isManager) loadScheduled() }, [commTab, isManager, loadScheduled])
+
+  function calcNextSend(schedType: string, daysOfWeek: number[], sendTime: string): string {
+    const now = new Date()
+    const [h, m] = sendTime.split(':').map(Number)
+    if (schedType === 'weekly' || schedType === 'biweekly') {
+      for (let i = 0; i < 14; i++) {
+        const d = new Date(now); d.setDate(d.getDate() + i); d.setHours(h, m, 0, 0)
+        if (daysOfWeek.includes(d.getDay()) && d > now) return d.toISOString()
+      }
+    }
+    if (schedType === 'monthly') {
+      const d = new Date(now.getFullYear(), now.getMonth(), 28, h, m); if (d <= now) d.setMonth(d.getMonth() + 1)
+      return d.toISOString()
+    }
+    // once / fallback
+    const d = new Date(now); d.setDate(d.getDate() + 1); d.setHours(h, m, 0, 0)
+    return d.toISOString()
+  }
+
+  async function saveScheduled() {
+    if (!schedForm.title) return
+    const nextSend = calcNextSend(schedForm.schedule_type, schedForm.days_of_week, schedForm.send_time)
+    const payload = {
+      branch_id: branchId, title: schedForm.title, body: schedForm.body || null, type: schedForm.type,
+      recipient_type: schedForm.recipient_type,
+      recipient_id: schedForm.recipient_type === 'specific' ? schedForm.recipient_id || null : null,
+      recipient_role: schedForm.recipient_type === 'role' ? schedForm.recipient_role || null : null,
+      schedule_type: schedForm.schedule_type, days_of_week: schedForm.days_of_week, send_time: schedForm.send_time,
+      is_active: schedForm.is_active, next_send_at: nextSend, created_by: appUser?.name || null,
+    }
+    if (editSchedId) { await supabase.from('scheduled_messages').update(payload).eq('id', editSchedId); setEditSchedId(null) }
+    else { await supabase.from('scheduled_messages').insert(payload) }
+    setShowAddSched(false); setSchedForm({ title: '', body: '', type: 'info', recipient_type: 'all', recipient_id: 0, recipient_role: '', schedule_type: 'weekly', days_of_week: [], send_time: '07:00', is_active: true }); loadScheduled()
+  }
+
+  async function toggleSchedActive(id: number, current: boolean) {
+    await supabase.from('scheduled_messages').update({ is_active: !current }).eq('id', id); loadScheduled()
+  }
+
+  async function deleteSched(id: number) { if (!confirm('למחוק הודעה קבועה זו?')) return; await supabase.from('scheduled_messages').delete().eq('id', id); loadScheduled() }
+
+  async function viewSchedLog(id: number) {
+    setSchedLogView(id)
+    const { data } = await supabase.from('scheduled_message_log').select('*').eq('scheduled_message_id', id).order('sent_at', { ascending: false }).limit(20)
+    setSchedLogs(data || [])
+  }
+
+  function loadTemplate(idx: number) {
+    const t = TEMPLATES[idx]
+    setSchedForm(prev => ({ ...prev, title: t.title, body: t.body, type: t.type, schedule_type: t.schedule_type, days_of_week: t.days_of_week, send_time: t.send_time }))
+  }
+
+  function describeSchedule(s: any): string {
+    if (s.schedule_type === 'once') return `חד פעמי ב-${s.send_time}`
+    if (s.schedule_type === 'monthly') return `ב-28 לכל חודש ב-${s.send_time}`
+    const days = (s.days_of_week || []).map((d: number) => DAY_NAMES[d]).join(', ')
+    return `כל ${days || 'יום'} ב-${s.send_time}${s.schedule_type === 'biweekly' ? ' (דו-שבועי)' : ''}`
+  }
+
   function getRecipientLabel(msg: Message): string | null {
     if (!msg.recipient_type || msg.recipient_type === 'all') return null
     if (msg.recipient_type === 'specific') {
@@ -200,6 +289,19 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
     <motion.div dir="rtl" variants={fadeIn} initial="hidden" animate="visible">
       <PageHeader title="מרכז תקשורת" subtitle={branchName} onBack={onBack} />
       <div style={{ padding: '24px 32px', maxWidth: 800, margin: '0 auto' }}>
+
+        {/* Tabs — manager only */}
+        {isManager && (
+          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e2e8f0', marginBottom: 16 }}>
+            <button style={{ padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', border: 'none', borderBottom: commTab === 'feed' ? '2px solid #0f172a' : '2px solid transparent', background: 'none', color: commTab === 'feed' ? '#0f172a' : '#94a3b8' }}
+              onClick={() => setCommTab('feed')}>הודעות</button>
+            <button style={{ padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', border: 'none', borderBottom: commTab === 'scheduled' ? '2px solid #0f172a' : '2px solid transparent', background: 'none', color: commTab === 'scheduled' ? '#0f172a' : '#94a3b8' }}
+              onClick={() => setCommTab('scheduled')}><Clock size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> הודעות קבועות</button>
+          </div>
+        )}
+
+        {/* ═══ FEED TAB ═══ */}
+        {(commTab === 'feed' || !isManager) && (<>
 
         {/* Manager stats */}
         {isManager && (
@@ -406,6 +508,163 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
               </div>
             )
           })
+        )}
+        </>)}
+
+        {/* ═══ SCHEDULED TAB ═══ */}
+        {commTab === 'scheduled' && isManager && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>הודעות קבועות</h3>
+              <button onClick={() => { setShowAddSched(true); setEditSchedId(null); setSchedForm({ title: '', body: '', type: 'info', recipient_type: 'all', recipient_id: 0, recipient_role: '', schedule_type: 'weekly', days_of_week: [], send_time: '07:00', is_active: true }) }}
+                style={{ ...S.btn, background: '#0f172a', color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Plus size={14} /> הודעה קבועה
+              </button>
+            </div>
+
+            {/* Add/edit scheduled form */}
+            {showAddSched && (
+              <div style={{ ...S.card, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px' }}>{editSchedId ? 'עריכה' : 'הודעה קבועה חדשה'}</h3>
+
+                {/* Template selector */}
+                <div style={{ marginBottom: 12 }}>
+                  <label style={S.label}>טען תבנית</label>
+                  <select onChange={e => { if (e.target.value) loadTemplate(Number(e.target.value)); e.target.value = '' }} style={S.input}>
+                    <option value="">בחר תבנית...</option>
+                    {TEMPLATES.map((t, i) => <option key={i} value={i}>{t.name}</option>)}
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div><label style={S.label}>כותרת</label><input value={schedForm.title} onChange={e => setSchedForm(p => ({ ...p, title: e.target.value }))} style={S.input} /></div>
+                  <div><label style={S.label}>תוכן</label><textarea value={schedForm.body} onChange={e => setSchedForm(p => ({ ...p, body: e.target.value }))} rows={3} style={{ ...S.input, resize: 'vertical' }} /></div>
+
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <label style={S.label}>סוג</label>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {Object.entries(TYPE_CONFIG).map(([key, cfg]) => (
+                          <button key={key} onClick={() => setSchedForm(p => ({ ...p, type: key }))}
+                            style={{ ...S.btn, padding: '4px 10px', fontSize: 11, background: schedForm.type === key ? cfg.bg : 'white', color: schedForm.type === key ? cfg.color : '#94a3b8', border: `1px solid ${schedForm.type === key ? cfg.color : '#e2e8f0'}` }}>
+                            {cfg.emoji} {cfg.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label style={S.label}>תזמון</label>
+                      <select value={schedForm.schedule_type} onChange={e => setSchedForm(p => ({ ...p, schedule_type: e.target.value }))} style={S.input}>
+                        <option value="once">חד פעמי</option>
+                        <option value="weekly">שבועי</option>
+                        <option value="biweekly">דו-שבועי</option>
+                        <option value="monthly">חודשי</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={S.label}>שעה</label>
+                      <input type="time" value={schedForm.send_time} onChange={e => setSchedForm(p => ({ ...p, send_time: e.target.value }))} style={{ ...S.input, width: 100 }} />
+                    </div>
+                  </div>
+
+                  {(schedForm.schedule_type === 'weekly' || schedForm.schedule_type === 'biweekly') && (
+                    <div>
+                      <label style={S.label}>ימים</label>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {DAY_NAMES.map((d, i) => (
+                          <button key={i} onClick={() => setSchedForm(p => ({ ...p, days_of_week: p.days_of_week.includes(i) ? p.days_of_week.filter(x => x !== i) : [...p.days_of_week, i] }))}
+                            style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, background: schedForm.days_of_week.includes(i) ? '#0f172a' : '#f1f5f9', color: schedForm.days_of_week.includes(i) ? 'white' : '#64748b' }}>
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label style={S.label}>נמענים</label>
+                    <select value={schedForm.recipient_type} onChange={e => setSchedForm(p => ({ ...p, recipient_type: e.target.value }))} style={{ ...S.input, width: 'auto' }}>
+                      <option value="all">כל העובדים</option>
+                      <option value="specific">עובד ספציפי</option>
+                      <option value="role">לפי תפקיד</option>
+                    </select>
+                    {schedForm.recipient_type === 'specific' && (
+                      <select value={schedForm.recipient_id} onChange={e => setSchedForm(p => ({ ...p, recipient_id: Number(e.target.value) }))} style={{ ...S.input, marginTop: 6 }}>
+                        <option value={0}>בחר...</option>{employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                      </select>
+                    )}
+                    {schedForm.recipient_type === 'role' && (
+                      <select value={schedForm.recipient_role} onChange={e => setSchedForm(p => ({ ...p, recipient_role: e.target.value }))} style={{ ...S.input, marginTop: 6 }}>
+                        <option value="">בחר...</option>{ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                  <button onClick={saveScheduled} disabled={!schedForm.title} style={{ ...S.btn, background: schedForm.title ? '#0f172a' : '#e2e8f0', color: schedForm.title ? 'white' : '#94a3b8' }}>שמור</button>
+                  <button onClick={() => { setShowAddSched(false); setEditSchedId(null) }} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>ביטול</button>
+                </div>
+              </div>
+            )}
+
+            {/* Log viewer */}
+            {schedLogView && (
+              <div style={{ ...S.card, background: '#f8fafc' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>היסטוריית שליחות</h4>
+                  <button onClick={() => setSchedLogView(null)} style={{ ...S.btn, padding: '4px 12px', fontSize: 12, background: '#f1f5f9', color: '#64748b' }}>סגור</button>
+                </div>
+                {schedLogs.length === 0 ? <div style={{ color: '#94a3b8', fontSize: 13 }}>אין שליחות עדיין</div> : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead><tr>
+                      <th style={{ fontSize: 12, fontWeight: 600, color: '#64748b', padding: '8px', textAlign: 'right', borderBottom: '1px solid #e2e8f0' }}>תאריך</th>
+                      <th style={{ fontSize: 12, fontWeight: 600, color: '#64748b', padding: '8px', textAlign: 'right', borderBottom: '1px solid #e2e8f0' }}>נמענים</th>
+                      <th style={{ fontSize: 12, fontWeight: 600, color: '#64748b', padding: '8px', textAlign: 'right', borderBottom: '1px solid #e2e8f0' }}>קראו</th>
+                      <th style={{ fontSize: 12, fontWeight: 600, color: '#64748b', padding: '8px', textAlign: 'right', borderBottom: '1px solid #e2e8f0' }}>%</th>
+                    </tr></thead>
+                    <tbody>{schedLogs.map((l: any) => (
+                      <tr key={l.id}>
+                        <td style={{ padding: '8px', fontSize: 13, borderBottom: '1px solid #f1f5f9' }}>{new Date(l.sent_at).toLocaleString('he-IL')}</td>
+                        <td style={{ padding: '8px', fontSize: 13, borderBottom: '1px solid #f1f5f9' }}>{l.recipients_count}</td>
+                        <td style={{ padding: '8px', fontSize: 13, borderBottom: '1px solid #f1f5f9' }}>{l.reads_count}</td>
+                        <td style={{ padding: '8px', fontSize: 13, borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>{l.recipients_count > 0 ? `${Math.round(l.reads_count / l.recipients_count * 100)}%` : '—'}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                )}
+              </div>
+            )}
+
+            {/* Scheduled messages list */}
+            {schedLoading ? <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>טוען...</div>
+            : schedMsgs.length === 0 ? <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>אין הודעות קבועות</div>
+            : schedMsgs.map(s => {
+              const cfg = TYPE_CONFIG[s.type] || TYPE_CONFIG.info
+              return (
+                <div key={s.id} style={{ ...S.card, opacity: s.is_active ? 1 : 0.6, borderRight: `4px solid ${s.is_active ? cfg.color : '#cbd5e1'}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                    <div>
+                      <span style={{ background: cfg.bg, color: cfg.color, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, marginLeft: 6 }}>{cfg.emoji} {cfg.label}</span>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{s.title}</span>
+                      <span style={{ background: s.is_active ? '#f0fdf4' : '#f1f5f9', color: s.is_active ? '#16a34a' : '#94a3b8', padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 600, marginRight: 8 }}>{s.is_active ? 'פעיל' : 'מושבת'}</span>
+                    </div>
+                    <button onClick={() => toggleSchedActive(s.id, s.is_active)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                      {s.is_active ? <ToggleRight size={24} color="#16a34a" /> : <ToggleLeft size={24} color="#94a3b8" />}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 13, color: '#64748b', marginBottom: 4 }}>📅 {describeSchedule(s)}</div>
+                  {s.next_send_at && <div style={{ fontSize: 12, color: '#94a3b8' }}>שליחה הבאה: {new Date(s.next_send_at).toLocaleDateString('he-IL')} {s.send_time}</div>}
+                  <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
+                    <button onClick={() => viewSchedLog(s.id)} style={{ ...S.btn, padding: '4px 10px', fontSize: 11, background: '#f1f5f9', color: '#374151' }}>היסטוריה</button>
+                    <button onClick={() => { setEditSchedId(s.id); setSchedForm({ title: s.title, body: s.body || '', type: s.type, recipient_type: s.recipient_type || 'all', recipient_id: s.recipient_id || 0, recipient_role: s.recipient_role || '', schedule_type: s.schedule_type, days_of_week: s.days_of_week || [], send_time: s.send_time || '07:00', is_active: s.is_active }); setShowAddSched(true) }}
+                      style={{ ...S.btn, padding: '4px 8px', fontSize: 11, background: '#f1f5f9', color: '#6366f1' }}><Pencil size={12} /></button>
+                    <button onClick={() => deleteSched(s.id)} style={{ ...S.btn, padding: '4px 8px', fontSize: 11, background: '#fef2f2', color: '#ef4444' }}><Trash2 size={12} /></button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
     </motion.div>
