@@ -12,6 +12,7 @@ import BranchWaste from './BranchWaste'
 // BranchPL removed from navigation — P&L data now shown in BranchDashboard
 import BranchSettings from './BranchSettings'
 import BranchCreditCustomers from './BranchCreditCustomers'
+import BranchB2BHistory from './BranchB2BHistory'
 import BranchSuppliers from './BranchSuppliers'
 import BranchOrders from './BranchOrders'
 import BranchEmployees from './BranchEmployees'
@@ -82,7 +83,7 @@ const MENU_ITEMS: MenuItem[] = [
   { page: 'branch-team', label: 'ניהול צוות',       subtitle: 'סידור עבודה · משימות · עובדים', Icon: Users,       ready: true },
   { page: 'waste',     label: 'פחת',             subtitle: 'סחורה · חומרי גלם',         Icon: Trash2,      ready: true },
   { page: 'suppliers', label: 'ספקים',           subtitle: 'ניהול · קטגוריות',           Icon: Building2,   ready: true },
-  { page: 'customers', label: 'לקוחות הקפה',    subtitle: 'חובות · תשלומים',            Icon: TrendingUp,  ready: true },
+  { page: 'customers', label: 'לקוחות הקפה',    subtitle: 'חשבוניות · היסטוריה',        Icon: TrendingUp,  ready: true },
   { page: 'communication', label: 'מרכז תקשורת', subtitle: 'הודעות · משימות · עדכונים', Icon: MessageSquare, ready: true },
   { page: 'orders',    label: 'הזמנות מהמפעל',  subtitle: 'אישור · עריכה · חומרי גלם', Icon: Package,     ready: true },
   // BranchPL removed — P&L now integrated in BranchDashboard
@@ -154,7 +155,7 @@ export default function BranchHome({ branch, onBack }: Props) {
     <BranchSettings branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
   if (page === 'customers') return (
-    <BranchCreditCustomers branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
+    <BranchB2BHistory branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
   if (page === 'suppliers') return (
     <BranchSuppliers branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
