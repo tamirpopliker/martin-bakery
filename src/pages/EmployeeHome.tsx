@@ -4,6 +4,7 @@ import { useAppUser } from '../lib/UserContext'
 import { supabase } from '../lib/supabase'
 import MySchedule from './MySchedule'
 import EmployeeConstraints from './EmployeeConstraints'
+import EmployeeMessages from './EmployeeMessages'
 import PageHeader from '../components/PageHeader'
 
 const fadeIn = {
@@ -20,6 +21,7 @@ export default function EmployeeHome({ onNavigate = () => {} }: Props) {
   const [branchName, setBranchName] = useState('')
   const [page, setPage] = useState<string | null>(null)
   const [nextWeekCount, setNextWeekCount] = useState(0)
+  const [unreadMsgs, setUnreadMsgs] = useState(0)
 
   useEffect(() => {
     if (appUser?.branch_id) {
@@ -63,15 +65,41 @@ export default function EmployeeHome({ onNavigate = () => {} }: Props) {
     fetchNextWeekAvailability()
   }, [appUser])
 
+  // Unread messages count + realtime
+  useEffect(() => {
+    async function loadUnread() {
+      if (!appUser?.branch_id || !appUser?.employee_id) return
+      const { data: msgs } = await supabase.from('branch_messages').select('id, recipient_type, recipient_id')
+        .eq('branch_id', appUser.branch_id)
+      if (!msgs || msgs.length === 0) { setUnreadMsgs(0); return }
+      const relevant = msgs.filter(m => !m.recipient_type || m.recipient_type === 'all' || (m.recipient_type === 'specific' && m.recipient_id === appUser.employee_id))
+      if (relevant.length === 0) { setUnreadMsgs(0); return }
+      const { data: reads } = await supabase.from('message_reads').select('message_id').eq('employee_id', appUser.employee_id).in('message_id', relevant.map(m => m.id))
+      const readIds = new Set((reads || []).map(r => r.message_id))
+      setUnreadMsgs(relevant.filter(m => !readIds.has(m.id)).length)
+    }
+    loadUnread()
+    if (appUser?.branch_id) {
+      const ch = supabase.channel(`emp-unread-${appUser.branch_id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'branch_messages' }, () => loadUnread())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reads' }, () => loadUnread())
+        .subscribe()
+      return () => { supabase.removeChannel(ch) }
+    }
+  }, [appUser?.branch_id, appUser?.employee_id])
+
   if (page === 'my-schedule') {
     return <MySchedule onBack={() => setPage(null)} />
   }
   if (page === 'employee-constraints') {
     return <EmployeeConstraints onBack={() => setPage(null)} />
   }
+  if (page === 'messages') {
+    return <EmployeeMessages onBack={() => setPage(null)} />
+  }
 
   const handleNavigate = (p: string) => {
-    if (p === 'my-schedule' || p === 'employee-constraints') {
+    if (p === 'my-schedule' || p === 'employee-constraints' || p === 'messages') {
       setPage(p)
     } else {
       onNavigate?.(p)
@@ -149,6 +177,38 @@ export default function EmployeeHome({ onNavigate = () => {} }: Props) {
             <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>אילוצים · שבועי</div>
           </motion.button>
         </div>
+
+        {/* Messages card */}
+        <motion.button variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.28 }}
+          onClick={() => handleNavigate('messages')}
+          style={{
+            width: '100%',
+            background: 'white',
+            border: unreadMsgs > 0 ? '1px solid #bfdbfe' : '1px solid #f1f5f9',
+            borderRadius: 12,
+            padding: '14px 16px',
+            marginBottom: 20,
+            cursor: 'pointer',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            textAlign: 'right',
+            position: 'relative',
+          }}>
+          {unreadMsgs > 0 && (
+            <div style={{ position: 'absolute', top: -6, left: -6, background: '#ef4444', color: 'white', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 }}>
+              {unreadMsgs}
+            </div>
+          )}
+          <span style={{ fontSize: 24 }}>💬</span>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>הודעות</div>
+            <div style={{ fontSize: 11, color: unreadMsgs > 0 ? '#3b82f6' : '#94a3b8', marginTop: 2, fontWeight: unreadMsgs > 0 ? 600 : 400 }}>
+              {unreadMsgs > 0 ? `${unreadMsgs} הודעות חדשות` : 'עדכונים · משימות'}
+            </div>
+          </div>
+        </motion.button>
 
         {/* Profile card (coming soon) */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.3 }}
