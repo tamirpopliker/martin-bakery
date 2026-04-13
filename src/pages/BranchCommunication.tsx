@@ -20,19 +20,19 @@ interface Message {
 interface Employee { id: number; name: string }
 
 const TYPE_CONFIG: Record<string, { label: string; emoji: string; color: string; bg: string }> = {
-  urgent: { label: 'דחוף', emoji: '🔴', color: '#dc2626', bg: '#fef2f2' },
-  task:   { label: 'משימה', emoji: '🔵', color: '#2563eb', bg: '#eff6ff' },
-  info:   { label: 'עדכון', emoji: '🟢', color: '#16a34a', bg: '#f0fdf4' },
-  praise: { label: 'הכרה', emoji: '🟡', color: '#ca8a04', bg: '#fefce8' },
+  urgent: { label: 'דחוף', emoji: '🔴', color: '#991b1b', bg: '#fef2f2' },
+  task:   { label: 'משימה', emoji: '🔵', color: '#4338ca', bg: '#eef2ff' },
+  info:   { label: 'עדכון', emoji: '🟢', color: '#0f766e', bg: '#f0fdfa' },
+  praise: { label: 'הכרה', emoji: '🟡', color: '#92400e', bg: '#fffbeb' },
 }
 
 const ROLE_OPTIONS = ['מוכרים', 'אופים', 'בריסטה', 'ניקיון', 'מחסן']
 
 const S = {
-  card: { background: 'white', borderRadius: 14, border: '1px solid #e2e8f0', padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginBottom: 12 } as React.CSSProperties,
-  btn: { border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer' } as React.CSSProperties,
-  input: { border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, width: '100%', boxSizing: 'border-box' as const } as React.CSSProperties,
-  label: { fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 } as React.CSSProperties,
+  card: { background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginBottom: 10, transition: 'box-shadow 0.15s' } as React.CSSProperties,
+  btn: { border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 500, cursor: 'pointer' } as React.CSSProperties,
+  input: { border: '1px solid #e2e8f0', borderRadius: 10, padding: '9px 14px', fontSize: 13, width: '100%', boxSizing: 'border-box' as const, outline: 'none', fontFamily: 'inherit' } as React.CSSProperties,
+  label: { fontSize: 12, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 5 } as React.CSSProperties,
 }
 
 export default function BranchCommunication({ branchId, branchName, branchColor, onBack }: Props) {
@@ -312,9 +312,9 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
         {/* Tabs — manager only */}
         {isManager && (
           <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e2e8f0', marginBottom: 16 }}>
-            <button style={{ padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', border: 'none', borderBottom: commTab === 'feed' ? '2px solid #0f172a' : '2px solid transparent', background: 'none', color: commTab === 'feed' ? '#0f172a' : '#94a3b8' }}
+            <button style={{ padding: '10px 20px', fontSize: 14, fontWeight: 500, cursor: 'pointer', border: 'none', borderBottom: commTab === 'feed' ? '2px solid #6366f1' : '2px solid transparent', background: 'none', color: commTab === 'feed' ? '#6366f1' : '#94a3b8' }}
               onClick={() => setCommTab('feed')}>הודעות</button>
-            <button style={{ padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', border: 'none', borderBottom: commTab === 'scheduled' ? '2px solid #0f172a' : '2px solid transparent', background: 'none', color: commTab === 'scheduled' ? '#0f172a' : '#94a3b8' }}
+            <button style={{ padding: '10px 20px', fontSize: 14, fontWeight: 500, cursor: 'pointer', border: 'none', borderBottom: commTab === 'scheduled' ? '2px solid #6366f1' : '2px solid transparent', background: 'none', color: commTab === 'scheduled' ? '#6366f1' : '#94a3b8' }}
               onClick={() => setCommTab('scheduled')}><Clock size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> הודעות קבועות</button>
           </div>
         )}
@@ -325,16 +325,16 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
         {/* Manager stats */}
         {isManager && (
           <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-            <div style={{ background: '#eff6ff', borderRadius: 10, padding: '10px 16px', flex: 1, minWidth: 120, textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#1d4ed8', fontWeight: 600 }}>הודעות פעילות</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#1d4ed8' }}>{messages.length}</div>
+            <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '12px 18px', flex: 1, minWidth: 120, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8', marginBottom: 2 }}>הודעות פעילות</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#6366f1' }}>{messages.length}</div>
             </div>
-            <div style={{ background: totalUnread > 0 ? '#fef2f2' : '#f0fdf4', borderRadius: 10, padding: '10px 16px', flex: 1, minWidth: 120, textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: totalUnread > 0 ? '#dc2626' : '#16a34a', fontWeight: 600 }}>לא נקראו</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: totalUnread > 0 ? '#dc2626' : '#16a34a' }}>{totalUnread}</div>
+            <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: '12px 18px', flex: 1, minWidth: 120, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8', marginBottom: 2 }}>לא נקראו</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: totalUnread > 0 ? '#ef4444' : '#10b981' }}>{totalUnread}</div>
             </div>
             <button onClick={() => { setShowAdd(true); setEditId(null); resetForm(); setShowAdd(true) }}
-              style={{ ...S.btn, background: '#0f172a', color: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
+              style={{ ...S.btn, background: '#6366f1', color: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
               <Plus size={16} /> הודעה חדשה
             </button>
           </div>
@@ -391,7 +391,7 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
                   <div style={{ display: 'flex', gap: 6 }}>
                     {Object.entries(TYPE_CONFIG).map(([key, cfg]) => (
                       <button key={key} onClick={() => setForm(p => ({ ...p, type: key }))}
-                        style={{ ...S.btn, padding: '6px 14px', fontSize: 12, background: form.type === key ? cfg.bg : 'white', color: form.type === key ? cfg.color : '#94a3b8', border: `1px solid ${form.type === key ? cfg.color : '#e2e8f0'}` }}>
+                        style={{ ...S.btn, padding: '6px 14px', fontSize: 12, borderRadius: 20, background: form.type === key ? '#eef2ff' : 'white', color: form.type === key ? '#4338ca' : '#94a3b8', border: `1px solid ${form.type === key ? '#a5b4fc' : '#e2e8f0'}` }}>
                         {cfg.emoji} {cfg.label}
                       </button>
                     ))}
@@ -451,11 +451,11 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
 
             return (
               <div key={msg.id} style={{
-                ...S.card, borderRight: `4px solid ${cfg.color}`,
+                ...S.card, borderRight: `3px solid ${cfg.color}`,
                 background: !isRead && !isManager ? '#fafbff' : 'white', position: 'relative',
               }}>
                 {!isRead && !isManager && (
-                  <div style={{ position: 'absolute', top: 12, left: 12, width: 10, height: 10, borderRadius: '50%', background: '#3b82f6' }} />
+                  <div style={{ position: 'absolute', top: 12, left: 12, width: 8, height: 8, borderRadius: '50%', background: '#6366f1' }} />
                 )}
                 {msg.is_pinned && (
                   <div style={{ position: 'absolute', top: 8, left: isManager ? 50 : 28, fontSize: 11, color: '#b45309', fontWeight: 600 }}>📌 מוצמד</div>
@@ -495,14 +495,14 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
                       <span style={{ fontSize: 12, color: '#64748b' }}>קראו {msg.read_count || 0}/{target}</span>
                       <div style={{ width: 80, height: 6, background: '#f1f5f9', borderRadius: 3, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', borderRadius: 3, width: `${Math.min(readPct, 100)}%`, background: readPct >= 100 ? '#16a34a' : '#3b82f6' }} />
+                        <div style={{ height: '100%', borderRadius: 3, width: `${Math.min(readPct, 100)}%`, background: readPct >= 100 ? '#6366f1' : '#a5b4fc' }} />
                       </div>
                     </div>
                   )}
 
                   {!isManager && !isRead && (
                     <button onClick={() => markRead(msg.id)}
-                      style={{ ...S.btn, padding: '6px 14px', fontSize: 12, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>
+                      style={{ ...S.btn, padding: '6px 14px', fontSize: 12, borderRadius: 20, background: '#eef2ff', color: '#6366f1', border: '1px solid #c7d2fe' }}>
                       <Check size={13} style={{ marginLeft: 4 }} /> קראתי
                     </button>
                   )}
@@ -536,7 +536,7 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>הודעות קבועות</h3>
               <button onClick={() => { setShowAddSched(true); setEditSchedId(null); setSchedForm({ title: '', body: '', type: 'info', recipient_type: 'all', recipient_id: 0, recipient_role: '', schedule_type: 'weekly', days_of_week: [], send_time: '07:00', is_active: true, specific_date: '', day_of_month: 28, days_before_holiday: 1 }) }}
-                style={{ ...S.btn, background: '#0f172a', color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
+                style={{ ...S.btn, background: '#6366f1', color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Plus size={14} /> הודעה קבועה
               </button>
             </div>
@@ -565,7 +565,7 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
                       <div style={{ display: 'flex', gap: 4 }}>
                         {Object.entries(TYPE_CONFIG).map(([key, cfg]) => (
                           <button key={key} onClick={() => setSchedForm(p => ({ ...p, type: key }))}
-                            style={{ ...S.btn, padding: '4px 10px', fontSize: 11, background: schedForm.type === key ? cfg.bg : 'white', color: schedForm.type === key ? cfg.color : '#94a3b8', border: `1px solid ${schedForm.type === key ? cfg.color : '#e2e8f0'}` }}>
+                            style={{ ...S.btn, padding: '4px 10px', fontSize: 11, borderRadius: 20, background: schedForm.type === key ? '#eef2ff' : 'white', color: schedForm.type === key ? '#4338ca' : '#94a3b8', border: `1px solid ${schedForm.type === key ? '#a5b4fc' : '#e2e8f0'}` }}>
                             {cfg.emoji} {cfg.label}
                           </button>
                         ))}
@@ -601,7 +601,7 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
                       <div style={{ display: 'flex', gap: 4 }}>
                         {DAY_NAMES.map((d, i) => (
                           <button key={i} onClick={() => setSchedForm(p => ({ ...p, days_of_week: p.days_of_week.includes(i) ? p.days_of_week.filter(x => x !== i) : [...p.days_of_week, i] }))}
-                            style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, background: schedForm.days_of_week.includes(i) ? '#0f172a' : '#f1f5f9', color: schedForm.days_of_week.includes(i) ? 'white' : '#64748b' }}>
+                            style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13, background: schedForm.days_of_week.includes(i) ? '#6366f1' : '#f1f5f9', color: schedForm.days_of_week.includes(i) ? 'white' : '#64748b' }}>
                             {d}
                           </button>
                         ))}
