@@ -202,7 +202,7 @@ export default function EmployerCostsUpload({ onBack }: Props) {
   const hqCost = employees.filter(e => e.is_headquarters).reduce((s, e) => s + e.actual_employer_cost, 0)
   const branchCost = employees.filter(e => e.branch_id).reduce((s, e) => s + e.actual_employer_cost, 0)
   const factoryCost = employees.filter(e => !e.branch_id && !e.is_headquarters).reduce((s, e) => s + e.actual_employer_cost, 0)
-  const unmatchedCount = employees.filter(e => !e.matched).length
+  const unmatchedCount = employees.filter(e => !e.matched && !e.is_headquarters).length
 
   return (
     <motion.div dir="rtl" variants={fadeIn} initial="hidden" animate="visible">
@@ -299,7 +299,7 @@ export default function EmployerCostsUpload({ onBack }: Props) {
                   <th style={S.th}>ימים</th>
                 </tr></thead>
                 <tbody>{employees.map((emp, i) => (
-                  <tr key={i} style={{ background: !emp.matched ? '#fffbeb' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
+                  <tr key={i} style={{ background: !emp.matched && !emp.is_headquarters ? '#fffbeb' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
                     <td style={{ ...S.td, color: '#64748b', fontSize: 12, fontWeight: 600 }}>{emp.employee_number}</td>
                     <td style={{ ...S.td, fontWeight: 500 }}>{emp.employee_name}</td>
                     <td style={{ ...S.td, fontSize: 12, color: '#64748b' }}>{emp.department_name}</td>
@@ -309,15 +309,15 @@ export default function EmployerCostsUpload({ onBack }: Props) {
                         if (v === -2) updateAssignment(i, null, true)
                         else if (v === -1) updateAssignment(i, null, false)
                         else updateAssignment(i, v, false)
-                      }} style={{ border: `1px solid ${!emp.matched ? '#fde68a' : '#e2e8f0'}`, borderRadius: 8, padding: '4px 8px', fontSize: 12, background: !emp.matched ? '#fffbeb' : 'white', width: '100%', cursor: 'pointer' }}>
+                      }} style={{ border: `1px solid ${!emp.matched && !emp.is_headquarters ? '#fde68a' : '#e2e8f0'}`, borderRadius: 8, padding: '4px 8px', fontSize: 12, background: !emp.matched && !emp.is_headquarters ? '#fffbeb' : 'white', width: '100%', cursor: 'pointer' }}>
                         <option value={-1}>מפעל</option>
                         <option value={-2}>מטה (מנהלים)</option>
                         {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                       </select>
                     </td>
                     <td style={S.td}>
-                      {emp.matched ? (
-                        <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ מזוהה</span>
+                      {emp.matched || emp.is_headquarters ? (
+                        <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ {emp.is_headquarters ? 'מטה' : 'מזוהה'}</span>
                       ) : (
                         <select value={emp.matched_employee_id ?? 0} onChange={e => {
                           const beId = Number(e.target.value)
