@@ -16,8 +16,10 @@ interface ParsedEmployee {
   department_number: number; department_name: string
   actual_employer_cost: number; actual_hours: number; actual_days: number
   branch_id: number | null; is_headquarters: boolean
-  matched: boolean; assignment: string
+  matched: boolean; matched_employee_id: number | null; assignment: string
 }
+
+interface UnmatchedBranchEmp { id: number; name: string; branch_id: number | null }
 
 // Department → branch mapping
 const DEPT_MAP: Record<number, { branch_id: number | null; is_hq: boolean; label: string }> = {
@@ -51,6 +53,7 @@ export default function EmployerCostsUpload({ onBack }: Props) {
   const [error, setError] = useState('')
   const [uploads, setUploads] = useState<any[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  const [unmatchedBranchEmps, setUnmatchedBranchEmps] = useState<UnmatchedBranchEmp[]>([])
 
   // Load past uploads
   useEffect(() => {
@@ -113,23 +116,41 @@ export default function EmployerCostsUpload({ onBack }: Props) {
             actual_employer_cost: cost, actual_hours: hours, actual_days: days,
             branch_id: mapping?.branch_id ?? null,
             is_headquarters: mapping?.is_hq ?? false,
-            matched: true,
+            matched: false, matched_employee_id: null,
             assignment: mapping?.label || `מחלקה ${currentDeptNum}`,
           })
         }
 
         if (parsed.length === 0) { setError('לא נמצאו עובדים בקובץ'); return }
 
-        // Try to match with branch_employees
-        const { data: branchEmps } = await supabase.from('branch_employees').select('id, name, employee_number').eq('active', true)
+        // Match with branch_employees by payroll_number
+        const { data: branchEmps } = await supabase.from('branch_employees').select('id, name, branch_id, payroll_number').eq('active', true)
+        const matchedPayrollNums = new Set<number>()
+
         if (branchEmps) {
           for (const emp of parsed) {
-            const match = branchEmps.find((be: any) =>
-              be.employee_number === emp.employee_number ||
+            // First try exact payroll_number match
+            const byPayroll = branchEmps.find((be: any) => be.payroll_number === emp.employee_number)
+            if (byPayroll) {
+              emp.matched = true
+              emp.matched_employee_id = byPayroll.id
+              matchedPayrollNums.add(emp.employee_number)
+              continue
+            }
+            // Try name match
+            const byName = branchEmps.find((be: any) =>
               emp.employee_name.includes(be.name) || be.name.includes(emp.employee_name)
             )
-            emp.matched = !!match || !!DEPT_MAP[emp.department_number]
+            if (byName) {
+              emp.matched = true
+              emp.matched_employee_id = byName.id
+              matchedPayrollNums.add(emp.employee_number)
+            }
           }
+
+          // Build list of branch employees without payroll_number for manual assignment
+          const unmatched = branchEmps.filter((be: any) => !be.payroll_number && !parsed.some(p => p.matched_employee_id === be.id))
+          setUnmatchedBranchEmps(unmatched.map((be: any) => ({ id: be.id, name: be.name, branch_id: be.branch_id })))
         }
 
         setEmployees(parsed)
@@ -156,6 +177,14 @@ export default function EmployerCostsUpload({ onBack }: Props) {
     }))
 
     await supabase.from('employer_costs').insert(payload)
+
+    // Save payroll_number permanently for matched employees
+    for (const emp of employees) {
+      if (emp.matched_employee_id) {
+        await supabase.from('branch_employees').update({ payroll_number: emp.employee_number }).eq('id', emp.matched_employee_id)
+      }
+    }
+
     await supabase.from('employer_costs_uploads').insert({
       month: reportMonth, year: reportYear,
       filename: 'דוח מעסיק', uploaded_by: appUser?.name || null,
@@ -264,6 +293,7 @@ export default function EmployerCostsUpload({ onBack }: Props) {
                   <th style={S.th}>עובד</th>
                   <th style={S.th}>מחלקה</th>
                   <th style={{ ...S.th, width: 170 }}>שיוך</th>
+                  <th style={{ ...S.th, width: 160 }}>זיהוי</th>
                   <th style={S.th}>עלות מעסיק</th>
                   <th style={S.th}>שעות</th>
                   <th style={S.th}>ימים</th>
@@ -284,6 +314,22 @@ export default function EmployerCostsUpload({ onBack }: Props) {
                         <option value={-2}>מטה (מנהלים)</option>
                         {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                       </select>
+                    </td>
+                    <td style={S.td}>
+                      {emp.matched ? (
+                        <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ מזוהה</span>
+                      ) : (
+                        <select value={emp.matched_employee_id ?? 0} onChange={e => {
+                          const beId = Number(e.target.value)
+                          if (!beId) return
+                          const be = unmatchedBranchEmps.find(u => u.id === beId)
+                          setEmployees(prev => prev.map((em, j) => j === i ? { ...em, matched: true, matched_employee_id: beId, assignment: be ? `${be.name}` : em.assignment } : em))
+                          setUnmatchedBranchEmps(prev => prev.filter(u => u.id !== beId))
+                        }} style={{ border: '1px solid #fde68a', borderRadius: 8, padding: '3px 6px', fontSize: 11, background: '#fffbeb', width: '100%' }}>
+                          <option value={0}>⚠️ שייך לעובד...</option>
+                          {unmatchedBranchEmps.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                      )}
                     </td>
                     <td style={{ ...S.td, fontWeight: 600 }}>{fmtM(emp.actual_employer_cost)}</td>
                     <td style={S.td}>{emp.actual_hours}</td>
