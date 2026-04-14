@@ -188,36 +188,49 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
   const [newEmpSaving, setNewEmpSaving] = useState(false)
   const [newEmpPhone, setNewEmpPhone] = useState('')
   const [newEmpEmail, setNewEmpEmail] = useState('')
+  const [newEmpDept, setNewEmpDept] = useState('')
+  const FACTORY_DEPTS = ['בצקים', 'קרמים', 'ניקיון', 'אריזה', 'מפעל אחר']
 
   async function saveNewEmployee() {
     if (!newEmpModal) return
     setNewEmpSaving(true)
-    const branchId = newEmpBranch >= 0 ? newEmpBranch : null
+    const branchId = newEmpBranch > 0 ? newEmpBranch : null
     const fullName = `${newEmpModal.firstName} ${newEmpModal.lastName}`.trim()
+    const empNumber = employees[newEmpModal.idx]?.employee_number || null
 
-    // Create in branch_employees
-    const { data: newEmp, error: insertErr } = await supabase.from('branch_employees').insert({
-      branch_id: branchId || 1, // default to branch 1 if factory/HQ
+    // branch_employees requires branch_id — for factory/HQ use branch 1 as placeholder
+    // The actual cost assignment uses employer_costs.branch_id (null for factory)
+    const dbBranchId = branchId || 1
+
+    const insertPayload: any = {
+      branch_id: dbBranchId,
       name: fullName,
       email: newEmpEmail || null,
       phone: newEmpPhone || null,
-      payroll_number: employees[newEmpModal.idx]?.employee_number || null,
+      payroll_number: empNumber,
       active: true,
-    }).select().single()
+    }
+    if (newEmpDept) insertPayload.department = newEmpDept
 
-    if (insertErr || !newEmp) { alert('שגיאה ביצירת עובד: ' + (insertErr?.message || '')); setNewEmpSaving(false); return }
+    const { data: newEmp, error: insertErr } = await supabase
+      .from('branch_employees').insert(insertPayload).select().single()
+
+    if (insertErr || !newEmp) {
+      console.error('Employee creation error:', insertErr)
+      alert('שגיאה ביצירת עובד: ' + (insertErr?.message || ''))
+      setNewEmpSaving(false)
+      return
+    }
 
     // Update the parsed employee row
     const empIdx = newEmpModal.idx
+    const assignLabel = branchId ? (branches.find(b => b.id === branchId)?.name || '') : newEmpDept ? `מפעל (${newEmpDept})` : 'מפעל'
     setEmployees(prev => prev.map((em, j) => j === empIdx ? {
       ...em, matched: true, matched_employee_id: newEmp.id,
-      branch_id: branchId, assignment: branchId ? (branches.find(b => b.id === branchId)?.name || 'מפעל') : 'מפעל',
+      branch_id: branchId, assignment: assignLabel,
     } : em))
 
-    // Remove from unmatched list
-    setUnmatchedBranchEmps(prev => [...prev.filter(u => u.id !== newEmp.id)])
-
-    setNewEmpModal(null); setNewEmpSaving(false); setNewEmpPhone(''); setNewEmpEmail('')
+    setNewEmpModal(null); setNewEmpSaving(false); setNewEmpPhone(''); setNewEmpEmail(''); setNewEmpDept('')
   }
 
   function updateAssignment(idx: number, branchId: number | null, isHq: boolean) {
@@ -513,11 +526,19 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
                   <input value={newEmpModal.lastName} onChange={e => setNewEmpModal(p => p ? { ...p, lastName: e.target.value } : p)} style={{ ...S.input, width: '100%' }} /></div>
               </div>
               <div><label style={S.label}>סניף / מפעל</label>
-                <select value={newEmpBranch} onChange={e => setNewEmpBranch(Number(e.target.value))} style={{ ...S.input, width: '100%' }}>
+                <select value={newEmpBranch} onChange={e => { setNewEmpBranch(Number(e.target.value)); if (Number(e.target.value) > 0) setNewEmpDept('') }} style={{ ...S.input, width: '100%' }}>
                   <option value={-1}>מפעל</option>
                   {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
               </div>
+              {newEmpBranch <= 0 && (
+                <div><label style={S.label}>מחלקה במפעל</label>
+                  <select value={newEmpDept} onChange={e => setNewEmpDept(e.target.value)} style={{ ...S.input, width: '100%' }}>
+                    <option value="">בחר מחלקה...</option>
+                    {FACTORY_DEPTS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+              )}
               <div><label style={S.label}>טלפון <span style={{ color: '#94a3b8' }}>(אופציונלי)</span></label>
                 <input value={newEmpPhone} onChange={e => setNewEmpPhone(e.target.value)} placeholder="050-..." style={{ ...S.input, width: '100%' }} /></div>
               <div><label style={S.label}>אימייל <span style={{ color: '#94a3b8' }}>(אופציונלי)</span></label>
