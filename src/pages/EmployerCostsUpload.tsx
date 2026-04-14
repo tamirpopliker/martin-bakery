@@ -64,42 +64,7 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
   const [newEmpModal, setNewEmpModal] = useState<{ idx: number; firstName: string; lastName: string } | null>(null)
   const [newEmpBranch, setNewEmpBranch] = useState<number>(-1)
 
-  // Restore state from sessionStorage after returning from employee creation
-  useEffect(() => {
-    const saved = sessionStorage.getItem('employer_costs_state')
-    if (saved) {
-      try {
-        const state = JSON.parse(saved)
-        setEmployees(state.employees || [])
-        setReportMonth(state.reportMonth || 0)
-        setReportYear(state.reportYear || 0)
-        setParsedFileName(state.parsedFileName || '')
-        setStep('preview')
-        setTab('upload')
-        sessionStorage.removeItem('employer_costs_state')
-        // Re-fetch unmatched employees (new one may have been created)
-        supabase.from('branch_employees').select('id, name, branch_id, payroll_number').eq('active', true)
-          .then(({ data }) => {
-            if (data) {
-              const matchedIds = new Set((state.employees || []).filter((e: any) => e.matched_employee_id).map((e: any) => e.matched_employee_id))
-              setUnmatchedBranchEmps(data.filter((be: any) => !be.payroll_number && !matchedIds.has(be.id)).map((be: any) => ({ id: be.id, name: be.name, branch_id: be.branch_id })))
-              // Try to auto-match the newly created employee by name
-              for (let i = 0; i < state.employees.length; i++) {
-                const emp = state.employees[i]
-                if (!emp.matched && !emp.is_headquarters && !emp.is_manager) {
-                  const match = data.find((be: any) => emp.employee_name.includes(be.name) || be.name.includes(emp.employee_name))
-                  if (match && !matchedIds.has(match.id)) {
-                    state.employees[i] = { ...emp, matched: true, matched_employee_id: match.id, branch_id: match.branch_id, assignment: match.name }
-                    matchedIds.add(match.id)
-                  }
-                }
-              }
-              setEmployees([...state.employees])
-            }
-          })
-      } catch {}
-    }
-  }, [])
+  // No longer needed — employee creation happens inline via modal
 
   // Load history
   const loadUploads = useCallback(async () => {
@@ -220,19 +185,39 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
     setNewEmpBranch(-1)
   }
 
-  function navigateToCreateEmployee() {
+  const [newEmpSaving, setNewEmpSaving] = useState(false)
+  const [newEmpPhone, setNewEmpPhone] = useState('')
+  const [newEmpEmail, setNewEmpEmail] = useState('')
+
+  async function saveNewEmployee() {
     if (!newEmpModal) return
-    // Save state
-    sessionStorage.setItem('employer_costs_state', JSON.stringify({
-      employees, reportMonth, reportYear, parsedFileName,
-    }))
-    // Build target branch_id for prefill
+    setNewEmpSaving(true)
     const branchId = newEmpBranch >= 0 ? newEmpBranch : null
-    sessionStorage.setItem('employer_costs_prefill', JSON.stringify({
-      firstName: newEmpModal.firstName, lastName: newEmpModal.lastName, branchId,
-    }))
-    setNewEmpModal(null)
-    if (onNavigate) onNavigate('user_management')
+    const fullName = `${newEmpModal.firstName} ${newEmpModal.lastName}`.trim()
+
+    // Create in branch_employees
+    const { data: newEmp, error: insertErr } = await supabase.from('branch_employees').insert({
+      branch_id: branchId || 1, // default to branch 1 if factory/HQ
+      name: fullName,
+      email: newEmpEmail || null,
+      phone: newEmpPhone || null,
+      payroll_number: employees[newEmpModal.idx]?.employee_number || null,
+      active: true,
+    }).select().single()
+
+    if (insertErr || !newEmp) { alert('שגיאה ביצירת עובד: ' + (insertErr?.message || '')); setNewEmpSaving(false); return }
+
+    // Update the parsed employee row
+    const empIdx = newEmpModal.idx
+    setEmployees(prev => prev.map((em, j) => j === empIdx ? {
+      ...em, matched: true, matched_employee_id: newEmp.id,
+      branch_id: branchId, assignment: branchId ? (branches.find(b => b.id === branchId)?.name || 'מפעל') : 'מפעל',
+    } : em))
+
+    // Remove from unmatched list
+    setUnmatchedBranchEmps(prev => [...prev.filter(u => u.id !== newEmp.id)])
+
+    setNewEmpModal(null); setNewEmpSaving(false); setNewEmpPhone(''); setNewEmpEmail('')
   }
 
   function updateAssignment(idx: number, branchId: number | null, isHq: boolean) {
@@ -516,30 +501,35 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
       {newEmpModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setNewEmpModal(null)}>
           <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 420, margin: '0 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>צור עובד חדש</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>הקמת עובד חדש</h3>
             <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px' }}>
-              עובד "{newEmpModal.firstName} {newEmpModal.lastName}" לא נמצא במערכת.
+              "{newEmpModal.firstName} {newEmpModal.lastName}" לא נמצא במערכת — צור עכשיו:
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-              <div>
-                <label style={S.label}>שם פרטי</label>
-                <input value={newEmpModal.firstName} readOnly style={{ ...S.input, width: '100%', background: '#f8fafc' }} />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1 }}><label style={S.label}>שם פרטי</label>
+                  <input value={newEmpModal.firstName} onChange={e => setNewEmpModal(p => p ? { ...p, firstName: e.target.value } : p)} style={{ ...S.input, width: '100%' }} /></div>
+                <div style={{ flex: 1 }}><label style={S.label}>שם משפחה</label>
+                  <input value={newEmpModal.lastName} onChange={e => setNewEmpModal(p => p ? { ...p, lastName: e.target.value } : p)} style={{ ...S.input, width: '100%' }} /></div>
               </div>
-              <div>
-                <label style={S.label}>שם משפחה</label>
-                <input value={newEmpModal.lastName} readOnly style={{ ...S.input, width: '100%', background: '#f8fafc' }} />
-              </div>
-              <div>
-                <label style={S.label}>באיזה סניף/מפעל להוסיף?</label>
+              <div><label style={S.label}>סניף / מפעל</label>
                 <select value={newEmpBranch} onChange={e => setNewEmpBranch(Number(e.target.value))} style={{ ...S.input, width: '100%' }}>
                   <option value={-1}>מפעל</option>
-                  <option value={-2}>מטה</option>
                   {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
               </div>
+              <div><label style={S.label}>טלפון <span style={{ color: '#94a3b8' }}>(אופציונלי)</span></label>
+                <input value={newEmpPhone} onChange={e => setNewEmpPhone(e.target.value)} placeholder="050-..." style={{ ...S.input, width: '100%' }} /></div>
+              <div><label style={S.label}>אימייל <span style={{ color: '#94a3b8' }}>(אופציונלי)</span></label>
+                <input value={newEmpEmail} onChange={e => setNewEmpEmail(e.target.value)} placeholder="email@..." style={{ ...S.input, width: '100%' }} /></div>
+            </div>
+            <div style={{ background: '#eff6ff', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#1d4ed8' }}>
+              💡 העובד ייווצר עם מספר שכר {employees[newEmpModal.idx]?.employee_number} ויזוהה אוטומטית בהעלאות הבאות
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={navigateToCreateEmployee} style={{ ...S.btn, background: '#6366f1', color: 'white' }}>פתח דף הקמת עובד</button>
+              <button onClick={saveNewEmployee} disabled={newEmpSaving} style={{ ...S.btn, background: newEmpSaving ? '#94a3b8' : '#6366f1', color: 'white' }}>
+                {newEmpSaving ? 'שומר...' : '✓ צור עובד ושייך'}
+              </button>
               <button onClick={() => setNewEmpModal(null)} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>ביטול</button>
             </div>
           </div>
