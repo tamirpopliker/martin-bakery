@@ -146,6 +146,8 @@ export default function CEODashboard({ onBack }: Props) {
 
   const [insights, setInsights] = useState<any[]>([])
   const [priceAlerts, setPriceAlerts] = useState<{ product_name: string; current_price: number; last_price: number; pct: number }[]>([])
+  const [hqCost, setHqCost] = useState(0)
+  const [hasEmployerReport, setHasEmployerReport] = useState(false)
 
   // Sheet (drawer) state
   const [sheetType, setSheetType] = useState<KpiSheetType | null>(null)
@@ -390,6 +392,15 @@ export default function CEODashboard({ onBack }: Props) {
       })).sort((a: any, b: any) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 10)
       setPriceAlerts(alerts)
     }
+
+    // Employer report — headquarters cost
+    const [mYear, mMonth] = mk.split('-').map(Number)
+    const { data: hqData } = await supabase.from('employer_costs')
+      .select('actual_employer_cost').eq('is_headquarters', true).eq('month', mMonth).eq('year', mYear)
+    setHqCost((hqData || []).reduce((s: number, r: any) => s + Number(r.actual_employer_cost), 0))
+    const { count: reportCount } = await supabase.from('employer_costs_uploads')
+      .select('id', { count: 'exact', head: true }).eq('month', mMonth).eq('year', mYear)
+    setHasEmployerReport((reportCount || 0) > 0)
 
     } catch (err) {
       console.error('[CEODashboard] fetchData error:', err)
@@ -941,6 +952,7 @@ export default function CEODashboard({ onBack }: Props) {
                 ] : []),
                 { label: isSegment ? 'ספקים חיצוניים' : 'חומרי גלם / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => br.expExternal, bold: false, color: '' },
                 { label: 'לייבור', factory: factoryLabor, getBr: br => br.labor, bold: false, color: '', kpiKey: 'labor' },
+                ...(hqCost > 0 ? [{ label: 'עלויות מטה' + (hasEmployerReport ? ' ✓' : ' ~'), factory: hqCost, getBr: () => 0, bold: false, color: '' as const }] : []),
                 { label: 'שכר מנהל', factory: 0, getBr: br => br.managerSalary, bold: false, color: '' },
                 { label: 'פחת', factory: factoryWaste, getBr: br => br.waste, bold: false, color: '', kpiKey: 'waste' },
                 { label: 'תיקונים', factory: factoryRepairs, getBr: br => br.repairs, bold: false, color: '' },
