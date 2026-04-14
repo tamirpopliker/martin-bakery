@@ -15,24 +15,24 @@ interface ParsedEmployee {
   employee_number: number; employee_name: string
   department_number: number; department_name: string
   actual_employer_cost: number; actual_hours: number; actual_days: number
-  branch_id: number | null; is_headquarters: boolean
+  branch_id: number | null; is_headquarters: boolean; is_manager: boolean
   matched: boolean; matched_employee_id: number | null; assignment: string
 }
 
 interface UnmatchedBranchEmp { id: number; name: string; branch_id: number | null }
 
 // Department → branch mapping
-const DEPT_MAP: Record<number, { branch_id: number | null; is_hq: boolean; label: string }> = {
-  1:  { branch_id: null, is_hq: true, label: 'מטה (מנהלים)' },
-  2:  { branch_id: null, is_hq: false, label: 'מפעל' },
-  3:  { branch_id: 1, is_hq: false, label: 'סניף אברהם אבינו' },
-  4:  { branch_id: 2, is_hq: false, label: 'סניף הפועלים' },
-  5:  { branch_id: null, is_hq: false, label: 'מפעל (בצקים)' },
-  6:  { branch_id: null, is_hq: false, label: 'מפעל (קרמים)' },
-  7:  { branch_id: null, is_hq: false, label: 'מפעל (ניקיון)' },
-  8:  { branch_id: null, is_hq: false, label: 'מפעל (אריזה)' },
-  11: { branch_id: 2, is_hq: false, label: 'סניף הפועלים (מנהלים)' },
-  13: { branch_id: 3, is_hq: false, label: 'סניף יעקב כהן' },
+const DEPT_MAP: Record<number, { branch_id: number | null; is_hq: boolean; is_mgr: boolean; label: string }> = {
+  1:  { branch_id: null, is_hq: true, is_mgr: true, label: 'מטה (מנהלים)' },
+  2:  { branch_id: null, is_hq: false, is_mgr: false, label: 'מפעל' },
+  3:  { branch_id: 1, is_hq: false, is_mgr: false, label: 'סניף אברהם אבינו' },
+  4:  { branch_id: 2, is_hq: false, is_mgr: false, label: 'סניף הפועלים' },
+  5:  { branch_id: null, is_hq: false, is_mgr: false, label: 'מפעל (בצקים)' },
+  6:  { branch_id: null, is_hq: false, is_mgr: false, label: 'מפעל (קרמים)' },
+  7:  { branch_id: null, is_hq: false, is_mgr: false, label: 'מפעל (ניקיון)' },
+  8:  { branch_id: null, is_hq: false, is_mgr: false, label: 'מפעל (אריזה)' },
+  11: { branch_id: 2, is_hq: false, is_mgr: true, label: 'סניף הפועלים (מנהלים)' },
+  13: { branch_id: 3, is_hq: false, is_mgr: false, label: 'סניף יעקב כהן' },
 }
 
 const S = {
@@ -116,6 +116,7 @@ export default function EmployerCostsUpload({ onBack }: Props) {
             actual_employer_cost: cost, actual_hours: hours, actual_days: days,
             branch_id: mapping?.branch_id ?? null,
             is_headquarters: mapping?.is_hq ?? false,
+            is_manager: mapping?.is_mgr ?? false,
             matched: false, matched_employee_id: null,
             assignment: mapping?.label || `מחלקה ${currentDeptNum}`,
           })
@@ -172,7 +173,7 @@ export default function EmployerCostsUpload({ onBack }: Props) {
       month: reportMonth, year: reportYear,
       department_number: emp.department_number, department_name: emp.department_name,
       actual_employer_cost: emp.actual_employer_cost, actual_hours: emp.actual_hours, actual_days: emp.actual_days,
-      branch_id: emp.branch_id, is_headquarters: emp.is_headquarters,
+      branch_id: emp.branch_id, is_headquarters: emp.is_headquarters, is_manager: emp.is_manager,
       uploaded_by: appUser?.name || null,
     }))
 

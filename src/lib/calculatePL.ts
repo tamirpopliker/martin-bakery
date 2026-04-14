@@ -99,24 +99,36 @@ export async function calculateBranchPL(
     }
   }
 
-  // Labor — check employer_costs (actual payroll) first, fallback to branch_labor (estimated)
+  // Labor + Manager salary — check employer_costs first to prevent double-counting
   const [mYear, mMonth] = mk.split('-').map(Number)
-  const { data: actualLab } = await supabase.from('employer_costs')
-    .select('actual_employer_cost').eq('branch_id', branchId).eq('month', mMonth).eq('year', mYear)
-  const laborIsActual = (actualLab && actualLab.length > 0) ? true : false
-  const labor = laborIsActual
-    ? actualLab!.reduce((s, r) => s + Number(r.actual_employer_cost), 0)
-    : (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+  const { data: actualLabAll } = await supabase.from('employer_costs')
+    .select('actual_employer_cost, is_manager').eq('branch_id', branchId).eq('month', mMonth).eq('year', mYear)
+  const laborIsActual = (actualLabAll && actualLabAll.length > 0) ? true : false
+
+  let labor: number, managerSalary: number
+  if (laborIsActual) {
+    // Actual payroll data: split into regular labor and manager salary
+    labor = actualLabAll!.filter(r => !r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    managerSalary = actualLabAll!.filter(r => r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+  } else {
+    // Estimated: labor from branch_labor, manager from fixed_costs
+    labor = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+    managerSalary = 0 // will be set from fixed_costs below
+  }
 
   // Waste
   const waste = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
 
   // Fixed costs: separate manager salary (entity_id='mgmt') from others
-  let fixedCosts = 0, managerSalary = 0
+  let fixedCosts = 0
   for (const r of (fcRes.data || [])) {
     const amt = Number(r.amount)
-    if (r.entity_id === 'mgmt') managerSalary += amt
-    else fixedCosts += amt
+    if (r.entity_id === 'mgmt') {
+      // Only use fixed_costs manager salary if NO actual payroll data
+      if (!laborIsActual) managerSalary += amt
+    } else {
+      fixedCosts += amt
+    }
   }
 
   // Controllable profit = revenue - all variable costs

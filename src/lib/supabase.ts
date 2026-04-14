@@ -558,20 +558,26 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     else expOther += amt
   }
 
-  // Labor — check employer_costs (actual payroll) first, fallback to branch_labor
+  // Labor + Manager — check employer_costs first to prevent double-counting
   const [mYear, mMonth] = monthKey.split('-').map(Number)
-  const { data: actualLab } = await supabase.from('employer_costs')
-    .select('actual_employer_cost').eq('branch_id', branchId).eq('month', mMonth).eq('year', mYear)
-  const laborIsActual = (actualLab && actualLab.length > 0)
-  const laborEmployer = laborIsActual
-    ? actualLab!.reduce((s, r) => s + Number(r.actual_employer_cost), 0)
-    : (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+  const { data: actualLabAll } = await supabase.from('employer_costs')
+    .select('actual_employer_cost, is_manager').eq('branch_id', branchId).eq('month', mMonth).eq('year', mYear)
+  const laborIsActual = (actualLabAll && actualLabAll.length > 0) ? true : false
+
+  let laborEmployer: number, mgmtCosts: number
+  if (laborIsActual) {
+    laborEmployer = actualLabAll!.filter(r => !r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    mgmtCosts = actualLabAll!.filter(r => r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+  } else {
+    laborEmployer = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+    mgmtCosts = 0
+  }
   const wasteTotal = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
 
-  let fixedCosts = 0, mgmtCosts = 0
+  let fixedCosts = 0
   for (const r of (fcRes.data || [])) {
     const amt = Number(r.amount)
-    if (r.entity_id === 'mgmt') mgmtCosts += amt
+    if (r.entity_id === 'mgmt') { if (!laborIsActual) mgmtCosts += amt }
     else fixedCosts += amt
   }
 
@@ -589,8 +595,8 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     { label: 'הכנסות', amount: revenue, bold: true, color: '' },
     { label: 'רכישות מפעל', amount: expSuppliersInternal, color: 'expense' },
     { label: 'ספקים חיצוניים', amount: expSuppliersExternal, color: 'expense' },
-    { label: 'לייבור', amount: laborEmployer, color: 'expense' },
-    { label: 'שכר מנהל (הנהלה)', amount: mgmtCosts, color: 'expense' },
+    { label: laborIsActual ? 'לייבור ✓' : 'לייבור ~', amount: laborEmployer, color: 'expense' },
+    { label: laborIsActual ? 'שכר מנהל ✓' : 'שכר מנהל (משוער)', amount: mgmtCosts, color: 'expense' },
     { label: 'פחת', amount: wasteTotal, color: 'expense' },
     { label: 'תיקונים', amount: expRepairs, color: 'expense' },
     { label: 'רווח נשלט', amount: controllableMargin, pct: pct(controllableMargin), bold: true, separator: true, color: 'profit' },
