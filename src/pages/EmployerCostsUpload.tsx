@@ -61,6 +61,8 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
   const [unmatchedBranchEmps, setUnmatchedBranchEmps] = useState<UnmatchedBranchEmp[]>([])
   const [existingUpload, setExistingUpload] = useState<any>(null)
   const [parsedFileName, setParsedFileName] = useState('')
+  const [newEmpModal, setNewEmpModal] = useState<{ idx: number; firstName: string; lastName: string } | null>(null)
+  const [newEmpBranch, setNewEmpBranch] = useState<number>(-1)
 
   // Restore state from sessionStorage after returning from employee creation
   useEffect(() => {
@@ -210,17 +212,27 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
     loadUploads()
   }
 
-  function createNewEmployee(empName: string) {
-    // Save current state to sessionStorage
+  function openNewEmpModal(idx: number, empName: string) {
+    const parts = empName.split(' ')
+    const firstName = parts[0] || ''
+    const lastName = parts.slice(1).join(' ') || ''
+    setNewEmpModal({ idx, firstName, lastName })
+    setNewEmpBranch(-1)
+  }
+
+  function navigateToCreateEmployee() {
+    if (!newEmpModal) return
+    // Save state
     sessionStorage.setItem('employer_costs_state', JSON.stringify({
       employees, reportMonth, reportYear, parsedFileName,
     }))
-    // Navigate to employee management — onNavigate goes to Home which can route
-    if (onNavigate) {
-      onNavigate('user_management')
-    } else {
-      alert(`צור עובד חדש בשם "${empName}" בדף ניהול צוות ואז חזור לכאן`)
-    }
+    // Build target branch_id for prefill
+    const branchId = newEmpBranch >= 0 ? newEmpBranch : null
+    sessionStorage.setItem('employer_costs_prefill', JSON.stringify({
+      firstName: newEmpModal.firstName, lastName: newEmpModal.lastName, branchId,
+    }))
+    setNewEmpModal(null)
+    if (onNavigate) onNavigate('user_management')
   }
 
   function updateAssignment(idx: number, branchId: number | null, isHq: boolean) {
@@ -391,8 +403,7 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
                               return
                             }
                             if (beId === -3) {
-                              // "צור עובד חדש" — save state and navigate
-                              createNewEmployee(emp.employee_name)
+                              openNewEmpModal(i, emp.employee_name)
                               return
                             }
                             if (!beId) return
@@ -500,6 +511,40 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
           </div>
         )}
       </div>
+
+      {/* New employee modal */}
+      {newEmpModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setNewEmpModal(null)}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 420, margin: '0 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>צור עובד חדש</h3>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px' }}>
+              עובד "{newEmpModal.firstName} {newEmpModal.lastName}" לא נמצא במערכת.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+              <div>
+                <label style={S.label}>שם פרטי</label>
+                <input value={newEmpModal.firstName} readOnly style={{ ...S.input, width: '100%', background: '#f8fafc' }} />
+              </div>
+              <div>
+                <label style={S.label}>שם משפחה</label>
+                <input value={newEmpModal.lastName} readOnly style={{ ...S.input, width: '100%', background: '#f8fafc' }} />
+              </div>
+              <div>
+                <label style={S.label}>באיזה סניף/מפעל להוסיף?</label>
+                <select value={newEmpBranch} onChange={e => setNewEmpBranch(Number(e.target.value))} style={{ ...S.input, width: '100%' }}>
+                  <option value={-1}>מפעל</option>
+                  <option value={-2}>מטה</option>
+                  {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={navigateToCreateEmployee} style={{ ...S.btn, background: '#6366f1', color: 'white' }}>פתח דף הקמת עובד</button>
+              <button onClick={() => setNewEmpModal(null)} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   )
 }
