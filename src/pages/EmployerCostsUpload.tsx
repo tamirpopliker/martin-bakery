@@ -335,17 +335,28 @@ export default function EmployerCostsUpload({ onBack }: Props) {
                         ) : (
                           <select value={emp.matched_employee_id ?? 0} onChange={e => {
                             const beId = Number(e.target.value)
-                            if (beId === -1) { setEmployees(prev => prev.map((em, j) => j === i ? { ...em, matched: true, matched_employee_id: null } : em)); return }
-                            if (beId === -2) { setEmployees(prev => prev.map((em, j) => j === i ? { ...em, matched: true, matched_employee_id: null } : em)); return }
+                            if (beId === -2) {
+                              // "עובד לא פעיל" — save cost without linking
+                              setEmployees(prev => prev.map((em, j) => j === i ? { ...em, matched: true, matched_employee_id: null } : em))
+                              return
+                            }
                             if (!beId) return
                             const be = unmatchedBranchEmps.find(u => u.id === beId)
-                            setEmployees(prev => prev.map((em, j) => j === i ? { ...em, matched: true, matched_employee_id: beId, assignment: be?.name || em.assignment } : em))
+                            // Auto-set branch_id from the selected employee's branch
+                            const branchId = be?.branch_id ?? emp.branch_id
+                            const branchLabel = branchId ? (branches.find(b => b.id === branchId)?.name || '') : emp.assignment
+                            setEmployees(prev => prev.map((em, j) => j === i ? {
+                              ...em, matched: true, matched_employee_id: beId,
+                              branch_id: branchId, assignment: branchLabel,
+                            } : em))
                             setUnmatchedBranchEmps(prev => prev.filter(u => u.id !== beId))
                           }} style={{ border: '1px solid #fde68a', borderRadius: 8, padding: '3px 6px', fontSize: 11, background: '#fffbeb', width: '100%' }}>
                             <option value={0}>⚠️ שייך לעובד...</option>
                             <option value={-2}>🚫 עובד לא פעיל</option>
-                            <option value={-1}>➕ עובד חדש</option>
-                            {unmatchedBranchEmps.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            {unmatchedBranchEmps.map(u => {
+                              const brName = u.branch_id ? branches.find(b => b.id === u.branch_id)?.name : 'מפעל'
+                              return <option key={u.id} value={u.id}>{u.name} ({brName})</option>
+                            })}
                           </select>
                         )}
                       </td>
