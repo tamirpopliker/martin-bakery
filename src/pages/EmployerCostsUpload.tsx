@@ -9,7 +9,7 @@ import * as XLSX from 'xlsx'
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
-interface Props { onBack: () => void }
+interface Props { onBack: () => void; onNavigate?: (page: string) => void }
 
 interface ParsedEmployee {
   employee_number: number; employee_name: string
@@ -47,7 +47,7 @@ const S = {
 }
 const fmtM = (n: number) => '₪' + Math.round(n).toLocaleString()
 
-export default function EmployerCostsUpload({ onBack }: Props) {
+export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
   const { appUser } = useAppUser()
   const { branches } = useBranches()
   const [tab, setTab] = useState<'upload' | 'history'>('upload')
@@ -61,6 +61,43 @@ export default function EmployerCostsUpload({ onBack }: Props) {
   const [unmatchedBranchEmps, setUnmatchedBranchEmps] = useState<UnmatchedBranchEmp[]>([])
   const [existingUpload, setExistingUpload] = useState<any>(null)
   const [parsedFileName, setParsedFileName] = useState('')
+
+  // Restore state from sessionStorage after returning from employee creation
+  useEffect(() => {
+    const saved = sessionStorage.getItem('employer_costs_state')
+    if (saved) {
+      try {
+        const state = JSON.parse(saved)
+        setEmployees(state.employees || [])
+        setReportMonth(state.reportMonth || 0)
+        setReportYear(state.reportYear || 0)
+        setParsedFileName(state.parsedFileName || '')
+        setStep('preview')
+        setTab('upload')
+        sessionStorage.removeItem('employer_costs_state')
+        // Re-fetch unmatched employees (new one may have been created)
+        supabase.from('branch_employees').select('id, name, branch_id, payroll_number').eq('active', true)
+          .then(({ data }) => {
+            if (data) {
+              const matchedIds = new Set((state.employees || []).filter((e: any) => e.matched_employee_id).map((e: any) => e.matched_employee_id))
+              setUnmatchedBranchEmps(data.filter((be: any) => !be.payroll_number && !matchedIds.has(be.id)).map((be: any) => ({ id: be.id, name: be.name, branch_id: be.branch_id })))
+              // Try to auto-match the newly created employee by name
+              for (let i = 0; i < state.employees.length; i++) {
+                const emp = state.employees[i]
+                if (!emp.matched && !emp.is_headquarters && !emp.is_manager) {
+                  const match = data.find((be: any) => emp.employee_name.includes(be.name) || be.name.includes(emp.employee_name))
+                  if (match && !matchedIds.has(match.id)) {
+                    state.employees[i] = { ...emp, matched: true, matched_employee_id: match.id, branch_id: match.branch_id, assignment: match.name }
+                    matchedIds.add(match.id)
+                  }
+                }
+              }
+              setEmployees([...state.employees])
+            }
+          })
+      } catch {}
+    }
+  }, [])
 
   // Load history
   const loadUploads = useCallback(async () => {
@@ -171,6 +208,19 @@ export default function EmployerCostsUpload({ onBack }: Props) {
     await supabase.from('employer_costs').delete().eq('month', month).eq('year', year)
     await supabase.from('employer_costs_uploads').delete().eq('id', id)
     loadUploads()
+  }
+
+  function createNewEmployee(empName: string) {
+    // Save current state to sessionStorage
+    sessionStorage.setItem('employer_costs_state', JSON.stringify({
+      employees, reportMonth, reportYear, parsedFileName,
+    }))
+    // Navigate to employee management — onNavigate goes to Home which can route
+    if (onNavigate) {
+      onNavigate('user_management')
+    } else {
+      alert(`צור עובד חדש בשם "${empName}" בדף ניהול צוות ואז חזור לכאן`)
+    }
   }
 
   function updateAssignment(idx: number, branchId: number | null, isHq: boolean) {
@@ -340,6 +390,11 @@ export default function EmployerCostsUpload({ onBack }: Props) {
                               setEmployees(prev => prev.map((em, j) => j === i ? { ...em, matched: true, matched_employee_id: null } : em))
                               return
                             }
+                            if (beId === -3) {
+                              // "צור עובד חדש" — save state and navigate
+                              createNewEmployee(emp.employee_name)
+                              return
+                            }
                             if (!beId) return
                             const be = unmatchedBranchEmps.find(u => u.id === beId)
                             // Auto-set branch_id from the selected employee's branch
@@ -352,6 +407,7 @@ export default function EmployerCostsUpload({ onBack }: Props) {
                             setUnmatchedBranchEmps(prev => prev.filter(u => u.id !== beId))
                           }} style={{ border: '1px solid #fde68a', borderRadius: 8, padding: '3px 6px', fontSize: 11, background: '#fffbeb', width: '100%' }}>
                             <option value={0}>⚠️ שייך לעובד...</option>
+                            <option value={-3}>➕ צור עובד חדש</option>
                             <option value={-2}>🚫 עובד לא פעיל</option>
                             {unmatchedBranchEmps.map(u => {
                               const brName = u.branch_id ? branches.find(b => b.id === u.branch_id)?.name : 'מפעל'

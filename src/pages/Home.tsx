@@ -306,7 +306,7 @@ export default function Home() {
     if (page === 'reports_alerts')       return <ReportsAlerts onBack={() => setPage(null)} />
 
     if (page === 'b2b_customers') return <B2BCustomers onBack={() => setPage(null)} />
-    if (page === 'employer_costs') return <EmployerCostsUpload onBack={() => setPage(null)} />
+    if (page === 'employer_costs') return <EmployerCostsUpload onBack={() => setPage(null)} onNavigate={(p) => setPage(p)} />
     if (page === 'factory_departments') return <FactoryDepartments onBack={() => setPage(null)} />
     if (page === 'factory_equipment')  return <FactoryEquipment onBack={() => setPage(null)} />
     if (page === 'dept_creams')    return <DepartmentHome department="creams"    onBack={() => setPage(null)} />
