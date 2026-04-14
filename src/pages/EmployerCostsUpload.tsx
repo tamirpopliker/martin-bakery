@@ -260,42 +260,34 @@ export default function EmployerCostsUpload({ onBack }: Props) {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
-                  <th style={{ ...S.th, width: 50 }}>#</th>
+                  <th style={{ ...S.th, width: 60 }}>מס' עובד</th>
                   <th style={S.th}>עובד</th>
                   <th style={S.th}>מחלקה</th>
-                  <th style={{ ...S.th, width: 150 }}>שיוך</th>
+                  <th style={{ ...S.th, width: 170 }}>שיוך</th>
                   <th style={S.th}>עלות מעסיק</th>
                   <th style={S.th}>שעות</th>
                   <th style={S.th}>ימים</th>
-                  <th style={{ ...S.th, width: 60 }}>סטטוס</th>
                 </tr></thead>
                 <tbody>{employees.map((emp, i) => (
                   <tr key={i} style={{ background: !emp.matched ? '#fffbeb' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
-                    <td style={{ ...S.td, color: '#94a3b8', fontSize: 11 }}>{emp.employee_number}</td>
+                    <td style={{ ...S.td, color: '#64748b', fontSize: 12, fontWeight: 600 }}>{emp.employee_number}</td>
                     <td style={{ ...S.td, fontWeight: 500 }}>{emp.employee_name}</td>
                     <td style={{ ...S.td, fontSize: 12, color: '#64748b' }}>{emp.department_name}</td>
                     <td style={S.td}>
-                      {!emp.matched ? (
-                        <select value={emp.branch_id ?? -1} onChange={e => {
-                          const v = Number(e.target.value)
-                          if (v === -2) updateAssignment(i, null, true)
-                          else if (v === -1) updateAssignment(i, null, false)
-                          else updateAssignment(i, v, false)
-                        }} style={{ border: '1px solid #fde68a', borderRadius: 6, padding: '3px 6px', fontSize: 12, background: '#fffbeb' }}>
-                          <option value={-1}>מפעל</option>
-                          <option value={-2}>מטה</option>
-                          {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                        </select>
-                      ) : (
-                        <span style={{ fontSize: 12 }}>{emp.assignment}</span>
-                      )}
+                      <select value={emp.is_headquarters ? -2 : (emp.branch_id ?? -1)} onChange={e => {
+                        const v = Number(e.target.value)
+                        if (v === -2) updateAssignment(i, null, true)
+                        else if (v === -1) updateAssignment(i, null, false)
+                        else updateAssignment(i, v, false)
+                      }} style={{ border: `1px solid ${!emp.matched ? '#fde68a' : '#e2e8f0'}`, borderRadius: 8, padding: '4px 8px', fontSize: 12, background: !emp.matched ? '#fffbeb' : 'white', width: '100%', cursor: 'pointer' }}>
+                        <option value={-1}>מפעל</option>
+                        <option value={-2}>מטה (מנהלים)</option>
+                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
                     </td>
                     <td style={{ ...S.td, fontWeight: 600 }}>{fmtM(emp.actual_employer_cost)}</td>
                     <td style={S.td}>{emp.actual_hours}</td>
                     <td style={S.td}>{emp.actual_days}</td>
-                    <td style={S.td}>
-                      {emp.matched ? <span style={{ fontSize: 11, color: '#16a34a' }}>✓</span> : <span style={{ fontSize: 11, color: '#f59e0b' }}>?</span>}
-                    </td>
                   </tr>
                 ))}</tbody>
               </table>
