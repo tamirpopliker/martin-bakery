@@ -332,6 +332,11 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                     <DiffBadge current={laborPct} previous={prevPl && prevPl.revenue > 0 ? (prevPl.laborEmployer / prevPl.revenue) * 100 : 0} inverse />
                   </div>
                   <span className="text-[11px] text-slate-400">{laborTarget > 0 ? `יעד ${laborTarget}%` : '\u2014'}</span>
+                  {pl?.laborIsActual !== undefined && (
+                    <div style={{ fontSize: 10, marginTop: 4, color: pl.laborIsActual ? '#16a34a' : '#ca8a04', fontWeight: 600 }}>
+                      {pl.laborIsActual ? '✓ נתוני מעסיק אמיתיים' : '~ משוער'}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>

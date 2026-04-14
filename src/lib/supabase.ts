@@ -485,6 +485,7 @@ export interface BranchPLResult {
   expDelivery: number
   expOther: number
   laborEmployer: number
+  laborIsActual: boolean
   mgmtCosts: number
   wasteTotal: number
   fixedCosts: number
@@ -557,7 +558,14 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     else expOther += amt
   }
 
-  const laborEmployer = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+  // Labor — check employer_costs (actual payroll) first, fallback to branch_labor
+  const [mYear, mMonth] = monthKey.split('-').map(Number)
+  const { data: actualLab } = await supabase.from('employer_costs')
+    .select('actual_employer_cost').eq('branch_id', branchId).eq('month', mMonth).eq('year', mYear)
+  const laborIsActual = (actualLab && actualLab.length > 0)
+  const laborEmployer = laborIsActual
+    ? actualLab!.reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    : (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
   const wasteTotal = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
 
   let fixedCosts = 0, mgmtCosts = 0
@@ -595,7 +603,7 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     revenue, revCashier, revWebsite, revCredit,
     expSuppliers, expSuppliersInternal, expSuppliersExternal,
     expRepairs, expInfra, expDelivery, expOther,
-    laborEmployer, mgmtCosts, wasteTotal, fixedCosts,
+    laborEmployer, laborIsActual, mgmtCosts, wasteTotal, fixedCosts,
     controllableMargin, overheadAmount, operatingProfit, rows,
   }
 }

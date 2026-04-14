@@ -39,6 +39,7 @@ export interface PLResult {
   branchId: number
   periodStart: string
   periodEnd: string
+  laborIsActual: boolean
 }
 
 export async function calculateBranchPL(
@@ -98,8 +99,14 @@ export async function calculateBranchPL(
     }
   }
 
-  // Labor
-  const labor = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+  // Labor — check employer_costs (actual payroll) first, fallback to branch_labor (estimated)
+  const [mYear, mMonth] = mk.split('-').map(Number)
+  const { data: actualLab } = await supabase.from('employer_costs')
+    .select('actual_employer_cost').eq('branch_id', branchId).eq('month', mMonth).eq('year', mYear)
+  const laborIsActual = (actualLab && actualLab.length > 0) ? true : false
+  const labor = laborIsActual
+    ? actualLab!.reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    : (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
 
   // Waste
   const waste = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
@@ -133,7 +140,7 @@ export async function calculateBranchPL(
     controllableProfit, controllableMargin,
     fixedCosts, overhead, operatingProfit, operatingMargin,
     overheadPct: pct,
-    branchId, periodStart, periodEnd,
+    branchId, periodStart, periodEnd, laborIsActual,
   }
 }
 
@@ -175,7 +182,13 @@ export async function calculateFactoryPL(
   const internalRevenue = sum(fSalesInt) + sum(fB2bInt)
   const revenue = externalRevenue + internalRevenue
   const suppliers = sum(fSupp)
-  const labor = sum(fLab)
+  // Factory labor — check employer_costs first (branch_id IS NULL, not HQ)
+  const [mYear, mMonth] = mk.split('-').map(Number)
+  const { data: actualFactLab } = await supabase.from('employer_costs')
+    .select('actual_employer_cost').is('branch_id', null).eq('is_headquarters', false).eq('month', mMonth).eq('year', mYear)
+  const labor = (actualFactLab && actualFactLab.length > 0)
+    ? actualFactLab.reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    : sum(fLab)
   const waste = sum(fWaste)
   const repairs = sum(fRepairs)
   const fixedCosts = sum(fFixed)
