@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Upload, CheckCircle, AlertTriangle, FileSpreadsheet } from 'lucide-react'
+import { Upload, CheckCircle, AlertTriangle, FileSpreadsheet, Trash2, History, Clock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
@@ -21,7 +21,6 @@ interface ParsedEmployee {
 
 interface UnmatchedBranchEmp { id: number; name: string; branch_id: number | null }
 
-// Department → branch mapping
 const DEPT_MAP: Record<number, { branch_id: number | null; is_hq: boolean; is_mgr: boolean; label: string }> = {
   1:  { branch_id: null, is_hq: true, is_mgr: true, label: 'מטה (מנהלים)' },
   2:  { branch_id: null, is_hq: false, is_mgr: false, label: 'מפעל' },
@@ -35,18 +34,24 @@ const DEPT_MAP: Record<number, { branch_id: number | null; is_hq: boolean; is_mg
   13: { branch_id: 3, is_hq: false, is_mgr: false, label: 'סניף יעקב כהן' },
 }
 
+const MONTH_NAMES = ['', 'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
+
 const S = {
   card: { background: 'white', borderRadius: 14, border: '1px solid #e2e8f0', padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' } as React.CSSProperties,
   btn: { border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer' } as React.CSSProperties,
   th: { fontSize: 12, fontWeight: 600, color: '#64748b', padding: '8px 6px', textAlign: 'right' as const, borderBottom: '2px solid #e2e8f0' },
   td: { fontSize: 13, color: '#1e293b', padding: '8px 6px', borderBottom: '1px solid #f1f5f9' },
+  input: { border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 13, boxSizing: 'border-box' as const } as React.CSSProperties,
+  label: { fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 } as React.CSSProperties,
+  tab: (a: boolean) => ({ padding: '10px 20px', fontSize: 14, fontWeight: 500, cursor: 'pointer', border: 'none', borderBottom: a ? '2px solid #6366f1' : '2px solid transparent', background: 'none', color: a ? '#6366f1' : '#94a3b8' } as React.CSSProperties),
 }
 const fmtM = (n: number) => '₪' + Math.round(n).toLocaleString()
 
 export default function EmployerCostsUpload({ onBack }: Props) {
   const { appUser } = useAppUser()
   const { branches } = useBranches()
-  const [step, setStep] = useState<'upload' | 'preview' | 'saving' | 'done'>('upload')
+  const [tab, setTab] = useState<'upload' | 'history'>('upload')
+  const [step, setStep] = useState<'upload' | 'confirm_month' | 'duplicate_check' | 'preview' | 'confirm_save' | 'saving' | 'done'>('upload')
   const [employees, setEmployees] = useState<ParsedEmployee[]>([])
   const [reportMonth, setReportMonth] = useState(0)
   const [reportYear, setReportYear] = useState(0)
@@ -54,15 +59,18 @@ export default function EmployerCostsUpload({ onBack }: Props) {
   const [uploads, setUploads] = useState<any[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const [unmatchedBranchEmps, setUnmatchedBranchEmps] = useState<UnmatchedBranchEmp[]>([])
+  const [existingUpload, setExistingUpload] = useState<any>(null)
+  const [parsedFileName, setParsedFileName] = useState('')
 
-  // Load past uploads
-  useEffect(() => {
-    supabase.from('employer_costs_uploads').select('*').order('uploaded_at', { ascending: false }).limit(10)
-      .then(({ data }) => setUploads(data || []))
-  }, [step])
+  // Load history
+  const loadUploads = useCallback(async () => {
+    const { data } = await supabase.from('employer_costs_uploads').select('*').order('uploaded_at', { ascending: false })
+    setUploads(data || [])
+  }, [])
+  useEffect(() => { loadUploads() }, [loadUploads, step])
 
   async function parseFile(file: File) {
-    setError('')
+    setError(''); setParsedFileName(file.name)
     const reader = new FileReader()
     reader.onload = async (e) => {
       try {
@@ -71,15 +79,11 @@ export default function EmployerCostsUpload({ onBack }: Props) {
         const ws = wb.Sheets[wb.SheetNames[0]]
         const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 })
 
-        // Extract month/year from row 1: "דוח מעסיק לחודש 3/2026"
         const titleRow = String(rows[1]?.[0] || '')
         const dateMatch = titleRow.match(/(\d+)\/(\d{4})/)
         if (!dateMatch) { setError('לא נמצא חודש/שנה בכותרת הדוח'); return }
-        const month = parseInt(dateMatch[1])
-        const year = parseInt(dateMatch[2])
-        setReportMonth(month); setReportYear(year)
+        setReportMonth(parseInt(dateMatch[1])); setReportYear(parseInt(dateMatch[2]))
 
-        // Parse employees
         const parsed: ParsedEmployee[] = []
         let currentDeptNum = 0; let currentDeptName = ''
 
@@ -87,87 +91,63 @@ export default function EmployerCostsUpload({ onBack }: Props) {
           const row = rows[i]
           if (!row || row.length === 0) continue
           const first = String(row[0] || '')
-
-          // Department header
           const deptMatch = first.match(/מחלקה מספר\s*(\d+)\s*:\s*(.+)/)
-          if (deptMatch) {
-            currentDeptNum = parseInt(deptMatch[1])
-            currentDeptName = deptMatch[2].trim()
-            continue
-          }
-
-          // Skip totals
+          if (deptMatch) { currentDeptNum = parseInt(deptMatch[1]); currentDeptName = deptMatch[2].trim(); continue }
           if (first.includes('סה"כ') || first.includes('סה״כ')) continue
-
-          // Employee row: col 0 = number, 1 = last name, 2 = first name
           const empNum = Number(row[0])
           if (!empNum || isNaN(empNum)) continue
-          const lastName = String(row[1] || '').trim()
-          const firstName = String(row[2] || '').trim()
-          const name = `${firstName} ${lastName}`.trim()
-          const cost = Number(row[12]) || 0
-          const hours = Number(row[13]) || 0
-          const days = Number(row[16]) || 0
-
+          const name = `${String(row[2] || '').trim()} ${String(row[1] || '').trim()}`.trim()
           const mapping = DEPT_MAP[currentDeptNum]
           parsed.push({
             employee_number: empNum, employee_name: name,
             department_number: currentDeptNum, department_name: currentDeptName,
-            actual_employer_cost: cost, actual_hours: hours, actual_days: days,
-            branch_id: mapping?.branch_id ?? null,
-            is_headquarters: mapping?.is_hq ?? false,
-            is_manager: mapping?.is_mgr ?? false,
-            matched: false, matched_employee_id: null,
-            assignment: mapping?.label || `מחלקה ${currentDeptNum}`,
+            actual_employer_cost: Number(row[12]) || 0, actual_hours: Number(row[13]) || 0, actual_days: Number(row[16]) || 0,
+            branch_id: mapping?.branch_id ?? null, is_headquarters: mapping?.is_hq ?? false, is_manager: mapping?.is_mgr ?? false,
+            matched: false, matched_employee_id: null, assignment: mapping?.label || `מחלקה ${currentDeptNum}`,
           })
         }
-
         if (parsed.length === 0) { setError('לא נמצאו עובדים בקובץ'); return }
 
-        // Match with branch_employees by payroll_number
+        // Match employees
         const { data: branchEmps } = await supabase.from('branch_employees').select('id, name, branch_id, payroll_number').eq('active', true)
-        const matchedPayrollNums = new Set<number>()
-
         if (branchEmps) {
           for (const emp of parsed) {
-            // First try exact payroll_number match
             const byPayroll = branchEmps.find((be: any) => be.payroll_number === emp.employee_number)
-            if (byPayroll) {
-              emp.matched = true
-              emp.matched_employee_id = byPayroll.id
-              matchedPayrollNums.add(emp.employee_number)
-              continue
-            }
-            // Try name match
-            const byName = branchEmps.find((be: any) =>
-              emp.employee_name.includes(be.name) || be.name.includes(emp.employee_name)
-            )
-            if (byName) {
-              emp.matched = true
-              emp.matched_employee_id = byName.id
-              matchedPayrollNums.add(emp.employee_number)
-            }
+            if (byPayroll) { emp.matched = true; emp.matched_employee_id = byPayroll.id; continue }
+            const byName = branchEmps.find((be: any) => emp.employee_name.includes(be.name) || be.name.includes(emp.employee_name))
+            if (byName) { emp.matched = true; emp.matched_employee_id = byName.id }
           }
-
-          // Build list of branch employees without payroll_number for manual assignment
-          const unmatched = branchEmps.filter((be: any) => !be.payroll_number && !parsed.some(p => p.matched_employee_id === be.id))
-          setUnmatchedBranchEmps(unmatched.map((be: any) => ({ id: be.id, name: be.name, branch_id: be.branch_id })))
+          setUnmatchedBranchEmps(branchEmps.filter((be: any) => !be.payroll_number && !parsed.some(p => p.matched_employee_id === be.id)).map((be: any) => ({ id: be.id, name: be.name, branch_id: be.branch_id })))
         }
 
         setEmployees(parsed)
-        setStep('preview')
-      } catch (err) {
-        setError('שגיאה בקריאת הקובץ: ' + (err instanceof Error ? err.message : String(err)))
-      }
+        setStep('confirm_month') // Step 1: confirm month first
+      } catch (err) { setError('שגיאה בקריאת הקובץ: ' + (err instanceof Error ? err.message : String(err))) }
     }
     reader.readAsArrayBuffer(file)
   }
 
-  async function saveAll() {
-    setStep('saving')
-    // Delete existing data for this month/year
-    await supabase.from('employer_costs').delete().eq('month', reportMonth).eq('year', reportYear)
+  async function confirmMonth() {
+    // Step 2: check for duplicate
+    const { data: existing } = await supabase.from('employer_costs_uploads')
+      .select('id, uploaded_at, uploaded_by').eq('month', reportMonth).eq('year', reportYear).maybeSingle()
+    if (existing) { setExistingUpload(existing); setStep('duplicate_check') }
+    else { setStep('preview') }
+  }
 
+  async function replaceDuplicate() {
+    await supabase.from('employer_costs').delete().eq('month', reportMonth).eq('year', reportYear)
+    await supabase.from('employer_costs_uploads').delete().eq('month', reportMonth).eq('year', reportYear)
+    setExistingUpload(null); setStep('preview')
+  }
+
+  async function saveAll() {
+    // Step 4: check unmatched before save
+    const remaining = employees.filter(e => !e.matched && !e.is_headquarters && !e.is_manager).length
+    if (remaining > 0 && step !== 'confirm_save') { setStep('confirm_save'); return }
+
+    setStep('saving')
+    await supabase.from('employer_costs').delete().eq('month', reportMonth).eq('year', reportYear)
     const payload = employees.map(emp => ({
       employee_number: emp.employee_number, employee_name: emp.employee_name,
       month: reportMonth, year: reportYear,
@@ -176,23 +156,21 @@ export default function EmployerCostsUpload({ onBack }: Props) {
       branch_id: emp.branch_id, is_headquarters: emp.is_headquarters, is_manager: emp.is_manager,
       uploaded_by: appUser?.name || null,
     }))
-
     await supabase.from('employer_costs').insert(payload)
-
-    // Save payroll_number permanently for matched employees
-    for (const emp of employees) {
-      if (emp.matched_employee_id) {
-        await supabase.from('branch_employees').update({ payroll_number: emp.employee_number }).eq('id', emp.matched_employee_id)
-      }
-    }
-
+    for (const emp of employees) { if (emp.matched_employee_id) await supabase.from('branch_employees').update({ payroll_number: emp.employee_number }).eq('id', emp.matched_employee_id) }
     await supabase.from('employer_costs_uploads').insert({
-      month: reportMonth, year: reportYear,
-      filename: 'דוח מעסיק', uploaded_by: appUser?.name || null,
-      status: 'completed', unmatched_count: employees.filter(e => !e.matched).length,
+      month: reportMonth, year: reportYear, filename: parsedFileName,
+      uploaded_by: appUser?.name || null, status: 'completed',
+      unmatched_count: employees.filter(e => !e.matched && !e.is_headquarters && !e.is_manager).length,
     })
-
     setStep('done')
+  }
+
+  async function deleteUpload(id: number, month: number, year: number) {
+    if (!confirm(`למחוק דוח מעסיק ${month}/${year}?`)) return
+    await supabase.from('employer_costs').delete().eq('month', month).eq('year', year)
+    await supabase.from('employer_costs_uploads').delete().eq('id', id)
+    loadUploads()
   }
 
   function updateAssignment(idx: number, branchId: number | null, isHq: boolean) {
@@ -210,13 +188,24 @@ export default function EmployerCostsUpload({ onBack }: Props) {
       <PageHeader title="דוח מעסיק" subtitle="עלויות שכר אמיתיות" onBack={onBack} />
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 32px' }}>
 
-        {step === 'upload' && (
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e2e8f0', marginBottom: 20 }}>
+          <button style={S.tab(tab === 'upload')} onClick={() => { setTab('upload'); setStep('upload') }}>
+            <Upload size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> העלאת דוח
+          </button>
+          <button style={S.tab(tab === 'history')} onClick={() => setTab('history')}>
+            <History size={14} style={{ marginLeft: 6, verticalAlign: -2 }} /> היסטוריה
+          </button>
+        </div>
+
+        {/* ═══ UPLOAD TAB ═══ */}
+        {tab === 'upload' && step === 'upload' && (
           <div style={S.card}>
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
               <FileSpreadsheet size={48} color="#94a3b8" style={{ marginBottom: 16 }} />
               <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>העלאת דוח מעסיק</h3>
               <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 24px', maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
-                העלה קובץ Excel מתוכנת השכר — המערכת תחלץ אוטומטית עלות מעסיק לכל עובד ותשייך לסניף/מפעל
+                העלה קובץ Excel מתוכנת השכר — המערכת תחלץ אוטומטית עלות מעסיק לכל עובד
               </p>
               <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) parseFile(f) }} />
@@ -228,62 +217,82 @@ export default function EmployerCostsUpload({ onBack }: Props) {
             {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginTop: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
               <AlertTriangle size={16} color="#ef4444" /><span style={{ fontSize: 13, color: '#dc2626' }}>{error}</span>
             </div>}
-
-            {/* Past uploads */}
-            {uploads.length > 0 && (
-              <div style={{ marginTop: 24, borderTop: '1px solid #f1f5f9', paddingTop: 16 }}>
-                <h4 style={{ fontSize: 14, fontWeight: 600, margin: '0 0 8px' }}>דוחות שהועלו</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {uploads.map(u => (
-                    <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#fafbfc', borderRadius: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{u.month}/{u.year}</span>
-                      <span style={{ fontSize: 12, color: '#16a34a' }}>✓ {u.status}</span>
-                      <span style={{ fontSize: 11, color: '#94a3b8' }}>{new Date(u.uploaded_at).toLocaleDateString('he-IL')}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {step === 'preview' && (
+        {/* Step 1: Confirm month */}
+        {tab === 'upload' && step === 'confirm_month' && (
+          <div style={S.card}>
+            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '16px 20px', marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#1d4ed8', marginBottom: 8 }}>
+                <Clock size={16} style={{ verticalAlign: -3, marginLeft: 6 }} />
+                חודש מזוהה: {MONTH_NAMES[reportMonth]} {reportYear}
+              </div>
+              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 12px' }}>האם החודש נכון? ניתן לשנות ידנית.</p>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div><label style={S.label}>חודש</label>
+                  <select value={reportMonth} onChange={e => setReportMonth(Number(e.target.value))} style={{ ...S.input, width: 120 }}>
+                    {MONTH_NAMES.slice(1).map((n, i) => <option key={i + 1} value={i + 1}>{n}</option>)}
+                  </select>
+                </div>
+                <div><label style={S.label}>שנה</label>
+                  <input type="number" value={reportYear} onChange={e => setReportYear(Number(e.target.value))} style={{ ...S.input, width: 80 }} />
+                </div>
+                <button onClick={confirmMonth} style={{ ...S.btn, background: '#6366f1', color: 'white' }}>✓ אשר והמשך</button>
+                <button onClick={() => setStep('upload')} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>ביטול</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Duplicate check */}
+        {tab === 'upload' && step === 'duplicate_check' && existingUpload && (
+          <div style={S.card}>
+            <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 10, padding: '16px 20px' }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#a16207', marginBottom: 8 }}>
+                ⚠️ קיים דוח מעסיק ל-{MONTH_NAMES[reportMonth]} {reportYear}
+              </div>
+              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 12px' }}>
+                הועלה ב-{new Date(existingUpload.uploaded_at).toLocaleDateString('he-IL')}
+                {existingUpload.uploaded_by ? ` ע"י ${existingUpload.uploaded_by}` : ''}
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={replaceDuplicate} style={{ ...S.btn, background: '#f59e0b', color: 'white' }}>מחק והחלף</button>
+                <button onClick={() => { setStep('upload'); setExistingUpload(null) }} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>ביטול</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Preview */}
+        {tab === 'upload' && step === 'preview' && (
           <div style={S.card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>תצוגה מקדימה — {reportMonth}/{reportYear}</h3>
-                <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>{employees.length} עובדים</p>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>תצוגה מקדימה — {MONTH_NAMES[reportMonth]} {reportYear}</h3>
+                <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>{employees.length} עובדים · {parsedFileName}</p>
               </div>
               <button onClick={() => setStep('upload')} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>חזרה</button>
             </div>
 
-            {/* Summary cards */}
             <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-              <div style={{ background: '#eff6ff', borderRadius: 10, padding: '10px 16px', flex: 1, textAlign: 'center', minWidth: 100 }}>
-                <div style={{ fontSize: 11, color: '#1d4ed8', fontWeight: 500 }}>סה"כ עובדים</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: '#1d4ed8' }}>{employees.length}</div>
-              </div>
-              <div style={{ background: '#faf5ff', borderRadius: 10, padding: '10px 16px', flex: 1, textAlign: 'center', minWidth: 100 }}>
-                <div style={{ fontSize: 11, color: '#7c3aed', fontWeight: 500 }}>עלות מטה</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#7c3aed' }}>{fmtM(hqCost)}</div>
-              </div>
-              <div style={{ background: '#f0fdf4', borderRadius: 10, padding: '10px 16px', flex: 1, textAlign: 'center', minWidth: 100 }}>
-                <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 500 }}>עלות סניפים</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#16a34a' }}>{fmtM(branchCost)}</div>
-              </div>
-              <div style={{ background: '#fff7ed', borderRadius: 10, padding: '10px 16px', flex: 1, textAlign: 'center', minWidth: 100 }}>
-                <div style={{ fontSize: 11, color: '#c2410c', fontWeight: 500 }}>עלות מפעל</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#c2410c' }}>{fmtM(factoryCost)}</div>
-              </div>
-              <div style={{ background: '#f8fafc', borderRadius: 10, padding: '10px 16px', flex: 1, textAlign: 'center', minWidth: 100 }}>
-                <div style={{ fontSize: 11, color: '#0f172a', fontWeight: 500 }}>סה"כ</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>{fmtM(totalCost)}</div>
-              </div>
+              {[
+                { label: 'עובדים', value: String(employees.length), bg: '#eff6ff', color: '#1d4ed8' },
+                { label: 'מטה', value: fmtM(hqCost), bg: '#faf5ff', color: '#7c3aed' },
+                { label: 'סניפים', value: fmtM(branchCost), bg: '#f0fdf4', color: '#16a34a' },
+                { label: 'מפעל', value: fmtM(factoryCost), bg: '#fff7ed', color: '#c2410c' },
+                { label: 'סה"כ', value: fmtM(totalCost), bg: '#f8fafc', color: '#0f172a' },
+              ].map((kpi, i) => (
+                <div key={i} style={{ background: kpi.bg, borderRadius: 10, padding: '10px 16px', flex: 1, textAlign: 'center', minWidth: 90 }}>
+                  <div style={{ fontSize: 11, color: kpi.color, fontWeight: 500 }}>{kpi.label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: kpi.color }}>{kpi.value}</div>
+                </div>
+              ))}
             </div>
 
             {unmatchedCount > 0 && (
               <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#a16207' }}>
-                ⚠ {unmatchedCount} עובדים לא מזוהים — שייך ידנית מה-dropdown
+                ⚠ {unmatchedCount} עובדים לא מזוהים — שייך ידנית או בחר "עובד לא פעיל"
               </div>
             )}
 
@@ -299,52 +308,53 @@ export default function EmployerCostsUpload({ onBack }: Props) {
                   <th style={S.th}>שעות</th>
                   <th style={S.th}>ימים</th>
                 </tr></thead>
-                <tbody>{employees.map((emp, i) => (
-                  <tr key={i} style={{ background: !emp.matched && !emp.is_headquarters && !emp.is_manager ? '#fffbeb' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
-                    <td style={{ ...S.td, color: '#64748b', fontSize: 12, fontWeight: 600 }}>{emp.employee_number}</td>
-                    <td style={{ ...S.td, fontWeight: 500 }}>{emp.employee_name}</td>
-                    <td style={{ ...S.td, fontSize: 12, color: '#64748b' }}>{emp.department_name}</td>
-                    <td style={S.td}>
-                      <select value={emp.is_headquarters ? -2 : (emp.branch_id ?? -1)} onChange={e => {
-                        const v = Number(e.target.value)
-                        if (v === -2) updateAssignment(i, null, true)
-                        else if (v === -1) updateAssignment(i, null, false)
-                        else updateAssignment(i, v, false)
-                      }} style={{ border: `1px solid ${!emp.matched && !emp.is_headquarters && !emp.is_manager ? '#fde68a' : '#e2e8f0'}`, borderRadius: 8, padding: '4px 8px', fontSize: 12, background: !emp.matched && !emp.is_headquarters && !emp.is_manager ? '#fffbeb' : 'white', width: '100%', cursor: 'pointer' }}>
-                        <option value={-1}>מפעל</option>
-                        <option value={-2}>מטה (מנהלים)</option>
-                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                      </select>
-                    </td>
-                    <td style={S.td}>
-                      {emp.matched || emp.is_headquarters || emp.is_manager ? (
-                        <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>
-                          ✓ {emp.is_headquarters ? 'מטה' : emp.is_manager ? 'מנהל' : 'מזוהה'}
-                        </span>
-                      ) : (
-                        <select value={emp.matched_employee_id ?? 0} onChange={e => {
-                          const beId = Number(e.target.value)
-                          if (beId === -1) {
-                            // "עובד חדש" — mark as matched without linking
-                            setEmployees(prev => prev.map((em, j) => j === i ? { ...em, matched: true, matched_employee_id: null } : em))
-                            return
-                          }
-                          if (!beId) return
-                          const be = unmatchedBranchEmps.find(u => u.id === beId)
-                          setEmployees(prev => prev.map((em, j) => j === i ? { ...em, matched: true, matched_employee_id: beId, assignment: be ? `${be.name}` : em.assignment } : em))
-                          setUnmatchedBranchEmps(prev => prev.filter(u => u.id !== beId))
-                        }} style={{ border: '1px solid #fde68a', borderRadius: 8, padding: '3px 6px', fontSize: 11, background: '#fffbeb', width: '100%' }}>
-                          <option value={0}>⚠️ שייך לעובד...</option>
-                          <option value={-1}>➕ עובד חדש (ללא שיוך)</option>
-                          {unmatchedBranchEmps.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                <tbody>{employees.map((emp, i) => {
+                  const needsMatch = !emp.matched && !emp.is_headquarters && !emp.is_manager
+                  return (
+                    <tr key={i} style={{ background: needsMatch ? '#fffbeb' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
+                      <td style={{ ...S.td, color: '#64748b', fontSize: 12, fontWeight: 600 }}>{emp.employee_number}</td>
+                      <td style={{ ...S.td, fontWeight: 500 }}>{emp.employee_name}</td>
+                      <td style={{ ...S.td, fontSize: 12, color: '#64748b' }}>{emp.department_name}</td>
+                      <td style={S.td}>
+                        <select value={emp.is_headquarters ? -2 : (emp.branch_id ?? -1)} onChange={e => {
+                          const v = Number(e.target.value)
+                          if (v === -2) updateAssignment(i, null, true)
+                          else if (v === -1) updateAssignment(i, null, false)
+                          else updateAssignment(i, v, false)
+                        }} style={{ border: `1px solid ${needsMatch ? '#fde68a' : '#e2e8f0'}`, borderRadius: 8, padding: '4px 8px', fontSize: 12, background: needsMatch ? '#fffbeb' : 'white', width: '100%', cursor: 'pointer' }}>
+                          <option value={-1}>מפעל</option>
+                          <option value={-2}>מטה (מנהלים)</option>
+                          {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                         </select>
-                      )}
-                    </td>
-                    <td style={{ ...S.td, fontWeight: 600 }}>{fmtM(emp.actual_employer_cost)}</td>
-                    <td style={S.td}>{emp.actual_hours}</td>
-                    <td style={S.td}>{emp.actual_days}</td>
-                  </tr>
-                ))}</tbody>
+                      </td>
+                      <td style={S.td}>
+                        {!needsMatch ? (
+                          <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>
+                            ✓ {emp.is_headquarters ? 'מטה' : emp.is_manager ? 'מנהל' : 'מזוהה'}
+                          </span>
+                        ) : (
+                          <select value={emp.matched_employee_id ?? 0} onChange={e => {
+                            const beId = Number(e.target.value)
+                            if (beId === -1) { setEmployees(prev => prev.map((em, j) => j === i ? { ...em, matched: true, matched_employee_id: null } : em)); return }
+                            if (beId === -2) { setEmployees(prev => prev.map((em, j) => j === i ? { ...em, matched: true, matched_employee_id: null } : em)); return }
+                            if (!beId) return
+                            const be = unmatchedBranchEmps.find(u => u.id === beId)
+                            setEmployees(prev => prev.map((em, j) => j === i ? { ...em, matched: true, matched_employee_id: beId, assignment: be?.name || em.assignment } : em))
+                            setUnmatchedBranchEmps(prev => prev.filter(u => u.id !== beId))
+                          }} style={{ border: '1px solid #fde68a', borderRadius: 8, padding: '3px 6px', fontSize: 11, background: '#fffbeb', width: '100%' }}>
+                            <option value={0}>⚠️ שייך לעובד...</option>
+                            <option value={-2}>🚫 עובד לא פעיל</option>
+                            <option value={-1}>➕ עובד חדש</option>
+                            {unmatchedBranchEmps.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                          </select>
+                        )}
+                      </td>
+                      <td style={{ ...S.td, fontWeight: 600 }}>{fmtM(emp.actual_employer_cost)}</td>
+                      <td style={S.td}>{emp.actual_hours}</td>
+                      <td style={S.td}>{emp.actual_days}</td>
+                    </tr>
+                  )
+                })}</tbody>
               </table>
             </div>
 
@@ -357,20 +367,69 @@ export default function EmployerCostsUpload({ onBack }: Props) {
           </div>
         )}
 
-        {step === 'saving' && (
+        {/* Step 4: Confirm save with unmatched */}
+        {tab === 'upload' && step === 'confirm_save' && (
+          <div style={S.card}>
+            <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 10, padding: '16px 20px' }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#a16207', marginBottom: 8 }}>
+                ⚠️ נותרו {unmatchedCount} עובדים ללא שיוך
+              </div>
+              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 12px' }}>
+                עובדים אלו יישמרו עם עלות המעסיק ללא שיוך לעובד ספציפי במערכת.
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setStep('preview')} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>חזור לשיבוץ</button>
+                <button onClick={() => { setStep('saving'); saveAll() }} style={{ ...S.btn, background: '#f59e0b', color: 'white' }}>שמור בכל זאת</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'upload' && step === 'saving' && (
           <div style={{ ...S.card, textAlign: 'center', padding: '48px 0' }}>
             <div style={{ fontSize: 14, color: '#64748b' }}>שומר {employees.length} רשומות...</div>
           </div>
         )}
 
-        {step === 'done' && (
+        {tab === 'upload' && step === 'done' && (
           <div style={{ ...S.card, textAlign: 'center', padding: '48px 0' }}>
             <CheckCircle size={48} color="#10b981" style={{ marginBottom: 16 }} />
             <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>הדוח נשמר בהצלחה</h3>
             <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 24px' }}>
-              {employees.length} עובדים · {reportMonth}/{reportYear} · עלות כוללת: {fmtM(totalCost)}
+              {employees.length} עובדים · {MONTH_NAMES[reportMonth]} {reportYear} · {fmtM(totalCost)}
             </p>
             <button onClick={() => setStep('upload')} style={{ ...S.btn, background: '#6366f1', color: 'white' }}>העלאת דוח נוסף</button>
+          </div>
+        )}
+
+        {/* ═══ HISTORY TAB ═══ */}
+        {tab === 'history' && (
+          <div style={S.card}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 16px' }}>היסטוריית דוחות מעסיק</h3>
+            {uploads.length === 0 ? <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>אין דוחות</div> : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr>
+                  <th style={S.th}>חודש</th>
+                  <th style={S.th}>קובץ</th>
+                  <th style={S.th}>הועלה ע"י</th>
+                  <th style={S.th}>תאריך העלאה</th>
+                  <th style={S.th}>לא משויכים</th>
+                  <th style={{ ...S.th, width: 50 }}></th>
+                </tr></thead>
+                <tbody>{uploads.map((u, i) => (
+                  <tr key={u.id} style={{ background: i % 2 === 0 ? 'white' : '#fafbfc' }}>
+                    <td style={{ ...S.td, fontWeight: 600 }}>{MONTH_NAMES[u.month] || u.month} {u.year}</td>
+                    <td style={{ ...S.td, fontSize: 12, color: '#64748b' }}>{u.filename || '—'}</td>
+                    <td style={{ ...S.td, fontSize: 12 }}>{u.uploaded_by || '—'}</td>
+                    <td style={{ ...S.td, fontSize: 12, color: '#94a3b8' }}>{new Date(u.uploaded_at).toLocaleDateString('he-IL')}</td>
+                    <td style={S.td}>{u.unmatched_count > 0 ? <span style={{ color: '#f59e0b', fontWeight: 600 }}>{u.unmatched_count}</span> : <span style={{ color: '#16a34a' }}>0</span>}</td>
+                    <td style={S.td}>
+                      <button onClick={() => deleteUpload(u.id, u.month, u.year)} style={{ ...S.btn, padding: '3px 6px', fontSize: 11, background: '#fef2f2', color: '#ef4444' }}><Trash2 size={12} /></button>
+                    </td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            )}
           </div>
         )}
       </div>
