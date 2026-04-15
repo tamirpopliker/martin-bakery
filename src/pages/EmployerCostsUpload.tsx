@@ -20,6 +20,7 @@ interface ParsedEmployee {
 }
 
 interface UnmatchedBranchEmp { id: number; name: string; branch_id: number | null }
+interface FactoryLaborEmp { name: string; department: string }
 
 const DEPT_MAP: Record<number, { branch_id: number | null; is_hq: boolean; is_mgr: boolean; label: string }> = {
   1:  { branch_id: null, is_hq: true, is_mgr: true, label: 'מטה (מנהלים)' },
@@ -59,12 +60,28 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
   const [uploads, setUploads] = useState<any[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const [unmatchedBranchEmps, setUnmatchedBranchEmps] = useState<UnmatchedBranchEmp[]>([])
+  const [factoryLaborEmps, setFactoryLaborEmps] = useState<FactoryLaborEmp[]>([])
   const [existingUpload, setExistingUpload] = useState<any>(null)
   const [parsedFileName, setParsedFileName] = useState('')
   const [newEmpModal, setNewEmpModal] = useState<{ idx: number; firstName: string; lastName: string } | null>(null)
   const [newEmpBranch, setNewEmpBranch] = useState<number>(-1)
 
-  // No longer needed — employee creation happens inline via modal
+  // Load factory employees from labor table (distinct names)
+  const loadFactoryEmps = useCallback(async () => {
+    const { data, error: laborErr } = await supabase.from('labor')
+      .select('employee_name, entity_id').eq('entity_type', 'factory').limit(10000)
+    console.log('[EmployerCosts] labor query result:', { rowCount: data?.length ?? 0, error: laborErr?.message ?? null, sample: data?.slice(0, 3) })
+    const empMap = new Map<string, string>()
+    for (const row of (data || [])) {
+      if (row.employee_name && !empMap.has(row.employee_name)) {
+        empMap.set(row.employee_name, row.entity_id || '')
+      }
+    }
+    setFactoryLaborEmps([...empMap.entries()]
+      .map(([name, dept]) => ({ name, department: dept }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'he')))
+  }, [])
+  useEffect(() => { loadFactoryEmps() }, [loadFactoryEmps])
 
   // Load history
   const loadUploads = useCallback(async () => {
@@ -112,16 +129,26 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
         }
         if (parsed.length === 0) { setError('לא נמצאו עובדים בקובץ'); return }
 
-        // Match employees
+        // Match branch employees
         const { data: branchEmps } = await supabase.from('branch_employees').select('id, name, branch_id, payroll_number').eq('active', true)
         if (branchEmps) {
           for (const emp of parsed) {
+            if ([5, 6, 7, 8].includes(emp.department_number)) continue // factory rows skip branch matching
             const byPayroll = branchEmps.find((be: any) => be.payroll_number === emp.employee_number)
             if (byPayroll) { emp.matched = true; emp.matched_employee_id = byPayroll.id; continue }
             const byName = branchEmps.find((be: any) => emp.employee_name.includes(be.name) || be.name.includes(emp.employee_name))
             if (byName) { emp.matched = true; emp.matched_employee_id = byName.id }
           }
           setUnmatchedBranchEmps(branchEmps.filter((be: any) => !be.payroll_number && !parsed.some(p => p.matched_employee_id === be.id)).map((be: any) => ({ id: be.id, name: be.name, branch_id: be.branch_id })))
+        }
+
+        // Auto-match factory rows by name against already-loaded factoryLaborEmps
+        const factoryNames = factoryLaborEmps.map(f => f.name)
+        for (const emp of parsed) {
+          if (![5, 6, 7, 8].includes(emp.department_number)) continue
+          if (emp.matched) continue
+          const byName = factoryNames.find(name => emp.employee_name.includes(name) || name.includes(emp.employee_name))
+          if (byName) { emp.matched = true; emp.matched_employee_id = null }
         }
 
         setEmployees(parsed)
@@ -161,7 +188,10 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
       uploaded_by: appUser?.name || null,
     }))
     await supabase.from('employer_costs').insert(payload)
-    for (const emp of employees) { if (emp.matched_employee_id) await supabase.from('branch_employees').update({ payroll_number: emp.employee_number }).eq('id', emp.matched_employee_id) }
+    const branchUpdates = employees.filter(e => e.matched_employee_id && ![2, 5, 6, 7, 8].includes(e.department_number))
+    await Promise.all(
+      branchUpdates.map(emp => supabase.from('branch_employees').update({ payroll_number: emp.employee_number }).eq('id', emp.matched_employee_id!))
+    )
     await supabase.from('employer_costs_uploads').insert({
       month: reportMonth, year: reportYear, filename: parsedFileName,
       uploaded_by: appUser?.name || null, status: 'completed',
@@ -393,35 +423,52 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
                             ✓ {emp.is_headquarters ? 'מטה' : emp.is_manager ? 'מנהל' : 'מזוהה'}
                           </span>
                         ) : (
-                          <select value={emp.matched_employee_id ?? 0} onChange={e => {
-                            const beId = Number(e.target.value)
-                            if (beId === -2) {
-                              // "עובד לא פעיל" — save cost without linking
+                          <select value="" onChange={e => {
+                            const val = e.target.value
+                            if (val === '__inactive') {
                               setEmployees(prev => prev.map((em, j) => j === i ? { ...em, matched: true, matched_employee_id: null } : em))
                               return
                             }
-                            if (beId === -3) {
+                            if (val === '__new') {
                               openNewEmpModal(i, emp.employee_name)
                               return
                             }
-                            if (!beId) return
-                            const be = unmatchedBranchEmps.find(u => u.id === beId)
-                            // Auto-set branch_id from the selected employee's branch
-                            const branchId = be?.branch_id ?? emp.branch_id
-                            const branchLabel = branchId ? (branches.find(b => b.id === branchId)?.name || '') : emp.assignment
-                            setEmployees(prev => prev.map((em, j) => j === i ? {
-                              ...em, matched: true, matched_employee_id: beId,
-                              branch_id: branchId, assignment: branchLabel,
-                            } : em))
-                            setUnmatchedBranchEmps(prev => prev.filter(u => u.id !== beId))
+                            if (!val) return
+                            if ([5, 6, 7, 8].includes(emp.department_number)) {
+                              // Factory: value is the employee name from labor
+                              const fe = factoryLaborEmps.find(u => u.name === val)
+                              const deptLabel = fe?.department ? `מפעל (${fe.department})` : emp.assignment
+                              setEmployees(prev => prev.map((em, j) => j === i ? {
+                                ...em, matched: true, matched_employee_id: null,
+                                branch_id: null, assignment: deptLabel,
+                              } : em))
+                              setFactoryLaborEmps(prev => prev.filter(u => u.name !== val))
+                            } else {
+                              const beId = Number(val)
+                              const be = unmatchedBranchEmps.find(u => u.id === beId)
+                              const branchId = be?.branch_id ?? emp.branch_id
+                              const branchLabel = branchId ? (branches.find(b => b.id === branchId)?.name || '') : emp.assignment
+                              setEmployees(prev => prev.map((em, j) => j === i ? {
+                                ...em, matched: true, matched_employee_id: beId,
+                                branch_id: branchId, assignment: branchLabel,
+                              } : em))
+                              setUnmatchedBranchEmps(prev => prev.filter(u => u.id !== beId))
+                            }
                           }} style={{ border: '1px solid #fde68a', borderRadius: 8, padding: '3px 6px', fontSize: 11, background: '#fffbeb', width: '100%' }}>
-                            <option value={0}>⚠️ שייך לעובד...</option>
-                            <option value={-3}>➕ צור עובד חדש</option>
-                            <option value={-2}>🚫 עובד לא פעיל</option>
-                            {unmatchedBranchEmps.map(u => {
-                              const brName = u.branch_id ? branches.find(b => b.id === u.branch_id)?.name : 'מפעל'
-                              return <option key={u.id} value={u.id}>{u.name} ({brName})</option>
-                            })}
+                            <option value="">⚠️ שייך לעובד...</option>
+                            <option value="__new">➕ צור עובד חדש</option>
+                            <option value="__inactive">🚫 עובד לא פעיל</option>
+                            {(() => { if (needsMatch) console.log('[EmployerCosts] dropdown row:', { name: emp.employee_name, dept: emp.department_number, factoryCount: factoryLaborEmps.length }); return null })()}
+                            {[5, 6, 7, 8].includes(emp.department_number) ? (
+                              factoryLaborEmps.map(u => (
+                                <option key={u.name} value={u.name}>{u.name} ({u.department || 'מפעל'})</option>
+                              ))
+                            ) : (
+                              unmatchedBranchEmps.map(u => {
+                                const brName = u.branch_id ? branches.find(b => b.id === u.branch_id)?.name : 'מפעל'
+                                return <option key={u.id} value={u.id}>{u.name} ({brName})</option>
+                              })
+                            )}
                           </select>
                         )}
                       </td>

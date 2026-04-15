@@ -13,9 +13,13 @@ martin-bakery/
 │   ├── App.tsx                      # Auth check + UserProvider + PeriodProvider
 │   ├── main.tsx                     # React entry point
 │   ├── index.css                    # Tailwind + RTL + responsive breakpoints
-│   ├── pages/                       # 28 page components (כל המסכים)
+│   ├── pages/                       # 55 page components (כל המסכים)
 │   ├── components/
 │   │   ├── PeriodPicker.tsx         # בורר תקופות (חודש / שבוע / רבעון / שנה)
+│   │   ├── PageHeader.tsx           # כותרת עמוד אחידה
+│   │   ├── InsightsCard.tsx         # כרטיס תובנות AI
+│   │   ├── InstallPWA.tsx           # התקנת PWA
+│   │   ├── ProductionHistory.tsx    # היסטוריית ייצור
 │   │   ├── icons/                   # אייקונים מותאמים (Revenue, Profit, Labor, FixedCost, Trophy)
 │   │   └── ui/                      # shadcn/ui: button, card, table, sheet
 │   ├── lib/
@@ -23,8 +27,15 @@ martin-bakery/
 │   │   ├── UserContext.tsx          # Auth context, AppUser, role-based access (canAccessPage)
 │   │   ├── BranchContext.tsx        # Dynamic branches from Supabase (useBranches hook)
 │   │   ├── PeriodContext.tsx        # Period state management (usePeriod hook)
+│   │   ├── NavigationContext.tsx    # ניהול ניווט state-based
 │   │   ├── period.ts               # Period computation, Hebrew month names, comparison periods
 │   │   ├── internalCustomers.ts    # מיפוי לקוחות פנימיים → סניפים (detectBranchId)
+│   │   ├── calculatePL.ts          # חישוב רווח והפסד
+│   │   ├── profitCalc.ts           # חישובי רווחיות
+│   │   ├── generateInsights.ts     # יצירת תובנות AI
+│   │   ├── parseCashOnTab.ts       # פרסור דוח קופה רושמת
+│   │   ├── parseTimeWatch.ts       # פרסור דוח שעון נוכחות
+│   │   ├── parseWorkingHours.ts    # פרסור שעות עבודה
 │   │   └── utils.ts                # cn() helper
 │   └── types/
 │       └── index.ts                # Type definitions
@@ -32,30 +43,56 @@ martin-bakery/
 │   └── functions/
 │       ├── check-alerts/           # Edge Function — בדיקת התרעות כל שעה
 │       │   └── index.ts            # Check rules → query data → send email → log
-│       └── send-reports/           # Edge Function — דוחות אימייל
-│           ├── index.ts            # Orchestrator: cron → reports → email
-│           ├── lib/
-│           │   ├── db.ts           # DB queries, date utils, branch/dept names
-│           │   ├── schedule.ts     # Daily/Weekly/Monthly schedule logic (Israel TZ)
-│           │   ├── recipients.ts   # Fetch app_users, filter by role
-│           │   ├── charts.ts       # QuickChart.io URL generation
-│           │   ├── insights.ts     # Claude AI insights (claude-haiku-4-5)
-│           │   ├── email.ts        # Resend API email sending
-│           │   └── templates.ts    # HTML email components
-│           └── reports/
-│               ├── branch-daily.ts
-│               ├── branch-weekly.ts
-│               ├── branch-monthly.ts
-│               ├── factory-daily.ts
-│               ├── factory-weekly.ts
-│               ├── factory-monthly.ts
-│               ├── admin-branches.ts
-│               └── admin-factory.ts
+│       ├── send-reports/           # Edge Function — דוחות אימייל
+│       │   ├── index.ts            # Orchestrator: cron → reports → email
+│       │   ├── lib/
+│       │   │   ├── db.ts           # DB queries, date utils, branch/dept names
+│       │   │   ├── schedule.ts     # Daily/Weekly/Monthly schedule logic (Israel TZ)
+│       │   │   ├── recipients.ts   # Fetch app_users, filter by role
+│       │   │   ├── charts.ts       # QuickChart.io URL generation
+│       │   │   ├── insights.ts     # Claude AI insights (claude-haiku-4-5)
+│       │   │   ├── email.ts        # Resend API email sending
+│       │   │   └── templates.ts    # HTML email components
+│       │   └── reports/
+│       │       ├── branch-daily.ts
+│       │       ├── branch-weekly.ts
+│       │       ├── branch-monthly.ts
+│       │       ├── factory-daily.ts
+│       │       ├── factory-weekly.ts
+│       │       ├── factory-monthly.ts
+│       │       ├── admin-branches.ts
+│       │       └── admin-factory.ts
+│       ├── extract-invoice/        # Edge Function — חילוץ נתונים מחשבוניות PDF
+│       │   └── index.ts
+│       ├── invite-existing-users/  # Edge Function — הזמנת משתמשים קיימים
+│       │   └── index.ts
+│       ├── send-invitation/        # Edge Function — שליחת הזמנה למשתמש חדש
+│       │   └── index.ts
+│       ├── send-schedule/          # Edge Function — שליחת סידור עבודה
+│       │   └── index.ts
+│       └── send-scheduled-messages/ # Edge Function — שליחת הודעות מתוזמנות
+│           └── index.ts
 ├── sql/                             # Migration/setup scripts
 │   ├── 004_app_users.sql           # טבלת משתמשים + RLS + seed data
 │   ├── 005_email_reports_setup.sql # branch_kpi_targets columns + report_log
 │   ├── 006_dynamic_branches.sql    # טבלת branches דינמית + seed 3 סניפים + RLS
 │   ├── 007_alerts.sql              # alert_rules + alert_log + RLS
+│   ├── 008_auth_trigger.sql        # Auto-provision app_users on Google OAuth sign-in
+│   ├── 008_report_subscriptions.sql # הרשמה לדוחות + התראות per user
+│   ├── 009_branch_employees.sql    # טבלת עובדי סניף + RLS
+│   ├── 010_branch_employees_bonus.sql # עמודת בונוס התמדה
+│   ├── 010_department_manager.sql  # managed_department column on app_users
+│   ├── 011_fix_branch_kpi_rls.sql  # תיקון RLS ליעדי סניפים
+│   ├── 012_system_settings.sql     # הגדרות מערכת גלובליות (overhead_pct)
+│   ├── 012_fix_yaakov_cohen_expenses.sql # תיקון הוצאות יעקב כהן
+│   ├── 013_production_reports.sql  # דוחות ייצור מרוכזים
+│   ├── 014_internal_sales.sql      # מכירות פנימיות + פריטים + מיפוי מחלקות
+│   ├── 015_products.sql            # קטלוג מוצרים + מעקב מחירים
+│   ├── 016_external_sales.sql      # מכירות חיצוניות B2B
+│   ├── 017_b2b_customers.sql       # לקוחות B2B + חשבוניות + תשלומים
+│   ├── 018_branch_messages.sql     # הודעות סניף + מעקב קריאה
+│   ├── 019_scheduled_messages.sql  # הודעות מתוזמנות + לוג שליחה
+│   ├── 020_employer_costs.sql      # עלויות מעסיק + העלאות
 │   ├── internal_orders_schema.sql  # Internal orders: is_internal, target_branch_id, branch_status
 │   ├── check_internal.sql          # Query for checking internal sales
 │   └── fix_internal_sales.sql      # Retroactive fix for internal sales
@@ -63,6 +100,7 @@ martin-bakery/
 ├── vite.config.ts                   # Vite + React + Tailwind plugin
 ├── components.json                  # shadcn/ui config (base-nova style)
 ├── vercel.json                      # Vercel deployment config
+├── eslint.config.js                 # ESLint configuration
 ├── .env.local                       # VITE_SUPABASE_ANON_KEY
 └── .env.vercel                      # Vercel tokens + Supabase config
 ```
@@ -77,10 +115,16 @@ martin-bakery/
 | id | UUID PK | auto-generated |
 | email | TEXT UNIQUE | אימייל |
 | name | TEXT | שם |
-| role | TEXT | 'admin' / 'factory' / 'branch' |
+| role | TEXT | 'admin' / 'factory' / 'branch' / 'employee' |
 | branch_id | INT | לסניפים: 1=אברהם אבינו, 2=הפועלים, 3=יעקב כהן |
 | excluded_departments | TEXT[] | מחלקות שמשתמש factory לא רואה |
 | can_settings | BOOLEAN | האם יכול לגשת להגדרות |
+| managed_department | TEXT | מחלקה מנוהלת: creams/dough/packaging/cleaning/NULL |
+| report_daily | BOOLEAN | מנוי לדוח יומי |
+| report_weekly | BOOLEAN | מנוי לדוח שבועי |
+| report_monthly | BOOLEAN | מנוי לדוח חודשי |
+| reports_enabled | BOOLEAN | דוחות מופעלים |
+| alerts_enabled | BOOLEAN | התראות מופעלות |
 | auth_uid | UUID | מקושר ל-Supabase auth |
 | created_at | TIMESTAMPTZ | |
 
@@ -195,6 +239,30 @@ martin-bakery/
 | id | SERIAL PK | |
 | name | TEXT | שם ספק |
 
+### employees — עובדים גלובליים (שכר גלובלי)
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| name | TEXT | שם עובד |
+| department | TEXT | מחלקה |
+| wage_type | TEXT | 'global' |
+| global_daily_rate | NUMERIC | תעריף יומי |
+| bonus | NUMERIC | בונוס |
+| active | BOOLEAN | |
+
+### branch_employees — עובדי סניפים
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| branch_id | INT | |
+| name | TEXT | שם עובד |
+| email | TEXT | |
+| phone | TEXT | |
+| hourly_rate | NUMERIC | תעריף לשעה |
+| retention_bonus | NUMERIC | בונוס התמדה לשעה (0 = אין) |
+| active | BOOLEAN | |
+| created_at | TIMESTAMPTZ | |
+
 ### branch_revenue — הכנסות סניפים
 | שדה | טיפוס | תיאור |
 |-----|--------|--------|
@@ -286,6 +354,191 @@ martin-bakery/
 | branch_id | INT | |
 | active | BOOLEAN | |
 
+### products — קטלוג מוצרים
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| product_name | TEXT UNIQUE | שם מוצר |
+| department | TEXT | מחלקה |
+| current_price | NUMERIC | מחיר נוכחי |
+| last_price | NUMERIC | מחיר קודם |
+| price_updated_at | TIMESTAMPTZ | תאריך עדכון מחיר |
+| created_at | TIMESTAMPTZ | |
+
+### product_department_mapping — מיפוי מוצרים למחלקות
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| product_name | TEXT UNIQUE | |
+| department | TEXT | |
+
+### production_reports — דוחות ייצור מרוכזים
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| report_date | DATE | |
+| product_name | TEXT | |
+| department | TEXT | |
+| quantity | NUMERIC | |
+| unit_price | NUMERIC | |
+| total_cost | NUMERIC | |
+| uploaded_at | TIMESTAMPTZ | |
+| uploaded_by | TEXT | |
+
+### internal_sales — מכירות פנימיות (מפעל → סניף)
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| order_number | TEXT | |
+| order_date | DATE | |
+| branch_id | INT | |
+| department | TEXT | |
+| status | TEXT | 'pending' / 'modified' / 'completed' |
+| total_amount | NUMERIC | |
+| uploaded_by | TEXT | |
+| confirmed_by | TEXT | |
+| completed_at | TIMESTAMPTZ | |
+
+### internal_sale_items — פריטי מכירה פנימית
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| sale_id | INT FK → internal_sales | |
+| product_name | TEXT | |
+| department | TEXT | |
+| quantity_supplied | NUMERIC | כמות שסופקה |
+| quantity_confirmed | NUMERIC | כמות שאושרה |
+| unit_price | NUMERIC | |
+| total_price | NUMERIC | |
+
+### external_sales — מכירות חיצוניות B2B
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| customer_name | TEXT | |
+| invoice_number | TEXT | |
+| invoice_date | DATE | |
+| total_before_vat | NUMERIC | סה"כ לפני מע"מ |
+| uploaded_by | TEXT | |
+
+### b2b_customers — לקוחות B2B
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| name | TEXT | |
+| company_number | TEXT | |
+| phone | TEXT | |
+| address | TEXT | |
+| branch_id | INT | |
+| credit_limit | NUMERIC | |
+| notes | TEXT | |
+
+### b2b_invoices — חשבוניות B2B
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| customer_id | INT FK → b2b_customers | |
+| invoice_number | TEXT | |
+| invoice_date | DATE | |
+| due_date | DATE | |
+| total_before_vat | NUMERIC | |
+| total_with_vat | NUMERIC | |
+| status | TEXT | 'open' / 'partial' / 'paid' / 'overdue' |
+| branch_id | INT | |
+
+### b2b_payments — תשלומי B2B
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| invoice_id | INT FK → b2b_invoices | |
+| payment_date | DATE | |
+| amount | NUMERIC | |
+| notes | TEXT | |
+
+### branch_messages — הודעות סניף
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| branch_id | INT | |
+| title | TEXT | |
+| body | TEXT | |
+| type | TEXT | 'urgent' / 'task' / 'info' / 'praise' |
+| created_by | TEXT | |
+| created_at | TIMESTAMPTZ | |
+| scheduled_at | TIMESTAMPTZ | |
+| is_pinned | BOOLEAN | |
+
+### message_reads — מעקב קריאת הודעות
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| message_id | INT FK → branch_messages | |
+| employee_id | INT | |
+| read_at | TIMESTAMPTZ | |
+
+### scheduled_messages — הודעות מתוזמנות
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| branch_id | INT | |
+| title | TEXT | |
+| body | TEXT | |
+| type | TEXT | סוג הודעה |
+| recipient_type | TEXT | 'all' / ספציפי |
+| recipient_id | INT | |
+| recipient_role | TEXT | |
+| schedule_type | TEXT | 'weekly' |
+| days_of_week | INT[] | ימים בשבוע |
+| specific_dates | DATE[] | תאריכים ספציפיים |
+| send_time | TEXT | שעת שליחה |
+| is_active | BOOLEAN | |
+| last_sent_at | TIMESTAMPTZ | |
+| next_send_at | TIMESTAMPTZ | |
+
+### scheduled_message_log — לוג שליחת הודעות מתוזמנות
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| scheduled_message_id | INT FK → scheduled_messages | |
+| sent_at | TIMESTAMPTZ | |
+| recipients_count | INT | |
+| reads_count | INT | |
+
+### employer_costs — עלויות מעסיק
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| employee_number | INT | |
+| employee_name | TEXT | |
+| month | INT | |
+| year | INT | |
+| department_number | INT | |
+| department_name | TEXT | |
+| actual_employer_cost | NUMERIC | |
+| actual_hours | NUMERIC | |
+| actual_days | NUMERIC | |
+| branch_id | INT | |
+| is_headquarters | BOOLEAN | |
+
+### employer_costs_uploads — לוג העלאות עלויות מעסיק
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| month | INT | |
+| year | INT | |
+| filename | TEXT | |
+| uploaded_at | TIMESTAMPTZ | |
+| uploaded_by | TEXT | |
+| status | TEXT | |
+| unmatched_count | INT | |
+
+### system_settings — הגדרות מערכת
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| key | TEXT PK | מפתח הגדרה (e.g. 'overhead_pct') |
+| value | TEXT | ערך |
+| updated_at | TIMESTAMPTZ | |
+
 ### report_log — לוג דוחות אימייל
 | שדה | טיפוס | תיאור |
 |-----|--------|--------|
@@ -339,9 +592,6 @@ martin-bakery/
 ### customers — לקוחות
 (referenced in DataExport)
 
-### employees — עובדים גלובליים
-(referenced in supabase.ts — fetchGlobalEmployees)
-
 ---
 
 ## מסכים ו-Routes
@@ -373,11 +623,17 @@ martin-bakery/
 | Suppliers | Suppliers.tsx | ספקים וחשבוניות |
 | FactoryDashboard | FactoryDashboard.tsx | דשבורד מפעל מלא עם KPI וגרפים |
 | FactorySettings | FactorySettings.tsx | יעדי KPI, עלויות קבועות, עובדים, ייבוא/ייצוא |
+| FactoryEmployees | FactoryEmployees.tsx | ניהול עובדי מפעל |
+| FactoryEquipment | FactoryEquipment.tsx | ניהול ציוד מפעל |
+| FactoryDepartments | FactoryDepartments.tsx | ניהול מחלקות מפעל |
+| ProductCatalog | ProductCatalog.tsx | קטלוג מוצרים + מעקב מחירים |
+| ProductionReportUpload | ProductionReportUpload.tsx | העלאת דוחות ייצור מ-Excel |
+| InternalSalesUpload | InternalSalesUpload.tsx | העלאת מכירות פנימיות |
 
 ### אזור סניפים (×3: אברהם אבינו / הפועלים / יעקב כהן)
 | מסך | קובץ | תיאור |
 |------|-------|--------|
-| BranchHome | BranchHome.tsx | Hub סניף עם 10 אפשרויות |
+| BranchHome | BranchHome.tsx | Hub סניף עם אפשרויות ניווט |
 | BranchRevenue | BranchRevenue.tsx | הכנסות: קופה / אתר / הקפה |
 | BranchExpenses | BranchExpenses.tsx | הוצאות: ספקים / תיקונים / תשתיות / משלוחים / אחר |
 | BranchLabor | BranchLabor.tsx | לייבור סניף עם יכולת חילוץ PDF |
@@ -387,16 +643,44 @@ martin-bakery/
 | BranchOrders | BranchOrders.tsx | הזמנות מהמפעל — אישור/ערעור |
 | BranchPL | BranchPL.tsx | דוח רווח והפסד עם השוואת תקופות |
 | BranchSettings | BranchSettings.tsx | יעדים, עלויות קבועות, עובדים |
+| BranchDashboard | BranchDashboard.tsx | דשבורד סניף |
 | BranchManagerDashboard | BranchManagerDashboard.tsx | השוואת 3 סניפים עם חלוקת overhead |
+| BranchComparisonDashboard | BranchComparisonDashboard.tsx | דשבורד השוואת סניפים |
+| BranchEmployees | BranchEmployees.tsx | ניהול עובדי סניף |
+| BranchTeam | BranchTeam.tsx | צוות סניף |
+| BranchCommunication | BranchCommunication.tsx | מרכז תקשורת סניף — הודעות + מעקב |
+| BranchB2BHistory | BranchB2BHistory.tsx | היסטוריית מכירות B2B לסניף |
+| B2BCustomers | B2BCustomers.tsx | ניהול לקוחות B2B + חשבוניות + תשלומים |
+
+### אזור עובדים
+| מסך | קובץ | תיאור |
+|------|-------|--------|
+| EmployeeHome | EmployeeHome.tsx | דף בית עובד |
+| EmployeeMessages | EmployeeMessages.tsx | הודעות לעובד |
+| EmployeeConstraints | EmployeeConstraints.tsx | הגשת אילוצי משמרות |
+| EmployeeArchive | EmployeeArchive.tsx | ארכיון עובד |
+| MySchedule | MySchedule.tsx | סידור עבודה אישי |
+
+### אזור ניהול משמרות / סידור עבודה
+| מסך | קובץ | תיאור |
+|------|-------|--------|
+| WorkSchedule | WorkSchedule.tsx | סידור עבודה שבועי |
+| WeeklySchedule | WeeklySchedule.tsx | תצוגת סידור שבועית |
+| ShiftSettings | ShiftSettings.tsx | הגדרות משמרות |
+| ScheduleHistory | ScheduleHistory.tsx | היסטוריית סידורים |
+| ManagerConstraintsView | ManagerConstraintsView.tsx | תצוגת אילוצי עובדים למנהל |
+| TeamManagement | TeamManagement.tsx | ניהול צוותים |
 
 ### אזור ניהול
 | מסך | קובץ | תיאור |
 |------|-------|--------|
 | CEODashboard | CEODashboard.tsx | דשבורד מנכ"ל — אנליטיקות מתקדמות, Recharts, CountUp, Framer Motion |
 | AlertsManagement | AlertsManagement.tsx | ניהול התרעות — כללים, לוג, הוספה/עריכה — admin only |
+| ReportsAlerts | ReportsAlerts.tsx | ניהול דוחות והתרעות |
 | UserManagement | UserManagement.tsx | ניהול משתמשים, תפקידים, הרשאות + ניהול סניפים — admin only |
 | DataImport | DataImport.tsx | ייבוא CSV מ-Base44 — תומך ב-16 טבלאות |
 | DataExport | DataExport.tsx | ייצוא 20+ טבלאות ל-CSV/ZIP |
+| EmployerCostsUpload | EmployerCostsUpload.tsx | העלאת עלויות מעסיק |
 
 ---
 
@@ -434,6 +718,21 @@ martin-bakery/
 **Schedule:** cron חיצוני (cron-job.org) → כל שעה, 07:00-20:00 שעון ישראל.
 **אימות:** CRON_SECRET header.
 
+### extract-invoice (Supabase Edge Function)
+**מה עושה:** חילוץ נתונים מחשבוניות PDF (OCR / parsing).
+
+### invite-existing-users (Supabase Edge Function)
+**מה עושה:** הזמנת משתמשים קיימים במערכת (שליחת לינק כניסה).
+
+### send-invitation (Supabase Edge Function)
+**מה עושה:** שליחת הזמנה למשתמש חדש להצטרף למערכת.
+
+### send-schedule (Supabase Edge Function)
+**מה עושה:** שליחת סידור עבודה שבועי לעובדים.
+
+### send-scheduled-messages (Supabase Edge Function)
+**מה עושה:** שליחת הודעות מתוזמנות לעובדים לפי לו"ז שהוגדר.
+
 ---
 
 ## שירותים חיצוניים מחוברים
@@ -445,96 +744,64 @@ martin-bakery/
 | **Anthropic Claude** | AI insights בדוחות (claude-haiku-4-5) | `ANTHROPIC_API_KEY` |
 | **QuickChart.io** | יצירת גרפים לאימיילים | ללא מפתח (public API) |
 | **Google OAuth** | התחברות עם Google | דרך Supabase Auth |
-| **Vercel** | Hosting + Deployment | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` |
-| **cron-job.org** | Scheduling דוחות | `CRON_SECRET` |
 
 ---
 
-## פיצ'רים שהושלמו ועובדים
+## פיצ'רים שהושלמו
 
-1. **Authentication** — Google OAuth + email/password דרך Supabase Auth (PKCE)
-2. **Role-based access control** — admin/factory/branch עם excluded_departments ו-can_settings
-3. **דף הבית (Home)** — KPI cards, מעבר ל-3 אזורים, גרפים 6 חודשים
-4. **ייצור יומי** — הזנה, עריכה, מחיקה, גרפים SVG
-5. **פחת מפעל** — לפי מחלקה וקטגוריה
-6. **תיקונים וציוד** — repair / new_equipment
-7. **לייבור מרוכז** — העלאת CSV, חישוב אוטומטי (×1.3), ניהול עובדים (שעתיים + גלובליים)
-8. **מכירות מפעל** — קרמים, בצקים, B2B, שונות
-9. **הזמנות פנימיות** — זיהוי אוטומטי של מכירות לסניפים, branch_status (pending/approved/disputed)
-10. **ספקים וחשבוניות** — ניהול ספקים + חשבוניות מס
-11. **דשבורד מפעל** — KPI, רווח גולמי, פרודוקטיביות, 6-month trends
-12. **דשבורד מחלקתי** — אנליטיקות לקרמים ובצקים
-13. **הגדרות מפעל** — יעדי KPI, עלויות קבועות, עובדים, import/export
-14. **הכנסות סניפים** — קופה / אתר / הקפה
-15. **הוצאות סניפים** — 5 קטגוריות הוצאה
-16. **לייבור סניפים** — כולל חילוץ מ-PDF
-17. **פחת סניפים** — finished/raw/packaging
-18. **לקוחות הקפה** — ניהול לקוחות + תשלומים
-19. **ספקי סניפים** — לפי קטגוריה
-20. **הזמנות מהמפעל** — אישור/ערעור הזמנות פנימיות
-21. **דוח רווח והפסד** — סניפי, עם השוואת תקופות
-22. **הגדרות סניף** — יעדים, עלויות קבועות, עובדים
-23. **דשבורד מנהל סניפים** — השוואת 3 סניפים + חלוקת overhead
-24. **דשבורד מנכ"ל** — אנליטיקות מתקדמות עם אנימציות (Framer Motion + CountUp)
-25. **ניהול משתמשים** — CRUD לאדמין, הקצאת תפקידים והרשאות
-26. **ייבוא נתונים** — CSV/ZIP מ-Base44, תומך 16 סוגי טבלאות, dedup, validation
-27. **ייצוא נתונים** — 20+ טבלאות ל-CSV/ZIP עם סינון תקופה
-28. **דוחות אימייל אוטומטיים** — Edge Function עם 8 סוגי דוחות, AI insights
-29. **PeriodPicker** — בורר תקופות גמיש (חודש/שבוע/רבעון/שנה/מותאם)
-30. **עיצוב מודרני** — shadcn/ui, Framer Motion, Recharts, responsive mobile-first
-31. **RTL + Hebrew** — כל הממשק בעברית עם תמיכה מלאה ב-RTL
-32. **שדרוג ויזואלי כלל-מערכתי** — צבע indigo אחיד, shadcn/ui, Framer Motion animations, עקביות ויזואלית בכל הדפים
-33. **סניפים דינמיים** — טבלת branches ב-Supabase, BranchContext, הסרת כל הערכים הקשיחים מהקוד, ממשק ניהול סניפים ב-UserManagement
-34. **PWA** — manifest.json, Service Worker, כפתור התקנה, תמיכה ב-iOS/Android, offline cache
-35. **מערכת התרעות** — alert_rules, alert_log, Edge Function check-alerts (רצה כל שעה דרך cron-job.org), ממשק ניהול התרעות AlertsManagement.tsx עם הפעלה/כיבוי, הוספה, ולוג שליחות — גישה לadmin בלבד
-36. **מודול ניהול צוות מלא** — schedule_constraints (זמינות עובדים לפי משמרת), shift_roles, branch_shifts, shift_staffing_requirements, employee_role_assignments, shift_assignments. ShiftSettings (תפקידים/משמרות/דרישות/תפקידי עובדים/חגים). WeeklySchedule (סידור שבועי, שיבוץ אוטומטי עם ניקוד, פרסום, ייצוא PDF/וואטסאפ). EmployeeConstraints (לוח שבועי, תאים חכמים, מובייל). ManagerConstraintsView (תצוגת זמינות הצוות). MySchedule (סידור אישי לעובד). ScheduleHistory (ארכיון סידורים). חונך-מתלמד (training_status). חגים מ-Hebcal API. send-schedule Edge Function לשליחת סידור במייל
-37. **תפקיד עובד (employee role)** — app_users עם role='employee', EmployeeHome, auth trigger אוטומטי ליצירת חשבון, send-invitation Edge Function, ייבוא עובדים בצובר מ-UserManagement
-38. **לוגו קונדיטוריית מרטין** — מוטמע בכל הדפים הרלוונטיים (Login, Home, EmployeeHome, מיילים), צבע מותג #0d6165
-39. **עיצוב Clean UI מינימליסטי** — כל האפליקציה, white space, indigo (#6366f1) palette, shadow-sm cards, border-gray-100, רקע gray-50, טבלאות נקיות ללא רקע שורות, headers אחידים
+1. **מערכת ניהול עובדים** — CRUD עובדי סניף ומפעל, בונוס התמדה, שיוך למחלקות, הזמנת משתמשים (BranchEmployees, FactoryEmployees, EmployeeHome)
+2. **סידור עבודה ומשמרות** — לוח שבועי, הגדרות משמרות וחגים, אילוצי עובדים, היסטוריית סידורים, תצוגה אישית (WorkSchedule, WeeklySchedule, ShiftSettings, MySchedule, ManagerConstraintsView)
+3. **מערכת תקשורת** — הודעות לסניף (urgent/task/info/praise), הצמדה, מעקב קריאה, הודעות מתוזמנות חוזרות, edge function לשליחה אוטומטית (BranchCommunication, EmployeeMessages, send-scheduled-messages)
+4. **ניהול לקוחות B2B** — לקוחות, חשבוניות, תשלומים, תנאי תשלום (שוטף+30/60/90), מעקב חוב, חילוץ חשבוניות מ-PDF דרך Claude vision (B2BCustomers, BranchB2BHistory, extract-invoice)
+5. **קטלוג מוצרים** — מוצרים לפי מחלקה, מעקב מחירים, היסטוריית שינויים (ProductCatalog, products table)
+6. **מכירות פנימיות (מפעל → סניף)** — העלאת Excel, מיפוי מחלקות, workflow אישור בסניף, מעקב סטטוס pending/modified/completed (InternalSalesUpload, BranchOrders, internal_sales)
+7. **העלאת עלויות מעסיק** — פרסור Excel, matching חכם לפי מספר שכר, זיהוי מטה/מנהלים, שילוב בחישובי P&L (EmployerCostsUpload, employer_costs)
+8. **דוחות אימייל אוטומטיים** — 8 סוגי דוחות (branch/factory/admin × daily/weekly/monthly), AI insights, גרפים, הרשמה אישית, cron חיצוני (send-reports)
+9. **מערכת התרעות** — כללים מותאמים, בדיקה אוטומטית כל שעה, dedup, אימייל HTML בעברית (check-alerts, AlertsManagement)
+10. **Auto-provision עובדים** — trigger על auth.users שמזהה עובד לפי email ויוצר app_users אוטומטית עם role='employee' (008_auth_trigger.sql)
+11. **תמיכת PWA** — כפתור התקנה, זיהוי standalone mode (InstallPWA)
+12. **דשבורדים** — דשבורד סניף, השוואת סניפים, דשבורד מנכ"ל, דשבורד מחלקתי (BranchDashboard, BranchManagerDashboard, CEODashboard, DepartmentDashboard)
 
 ---
 
-## פיצ'רים שהתחילו ולא הסתיימו
+## פיצ'רים פתוחים
 
-אין פיצ'רים פתוחים כרגע.
+1. **InsightsCard לא מוצג ב-BranchDashboard** — הקומפוננטה מיובאת ומעובדת (`BranchDashboard.tsx:269`) אבל לא מוצגת בפועל למשתמש. יש לבדוק תנאי הצגה, האם `insights` מתמלא בזמן, ו-CSS/layout שעלול להסתיר.
+
+2. **אחוזים שגויים ב-BranchManagerDashboard** — הנוסחאות (`BranchManagerDashboard.tsx:110-113`) מכפילות ב-100, אבל התוצאות שמוצגות למשתמש שגויות. יש לבדוק האם הנתונים שמגיעים מ-`calculateBranchPL` כבר באחוזים, האם יש overhead שנספר פעמיים, או בעיית נתוני מקור.
+
+3. **בעיות בדוח עלויות מעסיק (EmployerCostsUpload):**
+   - **Race condition** — `saveAll()` (`EmployerCostsUpload.tsx:148-171`) מבצע DELETE ואז INSERT בנפרד ללא transaction. אם ה-INSERT נכשל אחרי ה-DELETE, הנתונים אובדים. בנוסף, עדכוני branch_employees רצים ברצף ב-loop במקום `Promise.all`.
+   - **שדה `is_manager` חסר בסכמה** — הקוד (`EmployerCostsUpload.tsx:160`, `calculatePL.ts:104-105`, `supabase.ts:564`) קורא וכותב שדה `is_manager`, אבל `sql/020_employer_costs.sql` לא מכיל את העמודה. עלול לגרום לשגיאת INSERT.
+   - **חיבור לדשבורדים לא אומת** — `employer_costs` נצרך ע"י `calculatePL.ts` ו-`supabase.ts:fetchBranchPL()` עם דגל `laborIsActual`. לא אומת שהדשבורדים (BranchDashboard, BranchManagerDashboard, CEODashboard) מציגים את הנתונים הנכונים בפועל לאחר העלאה.
 
 ---
 
 ## החלטות ארכיטקטורה חשובות
 
-1. **ניווט state-based** — אין React Router עם URL paths. כל הניווט מנוהל ב-state פנימי של Home.tsx. לא לשנות לroutert-based.
-2. **Supabase PKCE Auth** — ה-auth flow הוא PKCE. אין tokens ב-URL.
-3. **מחלקות מפעל** — 4 קבועות: creams, dough, packaging, cleaning (ניקיון+נהג+הנהלה+משרד = cleaning)
-4. **3 סניפים קיימים** — branch_id: 1=אברהם אבינו, 2=הפועלים (עמק שרה), 3=יעקב כהן. IDs לא ניתנים לשינוי (נתונים היסטוריים).
-5. **עלות מעסיק ×1.3** — כשאין employer_cost ב-CSV, מחושב אוטומטית gross_salary × 1.3.
-6. **PeriodContext** — כל דף שצריך תקופה משתמש ב-usePeriod(). לא ליצור מנגנון תקופות נפרד.
-7. **UserContext** — canAccessPage() קובע גישה. לא להוסיף מנגנון auth נוסף.
-8. **RTL** — dir="rtl" על html. כל ה-CSS כתוב עם RTL ב-mind. אל תוסיף dir="ltr".
-9. **shadcn/ui** — כל UI components חדשים צריכים להיות מ-shadcn/ui (base-nova style).
-10. **Tailwind CSS 4** — גרסה 4, עם @tailwindcss/vite plugin. CSS variables ב-oklch.
-11. **Edge Function scheduling** — cron חיצוני (cron-job.org), לא pg_cron (לא זמין ב-Free plan).
-12. **ייבוא נתונים מ-Base44** — המערכת הקודמת. ייבוא כ-ZIP עם CSVs. מבנה קבצים ספציפי.
-13. **סניפים: שבוע עבודה** — א-ו (ראשון עד שישי), שבת סגור. שבוע מתחיל ביום ראשון.
-14. **סניפים דינמיים** — רשימת הסניפים נטענת מטבלת branches דרך BranchContext. אין יותר שמות סניפים קשיחים בקוד. הוספת סניף = שורה חדשה בטבלה בלבד.
-15. **PWA** — manifest.json + Service Worker. Cache First לנכסים סטטיים, Network First לקריאות Supabase.
-16. **התרעות** — Edge Function check-alerts רצה כל שעה (07:00-20:00 ישראל) דרך cron-job.org. כללי התרעה מנוהלים דרך ממשק admin.
+1. **ניווט state-based (לא URL routing)** — כל הניווט מנוהל דרך `NavigationContext.tsx` עם state (`currentPage`, `pageData`), לא React Router. המשמעות: אין deep linking, אין back button של הדפדפן, אבל פשטות בניהול. `react-router-dom` מותקן ב-package.json אבל לא בשימוש פעיל.
+
+2. **Period system גלובלי** — `PeriodContext` עוטף את כל האפליקציה ומספק `from`/`to`/`monthKey` לכל הדפים. `PeriodPicker` מאפשר בחירת חודש/שבוע/רבעון/שנה. תקופת השוואה מחושבת אוטומטית (שנה קודמת).
+
+3. **עלויות מעסיק מחליפות הערכות** — כש-`employer_costs` קיימים לחודש נתון, המערכת מעדיפה אותם על פני חישוב משוער (hours × rate × 1.3). הדגל `laborIsActual` מסמן שהנתונים אמיתיים.
+
+4. **תפקיד employee** — נוסף לאחר admin/factory/branch. Auto-provision דרך auth trigger. עובד רואה רק: סידור אישי, הודעות, אילוצים.
+
+5. **Edge Functions עם CRON_SECRET** — כל ה-edge functions שרצות ב-cron מאומתות ע"י header `CRON_SECRET`. cron חיצוני דרך cron-job.org.
+
+6. **RLS על כל הטבלאות** — Row Level Security מופעל עם policies לפי role. admin רואה הכל, factory רואה מפעל, branch רואה סניף שלו, employee רואה מידע אישי.
+
+7. **חישוב overhead** — אחוז העמסת מטה (`overhead_pct`) נשמר ב-`system_settings` ומוחל על הכנסות הסניפים ב-BranchManagerDashboard.
+
+8. **מכירות פנימיות כ-workflow** — מכירה פנימית עוברת: upload Excel → `internal_sales` (pending) → סניף מאשר/עורך → completed. המחירים נלקחים מ-`products`.
 
 ---
 
 ## הערות לשיחה הבאה
 
-1. **Dev server** — `npm run dev` על port 5177 (מוגדר ב-.claude/launch.json).
-2. **כל הטקסט בעברית** — UI, הודעות שגיאה, labels, placeholder — הכל בעברית.
-3. **Home.tsx הוא קובץ מרכזי** — ~740 שורות, מכיל את כל הניווט ו-KPI cards.
-4. **CEODashboard.tsx הכי גדול** — 40KB+, עם ויזואליזציות מורכבות. משמש כ"סטנדרט הזהב" לעיצוב.
-5. **DataImport.tsx** — מנוע ייבוא מורכב שתומך בזיהוי אוטומטי של סוגי קבצים, dedup, וvalidation.
-6. **Email from** — reports@martinbakery.co.il (default ב-Edge Function).
-7. **Employees** — שני סוגים: שעתיים (hourly, דרך CSV) וגלובליים (salary, דרך employees table). שניהם נכללים בחישובי לייבור.
-8. **כללי התרעה ריקים** — טרם הוגדרו ערכי סף. יש לעשות דרך AlertsManagement.
-9. **SQL files 006 ו-007 טרם הורצו על Supabase** — צריך להריץ בדשבורד.
-10. **theme_color של PWA** — #818cf8 (indigo).
-11. **מודול סידור עבודה** — טבלאות: shift_roles, employee_role_assignments, branch_shifts, shift_staffing_requirements, schedule_constraints (עם shift_id). דפים: ShiftSettings (4 לשוניות), EmployeeConstraints (לוח שבועי + תפקידים), ManagerConstraintsView (תצוגת יום/משמרת), EmployeeHome (דף בית עובד).
-12. **תפקידי עובדים** — role='employee' ב-app_users עם employee_id → branch_employees. הצטרפות דרך send-invitation Edge Function שיוצר app_users אוטומטית.
-13. **מצב ישיבה** — BranchManagerDashboard מציג מצב ישיבה כברירת מחדל (מסתיר נתוני שכר).
-14. **P&L אחיד** — "רווח נשלט" (Controllable Margin) + "רווח תפעולי". fetchBranchPL / fetchFactoryPL ב-supabase.ts.
-15. **ספקים פנימיים** — from_factory=true ב-branch_expenses. פיצול בטבלאות P&L: "רכישות מפעל" + "ספקים חיצוניים".
+- לתקן את עמודת `is_manager` החסרה ב-`employer_costs` — להריץ ALTER TABLE או לעדכן את `020_employer_costs.sql`.
+- לבדוק למה InsightsCard לא מוצג למשתמש ב-BranchDashboard — בדיקת runtime, console errors, ובדיקה ש-`generateInsights` מחזיר תוצאות.
+- לאמת את האחוזים ב-BranchManagerDashboard — להשוות נתוני DB לתצוגה בדפדפן.
+- לטפל ב-race condition ב-EmployerCostsUpload — לעטוף DELETE+INSERT ב-RPC/transaction, או להשתמש ב-upsert.
+- לבדוק שהדשבורדים מציגים נכון עלויות מעסיק בפועל (לא רק הערכות).
+- `types/index.ts` ריק — ייתכן שהטיפוסים מפוזרים בקבצים. לשקול קונסולידציה.
