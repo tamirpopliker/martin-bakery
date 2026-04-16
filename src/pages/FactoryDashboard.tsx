@@ -310,8 +310,11 @@ export default function FactoryDashboard({ onBack }: Props) {
   const maxCost = Math.max(...costItems.map(i => i.value), 1)
 
   // ─── P&L Table rows ───────────────────────────────────────────────────
+  const externalSales = salesCreams + salesDough + salesB2B + salesMisc
   const plRows: { label: string; amount: number; type: 'normal' | 'separator' | 'bold' }[] = [
-    { label: 'מכירות', amount: totalSales, type: 'normal' },
+    { label: 'מכירות חיצוניות', amount: externalSales, type: 'normal' },
+    ...(salesInternal > 0 ? [{ label: 'מכירות פנימיות לסניפים', amount: salesInternal, type: 'normal' as const }] : []),
+    { label: 'סה"כ מכירות', amount: totalSales, type: 'bold' },
     { label: 'חומרי גלם', amount: totalSuppliers, type: 'normal' },
     { label: 'לייבור', amount: totalLabor, type: 'normal' },
     { label: 'פחת', amount: totalWaste, type: 'normal' },
