@@ -62,7 +62,7 @@ export async function calculateBranchPL(
     pct = Number(branchData?.overhead_pct ?? 5.0)
   }
 
-  const [revRes, expRes, labRes, wasteRes, fcRes] = await Promise.all([
+  const [revRes, expRes, labRes, wasteRes, fcRes, intSalesRes] = await Promise.all([
     supabase.from('branch_revenue').select('amount')
       .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd),
     supabase.from('branch_expenses').select('expense_type, amount, from_factory')
@@ -73,20 +73,27 @@ export async function calculateBranchPL(
       .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd),
     supabase.from('fixed_costs').select('amount, entity_id')
       .eq('entity_type', `branch_${branchId}`).eq('month', mk),
+    supabase.from('internal_sales').select('total_amount')
+      .eq('branch_id', branchId).eq('status', 'completed')
+      .gte('order_date', periodStart).lt('order_date', periodEnd),
   ])
 
   // Revenue
   const revenue = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
 
-  // Expenses by type
-  let factoryPurchases = 0, externalSuppliers = 0, repairs = 0
+  // Factory purchases: prefer internal_sales (completed), fallback to branch_expenses from_factory
+  const intSalesTotal = (intSalesRes.data || []).reduce((s, r) => s + Number(r.total_amount), 0)
+  const expFromFactory = (expRes.data || []).filter(r => r.from_factory).reduce((s, r) => s + Number(r.amount), 0)
+  const factoryPurchases = intSalesTotal > 0 ? intSalesTotal : expFromFactory
+
+  // Expenses by type (excluding from_factory — handled above)
+  let externalSuppliers = 0, repairs = 0
   let deliveries = 0, infrastructure = 0, otherExpenses = 0
   for (const r of (expRes.data || [])) {
+    if (r.from_factory) continue // handled via internal_sales
     const amt = Number(r.amount)
     const t = r.expense_type || 'other'
-    if (r.from_factory) {
-      factoryPurchases += amt
-    } else if (t === 'suppliers' || t === 'supplier') {
+    if (t === 'suppliers' || t === 'supplier') {
       externalSuppliers += amt
     } else if (t === 'repairs' || t === 'repair') {
       repairs += amt

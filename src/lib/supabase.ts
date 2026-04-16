@@ -524,12 +524,13 @@ export interface ConsolidatedPLResult {
  * Fetch complete P&L for a branch.
  */
 export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: string, monthKey: string, overheadPct = 5): Promise<BranchPLResult> {
-  const [revRes, expRes, labRes, wasteRes, fcRes] = await Promise.all([
+  const [revRes, expRes, labRes, wasteRes, fcRes, intSalesRes] = await Promise.all([
     supabase.from('branch_revenue').select('source, amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
     supabase.from('branch_expenses').select('expense_type, amount, from_factory').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
     supabase.from('branch_labor').select('employer_cost').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
     supabase.from('branch_waste').select('amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
     supabase.from('fixed_costs').select('amount, entity_id').eq('entity_type', `branch_${branchId}`).eq('month', monthKey),
+    supabase.from('internal_sales').select('total_amount').eq('branch_id', branchId).eq('status', 'completed').gte('order_date', dateFrom).lt('order_date', dateTo),
   ])
 
   let revCashier = 0, revWebsite = 0, revCredit = 0
@@ -542,21 +543,26 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
   }
   const revenue = revCashier + revWebsite + revCredit
 
-  let expSuppliers = 0, expSuppliersInternal = 0, expSuppliersExternal = 0
+  // Factory purchases: prefer internal_sales (completed), fallback to branch_expenses from_factory
+  const intSalesTotal = (intSalesRes.data || []).reduce((s, r) => s + Number(r.total_amount), 0)
+  const expFromFactory = (expRes.data || []).filter(r => r.from_factory).reduce((s, r) => s + Number(r.amount), 0)
+  let expSuppliersInternal = intSalesTotal > 0 ? intSalesTotal : expFromFactory
+
+  let expSuppliersExternal = 0
   let expRepairs = 0, expInfra = 0, expDelivery = 0, expOther = 0
   for (const r of (expRes.data || [])) {
+    if (r.from_factory) continue // handled via internal_sales
     const amt = Number(r.amount)
     const t = r.expense_type || 'other'
     if (t === 'suppliers' || t === 'supplier' || t === 'inventory') {
-      expSuppliers += amt
-      if (r.from_factory) expSuppliersInternal += amt
-      else expSuppliersExternal += amt
+      expSuppliersExternal += amt
     }
     else if (t === 'repairs' || t === 'repair') expRepairs += amt
     else if (t === 'infrastructure') expInfra += amt
     else if (t === 'deliveries' || t === 'delivery') expDelivery += amt
     else expOther += amt
   }
+  let expSuppliers = expSuppliersInternal + expSuppliersExternal
 
   // Labor + Manager — check employer_costs first to prevent double-counting
   const [mYear, mMonth] = monthKey.split('-').map(Number)
