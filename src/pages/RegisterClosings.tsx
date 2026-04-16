@@ -416,7 +416,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                     <input type="number" inputMode="decimal" value={creditSales} onChange={e => setCreditSales(e.target.value)} style={S.input} placeholder="0" />
                   </div>
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={S.label}>מספר עסקאות (אופציונלי)</label>
+                    <label style={S.label}>מספר עסקאות *</label>
                     <input type="number" inputMode="numeric" value={txCount} onChange={e => setTxCount(e.target.value)} style={S.input} placeholder="0" />
                   </div>
                 </div>
@@ -444,12 +444,36 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
           {/* Step 3 — Cash count */}
           {step === 3 && (
             <motion.div variants={fadeIn} initial="hidden" animate="visible">
-              <div style={{ position: 'sticky', top: 86, zIndex: 1, background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', borderRadius: 16, padding: '22px 24px', marginBottom: 14, color: 'white', textAlign: 'center', boxShadow: '0 6px 20px rgba(99,102,241,0.25)' }}>
-                <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 700, marginBottom: 4 }}>סה"כ נספר</div>
-                <div style={{ fontSize: 44, fontWeight: 900, lineHeight: 1, letterSpacing: -0.5 }}>
-                  ₪{countedCash.toLocaleString('he-IL', { minimumFractionDigits: countedCash % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })}
-                </div>
-              </div>
+              {(() => {
+                const target = cash
+                const diff = countedCash - target
+                const diffColor = Math.abs(diff) < 0.005 ? '#94a3b8' : diff > 0 ? '#34d399' : '#fb7185'
+                const fmtNum = (n: number) => '₪' + n.toLocaleString('he-IL', { minimumFractionDigits: n % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })
+                return (
+                  <div style={{ position: 'sticky', top: 86, zIndex: 1, background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', borderRadius: 16, padding: '20px 18px', marginBottom: 14, color: 'white', boxShadow: '0 6px 20px rgba(99,102,241,0.25)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gap: 10, alignItems: 'end' }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 12, opacity: 0.9, fontWeight: 700, marginBottom: 4 }}>נספר</div>
+                        <div style={{ fontSize: 32, fontWeight: 900, lineHeight: 1, letterSpacing: -0.5 }}>
+                          {fmtNum(countedCash)}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'center', background: '#1d4ed8', borderRadius: 12, padding: '10px 6px' }}>
+                        <div style={{ fontSize: 11, opacity: 0.9, fontWeight: 700, marginBottom: 4 }}>יעד</div>
+                        <div style={{ fontSize: 20, fontWeight: 900, lineHeight: 1 }}>
+                          {fmtNum(target)}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.14)', borderRadius: 12, padding: '10px 6px' }}>
+                        <div style={{ fontSize: 11, opacity: 0.9, fontWeight: 700, marginBottom: 4 }}>הפרש</div>
+                        <div style={{ fontSize: 20, fontWeight: 900, lineHeight: 1, color: diffColor }}>
+                          {diff > 0 ? '+' : diff < 0 ? '−' : ''}{fmtNum(Math.abs(diff)).replace('₪', '₪')}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
               <DenomCounter denoms={BILL_DENOMS} counts={billCounts} setCounts={setBillCounts} label="שטרות" kind="bill" />
               <DenomCounter denoms={COIN_DENOMS} counts={coinCounts} setCounts={setCoinCounts} label="מטבעות" kind="coin" />
 
@@ -536,8 +560,8 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
           </button>
           {step < 4 ? (
             <button onClick={() => setStep(step + 1)}
-              disabled={step === 2 && !cashSales}
-              style={{ background: step === 2 && !cashSales ? '#c7d2fe' : '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: step === 2 && !cashSales ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 56 }}>
+              disabled={step === 2 && (!cashSales || !txCount || parseInt(txCount) <= 0)}
+              style={{ background: step === 2 && (!cashSales || !txCount || parseInt(txCount) <= 0) ? '#c7d2fe' : '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: step === 2 && (!cashSales || !txCount || parseInt(txCount) <= 0) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 56 }}>
               הבא <ArrowLeft size={17} />
             </button>
           ) : (
