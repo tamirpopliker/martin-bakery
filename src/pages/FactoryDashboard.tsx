@@ -259,7 +259,7 @@ export default function FactoryDashboard({ onBack }: Props) {
   }, [from, to])
 
   // ─── Computed Values ────────────────────────────────────────────────────
-  const totalSales   = salesCreams + salesDough + salesB2B + salesMisc
+  const totalSales   = salesCreams + salesDough + salesB2B + salesMisc + salesInternal
   const totalWaste   = DEPTS.reduce((s, d) => s + wasteDept[d], 0)
   const totalRepairs = DEPTS.reduce((s, d) => s + repairsDept[d], 0)
   const hourlyLabor  = DEPTS.reduce((s, d) => s + laborDept[d].employer, 0)

@@ -185,7 +185,7 @@ export default function CEODashboard({ onBack }: Props) {
     ])
 
     // Map factory PL to state variables
-    setFactorySales(factoryPL.externalRevenue)
+    setFactorySales(factoryPL.revenue)
     setFactoryLabor(factoryPL.labor)
     setFactorySuppliers(factoryPL.suppliers)
     setFactoryWaste(factoryPL.waste)
@@ -429,10 +429,10 @@ export default function CEODashboard({ onBack }: Props) {
   const grandLaborPct  = grandRevenue > 0 ? (grandLabor / grandRevenue) * 100 : 0
 
   // ─── Consolidated view (intercompany eliminated) ──────────────────────────
-  const factoryAllSales = factorySales + factoryInternalSales  // total factory including internal
+  // factorySales now includes internal — subtract for consolidated (net = external only)
   const totalExpInternal = branches.reduce((s, b) => s + b.expInternal, 0)
   const totalExpExternal = branches.reduce((s, b) => s + b.expExternal, 0)
-  const consRevenue     = totalRevenue + factorySales  // branches + factory external only
+  const consRevenue     = totalRevenue + factorySales - factoryInternalSales  // branches + factory external only
   const consLabor       = grandLabor
   const consSuppliers   = factorySuppliers + totalExpExternal  // raw materials + branch external suppliers
   const consWaste       = totalWaste + factoryWaste
@@ -883,7 +883,7 @@ export default function CEODashboard({ onBack }: Props) {
 
             {/* ═══ ROW 1: 4 Golden KPIs ═══ */}
             {(() => {
-              const kpiRev = viewMode === 'consolidated' ? consRevenue : grandRevenue + factoryInternalSales
+              const kpiRev = viewMode === 'consolidated' ? consRevenue : grandRevenue
               const kpiGross = viewMode === 'consolidated' ? consGross : grandGross
               const kpiOp = viewMode === 'consolidated' ? consOperating : grandOperating
               const kpiLaborPct = kpiRev > 0 ? (grandLabor / kpiRev) * 100 : 0
@@ -931,12 +931,12 @@ export default function CEODashboard({ onBack }: Props) {
             {/* ═══ P&L Table (shared for both views) ═══ */}
             {(() => {
               const isSegment = viewMode === 'segment'
-              const fRev = isSegment ? factorySales + factoryInternalSales : factorySales
+              const fRev = isSegment ? factorySales : factorySales - factoryInternalSales
               const fOp = fRev - factorySuppliers - factoryLabor - factoryFixed - factoryWaste - factoryRepairs
               const tableTitle = isSegment ? 'טבלת רווח והפסד — לפי מרכז רווח' : 'טבלת רווח והפסד — מאוחדת'
               const footerNote = isSegment
                 ? 'תצוגה זו כוללת עסקאות פנימיות בין המפעל לסניפים. לתמונה האמיתית של העסק עבור לתצוגה המאוחדת.'
-                : 'תצוגה מאוחדת — הכנסות המפעל כוללות מכירות חיצוניות בלבד. עסקאות פנימיות מבוטלות.'
+                : 'תצוגה מאוחדת — עסקאות פנימיות מבוטלות. הנטו = הכנסות חיצוניות בלבד.'
 
               type PLRow = {
                 label: string; factory: number; getBr: (br: BranchData) => number
