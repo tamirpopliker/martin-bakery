@@ -5,7 +5,7 @@ import PageHeader from '../components/PageHeader'
 import {
   DollarSign, CreditCard, Wallet, CheckCircle2, AlertCircle,
   Camera, X, ArrowRight, ArrowLeft, FileSpreadsheet, History, Calculator, Pencil, Home as HomeIcon,
-  Zap, Archive
+  Zap, Archive, Trash2
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -799,6 +799,68 @@ function EmptyDialog({ branchId, registerNumber, openingAmount, fundBalance, onC
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Delete confirmation dialog
+// ═══════════════════════════════════════════════════════════════════════════
+function DeleteDialog({ closing, onClose, onDeleted }: {
+  closing: Closing; onClose: () => void; onDeleted: () => void
+}) {
+  const [deleting, setDeleting] = useState(false)
+
+  async function doDelete() {
+    if (deleting) return
+    setDeleting(true)
+    try {
+      // Delete related change_fund rows first (either via FK relation or by related_closing_id)
+      await supabase.from('change_fund').delete().eq('related_closing_id', closing.id)
+      const { error } = await supabase.from('register_closings').delete().eq('id', closing.id)
+      if (error) throw error
+      onDeleted()
+    } catch (e: any) {
+      alert('שגיאת מחיקה: ' + (e?.message || 'לא ידוע'))
+    }
+    setDeleting(false)
+  }
+
+  const dateLabel = new Date(closing.date + 'T12:00:00').toLocaleDateString('he-IL')
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
+      <motion.div onClick={e => e.stopPropagation()}
+        initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        style={{ background: 'white', width: '100%', maxWidth: 440, borderRadius: 16, direction: 'rtl', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={20} color="#dc2626" /> מחיקת סגירה
+          </div>
+          <button onClick={onClose}
+            style={{ width: 40, height: 40, background: '#f8fafc', border: 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <X size={20} color="#64748b" />
+          </button>
+        </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ fontSize: 15, color: '#334155', lineHeight: 1.6, marginBottom: 10 }}>
+            האם למחוק את סגירת <strong>קופה {closing.register_number}</strong> מתאריך <strong>{dateLabel}</strong>?
+          </div>
+          <div style={{ fontSize: 13, color: '#dc2626', fontWeight: 700, background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 12px' }}>
+            פעולה זו אינה ניתנת לביטול. כל תנועות קופת העודף הקשורות יימחקו גם הן.
+          </div>
+        </div>
+        <div style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button onClick={onClose}
+            style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '12px 20px', fontSize: 14, fontWeight: 800, color: '#475569', cursor: 'pointer' }}>
+            ביטול
+          </button>
+          <button onClick={doDelete} disabled={deleting}
+            style={{ background: deleting ? '#fca5a5' : '#dc2626', color: 'white', border: 'none', borderRadius: 10, padding: '12px 20px', fontSize: 14, fontWeight: 800, cursor: deleting ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Trash2 size={15} /> {deleting ? 'מוחק…' : 'מחק'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Main page
 // ═══════════════════════════════════════════════════════════════════════════
 export default function RegisterClosings({ branchId, branchName, onBack }: Props) {
@@ -813,6 +875,7 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
   const [editClosing, setEditClosing] = useState<Closing | null>(null)
   const [activatingReg, setActivatingReg] = useState<number | null>(null)
   const [emptyingReg, setEmptyingReg] = useState<number | null>(null)
+  const [deletingClosing, setDeletingClosing] = useState<Closing | null>(null)
   const [overallOpen, setOverallOpen] = useState(false)
   const [historyFrom, setHistoryFrom] = useState(() => {
     const d = new Date(); d.setDate(1)
@@ -989,10 +1052,17 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
                               מזומן: {fmt(Number(closing.cash_sales))}<br />
                               פער: {fmt(Number(closing.variance))}
                             </div>
-                            <button onClick={() => setEditClosing(closing)}
-                              style={{ width: '100%', background: 'white', color: '#065f46', border: '1.5px solid #a7f3d0', borderRadius: 10, padding: '8px', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                              <Pencil size={13} /> ערוך
-                            </button>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button onClick={() => setEditClosing(closing)}
+                                style={{ flex: 1, background: 'white', color: '#065f46', border: '1.5px solid #a7f3d0', borderRadius: 10, padding: '8px', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                <Pencil size={13} /> ערוך
+                              </button>
+                              <button onClick={() => setDeletingClosing(closing)}
+                                title="מחק סגירה"
+                                style={{ background: 'white', color: '#dc2626', border: '1.5px solid #fecaca', borderRadius: 10, padding: '8px 10px', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </>
                         )}
 
@@ -1087,11 +1157,18 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
                         </td>
                         <td style={{ padding: '10px 10px' }}>{fmt(Number(c.next_opening_balance))}</td>
                         <td style={{ padding: '10px 6px' }}>
-                          <button onClick={() => setEditClosing(c)}
-                            title="עריכה"
-                            style={{ width: 36, height: 36, border: '1.5px solid #e2e8f0', background: 'white', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Pencil size={14} color="#6366f1" />
-                          </button>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => setEditClosing(c)}
+                              title="עריכה"
+                              style={{ width: 36, height: 36, border: '1.5px solid #e2e8f0', background: 'white', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Pencil size={14} color="#6366f1" />
+                            </button>
+                            <button onClick={() => setDeletingClosing(c)}
+                              title="מחיקה"
+                              style={{ width: 36, height: 36, border: '1.5px solid #fecaca', background: 'white', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Trash2 size={14} color="#dc2626" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1128,6 +1205,11 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
           fundBalance={fundBalance}
           onClose={() => setEmptyingReg(null)}
           onSaved={() => { setEmptyingReg(null); loadAll(); if (tab === 'history') loadHistory() }} />
+      )}
+      {deletingClosing && (
+        <DeleteDialog closing={deletingClosing}
+          onClose={() => setDeletingClosing(null)}
+          onDeleted={() => { setDeletingClosing(null); loadAll(); if (tab === 'history') loadHistory() }} />
       )}
     </div>
   )
