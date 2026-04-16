@@ -125,6 +125,7 @@ export default function FactoryDashboard({ onBack }: Props) {
       suppInvRes, suppNamesRes,
       globalEmpsData, wdData,
       prodRes,
+      intSalesRes,
     ] = await Promise.all([
       supabase.from('factory_sales').select('department, amount, is_internal').gte('date', from).lt('date', to),
       supabase.from('factory_b2b_sales').select('sale_type, customer, amount, is_internal').gte('date', from).lt('date', to),
@@ -138,6 +139,7 @@ export default function FactoryDashboard({ onBack }: Props) {
       fetchGlobalEmployees(),
       getWorkingDays(monthKey || from.slice(0, 7)),
       supabase.from('daily_production').select('department, amount').gte('date', from).lt('date', to),
+      supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', from).lt('order_date', to),
     ])
 
     // Global employees
@@ -155,9 +157,11 @@ export default function FactoryDashboard({ onBack }: Props) {
     const miscTotal = b2b.filter((r: any) => r.sale_type === 'misc').reduce((s: number, r: any) => s + Number(r.amount), 0)
     setSalesMisc(miscTotal)
 
-    const internalFsTotal = fs.filter((r: any) => r.is_internal).reduce((s: number, r: any) => s + Number(r.amount), 0)
-    const internalB2bTotal = b2b.filter((r: any) => r.is_internal).reduce((s: number, r: any) => s + Number(r.amount), 0)
-    setSalesInternal(internalFsTotal + internalB2bTotal)
+    // Internal revenue: prefer internal_sales (completed), fallback to factory_sales/b2b is_internal
+    const intSalesTotal = (intSalesRes.data || []).reduce((s: number, r: any) => s + Number(r.total_amount), 0)
+    const legacyInternal = fs.filter((r: any) => r.is_internal).reduce((s: number, r: any) => s + Number(r.amount), 0)
+                         + b2b.filter((r: any) => r.is_internal).reduce((s: number, r: any) => s + Number(r.amount), 0)
+    setSalesInternal(intSalesTotal > 0 ? intSalesTotal : legacyInternal)
 
     // Suppliers
     const suppInvData = suppInvRes.data || []

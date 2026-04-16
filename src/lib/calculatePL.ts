@@ -183,7 +183,7 @@ export async function calculateFactoryPL(
 ): Promise<FactoryPLResult> {
   const mk = monthKey || periodStart.slice(0, 7)
 
-  const [fSalesExt, fSalesInt, fB2bExt, fB2bInt, fLab, fSupp, fWaste, fRepairs, fFixed] = await Promise.all([
+  const [fSalesExt, fSalesInt, fB2bExt, fB2bInt, fLab, fSupp, fWaste, fRepairs, fFixed, intSalesRes] = await Promise.all([
     supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', periodStart).lt('date', periodEnd),
     supabase.from('factory_sales').select('amount').eq('is_internal', true).gte('date', periodStart).lt('date', periodEnd),
     supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', periodStart).lt('date', periodEnd),
@@ -193,12 +193,16 @@ export async function calculateFactoryPL(
     supabase.from('factory_waste').select('amount').gte('date', periodStart).lt('date', periodEnd),
     supabase.from('factory_repairs').select('amount').gte('date', periodStart).lt('date', periodEnd),
     supabase.from('fixed_costs').select('amount').eq('entity_type', 'factory').eq('month', mk),
+    supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', periodStart).lt('order_date', periodEnd),
   ])
 
   const sum = (d: any) => (d.data || []).reduce((s: number, r: any) => s + Number(r.amount || r.employer_cost || 0), 0)
 
   const externalRevenue = sum(fSalesExt) + sum(fB2bExt)
-  const internalRevenue = sum(fSalesInt) + sum(fB2bInt)
+  // Internal revenue: prefer internal_sales, fallback to factory_sales/b2b is_internal
+  const intSalesTotal = (intSalesRes.data || []).reduce((s, r) => s + Number(r.total_amount), 0)
+  const legacyInternal = sum(fSalesInt) + sum(fB2bInt)
+  const internalRevenue = intSalesTotal > 0 ? intSalesTotal : legacyInternal
   const revenue = externalRevenue + internalRevenue
   const suppliers = sum(fSupp)
   // Factory labor — check employer_costs first (branch_id IS NULL, not HQ)

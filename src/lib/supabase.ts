@@ -624,7 +624,7 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
  * Fetch complete P&L for the factory.
  */
 export async function fetchFactoryPL(dateFrom: string, dateTo: string, monthKey: string): Promise<FactoryPLResult> {
-  const [salesFs, salesB2b, salesFsInt, salesB2bInt, labRes, suppRes, wasteRes, repairsRes] = await Promise.all([
+  const [salesFs, salesB2b, salesFsInt, salesB2bInt, labRes, suppRes, wasteRes, repairsRes, intSalesRes] = await Promise.all([
     supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', dateFrom).lt('date', dateTo),
     supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', dateFrom).lt('date', dateTo),
     supabase.from('factory_sales').select('amount').eq('is_internal', true).gte('date', dateFrom).lt('date', dateTo),
@@ -633,12 +633,16 @@ export async function fetchFactoryPL(dateFrom: string, dateTo: string, monthKey:
     supabase.from('supplier_invoices').select('amount').gte('date', dateFrom).lt('date', dateTo),
     supabase.from('factory_waste').select('amount').gte('date', dateFrom).lt('date', dateTo),
     supabase.from('factory_repairs').select('amount').gte('date', dateFrom).lt('date', dateTo),
+    supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', dateFrom).lt('order_date', dateTo),
   ])
 
   const salesExternal = (salesFs.data || []).reduce((s, r) => s + Number(r.amount), 0)
                       + (salesB2b.data || []).reduce((s, r) => s + Number(r.amount), 0)
-  const salesInternal = (salesFsInt.data || []).reduce((s, r) => s + Number(r.amount), 0)
-                      + (salesB2bInt.data || []).reduce((s, r) => s + Number(r.amount), 0)
+  // Internal revenue: prefer internal_sales, fallback to factory_sales/b2b is_internal
+  const intSalesTotal = (intSalesRes.data || []).reduce((s, r) => s + Number(r.total_amount), 0)
+  const legacyInternal = (salesFsInt.data || []).reduce((s, r) => s + Number(r.amount), 0)
+                       + (salesB2bInt.data || []).reduce((s, r) => s + Number(r.amount), 0)
+  const salesInternal = intSalesTotal > 0 ? intSalesTotal : legacyInternal
   const sales = salesExternal + salesInternal
 
   const labor = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
