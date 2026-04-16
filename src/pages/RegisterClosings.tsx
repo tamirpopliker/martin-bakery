@@ -19,17 +19,25 @@ const BRANCH_REGISTERS: Record<number, number[]> = {
 const BILL_DENOMS = [200, 100, 50, 20, 10]
 const COIN_DENOMS = [10, 5, 2, 1, 0.5, 0.1]
 
-const DENOM_IMAGES: Record<string, string> = {
-  '200': 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/NIS_200_front.jpg/320px-NIS_200_front.jpg',
-  '100': 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/NIS_100_front.jpg/320px-NIS_100_front.jpg',
-  '50':  'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/NIS_50_front.jpg/320px-NIS_50_front.jpg',
-  '20':  'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/NIS_20_front.jpg/320px-NIS_20_front.jpg',
-  '10':  'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/NIS_10_coin.jpg/120px-NIS_10_coin.jpg',
-  '5':   'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/NIS_5_coin.jpg/120px-NIS_5_coin.jpg',
-  '2':   'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/NIS_2_coin.jpg/120px-NIS_2_coin.jpg',
-  '1':   'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/NIS_1_coin.jpg/120px-NIS_1_coin.jpg',
-  '0.5': '',
-  '0.1': '',
+const BILL_IMAGES: Record<string, string> = {
+  '200': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/INS-200-NIS-%282015%29-front.jpg/320px-INS-200-NIS-%282015%29-front.jpg',
+  '100': 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/INS-100-NIS-%282017%29-front.jpg/320px-INS-100-NIS-%282017%29-front.jpg',
+  '50':  'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/INS-50-NIS-%282014%29-front.jpg/320px-INS-50-NIS-%282014%29-front.jpg',
+  '20':  'https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/INS-20-NIS-%282017%29-front.jpg/320px-INS-20-NIS-%282017%29-front.jpg',
+  '10':  'https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/INS-10-NIS-%281998%29-front.jpg/320px-INS-10-NIS-%281998%29-front.jpg',
+}
+const COIN_IMAGES: Record<string, string> = {
+  '10':  'https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/10_NIS_obverse.jpg/120px-10_NIS_obverse.jpg',
+  '5':   'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c9/5_NIS_obverse.jpg/120px-5_NIS_obverse.jpg',
+  '2':   'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/2_NIS_obverse.jpg/120px-2_NIS_obverse.jpg',
+  '1':   'https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/1_NIS_obverse.jpg/120px-1_NIS_obverse.jpg',
+  '0.5': 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Half_NIS_obverse.jpg/120px-Half_NIS_obverse.jpg',
+  '0.1': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/10_agorot_obverse.jpg/120px-10_agorot_obverse.jpg',
+}
+
+const DENOM_LABELS: Record<string, string> = {
+  '0.5': '½ ₪',
+  '0.1': '10 אג׳',
 }
 
 interface Props {
@@ -63,6 +71,38 @@ function todayISO() { return new Date().toISOString().split('T')[0] }
 function fmt(n: number) { return '₪' + Math.round(n).toLocaleString() }
 function fmtDec(n: number) { return '₪' + n.toFixed(2) }
 
+// ─── Image with graceful fallback ──────────────────────────────────────────
+function DenomImage({ denom, kind }: { denom: number; kind: 'bill' | 'coin' }) {
+  const key = String(denom)
+  const src = kind === 'bill' ? BILL_IMAGES[key] : COIN_IMAGES[key]
+  const [failed, setFailed] = useState(false)
+  const displayLabel = DENOM_LABELS[key] || ('₪' + denom)
+
+  const billStyle = { width: 84, height: 44, objectFit: 'contain' as const, borderRadius: 4, flexShrink: 0, background: 'white', border: '1px solid #e2e8f0' }
+  const coinStyle = { width: 52, height: 52, objectFit: 'cover' as const, borderRadius: 999, flexShrink: 0, background: 'white', border: '1px solid #e2e8f0' }
+
+  if (!src || failed) {
+    if (kind === 'bill') {
+      return (
+        <div style={{ ...billStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', color: '#475569', fontSize: 14, fontWeight: 900 }}>
+          {displayLabel}
+        </div>
+      )
+    }
+    return (
+      <div style={{ ...coinStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fde68a', color: '#92400e', fontSize: 13, fontWeight: 900 }}>
+        {displayLabel}
+      </div>
+    )
+  }
+
+  return (
+    <img src={src} alt={displayLabel}
+      style={kind === 'bill' ? billStyle : coinStyle}
+      onError={() => setFailed(true)} />
+  )
+}
+
 // ─── Denomination Counter (mobile-friendly, with real bill/coin images) ─────
 function DenomCounter({ denoms, counts, setCounts, label, kind }: {
   denoms: number[]; counts: Record<string, number>; setCounts: (c: Record<string, number>) => void; label: string; kind: 'bill' | 'coin'
@@ -75,21 +115,13 @@ function DenomCounter({ denoms, counts, setCounts, label, kind }: {
           const key = String(d)
           const count = counts[key] || 0
           const subtotal = count * d
-          const img = DENOM_IMAGES[key]
+          const displayLabel = DENOM_LABELS[key] || ('₪' + d)
           const inc = (delta: number) => setCounts({ ...counts, [key]: Math.max(0, (counts[key] || 0) + delta) })
           return (
-            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#f8fafc', borderRadius: 12, minHeight: 64 }}>
-              {img ? (
-                <img src={img} alt={'₪' + d}
-                  style={{ width: kind === 'bill' ? 72 : 46, height: kind === 'bill' ? 40 : 46, objectFit: 'contain', borderRadius: kind === 'bill' ? 4 : 999, flexShrink: 0, background: 'white' }}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-              ) : (
-                <div style={{ width: 46, height: 46, borderRadius: 999, background: '#fde68a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#92400e', flexShrink: 0 }}>
-                  ₪{d}
-                </div>
-              )}
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: '#f8fafc', borderRadius: 12, minHeight: 68 }}>
+              <DenomImage denom={d} kind={kind} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>₪{d}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{displayLabel}</div>
                 <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>
                   {subtotal > 0 ? fmtDec(subtotal) : '—'}
                 </div>

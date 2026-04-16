@@ -61,6 +61,7 @@ export default function ChangeFund({ branchId, branchName, onBack }: Props) {
   const [action, setAction] = useState<ActionKey | null>(null)
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
+  const [filterType, setFilterType] = useState<string>('all')
 
   // Form state
   const [amount, setAmount] = useState('')
@@ -76,6 +77,7 @@ export default function ChangeFund({ branchId, branchName, onBack }: Props) {
       .order('created_at', { ascending: false })
     if (filterFrom) q = q.gte('date', filterFrom)
     if (filterTo) q = q.lte('date', filterTo)
+    if (filterType !== 'all') q = q.eq('type', filterType)
     const { data } = await q
     setMovements((data || []) as Movement[])
   }
@@ -88,7 +90,7 @@ export default function ChangeFund({ branchId, branchName, onBack }: Props) {
   }
 
   useEffect(() => { loadMovements(); loadBaseFund() }, [branchId])
-  useEffect(() => { loadMovements() }, [filterFrom, filterTo])
+  useEffect(() => { loadMovements() }, [filterFrom, filterTo, filterType])
 
   function resetForm() {
     setAmount(''); setDescription(''); setRegisterChoice(null); setBaseInput(String(baseFund))
@@ -106,6 +108,61 @@ export default function ChangeFund({ branchId, branchName, onBack }: Props) {
     setBaseFund(val)
   }
 
+  async function getLatestClosing(regNum: number) {
+    const { data } = await supabase.from('register_closings').select('*')
+      .eq('branch_id', branchId).eq('register_number', regNum)
+      .order('date', { ascending: false }).order('created_at', { ascending: false })
+      .limit(1)
+    return data && data.length > 0 ? data[0] : null
+  }
+
+  async function applyRegisterOpeningChange(regNum: number, delta: number, noteLabel: string): Promise<number | null> {
+    const today = todayISO()
+    const latest = await getLatestClosing(regNum)
+    if (latest) {
+      const newOpening = Math.max(0, Number(latest.next_opening_balance) + delta)
+      // If the latest closing is from today, update it directly (avoid dup today rows)
+      if (latest.date === today) {
+        await supabase.from('register_closings').update({
+          next_opening_balance: newOpening,
+          actual_cash: Math.max(0, Number(latest.actual_cash) + delta),
+          notes: (latest.notes ? latest.notes + ' · ' : '') + noteLabel,
+        }).eq('id', latest.id)
+        return latest.id
+      }
+      // Insert a "stub" closing for today that just reflects the opening change
+      const openingBefore = Number(latest.next_opening_balance)
+      const newCash = Math.max(0, openingBefore + delta)
+      const { data: inserted, error } = await supabase.from('register_closings').insert({
+        branch_id: branchId, date: today, register_number: regNum,
+        opening_balance: openingBefore,
+        cash_sales: 0, credit_sales: 0, transaction_count: 0,
+        actual_cash: newCash,
+        deposit_amount: 0,
+        variance: delta,
+        variance_action: null,
+        next_opening_balance: newCash,
+        notes: noteLabel,
+      }).select().single()
+      if (error) throw error
+      return inserted.id
+    }
+    // No prior closing — only valid for withdraw (seed opening)
+    if (delta > 0) {
+      const { data: inserted, error } = await supabase.from('register_closings').insert({
+        branch_id: branchId, date: today, register_number: regNum,
+        opening_balance: 0, cash_sales: 0, credit_sales: 0, transaction_count: 0,
+        actual_cash: delta, deposit_amount: 0,
+        variance: delta, variance_action: null,
+        next_opening_balance: delta,
+        notes: noteLabel,
+      }).select().single()
+      if (error) throw error
+      return inserted.id
+    }
+    throw new Error('לא ניתן לבצע דחיפה מקופה שאין לה יתרת פתיחה')
+  }
+
   async function submitAction() {
     if (!action || loading) return
     const amt = parseFloat(amount)
@@ -117,6 +174,7 @@ export default function ChangeFund({ branchId, branchName, onBack }: Props) {
       let signedAmount = 0
       let desc = description || ''
       let relatedReg: number | null = null
+      let relatedClosingId: number | null = null
 
       if (action === 'income') { type = 'income'; signedAmount = amt }
       else if (action === 'expense') { type = 'expense'; signedAmount = -amt }
@@ -125,12 +183,14 @@ export default function ChangeFund({ branchId, branchName, onBack }: Props) {
         type = 'withdraw_to_register'; signedAmount = -amt
         relatedReg = registerChoice
         desc = desc || `משיכה לקופה ${registerChoice}`
+        relatedClosingId = await applyRegisterOpeningChange(registerChoice, amt, desc)
       }
       else if (action === 'push') {
         if (!registerChoice) { setLoading(false); return }
         type = 'push_from_register'; signedAmount = amt
         relatedReg = registerChoice
         desc = desc || `דחיפה מקופה ${registerChoice}`
+        relatedClosingId = await applyRegisterOpeningChange(registerChoice, -amt, desc)
       }
       else if (action === 'reset') {
         type = 'reset'
@@ -149,6 +209,7 @@ export default function ChangeFund({ branchId, branchName, onBack }: Props) {
         description: desc || null,
         balance_after: newBalance,
         related_register_number: relatedReg,
+        related_closing_id: relatedClosingId,
       })
       if (error) throw error
 
@@ -241,6 +302,13 @@ export default function ChangeFund({ branchId, branchName, onBack }: Props) {
                 <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13 }} />
                 <span style={{ color: '#94a3b8', fontSize: 13 }}>עד</span>
                 <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13 }} />
+                <select value={filterType} onChange={e => setFilterType(e.target.value)}
+                  style={{ border: '1.5px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13 }}>
+                  <option value="all">כל הסוגים</option>
+                  {Object.entries(TYPE_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>{v.label}</option>
+                  ))}
+                </select>
                 <button onClick={exportExcel}
                   style={{ background: '#059669', color: 'white', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <FileSpreadsheet size={14} /> ייצוא
