@@ -444,6 +444,12 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
           {/* Step 3 — Cash count */}
           {step === 3 && (
             <motion.div variants={fadeIn} initial="hidden" animate="visible">
+              <div style={{ position: 'sticky', top: 86, zIndex: 1, background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', borderRadius: 16, padding: '22px 24px', marginBottom: 14, color: 'white', textAlign: 'center', boxShadow: '0 6px 20px rgba(99,102,241,0.25)' }}>
+                <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 700, marginBottom: 4 }}>סה"כ נספר</div>
+                <div style={{ fontSize: 44, fontWeight: 900, lineHeight: 1, letterSpacing: -0.5 }}>
+                  ₪{countedCash.toLocaleString('he-IL', { minimumFractionDigits: countedCash % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
               <DenomCounter denoms={BILL_DENOMS} counts={billCounts} setCounts={setBillCounts} label="שטרות" kind="bill" />
               <DenomCounter denoms={COIN_DENOMS} counts={coinCounts} setCounts={setCoinCounts} label="מטבעות" kind="coin" />
 
