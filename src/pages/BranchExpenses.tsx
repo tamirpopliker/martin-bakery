@@ -478,11 +478,12 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
                   <YAxis yAxisId="pct" orientation="left" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => v + '%'} />
                   <Tooltip formatter={(value: number, name: string) => name === '% מהכנסות' ? value + '%' : '₪' + Math.round(value).toLocaleString()} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  <Line yAxisId="amount" type="monotone" dataKey="factory" name="רכישות מפעל" stroke="#0ea5e9" strokeWidth={2} dot={{ r: 3 }} />
                   <Line yAxisId="amount" type="monotone" dataKey="supplier" name="ספקים" stroke="#818cf8" strokeWidth={2} dot={{ r: 3 }} />
                   <Line yAxisId="amount" type="monotone" dataKey="repair" name="תיקונים" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
                   <Line yAxisId="amount" type="monotone" dataKey="infrastructure" name="תשתיות" stroke="#c084fc" strokeWidth={2} dot={{ r: 3 }} />
                   <Line yAxisId="amount" type="monotone" dataKey="delivery" name="משלוחים" stroke="#34d399" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line yAxisId="amount" type="monotone" dataKey="total" name="סה״כ" stroke="#fb7185" strokeWidth={2.5} dot={{ r: 3 }} />
+                  <Line yAxisId="amount" type="monotone" dataKey="total" name="סה״כ הוצאות" stroke="#fb7185" strokeWidth={2.5} dot={{ r: 3 }} />
                   <Line yAxisId="pct" type="monotone" dataKey="pctOfRevenue" name="% מהכנסות" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 4 }} strokeDasharray="5 3" />
                 </LineChart>
               </ResponsiveContainer>

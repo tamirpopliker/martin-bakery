@@ -233,7 +233,7 @@ export async function fetchFactoryTrends(refMonth: string): Promise<MonthTrend[]
 
 export interface BranchRevenueTrend { month: string; label: string; cashier: number; website: number; credit: number; total: number }
 export interface BranchLaborTrend { month: string; label: string; laborCost: number; revenue: number; laborPct: number }
-export interface BranchExpensesTrend { month: string; label: string; supplier: number; repair: number; infrastructure: number; delivery: number; other: number; total: number; pctOfRevenue: number }
+export interface BranchExpensesTrend { month: string; label: string; factory: number; supplier: number; repair: number; infrastructure: number; delivery: number; other: number; total: number; pctOfRevenue: number }
 export interface BranchWasteTrend { month: string; label: string; finished: number; raw: number; packaging: number; total: number; pctOfRevenue: number }
 
 export async function fetchBranchRevenueTrend(branchId: number, refMonth: string): Promise<BranchRevenueTrend[]> {
@@ -272,21 +272,27 @@ export async function fetchBranchLaborTrend(branchId: number, refMonth: string):
 export async function fetchBranchExpensesTrend(branchId: number, refMonth: string): Promise<BranchExpensesTrend[]> {
   const months = getLast6Months(refMonth)
   const tFrom = months[0] + '-01', tTo = monthEnd(months[5])
-  const [expRes, revRes] = await Promise.all([
-    supabase.from('branch_expenses').select('date, amount, expense_type').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
+  const [expRes, revRes, intSalesRes] = await Promise.all([
+    supabase.from('branch_expenses').select('date, amount, expense_type, from_factory').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
     supabase.from('branch_revenue').select('date, amount').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
+    supabase.from('internal_sales').select('order_date, total_amount').eq('branch_id', branchId).eq('status', 'completed').gte('order_date', tFrom).lt('order_date', tTo),
   ])
   const byM: Record<string, Record<string, number>> = {}
   const revByM: Record<string, number> = {}
-  months.forEach(m => { byM[m] = { supplier: 0, repair: 0, infrastructure: 0, delivery: 0, other: 0 }; revByM[m] = 0 })
+  const factoryByM: Record<string, number> = {}
+  months.forEach(m => { byM[m] = { supplier: 0, repair: 0, infrastructure: 0, delivery: 0, other: 0 }; revByM[m] = 0; factoryByM[m] = 0 })
   ;(expRes.data || []).forEach((r: any) => {
+    if (r.from_factory) return // handled via internal_sales
     const m = r.date?.slice(0, 7), t = r.expense_type || 'other'
     if (m && byM[m]) byM[m][t === 'inventory' ? 'supplier' : t] = (byM[m][t === 'inventory' ? 'supplier' : t] || 0) + Number(r.amount || 0)
   })
   ;(revRes.data || []).forEach((r: any) => { const m = r.date?.slice(0, 7); if (m) revByM[m] = (revByM[m] || 0) + Number(r.amount || 0) })
+  ;(intSalesRes.data || []).forEach((r: any) => { const m = r.order_date?.slice(0, 7); if (m && factoryByM[m] !== undefined) factoryByM[m] += Number(r.total_amount || 0) })
   return months.map(m => {
-    const e = byM[m], total = Object.values(e).reduce((s, v) => s + v, 0), rev = revByM[m] || 0
-    return { month: m, label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1], supplier: e.supplier, repair: e.repair, infrastructure: e.infrastructure, delivery: e.delivery, other: e.other, total, pctOfRevenue: rev > 0 ? Math.round((total / rev) * 1000) / 10 : 0 }
+    const e = byM[m], factory = factoryByM[m] || 0
+    const expTotal = Object.values(e).reduce((s, v) => s + v, 0)
+    const total = expTotal + factory, rev = revByM[m] || 0
+    return { month: m, label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1], factory, supplier: e.supplier, repair: e.repair, infrastructure: e.infrastructure, delivery: e.delivery, other: e.other, total, pctOfRevenue: rev > 0 ? Math.round((total / rev) * 1000) / 10 : 0 }
   })
 }
 
