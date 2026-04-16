@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS register_closings (
   opening_balance NUMERIC NOT NULL DEFAULT 0,
   cash_sales NUMERIC NOT NULL DEFAULT 0,
   credit_sales NUMERIC NOT NULL DEFAULT 0,
+  transaction_count INT DEFAULT 0,
   actual_cash NUMERIC NOT NULL DEFAULT 0,
   deposit_amount NUMERIC NOT NULL DEFAULT 0,
   variance NUMERIC NOT NULL DEFAULT 0,
@@ -56,3 +57,6 @@ CREATE POLICY "manage_change_fund" ON change_fund FOR ALL
   USING (EXISTS (SELECT 1 FROM app_users WHERE auth_uid = auth.uid() AND role IN ('admin','branch')));
 
 -- Optional base fund setting per branch — stored in system_settings with key pattern 'change_fund_base_{branch_id}'
+
+-- Migration idempotency helper (safe to re-run)
+ALTER TABLE register_closings ADD COLUMN IF NOT EXISTS transaction_count INT DEFAULT 0;

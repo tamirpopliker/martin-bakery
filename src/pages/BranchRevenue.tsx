@@ -103,6 +103,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [trendData, setTrendData] = useState<BranchRevenueTrend[]>([])
+  const [closingsInPeriod, setClosingsInPeriod] = useState<Array<{ date: string; register_number: number; cash_sales: number; credit_sales: number; transaction_count: number | null }>>([])
 
   async function handlePdfFile(file: File) {
     setPdfParsing(true)
@@ -196,6 +197,18 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   }, [from, to, branchId, tab])
 
   useEffect(() => {
+    async function loadClosings() {
+      const { data } = await supabase.from('register_closings')
+        .select('date, register_number, cash_sales, credit_sales, transaction_count')
+        .eq('branch_id', branchId)
+        .gte('date', from).lt('date', to)
+        .order('date')
+      setClosingsInPeriod((data || []) as any)
+    }
+    loadClosings()
+  }, [branchId, from, to])
+
+  useEffect(() => {
     async function loadOpenRegisters() {
       const regs = BRANCH_REGISTERS[branchId] || []
       if (regs.length === 0) { setOpenRegisters(0); return }
@@ -236,12 +249,16 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
     setEditId(null); await fetchEntries()
   }
 
-  // חישובים
-  const totalCashier = entries.filter(e => e.source === 'cashier').reduce((s, e) => s + Number(e.amount), 0)
+  // חישובים — תצוגת הקופה נגזרת מסגירות קופה (register_closings) בלבד
+  const closingsCash = closingsInPeriod.reduce((s, c) => s + Number(c.cash_sales), 0)
+  const closingsCredit = closingsInPeriod.reduce((s, c) => s + Number(c.credit_sales), 0)
+  const closingsTx = closingsInPeriod.reduce((s, c) => s + (Number(c.transaction_count) || 0), 0)
+
+  const totalCashier = closingsCash + closingsCredit
   const totalWebsite = entries.filter(e => e.source === 'website').reduce((s, e) => s + Number(e.amount), 0)
   const totalCredit  = entries.filter(e => e.source === 'credit').reduce((s, e) => s + Number(e.amount), 0)
   const totalRevenue = totalCashier + totalWebsite + totalCredit
-  const totalTx      = entries.filter(e => e.source === 'cashier').reduce((s, e) => s + (Number(e.transaction_count) || 0), 0)
+  const totalTx      = closingsTx
   const avgBasket    = totalTx > 0 ? totalCashier / totalTx : 0
 
   const tabEntries = entries.filter(e => e.source === tab)
@@ -251,13 +268,25 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   const tabTotal = filtered.reduce((s, e) => s + Number(e.amount), 0)
 
   const dailySummary = Object.values(
-    entries.reduce((acc: Record<string, any>, e) => {
-      if (!acc[e.date]) acc[e.date] = { date: e.date, cashier: 0, website: 0, credit: 0, total: 0, transactions: 0 }
-      acc[e.date][e.source] += Number(e.amount)
-      acc[e.date].total += Number(e.amount)
-      if (e.source === 'cashier') acc[e.date].transactions += Number(e.transaction_count || 0)
+    (() => {
+      const acc: Record<string, any> = {}
+      // מקורות אתר/הקפה — מטבלת branch_revenue
+      for (const e of entries) {
+        if (!acc[e.date]) acc[e.date] = { date: e.date, cashier: 0, website: 0, credit: 0, total: 0, transactions: 0 }
+        if (e.source === 'cashier') continue
+        acc[e.date][e.source] += Number(e.amount)
+        acc[e.date].total += Number(e.amount)
+      }
+      // קופה — מטבלת register_closings (מזומן + אשראי)
+      for (const c of closingsInPeriod) {
+        if (!acc[c.date]) acc[c.date] = { date: c.date, cashier: 0, website: 0, credit: 0, total: 0, transactions: 0 }
+        const sum = Number(c.cash_sales) + Number(c.credit_sales)
+        acc[c.date].cashier += sum
+        acc[c.date].total += sum
+        acc[c.date].transactions += Number(c.transaction_count || 0)
+      }
       return acc
-    }, {})
+    })()
   ).sort((a: any, b: any) => b.date.localeCompare(a.date))
 
   const cfg = SOURCE_CONFIG[tab]
@@ -340,7 +369,44 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
           )}
         </div>
 
-        {/* טופס הזנה */}
+        {/* קופה — קריאה בלבד מתוך register_closings */}
+        {tab === 'cashier' && (
+          <motion.div variants={fadeIn} initial="hidden" animate="visible">
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: 20, marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <AlertCircle size={16} color="#6366f1" />
+                <span style={{ fontSize: 13, color: '#6366f1', fontWeight: 700 }}>נתונים מסגירות קופה — לקריאה בלבד</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+                <div style={{ padding: 14, background: '#ecfdf5', borderRadius: 12, border: '1px solid #a7f3d0' }}>
+                  <div style={{ fontSize: 12, color: '#047857', fontWeight: 700 }}>סה"כ מכירות מזומן</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: '#065f46' }}>₪{Math.round(closingsCash).toLocaleString()}</div>
+                </div>
+                <div style={{ padding: 14, background: '#eff6ff', borderRadius: 12, border: '1px solid #bfdbfe' }}>
+                  <div style={{ fontSize: 12, color: '#1d4ed8', fontWeight: 700 }}>סה"כ מכירות אשראי</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: '#1e3a8a' }}>₪{Math.round(closingsCredit).toLocaleString()}</div>
+                </div>
+                <div style={{ padding: 14, background: '#f5f3ff', borderRadius: 12, border: '1px solid #ddd6fe' }}>
+                  <div style={{ fontSize: 12, color: '#6d28d9', fontWeight: 700 }}>סה"כ עסקאות</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: '#4c1d95' }}>{closingsTx.toLocaleString()}</div>
+                </div>
+                <div style={{ padding: 14, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: 12, color: '#475569', fontWeight: 700 }}>סל ממוצע</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: '#0f172a' }}>{avgBasket > 0 ? '₪' + Math.round(avgBasket) : '—'}</div>
+                </div>
+              </div>
+              {onNavigate && (
+                <button onClick={() => onNavigate('register_closings')}
+                  style={{ marginTop: 14, background: '#6366f1', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 14, fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  מעבר לסגירת קופות ←
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* טופס הזנה — לאתר/הקפה בלבד */}
+        {tab !== 'cashier' && (
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
         <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px', marginBottom: 16 }}>
           <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת {cfg.label}</h2>
@@ -398,8 +464,10 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
           </button>
         </div>
         </motion.div>
+        )}
 
-        {/* טבלת רשומות */}
+        {/* טבלת רשומות — לא רלוונטי ל-קופה (נתונים מסגירות) */}
+        {tab !== 'cashier' && (
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
         <div className="table-scroll">
         <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
@@ -451,6 +519,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         </div>
         </div>
         </motion.div>
+        )}
 
         {/* סיכום יומי */}
         {dailySummary.length > 0 && (
