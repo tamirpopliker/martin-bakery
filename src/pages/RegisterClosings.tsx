@@ -16,7 +16,7 @@ const BRANCH_REGISTERS: Record<number, number[]> = {
   3: [9, 10],
 }
 
-const BILL_DENOMS = [200, 100, 50, 20, 10]
+const BILL_DENOMS = [200, 100, 50, 20]
 const COIN_DENOMS = [10, 5, 2, 1, 0.5, 0.1]
 
 const BILL_IMAGES: Record<string, string> = {
@@ -24,7 +24,6 @@ const BILL_IMAGES: Record<string, string> = {
   '100': 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/INS-100-NIS-%282017%29-front.jpg/320px-INS-100-NIS-%282017%29-front.jpg',
   '50':  'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/INS-50-NIS-%282014%29-front.jpg/320px-INS-50-NIS-%282014%29-front.jpg',
   '20':  'https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/INS-20-NIS-%282017%29-front.jpg/320px-INS-20-NIS-%282017%29-front.jpg',
-  '10':  'https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/INS-10-NIS-%281998%29-front.jpg/320px-INS-10-NIS-%281998%29-front.jpg',
 }
 const COIN_IMAGES: Record<string, string> = {
   '10':  'https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/10_NIS_obverse.jpg/120px-10_NIS_obverse.jpg',
