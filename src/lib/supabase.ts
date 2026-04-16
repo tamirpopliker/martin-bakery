@@ -581,10 +581,24 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
   const wasteTotal = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
 
   let fixedCosts = 0
+  let mgmtFromFixed = 0
   for (const r of (fcRes.data || [])) {
     const amt = Number(r.amount)
-    if (r.entity_id === 'mgmt') { if (!laborIsActual) mgmtCosts += amt }
+    if (r.entity_id === 'mgmt') { mgmtFromFixed += amt }
     else fixedCosts += amt
+  }
+  if (!laborIsActual) {
+    if (mgmtFromFixed > 0) {
+      mgmtCosts += mgmtFromFixed
+    } else {
+      // Fallback: fetch most recent mgmt cost from a previous month
+      const { data: prevMgmt } = await supabase.from('fixed_costs')
+        .select('amount').eq('entity_type', `branch_${branchId}`).eq('entity_id', 'mgmt')
+        .lt('month', monthKey).order('month', { ascending: false }).limit(1)
+      if (prevMgmt && prevMgmt.length > 0) {
+        mgmtCosts += Number(prevMgmt[0].amount)
+      }
+    }
   }
 
   // Controllable margin = revenue - all expenses - labor - mgmt - waste

@@ -128,13 +128,26 @@ export async function calculateBranchPL(
 
   // Fixed costs: separate manager salary (entity_id='mgmt') from others
   let fixedCosts = 0
+  let mgmtFromFixed = 0
   for (const r of (fcRes.data || [])) {
     const amt = Number(r.amount)
     if (r.entity_id === 'mgmt') {
-      // Only use fixed_costs manager salary if NO actual payroll data
-      if (!laborIsActual) managerSalary += amt
+      mgmtFromFixed += amt
     } else {
       fixedCosts += amt
+    }
+  }
+  if (!laborIsActual) {
+    if (mgmtFromFixed > 0) {
+      managerSalary += mgmtFromFixed
+    } else {
+      // Fallback: fetch most recent mgmt cost from a previous month
+      const { data: prevMgmt } = await supabase.from('fixed_costs')
+        .select('amount').eq('entity_type', `branch_${branchId}`).eq('entity_id', 'mgmt')
+        .lt('month', mk).order('month', { ascending: false }).limit(1)
+      if (prevMgmt && prevMgmt.length > 0) {
+        managerSalary += Number(prevMgmt[0].amount)
+      }
     }
   }
 
