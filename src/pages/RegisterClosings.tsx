@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase'
 import PageHeader from '../components/PageHeader'
 import {
   DollarSign, CreditCard, Wallet, CheckCircle2, AlertCircle,
-  Camera, X, ArrowRight, ArrowLeft, FileSpreadsheet, History, Calculator, Pencil, Home as HomeIcon
+  Camera, X, ArrowRight, ArrowLeft, FileSpreadsheet, History, Calculator, Pencil, Home as HomeIcon,
+  Zap, Archive
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -579,6 +580,193 @@ function OverallCount({ totalExpectedCash, onClose }: { totalExpectedCash: numbe
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Activate register dialog (for inactive registers)
+// ═══════════════════════════════════════════════════════════════════════════
+function ActivateDialog({ branchId, registerNumber, fundBalance, onClose, onSaved }: {
+  branchId: number; registerNumber: number; fundBalance: number; onClose: () => void; onSaved: () => void
+}) {
+  const [amount, setAmount] = useState('')
+  const [saving, setSaving] = useState(false)
+  const amt = parseFloat(amount) || 0
+
+  async function activate() {
+    if (saving || amt <= 0) return
+    setSaving(true)
+    try {
+      const today = todayISO()
+      const { data: inserted, error } = await supabase.from('register_closings').insert({
+        branch_id: branchId,
+        date: today,
+        register_number: registerNumber,
+        opening_balance: 0,
+        cash_sales: 0,
+        credit_sales: 0,
+        transaction_count: 0,
+        actual_cash: amt,
+        deposit_amount: 0,
+        variance: amt,
+        variance_action: null,
+        next_opening_balance: amt,
+        notes: 'הפעלת קופה — משיכה מקופת עודף',
+      }).select().single()
+      if (error) throw error
+
+      const newBalance = fundBalance - amt
+      await supabase.from('change_fund').insert({
+        branch_id: branchId,
+        date: today,
+        type: 'withdraw_to_register',
+        amount: -amt,
+        description: `הפעלת קופה ${registerNumber}`,
+        balance_after: newBalance,
+        related_closing_id: inserted.id,
+        related_register_number: registerNumber,
+      })
+      onSaved()
+    } catch (e: any) {
+      alert('שגיאה: ' + (e?.message || 'לא ידוע'))
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onClose}>
+      <motion.div onClick={e => e.stopPropagation()}
+        initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        style={{ background: 'white', width: '100%', maxWidth: 520, borderRadius: '20px 20px 0 0', direction: 'rtl', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Zap size={20} color="#6366f1" /> הפעלת קופה {registerNumber}
+          </div>
+          <button onClick={onClose}
+            style={{ width: 44, height: 44, background: '#f8fafc', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <X size={22} color="#64748b" />
+          </button>
+        </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 12, padding: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: '#4338ca', fontWeight: 700 }}>
+              יתרת קופת עודף: <strong>{fmt(fundBalance)}</strong>
+            </div>
+          </div>
+          <label style={{ fontSize: 14, fontWeight: 700, color: '#334155', marginBottom: 8, display: 'block' }}>
+            כמה להוציא מקופת העודף לפתיחת הקופה? (₪)
+          </label>
+          <input type="number" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)}
+            style={{ border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '14px 16px', fontSize: 18, fontWeight: 700, outline: 'none', width: '100%', boxSizing: 'border-box', textAlign: 'right', color: '#0f172a', minHeight: 56 }}
+            placeholder="0" autoFocus />
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
+            הסכום יירשם כמשיכה מקופת העודף וייקבע כיתרת פתיחה לקופה זו.
+          </div>
+        </div>
+        <div style={{ padding: '14px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button onClick={onClose}
+            style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, color: '#475569', cursor: 'pointer', minHeight: 56 }}>
+            ביטול
+          </button>
+          <button onClick={activate} disabled={saving || amt <= 0 || amt > fundBalance}
+            style={{ background: saving || amt <= 0 ? '#c7d2fe' : amt > fundBalance ? '#fecaca' : '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, cursor: saving || amt <= 0 ? 'not-allowed' : 'pointer', minHeight: 56, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Zap size={16} /> {saving ? 'מפעיל…' : 'הפעל קופה'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Empty register dialog
+// ═══════════════════════════════════════════════════════════════════════════
+function EmptyDialog({ branchId, registerNumber, openingAmount, fundBalance, onClose, onSaved }: {
+  branchId: number; registerNumber: number; openingAmount: number; fundBalance: number; onClose: () => void; onSaved: () => void
+}) {
+  const [saving, setSaving] = useState(false)
+
+  async function doEmpty() {
+    if (saving) return
+    setSaving(true)
+    try {
+      const today = todayISO()
+      const { data: inserted, error } = await supabase.from('register_closings').insert({
+        branch_id: branchId,
+        date: today,
+        register_number: registerNumber,
+        opening_balance: openingAmount,
+        cash_sales: 0,
+        credit_sales: 0,
+        transaction_count: 0,
+        actual_cash: 0,
+        deposit_amount: 0,
+        variance: -openingAmount,
+        variance_action: 'surplus_fund',
+        next_opening_balance: 0,
+        notes: 'רוקן קופה — העברה לקופת עודף',
+      }).select().single()
+      if (error) throw error
+
+      if (openingAmount > 0) {
+        const newBalance = fundBalance + openingAmount
+        await supabase.from('change_fund').insert({
+          branch_id: branchId,
+          date: today,
+          type: 'push_from_register',
+          amount: openingAmount,
+          description: `ריקון קופה ${registerNumber}`,
+          balance_after: newBalance,
+          related_closing_id: inserted.id,
+          related_register_number: registerNumber,
+        })
+      }
+      onSaved()
+    } catch (e: any) {
+      alert('שגיאה: ' + (e?.message || 'לא ידוע'))
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onClose}>
+      <motion.div onClick={e => e.stopPropagation()}
+        initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        style={{ background: 'white', width: '100%', maxWidth: 520, borderRadius: '20px 20px 0 0', direction: 'rtl', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Archive size={20} color="#7c3aed" /> ריקון קופה {registerNumber}
+          </div>
+          <button onClick={onClose}
+            style={{ width: 44, height: 44, background: '#f8fafc', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <X size={22} color="#64748b" />
+          </button>
+        </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: '#6d28d9', fontWeight: 700, marginBottom: 4 }}>יתרת פתיחה נוכחית</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: '#4c1d95' }}>{fmt(openingAmount)}</div>
+            <div style={{ fontSize: 11, color: '#6d28d9', marginTop: 4 }}>
+              {openingAmount > 0 ? 'מהסגירה האחרונה' : 'אין יתרה — הקופה כבר ריקה'}
+            </div>
+          </div>
+          <div style={{ fontSize: 14, color: '#334155', lineHeight: 1.6 }}>
+            פעולה זו תסמן את הקופה כלא פעילה ותעביר את הסכום לקופת העודף.<br />
+            ניתן יהיה להפעיל אותה מחדש בעתיד.
+          </div>
+        </div>
+        <div style={{ padding: '14px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button onClick={onClose}
+            style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, color: '#475569', cursor: 'pointer', minHeight: 56 }}>
+            ביטול
+          </button>
+          <button onClick={doEmpty} disabled={saving}
+            style={{ background: saving ? '#c7d2fe' : '#7c3aed', color: 'white', border: 'none', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, cursor: saving ? 'wait' : 'pointer', minHeight: 56, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Archive size={16} /> {saving ? 'שומר…' : `העבר ${fmt(openingAmount)} לקופת עודף`}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Main page
 // ═══════════════════════════════════════════════════════════════════════════
 export default function RegisterClosings({ branchId, branchName, onBack }: Props) {
@@ -587,9 +775,12 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
 
   const [tab, setTab] = useState<'today' | 'history'>('today')
   const [todayClosings, setTodayClosings] = useState<Closing[]>([])
+  const [lastClosings, setLastClosings] = useState<Record<number, Closing>>({})
   const [fundBalance, setFundBalance] = useState(0)
   const [wizardReg, setWizardReg] = useState<number | null>(null)
   const [editClosing, setEditClosing] = useState<Closing | null>(null)
+  const [activatingReg, setActivatingReg] = useState<number | null>(null)
+  const [emptyingReg, setEmptyingReg] = useState<number | null>(null)
   const [overallOpen, setOverallOpen] = useState(false)
   const [historyFrom, setHistoryFrom] = useState(() => {
     const d = new Date(); d.setDate(1)
@@ -600,12 +791,22 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
   const [history, setHistory] = useState<Closing[]>([])
 
   async function loadAll() {
-    const [todayRes, fundRes] = await Promise.all([
+    const d = new Date(); d.setDate(d.getDate() - 60)
+    const sixtyDaysAgo = d.toISOString().split('T')[0]
+    const [todayRes, fundRes, recentRes] = await Promise.all([
       supabase.from('register_closings').select('*').eq('branch_id', branchId).eq('date', today),
       supabase.from('change_fund').select('balance_after').eq('branch_id', branchId).order('created_at', { ascending: false }).limit(1),
+      supabase.from('register_closings').select('*').eq('branch_id', branchId)
+        .gte('date', sixtyDaysAgo)
+        .order('date', { ascending: false }).order('created_at', { ascending: false }),
     ])
     setTodayClosings((todayRes.data || []) as Closing[])
     setFundBalance(fundRes.data && fundRes.data.length > 0 ? Number(fundRes.data[0].balance_after) : 0)
+    const byReg: Record<number, Closing> = {}
+    for (const c of (recentRes.data || []) as Closing[]) {
+      if (!byReg[c.register_number]) byReg[c.register_number] = c
+    }
+    setLastClosings(byReg)
   }
 
   async function loadHistory() {
@@ -628,6 +829,40 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
   const totalCash = todayClosings.reduce((s, c) => s + Number(c.cash_sales), 0)
   const totalCredit = todayClosings.reduce((s, c) => s + Number(c.credit_sales), 0)
   const totalVariance = todayClosings.reduce((s, c) => s + Number(c.variance), 0)
+
+  type StatusKind = 'active-today' | 'yesterday' | 'two-days' | 'stale' | 'never' | 'inactive'
+  function getRegisterStatus(regNum: number): { kind: StatusKind; label: string; color: string; bg: string; border: string; daysSince: number } {
+    const closedToday = closedRegs.has(regNum)
+    const last = lastClosings[regNum]
+
+    // Inactive = last closing emptied register (next_opening=0 + surplus_fund)
+    if (last && Number(last.next_opening_balance) === 0 && last.variance_action === 'surplus_fund') {
+      return { kind: 'inactive', label: 'לא פעילה', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1', daysSince: -1 }
+    }
+
+    if (closedToday) {
+      return { kind: 'active-today', label: 'סגורה היום ✓', color: '#065f46', bg: '#d1fae5', border: '#a7f3d0', daysSince: 0 }
+    }
+
+    if (!last) {
+      return { kind: 'never', label: 'לא פעילה לאחרונה', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1', daysSince: -1 }
+    }
+
+    const todayTime = new Date(today + 'T00:00:00').getTime()
+    const lastTime = new Date(last.date + 'T00:00:00').getTime()
+    const daysSince = Math.round((todayTime - lastTime) / (24 * 60 * 60 * 1000))
+
+    if (daysSince === 1) return { kind: 'yesterday', label: 'אתמול', color: '#854d0e', bg: '#fef9c3', border: '#fde68a', daysSince }
+    if (daysSince === 2) return { kind: 'two-days', label: 'לפני יומיים', color: '#854d0e', bg: '#fef9c3', border: '#fde68a', daysSince }
+    if (daysSince >= 3 && daysSince <= 7) return { kind: 'stale', label: `לפני ${daysSince} ימים`, color: '#9a3412', bg: '#ffedd5', border: '#fed7aa', daysSince }
+    return { kind: 'never', label: 'לא פעילה לאחרונה', color: '#475569', bg: '#f1f5f9', border: '#cbd5e1', daysSince }
+  }
+
+  // Registers that need attention today = not closed today, not inactive, last closed within 7 days
+  const registersNeedingAttention = registers.filter(r => {
+    const s = getRegisterStatus(r)
+    return s.kind !== 'active-today' && s.kind !== 'inactive' && s.daysSince >= 1 && s.daysSince <= 7
+  })
 
   function exportExcel() {
     const rows = history.map(c => ({
@@ -690,29 +925,33 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
               <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 18, marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                   <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a' }}>קופות הסניף</div>
-                  {openRegs.length > 0 && (
+                  {registersNeedingAttention.length > 0 && (
                     <span style={{ background: '#fee2e2', color: '#991b1b', fontSize: 12, fontWeight: 800, padding: '4px 12px', borderRadius: 999 }}>
-                      {openRegs.length} פתוחות
+                      {registersNeedingAttention.length} דורשות סגירה
                     </span>
                   )}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 10 }}>
                   {registers.map(r => {
-                    const closed = closedRegs.has(r)
+                    const status = getRegisterStatus(r)
                     const closing = todayClosings.find(c => c.register_number === r)
+                    const last = lastClosings[r]
+                    const isInactive = status.kind === 'inactive'
+                    const isClosedToday = status.kind === 'active-today'
+                    const borderColor = status.border
+                    const bg = status.kind === 'active-today' ? '#f0fdf4' : status.kind === 'inactive' ? '#f8fafc' : 'white'
                     return (
-                      <div key={r} style={{ background: closed ? '#f0fdf4' : 'white', border: '1.5px solid ' + (closed ? '#a7f3d0' : '#fecaca'), borderRadius: 14, padding: 14, position: 'relative' }}>
-                        {!closed && (
-                          <span style={{ position: 'absolute', top: -8, left: -6, background: '#ef4444', color: 'white', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 999, boxShadow: '0 2px 6px rgba(239,68,68,0.4)' }}>
-                            טרם נסגרה
-                          </span>
-                        )}
+                      <div key={r} style={{ background: bg, border: '1.5px solid ' + borderColor, borderRadius: 14, padding: 14, position: 'relative' }}>
+                        <span style={{ position: 'absolute', top: -9, left: -6, background: status.bg, color: status.color, fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 999, border: '1px solid ' + status.border }}>
+                          {status.label}
+                        </span>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                           <div style={{ fontSize: 20, fontWeight: 900, color: '#0f172a' }}>קופה {r}</div>
-                          {closed ? <CheckCircle2 size={20} color="#059669" /> : <AlertCircle size={20} color="#dc2626" />}
+                          {isClosedToday ? <CheckCircle2 size={20} color="#059669" /> : isInactive ? <Archive size={20} color="#64748b" /> : <AlertCircle size={20} color={status.color} />}
                         </div>
-                        {closed && closing ? (
+
+                        {isClosedToday && closing && (
                           <>
                             <div style={{ fontSize: 13, color: '#065f46', fontWeight: 600, marginBottom: 8 }}>
                               מזומן: {fmt(Number(closing.cash_sales))}<br />
@@ -723,11 +962,27 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
                               <Pencil size={13} /> ערוך
                             </button>
                           </>
-                        ) : (
-                          <button onClick={() => setWizardReg(r)}
-                            style={{ width: '100%', background: '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '12px', fontSize: 15, fontWeight: 800, cursor: 'pointer', marginTop: 6, minHeight: 48 }}>
-                            סגור קופה
+                        )}
+
+                        {isInactive && (
+                          <button onClick={() => setActivatingReg(r)}
+                            style={{ width: '100%', background: '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '12px', fontSize: 15, fontWeight: 800, cursor: 'pointer', marginTop: 6, minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <Zap size={16} /> הפעל קופה
                           </button>
+                        )}
+
+                        {!isClosedToday && !isInactive && (
+                          <>
+                            <button onClick={() => setWizardReg(r)}
+                              style={{ width: '100%', background: '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '12px', fontSize: 15, fontWeight: 800, cursor: 'pointer', marginTop: 6, minHeight: 48 }}>
+                              סגור קופה
+                            </button>
+                            <button onClick={() => setEmptyingReg(r)}
+                              title={last ? `יתרת פתיחה נוכחית: ${fmt(Number(last.next_opening_balance))}` : ''}
+                              style={{ width: '100%', background: 'white', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '7px', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                              <Archive size={12} /> רוקן קופה
+                            </button>
+                          </>
                         )}
                       </div>
                     )
@@ -829,6 +1084,18 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
       )}
       {overallOpen && (
         <OverallCount totalExpectedCash={totalCash} onClose={() => setOverallOpen(false)} />
+      )}
+      {activatingReg !== null && (
+        <ActivateDialog branchId={branchId} registerNumber={activatingReg} fundBalance={fundBalance}
+          onClose={() => setActivatingReg(null)}
+          onSaved={() => { setActivatingReg(null); loadAll(); if (tab === 'history') loadHistory() }} />
+      )}
+      {emptyingReg !== null && (
+        <EmptyDialog branchId={branchId} registerNumber={emptyingReg}
+          openingAmount={lastClosings[emptyingReg] ? Number(lastClosings[emptyingReg].next_opening_balance) : 0}
+          fundBalance={fundBalance}
+          onClose={() => setEmptyingReg(null)}
+          onSaved={() => { setEmptyingReg(null); loadAll(); if (tab === 'history') loadHistory() }} />
       )}
     </div>
   )
