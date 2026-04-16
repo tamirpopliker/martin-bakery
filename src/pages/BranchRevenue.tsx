@@ -20,7 +20,7 @@ interface Props {
 const BRANCH_REGISTERS: Record<number, number[]> = {
   1: [1, 2, 3, 6],
   2: [4, 5, 7],
-  3: [9, 10],
+  3: [9, 10, 11, 13],
 }
 
 type Source = 'cashier' | 'website' | 'credit'
