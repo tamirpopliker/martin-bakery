@@ -83,7 +83,22 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
         ])
 
         const revenue = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
-        const labor = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+
+        // Check employer_costs for actual payroll data
+        const mk = monthKey || from.slice(0, 7)
+        const [mYear, mMonth] = mk.split('-').map(Number)
+        const { data: actualLabAll } = await supabase.from('employer_costs')
+          .select('actual_employer_cost, is_manager').eq('branch_id', br.id).eq('month', mMonth).eq('year', mYear)
+        const laborIsActual = (actualLabAll && actualLabAll.length > 0)
+
+        let labor: number, admin: number
+        if (laborIsActual) {
+          labor = actualLabAll!.filter(r => !r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+          admin = actualLabAll!.filter(r => r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+        } else {
+          labor = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+          admin = 0 // will be set from fixed_costs below
+        }
 
         const expenses = expRes.data || []
         const suppliers = expenses.filter(r => r.expense_type === 'suppliers').reduce((s, r) => s + Number(r.amount), 0)
@@ -92,7 +107,9 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
 
         const fcData = fcRes.data || []
         const fixedCosts = fcData.filter(r => r.entity_id !== 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
-        const admin = fcData.filter(r => r.entity_id === 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
+        if (!laborIsActual) {
+          admin += fcData.filter(r => r.entity_id === 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
+        }
         const waste = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
         const overhead = revenue * overheadPct / 100
 
