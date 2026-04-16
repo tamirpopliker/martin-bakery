@@ -218,7 +218,14 @@
       "Bash(grep -h \"CREATE TABLE\" /c/Users/USER/martin-bakery/sql/*.sql)",
       "Bash(grep -oh \"CREATE TABLE IF NOT EXISTS [a-z_]*\" /c/Users/USER/martin-bakery/sql/*.sql)",
       "Bash(ls -la /c/Users/USER/martin-bakery/sql/*.sql)",
-      "mcp__Claude_in_Chrome__tabs_context_mcp"
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(cat supabase/functions)",
+      "Bash(ls supabase/functions)",
+      "Bash(env)",
+      "Bash(which supabase *)",
+      "Bash(supabase projects *)",
+      "Bash(supabase link *)",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }

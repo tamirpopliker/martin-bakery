@@ -14,6 +14,13 @@ interface Props {
   branchName: string
   branchColor: string
   onBack: () => void
+  onNavigate?: (page: string) => void
+}
+
+const BRANCH_REGISTERS: Record<number, number[]> = {
+  1: [1, 2, 3, 6],
+  2: [4, 5, 7],
+  3: [9, 10],
 }
 
 type Source = 'cashier' | 'website' | 'credit'
@@ -68,7 +75,7 @@ function AutocompleteInput({ value, onChange, suggestions, placeholder, color }:
   )
 }
 
-export default function BranchRevenue({ branchId, branchName, branchColor, onBack }: Props) {
+export default function BranchRevenue({ branchId, branchName, branchColor, onBack, onNavigate }: Props) {
   const { period, setPeriod, from, to } = usePeriod()
   const [tab, setTab]               = useState<Source>('cashier')
   const [entries, setEntries]       = useState<Entry[]>([])
@@ -77,6 +84,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   const [editId, setEditId]         = useState<number | null>(null)
   const [editData, setEditData]     = useState<Partial<Entry>>({})
   const [loading, setLoading]       = useState(false)
+  const [openRegisters, setOpenRegisters] = useState(0)
 
   // טופס
   const [date, setDate]     = useState(new Date().toISOString().split('T')[0])
@@ -187,6 +195,19 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
     setAmount(''); setTxCount(''); setCustomer(''); setDocNumber(''); setNotes(''); setSearchFilter('')
   }, [from, to, branchId, tab])
 
+  useEffect(() => {
+    async function loadOpenRegisters() {
+      const regs = BRANCH_REGISTERS[branchId] || []
+      if (regs.length === 0) { setOpenRegisters(0); return }
+      const today = new Date().toISOString().split('T')[0]
+      const { data } = await supabase.from('register_closings')
+        .select('register_number').eq('branch_id', branchId).eq('date', today)
+      const closed = new Set((data || []).map((r: any) => r.register_number))
+      setOpenRegisters(regs.filter(r => !closed.has(r)).length)
+    }
+    loadOpenRegisters()
+  }, [branchId])
+
   async function addEntry() {
     if (!amount || !date) return
     if (tab === 'credit' && !customer) return
@@ -250,6 +271,28 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
       <PageHeader title="הכנסות" subtitle={branchName} onBack={onBack} />
+
+      {/* Close register CTA */}
+      {onNavigate && (BRANCH_REGISTERS[branchId] || []).length > 0 && (
+        <div style={{ padding: '12px 20px 0', maxWidth: 1000, margin: '0 auto' }}>
+          <button onClick={() => onNavigate('register_closings')}
+            style={{ width: '100%', background: openRegisters > 0 ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', color: 'white', border: 'none', borderRadius: 12, padding: '14px 20px', fontSize: 15, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, boxShadow: openRegisters > 0 ? '0 4px 12px rgba(239,68,68,0.25)' : '0 4px 12px rgba(99,102,241,0.25)', position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ShoppingBag size={20} />
+              <span>סגור קופה</span>
+            </div>
+            {openRegisters > 0 ? (
+              <span style={{ background: 'white', color: '#dc2626', fontSize: 12, fontWeight: 800, padding: '4px 12px', borderRadius: 999 }}>
+                {openRegisters} קופות טרם נסגרו היום
+              </span>
+            ) : (
+              <span style={{ background: 'rgba(255,255,255,0.25)', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 999 }}>
+                כל הקופות סגורות ✓
+              </span>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* KPI summary cards */}
       <div style={{ padding: '0 20px', maxWidth: '1000px', margin: '0 auto 16px' }}>

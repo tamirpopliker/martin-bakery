@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare } from 'lucide-react'
+import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PageHeader from '../components/PageHeader'
 import { useAppUser } from '../lib/UserContext'
@@ -25,6 +25,8 @@ import ScheduleHistory from './ScheduleHistory'
 import BranchDashboard from './BranchDashboard'
 import DataImport from './DataImport'
 import BranchCommunication from './BranchCommunication'
+import RegisterClosings from './RegisterClosings'
+import ChangeFund from './ChangeFund'
 // calculateBranchPL moved to BranchManagerDashboard
 
 // ─── אנימציות ─────────────────────────────────────────────────────────────────
@@ -64,6 +66,8 @@ type BranchPage =
   | 'weekly-schedule'
   | 'schedule-history'
   | 'communication'
+  | 'register_closings'
+  | 'change_fund'
 
 interface MenuItem {
   page: BranchPage
@@ -78,6 +82,8 @@ interface MenuItem {
 const MENU_ITEMS: MenuItem[] = [
   { page: 'dashboard', label: 'דשבורד סניף',   subtitle: 'KPI · הכנסות · הוצאות · גרפים', Icon: BarChart2, ready: true },
   { page: 'revenue',   label: 'הכנסות',        subtitle: 'קופה · אתר · הקפה',        Icon: ShoppingBag, ready: true },
+  { page: 'register_closings', label: 'סגירת קופות', subtitle: 'ספירה · הפקדה · פערים', Icon: Calculator, ready: true },
+  { page: 'change_fund', label: 'קופת עודף',     subtitle: 'יתרה · תנועות · קרן בסיס',  Icon: Wallet,      ready: true },
   { page: 'expenses',  label: 'הוצאות',         subtitle: 'ספקים · תיקונים · תשתיות', Icon: Receipt,     ready: true },
   { page: 'labor',     label: 'לייבור',          subtitle: 'שעות · עלות מעסיק',         Icon: Users,       ready: true },
   { page: 'branch-team', label: 'ניהול צוות',       subtitle: 'סידור עבודה · משימות · עובדים', Icon: Users,       ready: true },
@@ -139,7 +145,13 @@ export default function BranchHome({ branch, onBack }: Props) {
     <BranchDashboard branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
   if (page === 'revenue') return (
-    <BranchRevenue branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
+    <BranchRevenue branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} onNavigate={(p) => setPage(p as BranchPage)} />
+  )
+  if (page === 'register_closings') return (
+    <RegisterClosings branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
+  )
+  if (page === 'change_fund') return (
+    <ChangeFund branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
   if (page === 'expenses') return (
     <BranchExpenses branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} onNavigate={(p) => setPage(p as BranchPage)} />

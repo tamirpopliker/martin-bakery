@@ -139,6 +139,11 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
       return true
     }
 
+    // ─── Cash register management (branch scope) ───
+    if (pageKey === 'register_closings' || pageKey === 'change_fund') {
+      return user.role === 'branch' // admin handled above
+    }
+
     // ─── Management pages ───
     if (pageKey === 'manage') {
       return false // non-admins
