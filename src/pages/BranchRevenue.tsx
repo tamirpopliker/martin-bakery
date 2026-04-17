@@ -249,16 +249,21 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
     setEditId(null); await fetchEntries()
   }
 
-  // חישובים — תצוגת הקופה נגזרת מסגירות קופה (register_closings) בלבד
+  // חישובים — קופה משלבת נתונים היסטוריים מ-branch_revenue ונתונים חדשים מ-register_closings
   const closingsCash = closingsInPeriod.reduce((s, c) => s + Number(c.cash_sales), 0)
   const closingsCredit = closingsInPeriod.reduce((s, c) => s + Number(c.credit_sales), 0)
   const closingsTx = closingsInPeriod.reduce((s, c) => s + (Number(c.transaction_count) || 0), 0)
+  const closingsTotal = closingsCash + closingsCredit
 
-  const totalCashier = closingsCash + closingsCredit
+  const legacyCashierEntries = entries.filter(e => e.source === 'cashier')
+  const legacyCashierTotal = legacyCashierEntries.reduce((s, e) => s + Number(e.amount), 0)
+  const legacyCashierTx = legacyCashierEntries.reduce((s, e) => s + (Number(e.transaction_count) || 0), 0)
+
+  const totalCashier = legacyCashierTotal + closingsTotal
   const totalWebsite = entries.filter(e => e.source === 'website').reduce((s, e) => s + Number(e.amount), 0)
   const totalCredit  = entries.filter(e => e.source === 'credit').reduce((s, e) => s + Number(e.amount), 0)
   const totalRevenue = totalCashier + totalWebsite + totalCredit
-  const totalTx      = closingsTx
+  const totalTx      = legacyCashierTx + closingsTx
   const avgBasket    = totalTx > 0 ? totalCashier / totalTx : 0
 
   const tabEntries = entries.filter(e => e.source === tab)
@@ -270,14 +275,14 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   const dailySummary = Object.values(
     (() => {
       const acc: Record<string, any> = {}
-      // מקורות אתר/הקפה — מטבלת branch_revenue
+      // כל המקורות מטבלת branch_revenue (כולל קופה היסטורית)
       for (const e of entries) {
         if (!acc[e.date]) acc[e.date] = { date: e.date, cashier: 0, website: 0, credit: 0, total: 0, transactions: 0 }
-        if (e.source === 'cashier') continue
         acc[e.date][e.source] += Number(e.amount)
         acc[e.date].total += Number(e.amount)
+        if (e.source === 'cashier') acc[e.date].transactions += Number(e.transaction_count || 0)
       }
-      // קופה — מטבלת register_closings (מזומן + אשראי)
+      // קופה — מטבלת register_closings (מזומן + אשראי) — מתווסף למקור "קופה"
       for (const c of closingsInPeriod) {
         if (!acc[c.date]) acc[c.date] = { date: c.date, cashier: 0, website: 0, credit: 0, total: 0, transactions: 0 }
         const sum = Number(c.cash_sales) + Number(c.credit_sales)
@@ -369,7 +374,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
           )}
         </div>
 
-        {/* קופה — קריאה בלבד מתוך register_closings */}
+        {/* קופה — סיכום מסגירות קופה (קריאה בלבד) */}
         {tab === 'cashier' && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: 20, marginBottom: 16 }}>
@@ -402,6 +407,94 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                 </button>
               )}
             </div>
+
+            {/* טבלת סגירות קופה — קריאה בלבד */}
+            {closingsInPeriod.length > 0 && (
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#374151' }}>סגירות קופה — לתקופה</h3>
+                  <span style={{ background: '#eef2ff', color: '#4338ca', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999 }}>
+                    מסגירת קופה
+                  </span>
+                </div>
+                <div className="table-scroll" style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc' }}>
+                        {['תאריך', 'קופה', 'מזומן', 'אשראי', 'עסקאות'].map(h => (
+                          <th key={h} style={{ padding: '9px 14px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...closingsInPeriod].sort((a, b) => b.date.localeCompare(a.date)).map((c, i) => (
+                        <tr key={`${c.date}-${c.register_number}-${i}`} style={{ borderBottom: '1px solid #f8fafc' }}>
+                          <td style={{ padding: '9px 14px', fontSize: 13, color: '#64748b' }}>{new Date(c.date + 'T12:00:00').toLocaleDateString('he-IL')}</td>
+                          <td style={{ padding: '9px 14px', fontWeight: 700, color: '#0f172a' }}>{c.register_number}</td>
+                          <td style={{ padding: '9px 14px', color: '#10b981', fontWeight: 700 }}>₪{Number(c.cash_sales).toLocaleString()}</td>
+                          <td style={{ padding: '9px 14px', color: '#3b82f6', fontWeight: 700 }}>₪{Number(c.credit_sales).toLocaleString()}</td>
+                          <td style={{ padding: '9px 14px', color: '#64748b' }}>{c.transaction_count || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #f1f5f9', background: '#f8fafc' }}>
+                  <span style={{ fontWeight: 700, color: '#374151', fontSize: 13 }}>סה"כ — {closingsInPeriod.length} סגירות</span>
+                  <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 15 }}>₪{Math.round(closingsTotal).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
+            {/* טבלת נתונים היסטוריים — branch_revenue source='cashier' עם עריכה ומחיקה */}
+            {legacyCashierEntries.length > 0 && (
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#374151' }}>נתונים היסטוריים — רשומות ישנות</h3>
+                  <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999 }}>
+                    ישן
+                  </span>
+                </div>
+                <div className="table-scroll" style={{ overflowX: 'auto' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 80px 130px 36px 36px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', fontSize: 11, fontWeight: 700, color: '#94a3b8' }}>
+                    <span>תאריך</span>
+                    <span>הערות</span>
+                    <span style={{ textAlign: 'center' }}>עסקאות</span>
+                    <span style={{ textAlign: 'left' }}>סכום</span>
+                    <span /><span />
+                  </div>
+                  {legacyCashierEntries.map(entry => (
+                    <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 80px 130px 36px 36px', alignItems: 'center', padding: '12px 18px', borderBottom: '1px solid #f8fafc' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
+                      {editId === entry.id ? (
+                        <>
+                          <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 6px', fontSize: 12 }} />
+                          <input type="text" value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }} />
+                          <input type="number" value={editData.transaction_count || ''} onChange={e => setEditData({ ...editData, transaction_count: parseInt(e.target.value) })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 8px', fontSize: 12, textAlign: 'center' }} />
+                          <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 8px', fontSize: 12 }} />
+                          <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>✓</button>
+                          <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}>✕</button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ fontSize: 13, color: '#64748b' }}>{new Date(entry.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
+                          <div><div style={{ fontWeight: 600, color: '#374151', fontSize: 14 }}>{entry.notes || '—'}</div></div>
+                          <span style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center' }}>{entry.transaction_count || '—'}</span>
+                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>₪{Number(entry.amount).toLocaleString()}</span>
+                          <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Pencil size={14} color="#94a3b8" /></button>
+                          <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Trash2 size={14} color="#fb7185" /></button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #f1f5f9', background: '#f8fafc' }}>
+                  <span style={{ fontWeight: 700, color: '#374151', fontSize: 13 }}>סה"כ היסטורי — {legacyCashierEntries.length} רשומות</span>
+                  <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 15 }}>₪{Math.round(legacyCashierTotal).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
 
