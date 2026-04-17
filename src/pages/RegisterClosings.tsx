@@ -168,6 +168,8 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
   const [billCounts, setBillCounts] = useState<Record<string, number>>({})
   const [coinCounts, setCoinCounts] = useState<Record<string, number>>({})
   const [actualCashManual, setActualCashManual] = useState(existing ? String(existing.actual_cash) : '')
+  const [manualEntryOpen, setManualEntryOpen] = useState(false)
+  const [manualEntryAmount, setManualEntryAmount] = useState('')
 
   const [varianceAction, setVarianceAction] = useState<'surplus_fund' | 'documented' | 'kept'>(
     (existing?.variance_action as any) || 'documented'
@@ -495,6 +497,11 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                   <Kpi label="פער" value={variance} color={Math.abs(variance) < 0.01 ? '#059669' : variance > 0 ? '#f59e0b' : '#dc2626'} sub="נספר − צפוי" showSign />
                 </div>
               </div>
+
+              <button type="button" onClick={() => { setManualEntryAmount(countedCash > 0 ? String(countedCash) : ''); setManualEntryOpen(true) }}
+                style={{ marginTop: 14, width: '100%', background: 'white', color: '#475569', border: '1.5px dashed #cbd5e1', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52 }}>
+                <Pencil size={15} /> הזן סכום ידנית
+              </button>
             </motion.div>
           )}
 
@@ -571,6 +578,58 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
           )}
         </div>
       </motion.div>
+
+      {/* Manual entry dialog */}
+      {manualEntryOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setManualEntryOpen(false)}>
+          <motion.div onClick={e => e.stopPropagation()}
+            initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            style={{ background: 'white', width: '100%', maxWidth: 460, borderRadius: 16, direction: 'rtl', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Pencil size={18} color="#6366f1" /> הזנת סכום ידנית
+              </div>
+              <button onClick={() => setManualEntryOpen(false)}
+                style={{ width: 40, height: 40, background: '#f8fafc', border: 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X size={20} color="#64748b" />
+              </button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 12, padding: 12, marginBottom: 14, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <AlertCircle size={18} color="#b45309" style={{ flexShrink: 0, marginTop: 2 }} />
+                <div style={{ fontSize: 13, color: '#92400e', fontWeight: 700, lineHeight: 1.5 }}>
+                  שים לב — הזנת סכום ידנית עוקפת את ספירת השטרות. האם אתה בטוח?
+                </div>
+              </div>
+              <label style={{ fontSize: 14, fontWeight: 700, color: '#334155', marginBottom: 8, display: 'block' }}>
+                סכום נספר (₪)
+              </label>
+              <input type="number" inputMode="decimal" value={manualEntryAmount}
+                onChange={e => setManualEntryAmount(e.target.value)} autoFocus
+                style={{ border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '14px 16px', fontSize: 20, fontWeight: 800, outline: 'none', width: '100%', boxSizing: 'border-box', textAlign: 'right', color: '#0f172a', minHeight: 56 }}
+                placeholder="0" />
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setManualEntryOpen(false)}
+                style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '12px 20px', fontSize: 14, fontWeight: 800, color: '#475569', cursor: 'pointer' }}>
+                ביטול
+              </button>
+              <button onClick={() => {
+                const v = parseFloat(manualEntryAmount)
+                if (isNaN(v) || v < 0) return
+                setBillCounts({})
+                setCoinCounts({})
+                setActualCashManual(String(v))
+                setManualEntryOpen(false)
+              }}
+                disabled={manualEntryAmount === '' || isNaN(parseFloat(manualEntryAmount)) || parseFloat(manualEntryAmount) < 0}
+                style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 10, padding: '12px 22px', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+                אישור
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }
