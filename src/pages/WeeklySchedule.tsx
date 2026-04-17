@@ -447,9 +447,9 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
             const eligible = employees.filter(emp => {
               // Must have the required role
               if (!roleAssignments.some(ra => ra.employee_id === emp.id && ra.role_id === req.roleId)) return false
-              // Only 'available' gets auto-scheduled (prefer_not / unavailable / no submission = skip)
+              // Skip ONLY explicit 'unavailable'. No submission (null) or 'available'/'prefer_not' = eligible.
               const avail = getEmployeeAvailability(emp.id, date, shift.id)
-              if (avail !== 'available') return false
+              if (avail === 'unavailable') return false
               // Not already in this shift
               const alreadyInShift = newAssignments.some(a =>
                 a.employee_id === emp.id && a.shift_id === shift.id && a.date === date)
@@ -459,8 +459,18 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
               return true
             })
 
-            // Sort: higher priority first (lower number), then fewer weekly hours
+            // Sort: explicit 'available' first, then null (unsubmitted), then 'prefer_not' last;
+            // tie-break by priority, then by fewer weekly hours
+            const availRank = (emp: BranchEmployee): number => {
+              const a = getEmployeeAvailability(emp.id, date, shift.id)
+              if (a === 'available') return 0
+              if (a === null) return 1
+              if (a === 'prefer_not') return 2
+              return 3 // shouldn't reach here since 'unavailable' filtered
+            }
             eligible.sort((a, b) => {
+              const ra = availRank(a), rb = availRank(b)
+              if (ra !== rb) return ra - rb
               const aPriority = a.priority || 2
               const bPriority = b.priority || 2
               if (aPriority !== bPriority) return aPriority - bPriority
@@ -748,6 +758,27 @@ ${shiftRows}
       />
 
       <div style={{ padding: '12px 20px' }}>
+
+        {/* ─── Week Navigation ─── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, margin: '4px 0 14px', flexWrap: 'wrap' }}>
+          <button onClick={nextWeek}
+            style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '8px 14px', fontSize: 13, fontWeight: 700, color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 42 }}>
+            שבוע הבא ←
+          </button>
+          <div style={{ background: '#eef2ff', border: '1.5px solid #c7d2fe', borderRadius: 10, padding: '8px 16px', fontSize: 14, fontWeight: 800, color: '#4338ca', minWidth: 180, textAlign: 'center' }}>
+            {weekDates[0].split('-').reverse().slice(0, 2).join('/')} — {weekDates[5].split('-').reverse().slice(0, 2).join('/')}
+          </div>
+          <button onClick={prevWeek} disabled={!canGoBack}
+            style={{ background: canGoBack ? 'white' : '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '8px 14px', fontSize: 13, fontWeight: 700, color: canGoBack ? '#475569' : '#cbd5e1', cursor: canGoBack ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 6, minHeight: 42 }}>
+            → שבוע קודם
+          </button>
+          {(weekStart.getTime() !== getSundayOfNextWeek().getTime()) && (
+            <button onClick={() => setWeekStart(getSundayOfNextWeek())}
+              style={{ background: 'none', border: 'none', fontSize: 12, fontWeight: 700, color: '#6366f1', cursor: 'pointer', textDecoration: 'underline' }}>
+              חזור להשבוע
+            </button>
+          )}
+        </div>
 
         {/* ─── Publish Banner ─── */}
         {!loading && (

@@ -83,12 +83,17 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
   }
 
   function getAvail(empId: number, date: string, shiftId?: number): Availability | null {
-    const c = constraints.find(c =>
-      c.employee_id === empId &&
-      c.date === date &&
-      (shiftId === undefined || c.shift_id === shiftId || c.shift_id === null)
+    // Prefer exact shift match; fall back to day-wide constraint (shift_id = null)
+    const exact = constraints.find(c =>
+      c.employee_id === empId && c.date === date && shiftId !== undefined && c.shift_id === shiftId
     )
-    return c ? c.availability : null
+    if (exact) return exact.availability
+    const dayWide = constraints.find(c =>
+      c.employee_id === empId && c.date === date && c.shift_id === null
+    )
+    if (dayWide) return dayWide.availability
+    // No record at all → לא הוגדר
+    return null
   }
 
   // Get shifts that apply to a specific day of week (0=Sunday ... 6=Saturday)
@@ -128,7 +133,8 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
       const dow = new Date(date + 'T12:00:00').getDay()
       getShiftsForDay(dow).forEach(shift => {
         const avail = getAvail(empId, date, shift.id)
-        map.set(`${date}_${shift.id}`, avail || 'available')
+        // Store actual state ('unset' sentinel if no record) so toggle can distinguish.
+        map.set(`${date}_${shift.id}`, avail || 'unset')
       })
     })
     setManualAvails(map)
@@ -138,27 +144,27 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
   async function saveManualAvailability() {
     if (!manualDialog) return
     setSaving(true)
-    const records: { employee_id: number; branch_id: number; date: string; shift_id: number; availability: string; submitted_by_name: string; updated_at: string }[] = []
-    manualAvails.forEach((availability, key) => {
+
+    for (const [key, availability] of manualAvails) {
       const [date, shiftIdStr] = key.split('_')
-      records.push({
+      const shiftId = Number(shiftIdStr)
+      // Always remove the previous record for this slot
+      await supabase.from('schedule_constraints')
+        .delete()
+        .eq('employee_id', manualDialog.empId)
+        .eq('date', date)
+        .eq('shift_id', shiftId)
+      // 'unset' = no submission — don't insert a row
+      if (availability === 'unset') continue
+      await supabase.from('schedule_constraints').insert({
         employee_id: manualDialog.empId,
         branch_id: branchId,
         date,
-        shift_id: Number(shiftIdStr),
+        shift_id: shiftId,
         availability,
         submitted_by_name: appUser?.name || 'מנהל',
         updated_at: new Date().toISOString(),
       })
-    })
-
-    for (const r of records) {
-      await supabase.from('schedule_constraints')
-        .delete()
-        .eq('employee_id', r.employee_id)
-        .eq('date', r.date)
-        .eq('shift_id', r.shift_id)
-      await supabase.from('schedule_constraints').insert(r)
     }
 
     setSaving(false)
@@ -428,63 +434,89 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
       )}
 
       {manualDialog && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={() => setManualDialog(null)}>
-          <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 500, width: '100%', maxHeight: '80vh', overflow: 'auto' }}
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center" onClick={() => setManualDialog(null)}>
+          <div style={{ background: '#f8fafc', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 560, maxHeight: '90vh', overflow: 'auto', direction: 'rtl' }}
             onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>הגשת זמינות עבור {manualDialog.empName}</h3>
-            <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 16 }}>{weekLabel}</p>
+            <div style={{ position: 'sticky', top: 0, zIndex: 2, background: 'white', padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a' }}>הגשת זמינות — {manualDialog.empName}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>{weekLabel}</div>
+            </div>
 
-            {weekDays.slice(0, 6).map((date) => {
-              const dow = new Date(date + 'T12:00:00').getDay()
-              const dayShifts = getShiftsForDay(dow)
-              if (dayShifts.length === 0) return null
-              const dayName = DAY_NAMES[dow]
-              return (
-                <div key={date} style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', marginBottom: 6 }}>
-                    {dayName} {formatShortDate(date)}
-                  </div>
-                  {dayShifts.map(shift => {
-                    const key = `${date}_${shift.id}`
-                    const val = manualAvails.get(key) || 'available'
-                    const cycle = ['available', 'prefer_not', 'unavailable'] as const
-                    const nextVal = cycle[(cycle.indexOf(val as any) + 1) % 3]
-                    const cfg = val === 'available'
-                      ? { bg: '#ecfdf5', border: '#a7f3d0', text: '#065f46', label: '✓ פנוי' }
-                      : val === 'prefer_not'
-                      ? { bg: '#fffbeb', border: '#fde68a', text: '#92400e', label: '~ מעדיף שלא' }
-                      : { bg: '#fef2f2', border: '#fecaca', text: '#991b1b', label: '✕ לא יכול' }
-                    return (
-                      <button key={shift.id} onClick={() => {
+            <div style={{ padding: 16 }}>
+              {weekDays.slice(0, 6).map((date) => {
+                const dow = new Date(date + 'T12:00:00').getDay()
+                const dayShifts = getShiftsForDay(dow)
+                if (dayShifts.length === 0) return null
+                const dayName = DAY_NAMES[dow]
+                return (
+                  <div key={date} style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: 14, marginBottom: 12 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', marginBottom: 10, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <span>{dayName}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>{formatShortDate(date)}</span>
+                    </div>
+
+                    {dayShifts.map(shift => {
+                      const key = `${date}_${shift.id}`
+                      const val = manualAvails.get(key) || 'unset'
+                      const startTime = (shift.start_time || '').slice(0, 5)
+                      const endTime = (shift.end_time || '').slice(0, 5)
+                      const hoursLabel = startTime && endTime ? `${startTime}–${endTime}` : ''
+
+                      const options = [
+                        { k: 'available',   l: '✓ זמין',     bg: '#ecfdf5', border: '#a7f3d0', text: '#065f46', bgActive: '#10b981', textActive: 'white' },
+                        { k: 'unavailable', l: '✕ לא זמין',  bg: '#fef2f2', border: '#fecaca', text: '#991b1b', bgActive: '#ef4444', textActive: 'white' },
+                        { k: 'unset',       l: '○ לא הוגדר', bg: '#f8fafc', border: '#e2e8f0', text: '#64748b', bgActive: '#94a3b8', textActive: 'white' },
+                      ] as const
+
+                      const setVal = (newVal: string) => {
                         const next = new Map(manualAvails)
-                        next.set(key, nextVal)
+                        next.set(key, newVal)
                         setManualAvails(next)
-                      }}
-                        style={{
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                          width: '100%', padding: '10px 14px', marginBottom: 6, borderRadius: 10,
-                          border: `1.5px solid ${cfg.border}`, background: cfg.bg, cursor: 'pointer',
-                          transition: 'all 0.15s',
-                        }}>
-                        <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>
-                          {shift.name} <span style={{ color: '#94a3b8', fontWeight: 400 }}>{(shift.start_time||'').slice(0,5)}</span>
-                        </span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: cfg.text }}>{cfg.label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )
-            })}
+                      }
 
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+                      return (
+                        <div key={shift.id} style={{ padding: '10px 0', borderTop: '1px solid #f1f5f9' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{shift.name}</div>
+                              {hoursLabel && <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginTop: 2 }}>{hoursLabel}</div>}
+                            </div>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                            {options.map(opt => {
+                              const active = val === opt.k
+                              return (
+                                <button key={opt.k} type="button" onClick={() => setVal(opt.k)}
+                                  style={{
+                                    padding: '10px 8px', borderRadius: 10,
+                                    border: `1.5px solid ${active ? opt.bgActive : opt.border}`,
+                                    background: active ? opt.bgActive : opt.bg,
+                                    color: active ? opt.textActive : opt.text,
+                                    fontSize: 13, fontWeight: 800, cursor: 'pointer',
+                                    minHeight: 44,
+                                    transition: 'all 0.15s',
+                                  }}>
+                                  {opt.l}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid #f1f5f9', padding: '12px 16px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button onClick={() => setManualDialog(null)}
-                style={{ padding: '8px 16px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
+                style={{ padding: '12px 20px', background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 14, fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
                 ביטול
               </button>
               <button onClick={saveManualAvailability} disabled={saving}
-                style={{ padding: '8px 16px', background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                {saving ? 'שומר...' : 'שמור זמינות'}
+                style={{ padding: '12px 22px', background: saving ? '#c7d2fe' : '#6366f1', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 800, cursor: saving ? 'wait' : 'pointer' }}>
+                {saving ? 'שומר…' : 'שמור זמינות'}
               </button>
             </div>
           </div>
