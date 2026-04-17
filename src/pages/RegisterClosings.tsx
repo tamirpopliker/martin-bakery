@@ -340,7 +340,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 0 }} onClick={onClose}>
       <motion.div onClick={e => e.stopPropagation()}
         initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-        style={{ background: '#f8fafc', width: '100%', maxWidth: 720, maxHeight: '96vh', overflow: 'auto', borderRadius: '20px 20px 0 0', direction: 'rtl' }}>
+        style={{ background: '#f8fafc', width: '100%', maxWidth: 720, minHeight: 'min(90vh, 720px)', maxHeight: '96vh', overflow: 'auto', borderRadius: '20px 20px 0 0', direction: 'rtl', display: 'flex', flexDirection: 'column' }}>
 
         {/* Header + progress */}
         <div style={{ position: 'sticky', top: 0, zIndex: 2, background: 'white', padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
