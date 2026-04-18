@@ -809,56 +809,126 @@ ${shiftRows}
               {renderDayColumn(mobileDayIdx)}
             </div>
 
-            {/* ─── Desktop: Day Column Headers ─── */}
-            <div className="hidden md:grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 4, padding: '0 4px' }}>
-              {weekDates.slice(0, 6).map((date, i) => {
-                const isToday = date === formatDate(new Date())
-                const sd = specialDays.find(s => s.date === date)
-                return (
-                  <div key={date} style={{ textAlign: 'center', padding: '8px 0' }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: isToday ? '#6366f1' : '#64748b' }}>
-                      {DAY_NAMES[i]}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#94a3b8' }}>
-                      {date.split('-').reverse().slice(0, 2).join('/')}
-                    </div>
-                    {sd && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{'\u25CF'} {sd.name}</div>}
-                  </div>
-                )
-              })}
-            </div>
+            {/* ─── Desktop: Compact grid (shifts × days) ─── */}
+            <div className="hidden md:block" style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ overflowX: 'auto' }}>
+                {(() => {
+                  // All distinct shifts shown in the week (union), sorted by start_time
+                  const seenIds = new Set<number>()
+                  const allShifts: BranchShift[] = []
+                  for (let d = 0; d < 6; d++) {
+                    for (const s of getEffectiveShiftsForDay(d, weekDates[d])) {
+                      if (!seenIds.has(s.id)) { seenIds.add(s.id); allShifts.push(s) }
+                    }
+                  }
+                  allShifts.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
 
-            {/* ─── Desktop: Grid of Shift Cards ─── */}
-            <div className="hidden md:grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, alignItems: 'start' }}>
-              {[0, 1, 2, 3, 4, 5].map(dayIdx => {
-                const date = weekDates[dayIdx]
-                const sd = specialDays.find(s => s.date === date)
+                  if (allShifts.length === 0) {
+                    return <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>לא הוגדרו משמרות לסניף</div>
+                  }
 
-                if (sd?.shift_pattern === 'closed') {
+                  const cellMinWidth = 150
                   return (
-                    <div key={date} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', padding: 20, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>סגור</div>
-                        <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 2 }}>{sd.name}</div>
-                      </div>
-                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 900, tableLayout: 'fixed' }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc' }}>
+                          <th style={{ padding: '10px 12px', textAlign: 'right', fontSize: 12, fontWeight: 800, color: '#475569', borderBottom: '1px solid #f1f5f9', position: 'sticky', right: 0, background: '#f8fafc', zIndex: 2, width: 170 }}>משמרת</th>
+                          {weekDates.slice(0, 6).map((date, i) => {
+                            const isToday = date === formatDate(new Date())
+                            const sd = specialDays.find(s => s.date === date)
+                            return (
+                              <th key={date} style={{ padding: '10px 8px', textAlign: 'center', fontSize: 12, fontWeight: 800, color: isToday ? '#6366f1' : '#475569', borderBottom: '1px solid #f1f5f9', minWidth: cellMinWidth }}>
+                                <div>{DAY_NAMES[i]}</div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginTop: 2 }}>{date.split('-').reverse().slice(0, 2).join('/')}</div>
+                                {sd && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>● {sd.name}</div>}
+                              </th>
+                            )
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allShifts.map((shift, rowIdx) => (
+                          <tr key={shift.id} style={{ background: rowIdx % 2 === 0 ? 'white' : '#fafbfc' }}>
+                            <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 700, color: '#0f172a', borderBottom: '1px solid #f1f5f9', position: 'sticky', right: 0, background: rowIdx % 2 === 0 ? 'white' : '#fafbfc', zIndex: 1, verticalAlign: 'top' }}>
+                              {shift.name}
+                              <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginTop: 2 }}>
+                                {shift.start_time?.slice(0, 5)}–{shift.end_time?.slice(0, 5)}
+                              </div>
+                            </td>
+                            {weekDates.slice(0, 6).map((date, dayIdx) => {
+                              const sd = specialDays.find(s => s.date === date)
+                              const dayShifts = getEffectiveShiftsForDay(dayIdx, date)
+                              const runsToday = dayShifts.some(s => s.id === shift.id)
+
+                              if (sd?.shift_pattern === 'closed') {
+                                return <td key={date} style={{ padding: 8, borderBottom: '1px solid #f1f5f9', textAlign: 'center', color: '#cbd5e1', fontSize: 11 }}>סגור</td>
+                              }
+                              if (!runsToday) {
+                                return <td key={date} style={{ padding: 8, borderBottom: '1px solid #f1f5f9', textAlign: 'center', color: '#cbd5e1', fontSize: 11 }}>—</td>
+                              }
+
+                              const shiftRoles = getRolesForShift(shift.id, date)
+                              const summary = getShiftCardSummary(shift.id, date)
+                              const hasShortage = summary.total > 0 && summary.filled < summary.total
+                              const isFull = summary.total > 0 && summary.filled === summary.total
+
+                              return (
+                                <td key={date} style={{ padding: 6, borderBottom: '1px solid #f1f5f9', verticalAlign: 'top' }}>
+                                  <div style={{
+                                    background: isFull ? '#f0fdf4' : hasShortage ? '#fffbeb' : '#f8fafc',
+                                    border: `1px solid ${isFull ? '#bbf7d0' : hasShortage ? '#fde68a' : '#f1f5f9'}`,
+                                    borderRadius: 8, padding: 6, minHeight: 56, display: 'flex', flexDirection: 'column', gap: 3
+                                  }}>
+                                    {shiftRoles.map(sr => {
+                                      const slots = []
+                                      for (let i = 0; i < sr.count; i++) {
+                                        const assignment = getAssignment(shift.id, sr.roleId, date, i)
+                                        if (assignment) {
+                                          const emp = employees.find(e => e.id === assignment.employee_id)
+                                          slots.push(
+                                            <div key={`${sr.roleId}-${i}`}
+                                              onMouseEnter={() => setHoveredAssignment(assignment.id)}
+                                              onMouseLeave={() => setHoveredAssignment(null)}
+                                              style={{ background: '#dcfce7', color: '#166534', borderRadius: 6, padding: '3px 6px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {emp?.training_status === 'mentor' && '⭐ '}
+                                                {emp?.training_status === 'trainee' && '📚 '}
+                                                {emp?.name || '?'}
+                                              </span>
+                                              {hoveredAssignment === assignment.id && (
+                                                <button onClick={() => removeAssignment(assignment.id)}
+                                                  style={{ background: 'none', border: 'none', color: '#166534', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1, fontWeight: 800 }}>×</button>
+                                              )}
+                                            </div>
+                                          )
+                                        } else {
+                                          slots.push(
+                                            <button key={`${sr.roleId}-${i}`}
+                                              onClick={(e) => openPopover(shift.id, sr.roleId, date, i, e)}
+                                              style={{ background: '#fef3c7', color: '#92400e', border: '1px dashed #fde68a', borderRadius: 6, padding: '3px 6px', fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'right' }}>
+                                              + {sr.roleName}
+                                            </button>
+                                          )
+                                        }
+                                      }
+                                      return slots
+                                    })}
+                                    {summary.total > 0 && (
+                                      <div style={{ fontSize: 10, fontWeight: 700, color: isFull ? '#059669' : hasShortage ? '#b45309' : '#94a3b8', textAlign: 'left', marginTop: 'auto' }}>
+                                        {summary.filled}/{summary.total}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   )
-                }
-
-                const dayShifts = getEffectiveShiftsForDay(dayIdx, date)
-
-                return (
-                  <div key={date} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {sd?.shift_pattern === 'friday' && (
-                      <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center' }}>ערב חג — משמרת אחת</div>
-                    )}
-                    {dayShifts.length === 0 && (
-                      <div style={{ textAlign: 'center', fontSize: 12, color: '#cbd5e1', padding: '16px 0' }}>אין משמרות</div>
-                    )}
-                    {dayShifts.map(shift => renderShiftCard(shift, date))}
-                  </div>
-                )
-              })}
+                })()}
+              </div>
             </div>
 
             {/* ─── Weekly Summary ─── */}

@@ -111,6 +111,14 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
       return user.role === 'factory' // both dept managers and regular factory users
     }
 
+    // ─── Special orders: branch AND factory both allowed ───
+    if (pageKey === 'factory_special_orders') {
+      return user.role === 'factory' // admin handled above; branch cannot access factory page
+    }
+    if (pageKey === 'special_orders') {
+      return user.role === 'branch' // admin handled above; branch-scoped page
+    }
+
     // ─── Factory pages ───
     const dept = getDeptFromPage(pageKey)
     if (dept !== null || pageKey === 'factory_dashboard' || pageKey === 'factory_b2b' ||

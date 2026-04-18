@@ -96,6 +96,56 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
     return null
   }
 
+  function shortShiftLabel(name: string): string {
+    if (!name) return ''
+    if (name.includes('בוקר')) return 'בוקר'
+    if (name.includes('צהריים')) return 'צהריים'
+    if (name.includes('ערב')) return 'ערב'
+    if (name.includes('שישי')) return 'שישי'
+    return name.slice(0, 8)
+  }
+
+  type DayStatus = { kind: 'unsubmitted' | 'all_available' | 'all_unavailable' | 'mixed'; label: string; detail?: string; bg: string; border: string; text: string }
+
+  function getDayStatus(empId: number, date: string): DayStatus | null {
+    const dow = new Date(date + 'T12:00:00').getDay()
+    const dayShifts = getShiftsForDay(dow)
+    if (dayShifts.length === 0) return null
+
+    const empDayConstraints = constraints.filter(c => c.employee_id === empId && c.date === date)
+    if (empDayConstraints.length === 0) {
+      return { kind: 'unsubmitted', label: 'לא הגיש', bg: '#f1f5f9', border: '#e2e8f0', text: '#64748b' }
+    }
+
+    const perShift = dayShifts.map(s => ({ shift: s, avail: getAvail(empId, date, s.id) }))
+    const available = perShift.filter(x => x.avail === 'available')
+    const unavailable = perShift.filter(x => x.avail === 'unavailable')
+
+    if (available.length === dayShifts.length) {
+      return { kind: 'all_available', label: 'כל המשמרות', bg: '#dcfce7', border: '#86efac', text: '#166534' }
+    }
+    if (unavailable.length === dayShifts.length) {
+      return { kind: 'all_unavailable', label: 'לא יכול', bg: '#fee2e2', border: '#fecaca', text: '#991b1b' }
+    }
+
+    // Mixed — list per shift
+    const parts = perShift.map(x => {
+      const name = shortShiftLabel(x.shift.name)
+      if (x.avail === 'available') return `${name} ✓`
+      if (x.avail === 'unavailable') return `${name} ✕`
+      if (x.avail === 'prefer_not') return `${name} ~`
+      return `${name} —`
+    })
+    const hasAny = available.length > 0
+    return {
+      kind: 'mixed',
+      label: parts.join(' · '),
+      bg: hasAny ? '#ecfdf5' : '#fef2f2',
+      border: hasAny ? '#a7f3d0' : '#fecaca',
+      text: hasAny ? '#065f46' : '#991b1b',
+    }
+  }
+
   // Get shifts that apply to a specific day of week (0=Sunday ... 6=Saturday)
   function getShiftsForDay(dayIndex: number): BranchShift[] {
     return shifts.filter(s => s.days_of_week && s.days_of_week.includes(dayIndex))
@@ -221,12 +271,11 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
       </motion.div>
 
       {/* Legend */}
-      <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginBottom: 12, fontSize: 11, color: '#64748b', flexWrap: 'wrap' }}>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#10b981', verticalAlign: 'middle', marginLeft: 3 }} /> פנוי</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#f59e0b', verticalAlign: 'middle', marginLeft: 3 }} /> מעדיף שלא</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#ef4444', verticalAlign: 'middle', marginLeft: 3 }} /> לא יכול</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#e5e7eb', border: '1px solid #d1d5db', verticalAlign: 'middle', marginLeft: 3 }} /> לא הגדיר</span>
-        <span style={{ color: '#94a3b8' }}>(B) בוקר &nbsp; (E) ערב</span>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 12, fontSize: 11, color: '#64748b', flexWrap: 'wrap' }}>
+        <span style={{ background: '#dcfce7', border: '1px solid #86efac', color: '#166534', fontWeight: 700, borderRadius: 6, padding: '2px 8px' }}>כל המשמרות</span>
+        <span style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', fontWeight: 700, borderRadius: 6, padding: '2px 8px' }}>משמרת ספציפית ✓</span>
+        <span style={{ background: '#fee2e2', border: '1px solid #fecaca', color: '#991b1b', fontWeight: 700, borderRadius: 6, padding: '2px 8px' }}>לא יכול</span>
+        <span style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', fontWeight: 700, borderRadius: 6, padding: '2px 8px' }}>לא הגיש</span>
       </div>
 
       {loading ? (
@@ -239,7 +288,7 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
             <>
               {/* Weekly grid table */}
               <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', overflow: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 780, tableLayout: 'fixed' }}>
                   <thead>
                     <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
                       <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontSize: 12, color: '#64748b', position: 'sticky', right: 0, background: 'white', zIndex: 2, minWidth: 100 }}>עובד</th>
@@ -277,30 +326,39 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
                             )}
                           </td>
                           {weekDays.slice(0, 6).map(date => {
-                            const dow = new Date(date + 'T12:00:00').getDay()
-                            const dayShifts = getShiftsForDay(dow)
+                            const status = getDayStatus(emp.id, date)
+                            if (!status) {
+                              return <td key={date} style={{ padding: '8px 4px', textAlign: 'center', color: '#cbd5e1', fontSize: 11 }}>—</td>
+                            }
+                            const canEdit = appUser?.role === 'admin' || appUser?.role === 'branch' || appUser?.role === 'scheduler'
                             return (
-                              <td key={date} style={{ padding: '8px 4px', textAlign: 'center' }}>
-                                <div style={{ display: 'flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
-                                  {dayShifts.map(shift => {
-                                    const avail = getAvail(emp.id, date, shift.id)
-                                    const color = avail === 'available' ? '#10b981'
-                                      : avail === 'prefer_not' ? '#f59e0b'
-                                      : avail === 'unavailable' ? '#ef4444'
-                                      : undefined
-                                    const label = shift.name?.includes('בוקר') ? 'B' : shift.name?.includes('ערב') ? 'E' : shift.name?.includes('שישי') ? 'F' : '?'
-                                    const constraint = constraints.find(c => c.employee_id === emp.id && c.date === date && (c.shift_id === shift.id || c.shift_id === null))
-                                    return (
-                                      <span key={shift.id} title={`${shift.name}: ${avail || 'לא הגדיר'}${constraint?.submitted_by_name ? ` (הוגש ע"י ${constraint.submitted_by_name})` : ''}`}
-                                        style={{
-                                          width: 14, height: 14, borderRadius: '50%', display: 'inline-block',
-                                          background: color || 'transparent',
-                                          border: color ? 'none' : '1.5px solid #d1d5db',
-                                          cursor: 'help', flexShrink: 0,
-                                        }} />
-                                    )
-                                  })}
-                                </div>
+                              <td key={date} style={{ padding: '6px 4px', textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  onClick={canEdit ? () => openManualDialog(emp.id, emp.name) : undefined}
+                                  disabled={!canEdit}
+                                  title={canEdit ? 'ערוך זמינות' : status.label}
+                                  style={{
+                                    background: status.bg,
+                                    border: `1px solid ${status.border}`,
+                                    color: status.text,
+                                    borderRadius: 8,
+                                    padding: '6px 8px',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    lineHeight: 1.2,
+                                    cursor: canEdit ? 'pointer' : 'default',
+                                    width: '100%',
+                                    minHeight: 36,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    textAlign: 'center',
+                                    whiteSpace: 'normal',
+                                    transition: 'all 0.15s',
+                                  }}>
+                                  {status.label}
+                                </button>
                               </td>
                             )
                           })}

@@ -38,12 +38,13 @@ import FactoryDepartments from './FactoryDepartments'
 import FactoryEquipment from './FactoryEquipment'
 import B2BCustomers from './B2BCustomers'
 import EmployerCostsUpload from './EmployerCostsUpload'
+import FactorySpecialOrders from './FactorySpecialOrders'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
   AlertTriangle, ClipboardList, Truck, UserCog, Activity,
   Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
-  LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft, ShoppingCart, Wrench, Building2, CreditCard, Briefcase
+  LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft, ShoppingCart, Wrench, Building2, CreditCard, Briefcase, Cake
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
@@ -53,6 +54,7 @@ const PANEL_FACTORY = [
   { label: 'מחלקות',           subtitle: 'קרמים · בצקים · אריזה · ניקיון/נהג',  Icon: Building2,       color: '#6366f1', page: 'factory_departments' },
   { label: 'מכירות פנימיות',   subtitle: 'תעודות משלוח לסניפים',                Icon: ArrowRightLeft,  color: '#f59e0b', page: 'internal_sales' },
   { label: 'מכירות חיצוניות',  subtitle: 'לקוחות עסקיים · B2B',                 Icon: TrendingUp,      color: '#6366f1', page: 'factory_b2b' },
+  { label: 'הזמנות עוגות מיוחדות', subtitle: 'עוגות מעוצבות · הדפסה · כל הסניפים',  Icon: Cake,             color: '#ec4899', page: 'factory_special_orders' },
   { label: 'לייבור מרוכז',     subtitle: 'העלאת דוח נוכחות PDF · כל המחלקות',   Icon: HardHat,         color: '#f59e0b', page: 'labor' },
   { label: 'דוח ייצור מרוכז',  subtitle: 'העלאת דוח ייצור מ-Excel',             Icon: FileSpreadsheet, color: '#10b981', page: 'production_report_upload' },
   { label: 'פחת / תיקונים / ציוד', subtitle: 'פחת · תיקונים · ציוד · כל המחלקות', Icon: Wrench,          color: '#64748b', page: 'factory_equipment' },
@@ -108,6 +110,24 @@ export default function Home() {
 
   // Modified internal sales badge (internal_sales only)
   const [modifiedCount, setModifiedCount] = useState(0)
+
+  // Unread special-order notifications for this user (factory badge)
+  const [unreadSpecialOrders, setUnreadSpecialOrders] = useState(0)
+  useEffect(() => {
+    async function loadUnreadSpecial() {
+      if (!appUser?.id) return
+      const { count } = await supabase.from('order_notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', appUser.id)
+        .eq('read', false)
+      setUnreadSpecialOrders(count || 0)
+    }
+    loadUnreadSpecial()
+    const ch = supabase.channel(`home-unread-special-${appUser?.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_notifications' }, () => loadUnreadSpecial())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [appUser?.id])
 
   useEffect(() => {
     async function loadModified() {
@@ -293,6 +313,7 @@ export default function Home() {
     if (page === 'dough_dashboard')      return <DepartmentDashboard department="dough"  onBack={() => setPage(null)} />
     if (page === 'factory_dashboard')    return <FactoryDashboard onBack={() => setPage(null)} />
     if (page === 'factory_b2b')          return <FactoryB2B onBack={() => setPage(null)} />
+    if (page === 'factory_special_orders') return <FactorySpecialOrders onBack={() => setPage(null)} />
     if (page === 'settings')             return <FactorySettings onBack={() => setPage(null)} />
     if (page === 'factory_employees')  return <FactoryEmployees onBack={() => setPage(null)} />
     if (page === 'production_report_upload') return <ProductionReportUpload onBack={() => setPage(null)} />
@@ -644,7 +665,11 @@ export default function Home() {
                   className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
                   {filteredPanelFactory.map(item => {
                     const Icon = item.Icon
-                    const badgeCount = item.page === 'internal_sales' ? modifiedCount : 0
+                    const badgeCount = item.page === 'internal_sales'
+                      ? modifiedCount
+                      : item.page === 'factory_special_orders'
+                        ? unreadSpecialOrders
+                        : 0
                     return (
                       <motion.div key={item.page} variants={fadeUp}>
                         <button onClick={() => setPage(item.page)}
@@ -663,7 +688,9 @@ export default function Home() {
                             <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{item.subtitle}</div>
                             {badgeCount > 0 && (
                               <div style={{ fontSize: 11, color: '#ea580c', fontWeight: 600, marginTop: 2 }}>
-                                {badgeCount} הזמנות ממתינות לאישורך
+                                {item.page === 'factory_special_orders'
+                                  ? `${badgeCount} התראות חדשות`
+                                  : `${badgeCount} הזמנות ממתינות לאישורך`}
                               </div>
                             )}
                           </div>
