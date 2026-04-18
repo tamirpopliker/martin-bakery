@@ -32,7 +32,7 @@ export interface SpecialOrder {
   extras: string[] | null
   notes: string | null
   factory_notes: string | null
-  status: 'new' | 'confirmed' | 'in_production' | 'ready' | 'delivered' | 'cancelled'
+  status: 'new' | 'in_progress' | 'sent_to_branch' | 'cancelled'
   created_by: string | null
   created_at: string
 }
@@ -42,12 +42,10 @@ export function displayOrderNumber(o: Pick<SpecialOrder, 'order_number' | 'order
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  new:           { label: 'חדשה',       color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
-  confirmed:     { label: 'אושרה',      color: '#5b21b6', bg: '#ede9fe', border: '#c4b5fd' },
-  in_production: { label: 'בייצור',     color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-  ready:         { label: 'מוכנה',      color: '#166534', bg: '#dcfce7', border: '#86efac' },
-  delivered:     { label: 'נמסרה',      color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
-  cancelled:     { label: 'בוטלה',      color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
+  new:            { label: 'הזמנה חדשה', color: '#9a3412', bg: '#ffedd5', border: '#fdba74' },
+  in_progress:    { label: 'בטיפול',     color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
+  sent_to_branch: { label: 'נשלח לסניף', color: '#166534', bg: '#dcfce7', border: '#86efac' },
+  cancelled:      { label: 'בוטלה',      color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
 }
 
 const BASE_SIZES = ['עגולה גדולה', 'ריבוע', 'רבע פלטה', 'לב']
@@ -106,10 +104,10 @@ export default function BranchSpecialOrders({ branchId, branchName, branchColor,
   }, [branchId])
 
   const today = todayISO()
-  const active = orders.filter(o => !['delivered', 'cancelled'].includes(o.status))
+  const active = orders.filter(o => !['sent_to_branch', 'cancelled'].includes(o.status))
   const pending = orders.filter(o => o.status === 'new')
-  const ready = orders.filter(o => o.status === 'ready')
-  const pickupToday = orders.filter(o => o.pickup_date === today && !['delivered', 'cancelled'].includes(o.status))
+  const ready = orders.filter(o => o.status === 'sent_to_branch' && o.pickup_date >= today)
+  const pickupToday = orders.filter(o => o.pickup_date === today && o.status !== 'cancelled')
 
   const filtered = statusFilter === 'all'
     ? orders
@@ -340,7 +338,7 @@ function OrderView({ order, onClose, onCancel }: { order: SpecialOrder; onClose:
           </Section>
         )}
 
-        {!['delivered', 'cancelled'].includes(order.status) && (
+        {!['sent_to_branch', 'cancelled'].includes(order.status) && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8 }}>
             <button
               onClick={onCancel}

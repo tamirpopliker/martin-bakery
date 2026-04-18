@@ -12,19 +12,15 @@ interface Props {
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  new:           { label: 'חדשה',       color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
-  confirmed:     { label: 'אושרה',      color: '#5b21b6', bg: '#ede9fe', border: '#c4b5fd' },
-  in_production: { label: 'בייצור',     color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-  ready:         { label: 'מוכנה',      color: '#166534', bg: '#dcfce7', border: '#86efac' },
-  delivered:     { label: 'נמסרה',      color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
-  cancelled:     { label: 'בוטלה',      color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
+  new:            { label: 'הזמנה חדשה', color: '#9a3412', bg: '#ffedd5', border: '#fdba74' },
+  in_progress:    { label: 'בטיפול',     color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
+  sent_to_branch: { label: 'נשלח לסניף', color: '#166534', bg: '#dcfce7', border: '#86efac' },
+  cancelled:      { label: 'בוטלה',      color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
 }
 
 const STATUS_FLOW: Record<string, { next: string; label: string }> = {
-  new:           { next: 'confirmed',     label: 'אשר הזמנה' },
-  confirmed:     { next: 'in_production', label: 'התחל ייצור' },
-  in_production: { next: 'ready',         label: 'סמן כמוכנה' },
-  ready:         { next: 'delivered',     label: 'סמן כנמסרה' },
+  new:         { next: 'in_progress',    label: 'התחל טיפול' },
+  in_progress: { next: 'sent_to_branch', label: 'שלח לסניף' },
 }
 
 // Branch name → color scheme
@@ -95,8 +91,8 @@ export default function FactorySpecialOrders({ onBack }: Props) {
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', order.id)
 
-    // Notify branch manager when ready
-    if (newStatus === 'ready') {
+    // Notify branch manager when the order leaves the factory
+    if (newStatus === 'sent_to_branch') {
       const { data: branchUsers } = await supabase.from('app_users')
         .select('id')
         .eq('role', 'branch')
@@ -105,7 +101,7 @@ export default function FactorySpecialOrders({ onBack }: Props) {
         const notifications = branchUsers.map((u: any) => ({
           user_id: u.id,
           order_id: order.id,
-          message: `הזמנה ${displayOrderNumber(order)} מוכנה לאיסוף — ${order.customer_name}`,
+          message: `הזמנה ${displayOrderNumber(order)} נשלחה לסניף — ${order.customer_name}`,
         }))
         await supabase.from('order_notifications').insert(notifications)
       }
@@ -134,9 +130,9 @@ export default function FactorySpecialOrders({ onBack }: Props) {
     return d.toISOString().slice(0, 10)
   }, [])
   const newCount = orders.filter(o => o.status === 'new').length
-  const inProduction = orders.filter(o => o.status === 'in_production').length
-  const readyCount = orders.filter(o => o.status === 'ready').length
-  const weekCount = orders.filter(o => o.pickup_date >= today && o.pickup_date <= weekEnd && !['delivered', 'cancelled'].includes(o.status)).length
+  const inProgressCount = orders.filter(o => o.status === 'in_progress').length
+  const sentCount = orders.filter(o => o.status === 'sent_to_branch').length
+  const weekCount = orders.filter(o => o.pickup_date >= today && o.pickup_date <= weekEnd && o.status !== 'cancelled').length
 
   const filtered = orders.filter(o => {
     if (branchFilter !== 'all' && o.branch_id !== branchFilter) return false
@@ -170,10 +166,10 @@ export default function FactorySpecialOrders({ onBack }: Props) {
       <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
         {/* Summary */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 20 }}>
-          <SummaryCard label="חדשות (לא אושרו)" value={newCount} icon={<Clock size={18} />} color="#2563eb" badge={newCount > 0} />
-          <SummaryCard label="בייצור" value={inProduction} icon={<Cake size={18} />} color="#f59e0b" />
-          <SummaryCard label="מוכנות" value={readyCount} icon={<CheckCircle2 size={18} />} color="#10b981" />
-          <SummaryCard label="השבוע" value={weekCount} icon={<CalendarRange size={18} />} color="#6366f1" />
+          <SummaryCard label="הזמנות חדשות" value={newCount} icon={<Clock size={18} />} color="#ea580c" badge={newCount > 0} />
+          <SummaryCard label="בטיפול" value={inProgressCount} icon={<Cake size={18} />} color="#2563eb" />
+          <SummaryCard label="נשלחו לסניף" value={sentCount} icon={<CheckCircle2 size={18} />} color="#10b981" />
+          <SummaryCard label="איסוף השבוע" value={weekCount} icon={<CalendarRange size={18} />} color="#6366f1" />
         </div>
 
         {/* Filters */}
@@ -446,7 +442,7 @@ function OrderDetailModal({ order, branchName, onClose, onUpdateStatus, onSaveNo
 
           {flow && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8 }}>
-              {order.status !== 'cancelled' && order.status !== 'delivered' && (
+              {order.status !== 'cancelled' && order.status !== 'sent_to_branch' && (
                 <button
                   onClick={() => onUpdateStatus('cancelled')}
                   style={{ background: 'white', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
