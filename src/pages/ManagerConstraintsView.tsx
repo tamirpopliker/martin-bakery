@@ -118,31 +118,24 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
     }
 
     const perShift = dayShifts.map(s => ({ shift: s, avail: getAvail(empId, date, s.id) }))
-    const available = perShift.filter(x => x.avail === 'available')
-    const unavailable = perShift.filter(x => x.avail === 'unavailable')
+    // Treat 'available' and 'prefer_not' both as "can work"; 'unavailable' is a hard no.
+    const canWork = perShift.filter(x => x.avail === 'available' || x.avail === 'prefer_not')
 
-    if (available.length === dayShifts.length) {
+    if (canWork.length === dayShifts.length) {
       return { kind: 'all_available', label: 'כל המשמרות', bg: '#dcfce7', border: '#86efac', text: '#166534' }
     }
-    if (unavailable.length === dayShifts.length) {
+    if (canWork.length === 0) {
       return { kind: 'all_unavailable', label: 'לא יכול', bg: '#fee2e2', border: '#fecaca', text: '#991b1b' }
     }
 
-    // Mixed — list per shift
-    const parts = perShift.map(x => {
-      const name = shortShiftLabel(x.shift.name)
-      if (x.avail === 'available') return `${name} ✓`
-      if (x.avail === 'unavailable') return `${name} ✕`
-      if (x.avail === 'prefer_not') return `${name} ~`
-      return `${name} —`
-    })
-    const hasAny = available.length > 0
+    // Partially available — list only the available shifts (e.g. "בוקר ✓ · ערב ✓")
+    const parts = canWork.map(x => `${shortShiftLabel(x.shift.name)} ✓`)
     return {
       kind: 'mixed',
       label: parts.join(' · '),
-      bg: hasAny ? '#ecfdf5' : '#fef2f2',
-      border: hasAny ? '#a7f3d0' : '#fecaca',
-      text: hasAny ? '#065f46' : '#991b1b',
+      bg: '#ecfdf5',
+      border: '#a7f3d0',
+      text: '#065f46',
     }
   }
 

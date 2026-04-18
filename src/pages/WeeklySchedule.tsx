@@ -88,14 +88,9 @@ interface ShiftAssignment {
   date: string
 }
 
-interface PopoverState {
-  shiftId: number
-  roleId: number
-  date: string
-  slotIndex: number
-  x: number
-  y: number
-}
+type PopoverState =
+  | { type: 'cell'; shiftId: number; date: string; x: number; y: number }
+  | { type: 'slot'; shiftId: number; roleId: number; date: string; slotIndex: number; x: number; y: number }
 
 function getSundayOfNextWeek(): Date {
   const today = new Date()
@@ -118,10 +113,6 @@ function getSundayOfCurrentWeek(): Date {
 
 function formatDate(d: Date): string {
   return d.toISOString().split('T')[0]
-}
-
-function formatShortDate(d: Date): string {
-  return `${d.getDate()}/${d.getMonth() + 1}`
 }
 
 function addDays(d: Date, n: number): Date {
@@ -154,8 +145,6 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
   const [isPublished, setIsPublished] = useState(false)
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
   const [showPublishDialog, setShowPublishDialog] = useState(false)
-  const [mobileDayIdx, setMobileDayIdx] = useState(0)
-  const [hoveredAssignment, setHoveredAssignment] = useState<number | null>(null)
   const [popoverSearch, setPopoverSearch] = useState('')
   const popoverRef = useRef<HTMLDivElement>(null)
 
@@ -352,14 +341,21 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     }
   }
 
-  function openPopover(shiftId: number, roleId: number, date: string, slotIndex: number, e: React.MouseEvent) {
+  function openSlotPopover(shiftId: number, roleId: number, date: string, slotIndex: number, e: React.MouseEvent) {
+    e.stopPropagation()
     const rect = (e.target as HTMLElement).getBoundingClientRect()
-    setPopover({ shiftId, roleId, date, slotIndex, x: rect.left, y: rect.bottom + 4 })
+    setPopover({ type: 'slot', shiftId, roleId, date, slotIndex, x: rect.left, y: rect.bottom + 4 })
+    setPopoverSearch('')
+  }
+
+  function openCellPopover(shiftId: number, date: string, e: React.MouseEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    setPopover({ type: 'cell', shiftId, date, x: rect.left, y: rect.bottom + 4 })
     setPopoverSearch('')
   }
 
   function getPopoverEmployees(): { emp: BranchEmployee; avail: Availability | null; alreadyAssigned: boolean }[] {
-    if (!popover) return []
+    if (!popover || popover.type !== 'slot') return []
     // Filter by role capability
     const eligible = roleAssignments
       .filter(ra => ra.role_id === popover.roleId)
@@ -797,20 +793,8 @@ ${shiftRows}
           <div style={{ textAlign: 'center', padding: '48px 0', color: '#94a3b8', fontSize: 14 }}>טוען...</div>
         ) : (
           <>
-            {/* ─── Mobile Day Tabs ─── */}
-            <div className="md:hidden" style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
-                {DAY_NAMES.map((name, i) => (
-                  <button key={i} onClick={() => setMobileDayIdx(i)}
-                    style={{ width: mobileDayIdx === i ? 24 : 8, height: 8, borderRadius: 4, border: 'none', cursor: 'pointer',
-                      background: mobileDayIdx === i ? '#6366f1' : '#cbd5e1', transition: 'width 0.2s' }} />
-                ))}
-              </div>
-              {renderDayColumn(mobileDayIdx)}
-            </div>
-
-            {/* ─── Desktop: Compact grid (shifts × days) ─── */}
-            <div className="hidden md:block" style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            {/* ─── Compact grid (shifts × days) — works on mobile with horizontal scroll ─── */}
+            <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
               <div style={{ overflowX: 'auto' }}>
                 {(() => {
                   // All distinct shifts shown in the week (union), sorted by start_time
@@ -872,53 +856,49 @@ ${shiftRows}
                               const hasShortage = summary.total > 0 && summary.filled < summary.total
                               const isFull = summary.total > 0 && summary.filled === summary.total
 
+                              const cellAssigns: { a: ShiftAssignment; emp: BranchEmployee | undefined }[] = []
+                              for (const sr of shiftRoles) {
+                                for (let i = 0; i < sr.count; i++) {
+                                  const a = getAssignment(shift.id, sr.roleId, date, i)
+                                  if (a) cellAssigns.push({ a, emp: employees.find(e => e.id === a.employee_id) })
+                                }
+                              }
+
+                              const cellBg = summary.total === 0 ? '#f8fafc' : isFull ? '#f0fdf4' : hasShortage ? '#fffbeb' : '#f8fafc'
+                              const cellBorder = summary.total === 0 ? '#e2e8f0' : isFull ? '#bbf7d0' : hasShortage ? '#fde68a' : '#e2e8f0'
+
                               return (
                                 <td key={date} style={{ padding: 6, borderBottom: '1px solid #f1f5f9', verticalAlign: 'top' }}>
-                                  <div style={{
-                                    background: isFull ? '#f0fdf4' : hasShortage ? '#fffbeb' : '#f8fafc',
-                                    border: `1px solid ${isFull ? '#bbf7d0' : hasShortage ? '#fde68a' : '#f1f5f9'}`,
-                                    borderRadius: 8, padding: 6, minHeight: 56, display: 'flex', flexDirection: 'column', gap: 3
-                                  }}>
-                                    {shiftRoles.map(sr => {
-                                      const slots = []
-                                      for (let i = 0; i < sr.count; i++) {
-                                        const assignment = getAssignment(shift.id, sr.roleId, date, i)
-                                        if (assignment) {
-                                          const emp = employees.find(e => e.id === assignment.employee_id)
-                                          slots.push(
-                                            <div key={`${sr.roleId}-${i}`}
-                                              onMouseEnter={() => setHoveredAssignment(assignment.id)}
-                                              onMouseLeave={() => setHoveredAssignment(null)}
-                                              style={{ background: '#dcfce7', color: '#166534', borderRadius: 6, padding: '3px 6px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {emp?.training_status === 'mentor' && '⭐ '}
-                                                {emp?.training_status === 'trainee' && '📚 '}
-                                                {emp?.name || '?'}
-                                              </span>
-                                              {hoveredAssignment === assignment.id && (
-                                                <button onClick={() => removeAssignment(assignment.id)}
-                                                  style={{ background: 'none', border: 'none', color: '#166534', cursor: 'pointer', fontSize: 13, padding: 0, lineHeight: 1, fontWeight: 800 }}>×</button>
-                                              )}
-                                            </div>
-                                          )
-                                        } else {
-                                          slots.push(
-                                            <button key={`${sr.roleId}-${i}`}
-                                              onClick={(e) => openPopover(shift.id, sr.roleId, date, i, e)}
-                                              style={{ background: '#fef3c7', color: '#92400e', border: '1px dashed #fde68a', borderRadius: 6, padding: '3px 6px', fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'right' }}>
-                                              + {sr.roleName}
-                                            </button>
-                                          )
-                                        }
-                                      }
-                                      return slots
-                                    })}
-                                    {summary.total > 0 && (
-                                      <div style={{ fontSize: 10, fontWeight: 700, color: isFull ? '#059669' : hasShortage ? '#b45309' : '#94a3b8', textAlign: 'left', marginTop: 'auto' }}>
-                                        {summary.filled}/{summary.total}
-                                      </div>
+                                  <button
+                                    onClick={(e) => openCellPopover(shift.id, date, e)}
+                                    style={{
+                                      width: '100%',
+                                      background: cellBg,
+                                      border: `1px solid ${cellBorder}`,
+                                      borderRadius: 8, padding: 6, minHeight: 48,
+                                      display: 'flex', flexDirection: 'column', gap: 3,
+                                      cursor: 'pointer', textAlign: 'right', fontFamily: 'inherit',
+                                      transition: 'all 0.15s',
+                                    }}>
+                                    {cellAssigns.map(({ a, emp }) => (
+                                      <span key={a.id} style={{ background: '#dcfce7', color: '#166534', borderRadius: 6, padding: '2px 6px', fontSize: 11, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {emp?.training_status === 'mentor' && '⭐ '}
+                                        {emp?.training_status === 'trainee' && '📚 '}
+                                        {emp?.name || '?'}
+                                      </span>
+                                    ))}
+                                    {summary.total === 0 ? (
+                                      <span style={{ fontSize: 11, color: '#cbd5e1', textAlign: 'center' }}>—</span>
+                                    ) : hasShortage ? (
+                                      <span style={{ fontSize: 11, fontWeight: 700, color: '#b45309', marginTop: 'auto' }}>
+                                        חסר {summary.filled}/{summary.total}
+                                      </span>
+                                    ) : (
+                                      <span style={{ fontSize: 10, fontWeight: 700, color: '#059669', textAlign: 'left', marginTop: 'auto' }}>
+                                        {summary.filled}/{summary.total} ✓
+                                      </span>
                                     )}
-                                  </div>
+                                  </button>
                                 </td>
                               )
                             })}
@@ -990,8 +970,69 @@ ${shiftRows}
         </div>
       )}
 
-      {/* ─── Employee Selection Popover ─── */}
-      {popover && (
+      {/* ─── Cell Popover (list slots + add/remove) ─── */}
+      {popover?.type === 'cell' && (() => {
+        const shift = shifts.find(s => s.id === popover.shiftId)
+        const shiftRoles = getRolesForShift(popover.shiftId, popover.date)
+        const dateLabel = popover.date.split('-').reverse().slice(0, 2).join('/')
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 50 }} onClick={() => setPopover(null)}>
+            <div ref={popoverRef} style={{
+              position: 'absolute',
+              top: Math.min(popover.y, window.innerHeight - 360),
+              left: Math.min(popover.x, window.innerWidth - 280),
+              background: 'white', borderRadius: 12, boxShadow: '0 4px 24px rgba(0,0,0,0.14)',
+              border: '1px solid #f1f5f9', width: 260, maxHeight: 420, overflow: 'auto',
+              padding: 10, direction: 'rtl',
+            }} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', marginBottom: 2 }}>
+                {shift?.name || 'משמרת'}
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 10 }}>
+                {shift?.start_time?.slice(0, 5)}–{shift?.end_time?.slice(0, 5)} · {dateLabel}
+              </div>
+              {shiftRoles.length === 0 && (
+                <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 10 }}>אין תפקידים נדרשים</div>
+              )}
+              {shiftRoles.map(sr => (
+                <div key={sr.roleId} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 4 }}>{sr.roleName}</div>
+                  {Array.from({ length: sr.count }).map((_, i) => {
+                    const a = getAssignment(popover.shiftId, sr.roleId, popover.date, i)
+                    if (a) {
+                      const emp = employees.find(e => e.id === a.employee_id)
+                      return (
+                        <div key={i} style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '6px 8px', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#166534' }}>
+                            {emp?.training_status === 'mentor' && '⭐ '}
+                            {emp?.training_status === 'trainee' && '📚 '}
+                            {emp?.name || '?'}
+                          </span>
+                          <button onClick={() => removeAssignment(a.id)}
+                            title="הסר"
+                            style={{ background: 'none', border: 'none', color: '#166534', cursor: 'pointer', fontSize: 15, fontWeight: 800, padding: 0, lineHeight: 1 }}>
+                            ×
+                          </button>
+                        </div>
+                      )
+                    }
+                    return (
+                      <button key={i}
+                        onClick={(e) => openSlotPopover(popover.shiftId, sr.roleId, popover.date, i, e)}
+                        style={{ width: '100%', background: '#fffbeb', color: '#92400e', border: '1px dashed #fde68a', borderRadius: 8, padding: '6px 8px', marginBottom: 4, fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'right' }}>
+                        + שבץ {sr.roleName}
+                      </button>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ─── Slot Employee Picker ─── */}
+      {popover?.type === 'slot' && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50 }} onClick={() => setPopover(null)}>
           <div ref={popoverRef} style={{
             position: 'absolute',
@@ -1008,7 +1049,8 @@ ${shiftRows}
               style={{ width: '100%', border: '1px solid #f1f5f9', borderRadius: 8, padding: '8px 10px', fontSize: 13, marginBottom: 6, outline: 'none', boxSizing: 'border-box' }}
             />
             {(() => {
-              const popoverShiftAssigns = assignments.filter(a => a.shift_id === popover.shiftId && a.date === popover.date)
+              const pop = popover
+              const popoverShiftAssigns = assignments.filter(a => a.shift_id === pop.shiftId && a.date === pop.date)
               const hasMentorInShift = popoverShiftAssigns.some(a => {
                 const e = employees.find(emp => emp.id === a.employee_id)
                 return e?.training_status === 'mentor'
@@ -1024,7 +1066,7 @@ ${shiftRows}
 
               return filtered.map(({ emp, avail, alreadyAssigned }) => (
                 <button key={emp.id}
-                  onClick={() => addAssignment(popover.shiftId, popover.roleId, popover.date, emp.id)}
+                  onClick={() => addAssignment(pop.shiftId, pop.roleId, pop.date, emp.id)}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', background: 'none', border: 'none', borderRadius: 8, cursor: 'pointer', textAlign: 'right', fontSize: 13 }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}>
@@ -1051,142 +1093,4 @@ ${shiftRows}
     </motion.div>
   )
 
-  // ─── Render helpers (inside component scope) ───
-
-  function renderDayColumn(dayIdx: number) {
-    const date = weekDates[dayIdx]
-    const isToday = date === formatDate(new Date())
-    const sd = specialDays.find(s => s.date === date)
-
-    if (sd?.shift_pattern === 'closed') {
-      return (
-        <div key={date}>
-          <div style={{ textAlign: 'center', padding: '8px 0', marginBottom: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: isToday ? '#6366f1' : '#64748b' }}>{DAY_NAMES[dayIdx]}</div>
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>{formatShortDate(addDays(weekStart, dayIdx))}</div>
-            {sd && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{'\u25CF'} {sd.name}</div>}
-          </div>
-          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', padding: 20, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>סגור</div>
-            <div style={{ fontSize: 11, color: '#cbd5e1', marginTop: 2 }}>{sd.name}</div>
-          </div>
-        </div>
-      )
-    }
-
-    const dayShifts = getEffectiveShiftsForDay(dayIdx, date)
-
-    return (
-      <div key={date}>
-        <div style={{ textAlign: 'center', padding: '8px 0', marginBottom: 8 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: isToday ? '#6366f1' : '#64748b' }}>{DAY_NAMES[dayIdx]}</div>
-          <div style={{ fontSize: 12, color: '#94a3b8' }}>{formatShortDate(addDays(weekStart, dayIdx))}</div>
-          {sd && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{'\u25CF'} {sd.name}</div>}
-        </div>
-        {sd?.shift_pattern === 'friday' && (
-          <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', marginBottom: 4 }}>ערב חג — משמרת אחת</div>
-        )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {dayShifts.length === 0 && (
-            <div style={{ textAlign: 'center', fontSize: 12, color: '#cbd5e1', padding: '16px 0' }}>אין משמרות</div>
-          )}
-          {dayShifts.map(shift => renderShiftCard(shift, date))}
-        </div>
-      </div>
-    )
-  }
-
-  function renderShiftCard(shift: BranchShift, date: string) {
-    const shiftRoles = getRolesForShift(shift.id, date)
-    const cardSummary = getShiftCardSummary(shift.id, date)
-    const hasShortage = cardSummary.total > 0 && cardSummary.filled < cardSummary.total
-
-    // Trainee without mentor check
-    const shiftAssigns = assignments.filter(a => a.shift_id === shift.id && a.date === date)
-    const hasTrainee = shiftAssigns.some(a => {
-      const emp = employees.find(e => e.id === a.employee_id)
-      return emp?.training_status === 'trainee'
-    })
-    const hasMentor = shiftAssigns.some(a => {
-      const emp = employees.find(e => e.id === a.employee_id)
-      return emp?.training_status === 'mentor'
-    })
-    const hasTraineeNoMentor = hasTrainee && !hasMentor
-
-    const traineeCount = shiftAssigns.filter(a => {
-      const emp = employees.find(e => e.id === a.employee_id)
-      return emp?.training_status === 'trainee'
-    }).length
-
-    return (
-      <div key={shift.id} style={{
-        background: 'white',
-        borderRadius: 12,
-        border: hasShortage ? '1px solid #fecaca' : '1px solid #f1f5f9',
-        padding: 14,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-        transition: 'box-shadow 0.2s',
-      }}>
-        {/* Header */}
-        <div style={{ marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{shift.name}</span>
-          <span style={{ fontSize: 11, color: '#94a3b8', marginRight: 6 }}>{shift.start_time?.slice(0, 5)}–{shift.end_time?.slice(0, 5)}</span>
-        </div>
-
-        {/* Role slots */}
-        {shiftRoles.map(sr => {
-          const slots = []
-          for (let i = 0; i < sr.count; i++) {
-            const assignment = getAssignment(shift.id, sr.roleId, date, i)
-            slots.push(
-              <div key={`${sr.roleId}-${i}`} style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 2 }}>{sr.roleName}</div>
-                {assignment ? (
-                  <div
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}
-                    onMouseEnter={() => setHoveredAssignment(assignment.id)}
-                    onMouseLeave={() => setHoveredAssignment(null)}>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>
-                      {(() => {
-                        const emp = employees.find(e => e.id === assignment.employee_id)
-                        return (
-                          <>
-                            {emp?.name || '?'}
-                            {emp?.training_status === 'mentor' && <span style={{ fontSize: 10, marginRight: 4 }}>⭐</span>}
-                            {emp?.training_status === 'trainee' && <span style={{ fontSize: 10, marginRight: 4 }}>📚</span>}
-                          </>
-                        )
-                      })()}
-                    </span>
-                    {hoveredAssignment === assignment.id && (
-                      <button onClick={() => removeAssignment(assignment.id)} style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
-                    )}
-                  </div>
-                ) : (
-                  <button onClick={(e) => openPopover(shift.id, sr.roleId, date, i, e)}
-                    style={{ fontSize: 12, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>
-                    + הוסף
-                  </button>
-                )}
-              </div>
-            )
-          }
-          return slots
-        })}
-
-        {/* Trainee warning */}
-        {hasTraineeNoMentor && (
-          <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>יש לוודא חונך</div>
-        )}
-
-        {/* Summary bottom line */}
-        {cardSummary.total > 0 && (
-          <div style={{ borderTop: '1px solid #f8fafc', paddingTop: 6, marginTop: 6, fontSize: 11, color: cardSummary.filled >= cardSummary.total ? '#10b981' : '#ef4444' }}>
-            {cardSummary.filled}/{cardSummary.total} {cardSummary.filled >= cardSummary.total ? '✓' : ''}
-            {traineeCount > 0 ? ` + ${traineeCount} מתלמדים` : ''}
-          </div>
-        )}
-      </div>
-    )
-  }
 }
