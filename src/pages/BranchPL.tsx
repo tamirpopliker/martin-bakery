@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, fetchBranchTrends, getOverheadPct, MonthTrend } from '../lib/supabase'
+import { supabase, fetchBranchTrends, getOverheadPct } from '../lib/supabase'
+import type { MonthTrend } from '../lib/supabase'
 import { calculateBranchPL, type PLResult } from '../lib/calculatePL'
 import { usePeriod } from '../lib/PeriodContext'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'

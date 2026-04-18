@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, fetchBranchRevenueTrend, BranchRevenueTrend } from '../lib/supabase'
+import { supabase, fetchBranchRevenueTrend } from '../lib/supabase'
+import type { BranchRevenueTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import PageHeader from '../components/PageHeader'
 import { Plus, Pencil, Trash2, Search, X, ShoppingBag, CreditCard, Monitor, Upload, FileText, Check, AlertCircle, HelpCircle } from 'lucide-react'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { parseCashOnTabPDF, CashOnTabRow } from '../lib/parseCashOnTab'
+import { parseCashOnTabPDF } from '../lib/parseCashOnTab'
+import type { CashOnTabRow } from '../lib/parseCashOnTab'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface Props {

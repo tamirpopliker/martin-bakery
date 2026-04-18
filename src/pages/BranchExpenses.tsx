@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, fetchBranchExpensesTrend, BranchExpensesTrend } from '../lib/supabase'
+import { supabase, fetchBranchExpensesTrend } from '../lib/supabase'
+import type { BranchExpensesTrend } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import PageHeader from '../components/PageHeader'

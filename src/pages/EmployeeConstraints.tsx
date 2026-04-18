@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence, PanInfo } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+
+// Minimal shape of framer-motion's pan/drag info (no longer publicly exported in v12)
+type PanInfo = { offset: { x: number; y: number } }
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
