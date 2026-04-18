@@ -5,6 +5,7 @@ import { useAppUser } from '../lib/UserContext'
 import PageHeader from '../components/PageHeader'
 import { Printer, Cake, Clock, CheckCircle2, CalendarRange, ArrowRight, X, Save } from 'lucide-react'
 import type { SpecialOrder } from './BranchSpecialOrders'
+import { displayOrderNumber } from './BranchSpecialOrders'
 
 interface Props {
   onBack: () => void
@@ -104,7 +105,7 @@ export default function FactorySpecialOrders({ onBack }: Props) {
         const notifications = branchUsers.map((u: any) => ({
           user_id: u.id,
           order_id: order.id,
-          message: `הזמנה ${order.order_number} מוכנה לאיסוף — ${order.customer_name}`,
+          message: `הזמנה ${displayOrderNumber(order)} מוכנה לאיסוף — ${order.customer_name}`,
         }))
         await supabase.from('order_notifications').insert(notifications)
       }
@@ -236,7 +237,7 @@ export default function FactorySpecialOrders({ onBack }: Props) {
                       onMouseEnter={e => (e.currentTarget.style.background = '#fafbff')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'white')}
                     >
-                      <Td><span style={{ color: '#2563eb', fontWeight: 700 }}>{o.order_number}</span></Td>
+                      <Td><span style={{ color: '#2563eb', fontWeight: 700 }}>{displayOrderNumber(o)}</span></Td>
                       <Td>
                         <span style={{ background: cs.bg, color: cs.text, borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 700, display: 'inline-block' }}>
                           {branchName}
@@ -244,7 +245,6 @@ export default function FactorySpecialOrders({ onBack }: Props) {
                       </Td>
                       <Td>
                         <div style={{ fontWeight: 700, color: '#0f172a' }}>{o.customer_name}</div>
-                        <div style={{ fontSize: 11, color: '#94a3b8' }}>{o.customer_phone}</div>
                       </Td>
                       <Td>
                         <div style={{ fontWeight: 600 }}>{new Date(o.pickup_date).toLocaleDateString('he-IL')}</div>
@@ -384,7 +384,7 @@ function OrderDetailModal({ order, branchName, onClose, onUpdateStatus, onSaveNo
       >
         <div style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1, padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{order.order_number}</h3>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{displayOrderNumber(order)}</h3>
             <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ background: cs.bg, color: cs.text, borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 700 }}>
                 {branchName}
@@ -402,13 +402,11 @@ function OrderDetailModal({ order, branchName, onClose, onUpdateStatus, onSaveNo
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Section title="פרטי לקוח">
             <Field label="שם" value={order.customer_name} />
-            <Field label="טלפון" value={order.customer_phone} />
           </Section>
 
           <Section title="איסוף">
             <Field label="תאריך" value={new Date(order.pickup_date).toLocaleDateString('he-IL')} />
             {order.pickup_time && <Field label="שעה" value={order.pickup_time} />}
-            <Field label="מקדמה" value={`₪${Number(order.advance_payment || 0).toLocaleString()}`} />
           </Section>
 
           <Section title="פרטי עוגה">
@@ -420,8 +418,6 @@ function OrderDetailModal({ order, branchName, onClose, onUpdateStatus, onSaveNo
             <Field label="ציפוי" value={order.coating} />
             <Field label="כתר עליון" value={order.crown} />
             {order.extras && order.extras.length > 0 && <Field label="תוספות" value={order.extras.join(' · ')} />}
-            {order.image_requested && <Field label="תמונה מודפסת" value="כן" />}
-            {order.dedication && <Field label="הקדשה" value={order.dedication} />}
           </Section>
 
           {order.notes && (
@@ -584,7 +580,7 @@ function PrintDialog({ orders, branches, onClose }: {
                 <thead>
                   <tr>
                     <th style={printThStyle}>מס׳</th>
-                    <th style={printThStyle}>לקוח + טלפון</th>
+                    <th style={printThStyle}>לקוח</th>
                     <th style={printThStyle}>שעה</th>
                     <th style={printThStyle}>פרטי עוגה</th>
                     <th style={printThStyle}>הערות</th>
@@ -593,10 +589,9 @@ function PrintDialog({ orders, branches, onClose }: {
                 <tbody>
                   {list.map(o => (
                     <tr key={o.id}>
-                      <td style={printTdStyle}>{o.order_number}</td>
+                      <td style={printTdStyle}>{displayOrderNumber(o)}</td>
                       <td style={printTdStyle}>
                         <div style={{ fontWeight: 'bold' }}>{o.customer_name}</div>
-                        <div>{o.customer_phone}</div>
                       </td>
                       <td style={printTdStyle}>{o.pickup_time || '—'}</td>
                       <td style={printTdStyle}>
@@ -608,8 +603,6 @@ function PrintDialog({ orders, branches, onClose }: {
                         <div><strong>ציפוי:</strong> {o.coating}</div>
                         <div><strong>כתר:</strong> {o.crown}</div>
                         {o.extras && o.extras.length > 0 && <div><strong>תוספות:</strong> {o.extras.join(', ')}</div>}
-                        {o.image_requested && <div><strong>תמונה:</strong> כן</div>}
-                        {o.dedication && <div><strong>הקדשה:</strong> {o.dedication}</div>}
                       </td>
                       <td style={printTdStyle}>
                         {o.notes && <div>{o.notes}</div>}

@@ -14,10 +14,11 @@ interface Props {
 
 export interface SpecialOrder {
   id: number
-  order_number: string
+  order_number: string                  // system-generated unique key
+  order_number_manual: string | null    // manually-entered display number
   branch_id: number
   customer_name: string
-  customer_phone: string
+  customer_phone: string | null
   order_date: string
   pickup_date: string
   pickup_time: string | null
@@ -29,14 +30,15 @@ export interface SpecialOrder {
   coating: string
   crown: string
   extras: string[] | null
-  dedication: string | null
-  image_requested: boolean
-  advance_payment: number
   notes: string | null
   factory_notes: string | null
   status: 'new' | 'confirmed' | 'in_production' | 'ready' | 'delivered' | 'cancelled'
   created_by: string | null
   created_at: string
+}
+
+export function displayOrderNumber(o: Pick<SpecialOrder, 'order_number' | 'order_number_manual'>): string {
+  return o.order_number_manual?.trim() || o.order_number
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -48,20 +50,13 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string; 
   cancelled:     { label: 'בוטלה',      color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
 }
 
-const BASE_SIZES = [
-  'עגולה',
-  'מרובעת',
-  'לב',
-  'מיוחדת',
-  '30×40 רבע פלטה (50-60 איש)',
-  '30×30 ריבוע (30-40 איש)',
-]
+const BASE_SIZES = ['עגולה גדולה', 'ריבוע', 'רבע פלטה', 'לב']
 const TORTE_FLAVORS = ['וניל', 'שוקולד']
 const CREAMS_BETWEEN = ['שאנטי שוקולד', 'וניל']
 const FILLINGS = ['ריבת חלב', 'תות', 'אוכמניות', 'שוקולד']
-const COATINGS = ['מזרה סוכריות', 'קוקוס קלוי', 'אגוזי מלח טחונים', 'קרם חלק', 'שתי וערב (+₪30)']
+const COATINGS = ['מזרה סוכריות', 'קוקוס קלוי', 'אגוזי מלח טחונים', 'קרם חלק', 'שתי וערב']
 const CROWNS = ['ללא', 'לבן', 'חום', 'ורוד', 'תכלת', 'תכלת-לבן', 'ורוד-לבן', 'חום-לבן']
-const EXTRAS = ['דובדבנים', 'דובדבנים אקסטרה (+₪10)', 'כדורי שוקולד (+₪10)', 'אגוזי מלך (בתוך העוגה)']
+const EXTRAS = ['דובדבנים', 'דובדבנים אקסטרה', 'כדורי שוקולד', 'אגוזי מלך (בתוך העוגה)']
 
 function todayISO() { return new Date().toISOString().slice(0, 10) }
 
@@ -123,7 +118,7 @@ export default function BranchSpecialOrders({ branchId, branchName, branchColor,
       : orders.filter(o => o.status === statusFilter)
 
   async function cancelOrder(o: SpecialOrder) {
-    if (!confirm(`לבטל את הזמנה ${o.order_number}?`)) return
+    if (!confirm(`לבטל את הזמנה ${displayOrderNumber(o)}?`)) return
     await supabase.from('special_orders').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', o.id)
     setViewOrder(null)
     fetchOrders()
@@ -279,7 +274,7 @@ function OrderRow({ order, onClick }: { order: SpecialOrder; onClick: () => void
       onMouseLeave={e => (e.currentTarget.style.borderColor = '#f1f5f9')}
     >
       <div style={{ flexShrink: 0, minWidth: 120 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#2563eb' }}>{order.order_number}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#2563eb' }}>{displayOrderNumber(order)}</div>
         <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{new Date(order.order_date).toLocaleDateString('he-IL')}</div>
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -305,7 +300,7 @@ function OrderRow({ order, onClick }: { order: SpecialOrder; onClick: () => void
 function OrderView({ order, onClose, onCancel }: { order: SpecialOrder; onClose: () => void; onCancel: () => void }) {
   const st = STATUS_LABELS[order.status]
   return (
-    <Modal onClose={onClose} title={`הזמנה ${order.order_number}`}>
+    <Modal onClose={onClose} title={`הזמנה ${displayOrderNumber(order)}`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}`, borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 700 }}>
@@ -318,13 +313,11 @@ function OrderView({ order, onClose, onCancel }: { order: SpecialOrder; onClose:
 
         <Section title="פרטי לקוח">
           <Field label="שם" value={order.customer_name} />
-          <Field label="טלפון" value={order.customer_phone} />
         </Section>
 
         <Section title="איסוף">
           <Field label="תאריך" value={new Date(order.pickup_date).toLocaleDateString('he-IL')} />
           {order.pickup_time && <Field label="שעה" value={order.pickup_time} />}
-          <Field label="מקדמה ששולמה" value={`₪${Number(order.advance_payment || 0).toLocaleString()}`} />
         </Section>
 
         <Section title="פרטי עוגה">
@@ -338,8 +331,6 @@ function OrderView({ order, onClose, onCancel }: { order: SpecialOrder; onClose:
           {order.extras && order.extras.length > 0 && (
             <Field label="תוספות" value={order.extras.join(' · ')} />
           )}
-          {order.image_requested && <Field label="תמונה מודפסת" value="כן" />}
-          {order.dedication && <Field label="הקדשה" value={order.dedication} />}
         </Section>
 
         {(order.notes || order.factory_notes) && (
@@ -432,10 +423,9 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
   onClose: () => void; onSaved: () => void
 }) {
   const [customerName, setCustomerName] = useState('')
-  const [customerPhone, setCustomerPhone] = useState('')
+  const [orderNumberManual, setOrderNumberManual] = useState('')
   const [pickupDate, setPickupDate] = useState('')
   const [pickupTime, setPickupTime] = useState('')
-  const [advancePayment, setAdvancePayment] = useState('0')
   const [type, setType] = useState<'חלבי' | 'פרווה'>('חלבי')
   const [baseSize, setBaseSize] = useState('')
   const [torteFlavor, setTorteFlavor] = useState('')
@@ -444,8 +434,6 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
   const [coating, setCoating] = useState('')
   const [crown, setCrown] = useState('')
   const [extras, setExtras] = useState<string[]>([])
-  const [imageRequested, setImageRequested] = useState(false)
-  const [dedication, setDedication] = useState('')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -457,7 +445,7 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
   async function save() {
     setError(null)
     if (!customerName.trim()) return setError('שם לקוח חובה')
-    if (!customerPhone.trim()) return setError('טלפון חובה')
+    if (!orderNumberManual.trim()) return setError('מספר הזמנה חובה')
     if (!pickupDate) return setError('תאריך איסוף חובה')
     if (!baseSize) return setError('גודל וצורת בסיס חובה')
     if (!torteFlavor) return setError('טעם טורט חובה')
@@ -468,12 +456,13 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
 
     setSaving(true)
 
-    const orderNumber = generateOrderNumber(branchId)
+    const systemOrderNumber = generateOrderNumber(branchId)
+    const manualNumber = orderNumberManual.trim()
     const { data: inserted, error: insErr } = await supabase.from('special_orders').insert({
-      order_number: orderNumber,
+      order_number: systemOrderNumber,
+      order_number_manual: manualNumber,
       branch_id: branchId,
       customer_name: customerName.trim(),
-      customer_phone: customerPhone.trim(),
       order_date: todayISO(),
       pickup_date: pickupDate,
       pickup_time: pickupTime || null,
@@ -485,9 +474,6 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
       coating,
       crown,
       extras: extras.length > 0 ? extras : null,
-      dedication: dedication.trim() || null,
-      image_requested: imageRequested,
-      advance_payment: Number(advancePayment) || 0,
       notes: notes.trim() || null,
       status: 'new',
       created_by: userId,
@@ -505,7 +491,7 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
       const notifications = factoryUsers.map((u: any) => ({
         user_id: u.id,
         order_id: inserted.id,
-        message: `הזמנה חדשה ${orderNumber} — ${customerName} · איסוף ${new Date(pickupDate).toLocaleDateString('he-IL')}`,
+        message: `הזמנה חדשה ${manualNumber} — ${customerName} · איסוף ${new Date(pickupDate).toLocaleDateString('he-IL')}`,
       }))
       await supabase.from('order_notifications').insert(notifications)
     }
@@ -526,10 +512,9 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
         {/* Customer + Pickup */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <TextInput label="שם לקוח *" value={customerName} onChange={setCustomerName} />
-          <TextInput label="טלפון *" value={customerPhone} onChange={setCustomerPhone} type="tel" />
+          <TextInput label="מספר הזמנה *" value={orderNumberManual} onChange={setOrderNumberManual} />
           <TextInput label="תאריך איסוף *" value={pickupDate} onChange={setPickupDate} type="date" min={todayISO()} />
           <TextInput label="שעת איסוף" value={pickupTime} onChange={setPickupTime} type="time" />
-          <TextInput label="מקדמה ששולמה (₪)" value={advancePayment} onChange={setAdvancePayment} type="number" />
         </div>
 
         {/* Type */}
@@ -563,16 +548,6 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Image + Dedication */}
-        <div style={{ background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: 10, padding: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }}>תמונה / הקדשה (אופציונלי)</div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 8, cursor: 'pointer' }}>
-            <input type="checkbox" checked={imageRequested} onChange={e => setImageRequested(e.target.checked)} />
-            תמונה מודפסת
-          </label>
-          <TextInput label="הקדשה בזילוף" value={dedication} onChange={setDedication} />
         </div>
 
         {/* Notes */}
