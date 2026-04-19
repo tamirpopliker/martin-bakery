@@ -267,6 +267,7 @@ export default function BranchSpecialOrders({ branchId, branchName, branchColor,
       {showForm && (
         <OrderForm
           branchId={branchId}
+          branchName={branchName}
           branchColor={branchColor}
           userId={appUser?.id || null}
           onClose={() => setShowForm(false)}
@@ -690,8 +691,8 @@ function Modal({ onClose, title, children, width = 600 }: { onClose: () => void;
 }
 
 // ─── Order Form ───────────────────────────────────────────────────────────
-function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
-  branchId: number; branchColor: string; userId: string | null
+function OrderForm({ branchId, branchName, branchColor, userId, onClose, onSaved }: {
+  branchId: number; branchName: string; branchColor: string; userId: string | null
   onClose: () => void; onSaved: () => void
 }) {
   const [customerName, setCustomerName] = useState('')
@@ -788,13 +789,17 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
       return
     }
 
-    // Notify all factory users
-    const { data: factoryUsers } = await supabase.from('app_users').select('id').eq('role', 'factory')
-    if (factoryUsers && factoryUsers.length > 0) {
-      const notifications = factoryUsers.map((u: any) => ({
+    // Notify every factory + admin user about the new cake order
+    const { data: recipients } = await supabase.from('app_users')
+      .select('id')
+      .in('role', ['factory', 'admin'])
+    if (recipients && recipients.length > 0) {
+      const pickupLabel = new Date(pickupDate).toLocaleDateString('he-IL')
+      const message = `הזמנת עוגה חדשה מסניף ${branchName} — ${customerName}, איסוף ${pickupLabel}`
+      const notifications = recipients.map((u: any) => ({
         user_id: u.id,
         order_id: inserted.id,
-        message: `הזמנה חדשה ${manualNumber} — ${customerName} · איסוף ${new Date(pickupDate).toLocaleDateString('he-IL')}`,
+        message,
       }))
       await supabase.from('order_notifications').insert(notifications)
     }

@@ -111,21 +111,31 @@ export default function Home() {
   // Modified internal sales badge (internal_sales only)
   const [modifiedCount, setModifiedCount] = useState(0)
 
-  // New special-order count (factory badge + banner) — cleared when status moves off 'new'
+  // Unread special-order notifications for this user (factory/admin badge + banner).
+  // Counts rows in order_notifications; cleared when the user opens FactorySpecialOrders.
   const [newSpecialOrdersCount, setNewSpecialOrdersCount] = useState(0)
   useEffect(() => {
-    async function loadNewCount() {
-      const { count } = await supabase.from('special_orders')
+    if (!appUser?.id) return
+    let cancelled = false
+    async function loadUnreadCount() {
+      const { count } = await supabase.from('order_notifications')
         .select('id', { count: 'exact', head: true })
-        .eq('status', 'new')
-      setNewSpecialOrdersCount(count || 0)
+        .eq('user_id', appUser!.id)
+        .eq('read', false)
+      if (!cancelled) setNewSpecialOrdersCount(count || 0)
     }
-    loadNewCount()
-    const ch = supabase.channel('home-new-special-orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'special_orders' }, () => loadNewCount())
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [])
+    loadUnreadCount()
+    // Poll every 60 seconds so the badge stays fresh without a realtime subscription.
+    const interval = setInterval(loadUnreadCount, 60_000)
+    // Also refresh when the tab returns to the foreground — avoids stale counts after long idle.
+    function onVisible() { if (document.visibilityState === 'visible') loadUnreadCount() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [appUser?.id])
 
   useEffect(() => {
     async function loadModified() {
