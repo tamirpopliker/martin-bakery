@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import PageHeader from '../components/PageHeader'
-import { Plus, X, Cake, Clock, CheckCircle2, CalendarCheck, Ban } from 'lucide-react'
+import { Plus, X, Cake, Clock, CheckCircle2, CalendarCheck, Ban, Printer, Search, CheckCheck } from 'lucide-react'
 
 interface Props {
   branchId: number
@@ -32,7 +32,7 @@ export interface SpecialOrder {
   extras: string[] | null
   notes: string | null
   factory_notes: string | null
-  status: 'new' | 'in_progress' | 'sent_to_branch' | 'cancelled'
+  status: 'new' | 'in_progress' | 'sent_to_branch' | 'delivered_to_customer' | 'cancelled'
   created_by: string | null
   created_at: string
 }
@@ -42,11 +42,14 @@ export function displayOrderNumber(o: Pick<SpecialOrder, 'order_number' | 'order
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  new:            { label: 'הזמנה חדשה', color: '#9a3412', bg: '#ffedd5', border: '#fdba74' },
-  in_progress:    { label: 'בטיפול',     color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
-  sent_to_branch: { label: 'נשלח לסניף', color: '#166534', bg: '#dcfce7', border: '#86efac' },
-  cancelled:      { label: 'בוטלה',      color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
+  new:                   { label: 'הזמנה חדשה', color: '#9a3412', bg: '#ffedd5', border: '#fdba74' },
+  in_progress:           { label: 'בטיפול',     color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
+  sent_to_branch:        { label: 'נשלח לסניף', color: '#166534', bg: '#dcfce7', border: '#86efac' },
+  delivered_to_customer: { label: 'יצאה ללקוח', color: '#5b21b6', bg: '#ede9fe', border: '#c4b5fd' },
+  cancelled:             { label: 'בוטלה',      color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
 }
+
+const HISTORY_STATUSES = ['sent_to_branch', 'delivered_to_customer', 'cancelled']
 
 const BASE_SIZES = ['עגולה גדולה', 'ריבוע', 'רבע פלטה', 'לב']
 const TORTE_FLAVORS = ['וניל', 'שוקולד']
@@ -68,9 +71,12 @@ export default function BranchSpecialOrders({ branchId, branchName, branchColor,
   const { appUser } = useAppUser()
   const [orders, setOrders] = useState<SpecialOrder[]>([])
   const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<'active' | 'history'>('active')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [viewOrder, setViewOrder] = useState<SpecialOrder | null>(null)
+  const [printOrder, setPrintOrder] = useState<SpecialOrder | null>(null)
 
   async function markMyNotificationsRead() {
     if (!appUser?.id) return
@@ -104,20 +110,30 @@ export default function BranchSpecialOrders({ branchId, branchName, branchColor,
   }, [branchId])
 
   const today = todayISO()
-  const active = orders.filter(o => !['sent_to_branch', 'cancelled'].includes(o.status))
+  const active = orders.filter(o => !HISTORY_STATUSES.includes(o.status))
+  const history = orders.filter(o => HISTORY_STATUSES.includes(o.status))
   const pending = orders.filter(o => o.status === 'new')
   const ready = orders.filter(o => o.status === 'sent_to_branch' && o.pickup_date >= today)
-  const pickupToday = orders.filter(o => o.pickup_date === today && o.status !== 'cancelled')
+  const pickupToday = orders.filter(o => o.pickup_date === today && !['cancelled', 'delivered_to_customer'].includes(o.status))
 
-  const filtered = statusFilter === 'all'
-    ? orders
-    : statusFilter === 'active'
-      ? active
-      : orders.filter(o => o.status === statusFilter)
+  const tabOrders = tab === 'active' ? active : history
+  const afterStatusFilter = statusFilter === 'all' ? tabOrders : tabOrders.filter(o => o.status === statusFilter)
+  const searchLower = search.trim().toLowerCase()
+  const filtered = searchLower
+    ? afterStatusFilter.filter(o =>
+        o.customer_name.toLowerCase().includes(searchLower) ||
+        displayOrderNumber(o).toLowerCase().includes(searchLower))
+    : afterStatusFilter
 
   async function cancelOrder(o: SpecialOrder) {
     if (!confirm(`לבטל את הזמנה ${displayOrderNumber(o)}?`)) return
     await supabase.from('special_orders').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', o.id)
+    setViewOrder(null)
+    fetchOrders()
+  }
+
+  async function markDeliveredToCustomer(o: SpecialOrder) {
+    await supabase.from('special_orders').update({ status: 'delivered_to_customer', updated_at: new Date().toISOString() }).eq('id', o.id)
     setViewOrder(null)
     fetchOrders()
   }
@@ -152,29 +168,78 @@ export default function BranchSpecialOrders({ branchId, branchName, branchColor,
           <SummaryCard label="איסוף היום" value={pickupToday.length} icon={<CalendarCheck size={18} />} color="#ec4899" />
         </div>
 
+        {/* ─── Tabs ─────────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', gap: 2, background: '#f1f5f9', padding: 4, borderRadius: 10, marginBottom: 14, maxWidth: 320 }}>
+          <TabButton label="פעילות" count={active.length} active={tab === 'active'} onClick={() => { setTab('active'); setStatusFilter('all') }} />
+          <TabButton label="היסטוריה" count={history.length} active={tab === 'history'} onClick={() => { setTab('history'); setStatusFilter('all') }} />
+        </div>
+
+        {/* ─── Search ───────────────────────────────────────────────── */}
+        <div style={{ position: 'relative', marginBottom: 14 }}>
+          <Search size={16} color="#94a3b8" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }} />
+          <input
+            type="text"
+            placeholder="חיפוש לפי שם לקוח או מספר הזמנה..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              width: '100%', border: '1px solid #e2e8f0', borderRadius: 10,
+              padding: '10px 36px 10px 12px', fontSize: 14, fontFamily: 'inherit',
+              direction: 'rtl', boxSizing: 'border-box', background: 'white',
+            }}
+          />
+        </div>
+
         {/* ─── Filters ──────────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-          <FilterChip label="הכל" active={statusFilter === 'all'} count={orders.length} onClick={() => setStatusFilter('all')} />
-          <FilterChip label="פעילות" active={statusFilter === 'active'} count={active.length} onClick={() => setStatusFilter('active')} />
-          {Object.entries(STATUS_LABELS).map(([key, cfg]) => (
-            <FilterChip
-              key={key}
-              label={cfg.label}
-              active={statusFilter === key}
-              count={orders.filter(o => o.status === key).length}
-              onClick={() => setStatusFilter(key)}
-              color={cfg.color}
-            />
-          ))}
+          <FilterChip label="הכל" active={statusFilter === 'all'} count={tabOrders.length} onClick={() => setStatusFilter('all')} />
+          {Object.entries(STATUS_LABELS)
+            .filter(([k]) => tab === 'active' ? !HISTORY_STATUSES.includes(k) : HISTORY_STATUSES.includes(k))
+            .map(([key, cfg]) => (
+              <FilterChip
+                key={key}
+                label={cfg.label}
+                active={statusFilter === key}
+                count={tabOrders.filter(o => o.status === key).length}
+                onClick={() => setStatusFilter(key)}
+                color={cfg.color}
+              />
+            ))}
         </div>
 
         {/* ─── Orders List ──────────────────────────────────────────── */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>טוען...</div>
         ) : filtered.length === 0 ? (
-          <div style={{ background: 'white', borderRadius: 12, padding: 48, textAlign: 'center', color: '#94a3b8', border: '1px solid #f1f5f9' }}>
-            אין הזמנות להצגה
-          </div>
+          search ? (
+            <div style={{ background: 'white', borderRadius: 12, padding: 48, textAlign: 'center', color: '#94a3b8', border: '1px solid #f1f5f9' }}>
+              לא נמצאו הזמנות תואמות לחיפוש
+            </div>
+          ) : tab === 'active' ? (
+            <div style={{ background: 'white', borderRadius: 16, padding: '56px 20px', textAlign: 'center', border: '1px dashed #e2e8f0' }}>
+              <div style={{ width: 72, height: 72, borderRadius: '50%', background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                <Cake size={32} color="#6366f1" />
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>אין הזמנות פעילות</div>
+              <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 20 }}>התחל בהזמנת עוגה חדשה ללקוח</div>
+              <button
+                onClick={() => setShowForm(true)}
+                style={{
+                  background: branchColor, color: 'white', border: 'none', borderRadius: 12,
+                  padding: '12px 28px', fontSize: 15, fontWeight: 800, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  boxShadow: `0 4px 14px ${branchColor}55`,
+                }}
+              >
+                <Plus size={18} />
+                הזמנה חדשה
+              </button>
+            </div>
+          ) : (
+            <div style={{ background: 'white', borderRadius: 12, padding: 48, textAlign: 'center', color: '#94a3b8', border: '1px solid #f1f5f9' }}>
+              אין הזמנות בהיסטוריה
+            </div>
+          )
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {filtered.map(o => (
@@ -199,11 +264,46 @@ export default function BranchSpecialOrders({ branchId, branchName, branchColor,
       {viewOrder && (
         <OrderView
           order={viewOrder}
+          branchName={branchName}
           onClose={() => setViewOrder(null)}
           onCancel={() => cancelOrder(viewOrder)}
+          onDeliverToCustomer={() => markDeliveredToCustomer(viewOrder)}
+          onPrint={() => setPrintOrder(viewOrder)}
+        />
+      )}
+
+      {/* ─── Customer Print Confirmation ─────────────────────────── */}
+      {printOrder && (
+        <PrintConfirmation
+          order={printOrder}
+          branchName={branchName}
+          onClose={() => setPrintOrder(null)}
         />
       )}
     </div>
+  )
+}
+
+// ─── Tab Button ──────────────────────────────────────────────────────────
+function TabButton({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1, background: active ? 'white' : 'transparent',
+        color: active ? '#0f172a' : '#64748b',
+        border: 'none', borderRadius: 8, padding: '8px 14px',
+        fontSize: 13, fontWeight: 700, cursor: 'pointer',
+        boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        transition: 'all 0.15s',
+      }}
+    >
+      {label}
+      <span style={{ background: active ? '#f1f5f9' : 'rgba(100,116,139,0.12)', color: active ? '#475569' : '#64748b', borderRadius: 999, padding: '1px 8px', fontSize: 11, fontWeight: 700 }}>
+        {count}
+      </span>
+    </button>
   )
 }
 
@@ -295,7 +395,15 @@ function OrderRow({ order, onClick }: { order: SpecialOrder; onClick: () => void
 }
 
 // ─── Order View Modal ─────────────────────────────────────────────────────
-function OrderView({ order, onClose, onCancel }: { order: SpecialOrder; onClose: () => void; onCancel: () => void }) {
+function OrderView({ order, branchName, onClose, onCancel, onDeliverToCustomer, onPrint }: {
+  order: SpecialOrder
+  branchName: string
+  onClose: () => void
+  onCancel: () => void
+  onDeliverToCustomer: () => void
+  onPrint: () => void
+}) {
+  void branchName
   const st = STATUS_LABELS[order.status]
   return (
     <Modal onClose={onClose} title={`הזמנה ${displayOrderNumber(order)}`}>
@@ -331,30 +439,170 @@ function OrderView({ order, onClose, onCancel }: { order: SpecialOrder; onClose:
           )}
         </Section>
 
-        {(order.notes || order.factory_notes) && (
-          <Section title="הערות">
-            {order.notes && <Field label="הערות סניף" value={order.notes} />}
-            {order.factory_notes && <Field label="הערות מפעל" value={order.factory_notes} />}
+        {order.notes && (
+          <Section title="הערות סניף">
+            <div style={{ fontSize: 13, color: '#0f172a', whiteSpace: 'pre-wrap' }}>{order.notes}</div>
           </Section>
         )}
 
-        {!['sent_to_branch', 'cancelled'].includes(order.status) && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 8 }}>
-            <button
-              onClick={onCancel}
-              style={{
-                background: 'white', color: '#991b1b', border: '1px solid #fca5a5',
-                borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-              }}
-            >
-              <Ban size={14} />
-              בטל הזמנה
-            </button>
+        {/* factory_notes intentionally hidden from the branch view */}
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8, paddingTop: 8 }}>
+          <button
+            onClick={onPrint}
+            style={{
+              background: '#6366f1', color: 'white', border: 'none',
+              borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <Printer size={14} />
+            הדפס אישור
+          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {order.status === 'sent_to_branch' && (
+              <button
+                onClick={onDeliverToCustomer}
+                style={{
+                  background: '#10b981', color: 'white', border: 'none',
+                  borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                <CheckCheck size={14} />
+                יצאה ללקוח
+              </button>
+            )}
+            {!HISTORY_STATUSES.includes(order.status) && (
+              <button
+                onClick={onCancel}
+                style={{
+                  background: 'white', color: '#991b1b', border: '1px solid #fca5a5',
+                  borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                <Ban size={14} />
+                בטל הזמנה
+              </button>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </Modal>
+  )
+}
+
+// ─── Print Confirmation (A5 customer receipt) ────────────────────────────
+function PrintConfirmation({ order, branchName, onClose }: { order: SpecialOrder; branchName: string; onClose: () => void }) {
+  const pickupLabel = new Date(order.pickup_date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
+  function doPrint() {
+    window.print()
+    setTimeout(onClose, 400)
+  }
+
+  return (
+    <>
+      {/* Confirmation dialog (hidden during print) */}
+      <div
+        className="so-print-dialog"
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: 20, direction: 'rtl' }}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{ background: 'white', borderRadius: 16, maxWidth: 420, width: '100%', boxShadow: '0 20px 40px rgba(0,0,0,0.15)' }}
+        >
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>הדפס אישור ללקוח</h3>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4, display: 'flex' }}>
+              <X size={20} />
+            </button>
+          </div>
+          <div style={{ padding: 20, fontSize: 13, color: '#475569' }}>
+            יודפס דף A5 עם פרטי ההזמנה של {order.customer_name}.
+          </div>
+          <div style={{ padding: '0 20px 20px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button onClick={onClose} style={{ background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>ביטול</button>
+            <button onClick={doPrint} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Printer size={14} /> הדפס
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Printable content */}
+      <div id="so-confirmation-print" style={{ direction: 'rtl', color: '#000', fontFamily: 'Arial, sans-serif' }}>
+        <div className="confirm-root" style={{ padding: '16mm 14mm' }}>
+          <div style={{ textAlign: 'center', marginBottom: 20, borderBottom: '3px double #0d6165', paddingBottom: 14 }}>
+            <div style={{ fontSize: 34, fontWeight: 900, color: '#0d6165', fontFamily: 'serif', letterSpacing: 2 }}>מרטין</div>
+            <div style={{ fontSize: 11, color: '#0d6165', letterSpacing: 4, marginTop: 2 }}>קונדיטוריה ובית מאפה · 1964</div>
+            <div style={{ fontSize: 12, color: '#475569', marginTop: 6 }}>סניף {branchName}</div>
+          </div>
+
+          <div style={{ textAlign: 'center', marginBottom: 18 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>אישור הזמנה</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#2563eb', marginTop: 4, letterSpacing: 1 }}>
+              #{displayOrderNumber(order)}
+            </div>
+          </div>
+
+          <PrintRow label="שם הלקוח" value={order.customer_name} strong />
+          <PrintRow label="תאריך איסוף" value={pickupLabel} strong />
+          {order.pickup_time && <PrintRow label="שעת איסוף" value={order.pickup_time} strong />}
+
+          <div style={{ margin: '18px 0 8px', fontSize: 13, fontWeight: 800, color: '#0d6165', borderBottom: '1px solid #0d6165', paddingBottom: 4 }}>
+            פרטי העוגה
+          </div>
+          <PrintRow label="סוג" value={order.type} />
+          <PrintRow label="גודל וצורה" value={order.base_size} />
+          <PrintRow label="טעם טורט" value={order.torte_flavor} />
+          <PrintRow label="קרם בין השכבות" value={order.cream_between} />
+          <PrintRow label="מילוי" value={order.filling} />
+          <PrintRow label="ציפוי" value={order.coating} />
+          <PrintRow label="כתר עליון" value={order.crown} />
+          {order.extras && order.extras.length > 0 && <PrintRow label="תוספות" value={order.extras.join(' · ')} />}
+
+          {order.notes && (
+            <>
+              <div style={{ margin: '16px 0 6px', fontSize: 13, fontWeight: 800, color: '#0d6165', borderBottom: '1px solid #0d6165', paddingBottom: 4 }}>
+                הערות
+              </div>
+              <div style={{ fontSize: 12, color: '#0f172a', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{order.notes}</div>
+            </>
+          )}
+
+          <div style={{ marginTop: 20, paddingTop: 10, borderTop: '1px solid #cbd5e1', fontSize: 10, color: '#64748b', textAlign: 'center', lineHeight: 1.6 }}>
+            אנא הציגו אישור זה בעת האיסוף · תודה שבחרתם בקונדיטוריית מרטין
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        #so-confirmation-print { display: none; }
+        @media print {
+          body * { visibility: hidden !important; }
+          .so-print-dialog { display: none !important; }
+          #so-confirmation-print, #so-confirmation-print * { visibility: visible !important; }
+          #so-confirmation-print {
+            display: block !important;
+            position: absolute !important; inset: 0 !important;
+            background: white !important; color: #000 !important;
+          }
+          @page { size: A5; margin: 0; }
+        }
+      `}</style>
+    </>
+  )
+}
+
+function PrintRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, fontSize: 13, padding: '4px 0', borderBottom: '1px dotted #e2e8f0' }}>
+      <div style={{ minWidth: 110, color: '#64748b', fontWeight: 600 }}>{label}:</div>
+      <div style={{ color: '#0f172a', fontWeight: strong ? 800 : 500 }}>{value}</div>
+    </div>
   )
 }
 

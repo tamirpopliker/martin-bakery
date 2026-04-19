@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useBranches } from '../lib/BranchContext'
 import { useAppUser } from '../lib/UserContext'
 import PageHeader from '../components/PageHeader'
-import { Printer, Cake, Clock, CheckCircle2, CalendarRange, ArrowRight, X, Save } from 'lucide-react'
+import { Printer, Cake, Clock, CheckCircle2, CalendarRange, ArrowRight, X, Save, Search } from 'lucide-react'
 import type { SpecialOrder } from './BranchSpecialOrders'
 import { displayOrderNumber } from './BranchSpecialOrders'
 
@@ -12,16 +12,19 @@ interface Props {
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  new:            { label: 'הזמנה חדשה', color: '#9a3412', bg: '#ffedd5', border: '#fdba74' },
-  in_progress:    { label: 'בטיפול',     color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
-  sent_to_branch: { label: 'נשלח לסניף', color: '#166534', bg: '#dcfce7', border: '#86efac' },
-  cancelled:      { label: 'בוטלה',      color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
+  new:                   { label: 'הזמנה חדשה', color: '#9a3412', bg: '#ffedd5', border: '#fdba74' },
+  in_progress:           { label: 'בטיפול',     color: '#1e40af', bg: '#dbeafe', border: '#93c5fd' },
+  sent_to_branch:        { label: 'נשלח לסניף', color: '#166534', bg: '#dcfce7', border: '#86efac' },
+  delivered_to_customer: { label: 'יצאה ללקוח', color: '#5b21b6', bg: '#ede9fe', border: '#c4b5fd' },
+  cancelled:             { label: 'בוטלה',      color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' },
 }
 
 const STATUS_FLOW: Record<string, { next: string; label: string }> = {
   new:         { next: 'in_progress',    label: 'התחל טיפול' },
   in_progress: { next: 'sent_to_branch', label: 'שלח לסניף' },
 }
+
+const FACTORY_HISTORY = ['sent_to_branch', 'delivered_to_customer', 'cancelled']
 
 // Branch name → color scheme
 const BRANCH_COLORS: Record<string, { bg: string; text: string }> = {
@@ -55,6 +58,10 @@ export default function FactorySpecialOrders({ onBack }: Props) {
   const [pickupTo, setPickupTo] = useState<string>('')
   const [viewOrder, setViewOrder] = useState<SpecialOrder | null>(null)
   const [showPrintDialog, setShowPrintDialog] = useState(false)
+  const [tab, setTab] = useState<'active' | 'history'>('active')
+  const [search, setSearch] = useState('')
+  const [noteDialogFor, setNoteDialogFor] = useState<SpecialOrder | null>(null)
+  const [noteDraft, setNoteDraft] = useState('')
 
   async function markMyNotificationsRead() {
     if (!appUser?.id) return
@@ -86,10 +93,22 @@ export default function FactorySpecialOrders({ onBack }: Props) {
     return () => { supabase.removeChannel(ch) }
   }, [])
 
-  async function updateStatus(order: SpecialOrder, newStatus: string) {
-    await supabase.from('special_orders')
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq('id', order.id)
+  function requestStatusChange(order: SpecialOrder, newStatus: string) {
+    // Prompt for a confectioner note before marking as in_progress
+    if (newStatus === 'in_progress') {
+      setNoteDraft(order.factory_notes || '')
+      setNoteDialogFor(order)
+      return
+    }
+    updateStatus(order, newStatus)
+  }
+
+  async function updateStatus(order: SpecialOrder, newStatus: string, factoryNoteOverride?: string) {
+    const patch: Record<string, any> = { status: newStatus, updated_at: new Date().toISOString() }
+    if (factoryNoteOverride !== undefined) {
+      patch.factory_notes = factoryNoteOverride.trim() || null
+    }
+    await supabase.from('special_orders').update(patch).eq('id', order.id)
 
     // Notify branch manager when the order leaves the factory
     if (newStatus === 'sent_to_branch') {
@@ -108,9 +127,20 @@ export default function FactorySpecialOrders({ onBack }: Props) {
     }
 
     if (viewOrder?.id === order.id) {
-      setViewOrder({ ...order, status: newStatus as SpecialOrder['status'] })
+      setViewOrder({
+        ...order,
+        status: newStatus as SpecialOrder['status'],
+        ...(factoryNoteOverride !== undefined ? { factory_notes: factoryNoteOverride.trim() || null } : {}),
+      })
     }
     fetchOrders()
+  }
+
+  async function confirmInProgressNote() {
+    if (!noteDialogFor) return
+    await updateStatus(noteDialogFor, 'in_progress', noteDraft)
+    setNoteDialogFor(null)
+    setNoteDraft('')
   }
 
   async function saveFactoryNotes(order: SpecialOrder, notes: string) {
@@ -134,11 +164,24 @@ export default function FactorySpecialOrders({ onBack }: Props) {
   const sentCount = orders.filter(o => o.status === 'sent_to_branch').length
   const weekCount = orders.filter(o => o.pickup_date >= today && o.pickup_date <= weekEnd && o.status !== 'cancelled').length
 
+  const searchLower = search.trim().toLowerCase()
+  const activeCount = orders.filter(o => !FACTORY_HISTORY.includes(o.status)).length
+  const historyCount = orders.filter(o => FACTORY_HISTORY.includes(o.status)).length
+
   const filtered = orders.filter(o => {
+    const inActive = !FACTORY_HISTORY.includes(o.status)
+    if (tab === 'active' && !inActive) return false
+    if (tab === 'history' && inActive) return false
     if (branchFilter !== 'all' && o.branch_id !== branchFilter) return false
     if (statusFilter !== 'all' && o.status !== statusFilter) return false
     if (pickupFrom && o.pickup_date < pickupFrom) return false
     if (pickupTo && o.pickup_date > pickupTo) return false
+    if (searchLower) {
+      const matches =
+        o.customer_name.toLowerCase().includes(searchLower) ||
+        displayOrderNumber(o).toLowerCase().includes(searchLower)
+      if (!matches) return false
+    }
     return true
   })
 
@@ -172,6 +215,28 @@ export default function FactorySpecialOrders({ onBack }: Props) {
           <SummaryCard label="איסוף השבוע" value={weekCount} icon={<CalendarRange size={18} />} color="#6366f1" />
         </div>
 
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 2, background: '#f1f5f9', padding: 4, borderRadius: 10, marginBottom: 14, maxWidth: 340 }}>
+          <FactoryTabButton label="פעילות" count={activeCount} active={tab === 'active'} onClick={() => { setTab('active'); setStatusFilter('all') }} />
+          <FactoryTabButton label="היסטוריה" count={historyCount} active={tab === 'history'} onClick={() => { setTab('history'); setStatusFilter('all') }} />
+        </div>
+
+        {/* Search */}
+        <div style={{ position: 'relative', marginBottom: 14 }}>
+          <Search size={16} color="#94a3b8" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }} />
+          <input
+            type="text"
+            placeholder="חיפוש לפי שם לקוח או מספר הזמנה..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              width: '100%', border: '1px solid #e2e8f0', borderRadius: 10,
+              padding: '10px 36px 10px 12px', fontSize: 14, fontFamily: 'inherit',
+              direction: 'rtl', boxSizing: 'border-box', background: 'white',
+            }}
+          />
+        </div>
+
         {/* Filters */}
         <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: 12, marginBottom: 16, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'end' }}>
           <FilterSelect
@@ -184,7 +249,12 @@ export default function FactorySpecialOrders({ onBack }: Props) {
             label="סטטוס"
             value={statusFilter}
             onChange={setStatusFilter}
-            options={[{ value: 'all', label: 'כל הסטטוסים' }, ...Object.entries(STATUS_LABELS).map(([k, v]) => ({ value: k, label: v.label }))]}
+            options={[
+              { value: 'all', label: 'כל הסטטוסים' },
+              ...Object.entries(STATUS_LABELS)
+                .filter(([k]) => tab === 'active' ? !FACTORY_HISTORY.includes(k) : FACTORY_HISTORY.includes(k))
+                .map(([k, v]) => ({ value: k, label: v.label })),
+            ]}
           />
           <FilterDate label="איסוף מ-" value={pickupFrom} onChange={setPickupFrom} />
           <FilterDate label="איסוף עד-" value={pickupTo} onChange={setPickupTo} />
@@ -202,8 +272,16 @@ export default function FactorySpecialOrders({ onBack }: Props) {
         {loading ? (
           <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>טוען...</div>
         ) : filtered.length === 0 ? (
-          <div style={{ background: 'white', borderRadius: 12, padding: 48, textAlign: 'center', color: '#94a3b8', border: '1px solid #f1f5f9' }}>
-            אין הזמנות להצגה
+          <div style={{ background: 'white', borderRadius: 16, padding: '56px 20px', textAlign: 'center', border: '1px dashed #e2e8f0' }}>
+            <div style={{ width: 72, height: 72, borderRadius: '50%', background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <CheckCircle2 size={32} color="#10b981" />
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+              {search ? 'לא נמצאו תוצאות לחיפוש' : tab === 'active' ? 'אין הזמנות חדשות' : 'אין הזמנות בהיסטוריה'}
+            </div>
+            <div style={{ fontSize: 13, color: '#94a3b8' }}>
+              {tab === 'active' ? 'כל ההזמנות מעודכנות וסגורות' : 'הזמנות שנשלחו יופיעו כאן'}
+            </div>
           </div>
         ) : (
           <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden' }}>
@@ -259,7 +337,7 @@ export default function FactorySpecialOrders({ onBack }: Props) {
                       <Td>
                         {flow && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); updateStatus(o, flow.next) }}
+                            onClick={(e) => { e.stopPropagation(); requestStatusChange(o, flow.next) }}
                             style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                           >
                             {flow.label}
@@ -281,7 +359,7 @@ export default function FactorySpecialOrders({ onBack }: Props) {
           order={viewOrder}
           branchName={getBranchName(viewOrder.branch_id)}
           onClose={() => setViewOrder(null)}
-          onUpdateStatus={(s) => updateStatus(viewOrder, s)}
+          onUpdateStatus={(s) => requestStatusChange(viewOrder, s)}
           onSaveNotes={(n) => saveFactoryNotes(viewOrder, n)}
         />
       )}
@@ -293,7 +371,82 @@ export default function FactorySpecialOrders({ onBack }: Props) {
           onClose={() => setShowPrintDialog(false)}
         />
       )}
+
+      {/* Note-to-confectioner dialog (prompted when marking 'in_progress') */}
+      {noteDialogFor && (
+        <div
+          onClick={() => { setNoteDialogFor(null); setNoteDraft('') }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20, direction: 'rtl' }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: 'white', borderRadius: 16, maxWidth: 480, width: '100%', boxShadow: '0 20px 40px rgba(0,0,0,0.15)' }}
+          >
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>פתק לקונדיטור</h3>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+                  {displayOrderNumber(noteDialogFor)} · {noteDialogFor.customer_name}
+                </div>
+              </div>
+              <button onClick={() => { setNoteDialogFor(null); setNoteDraft('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4, display: 'flex' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 13, color: '#475569' }}>
+                הוסף פתק פנימי לקונדיטור (אופציונלי). הפתק יוצג במפעל בלבד ויודגש בטבלת ההדפסה היומית.
+              </div>
+              <textarea
+                value={noteDraft}
+                onChange={e => setNoteDraft(e.target.value)}
+                rows={4}
+                placeholder="לדוגמה: הלקוח ביקש דגש על זילוף עדין, שוקולד איכותי במילוי..."
+                autoFocus
+                style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, fontSize: 13, fontFamily: 'inherit', resize: 'vertical', direction: 'rtl', boxSizing: 'border-box' }}
+              />
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => { setNoteDialogFor(null); setNoteDraft('') }}
+                  style={{ background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  ביטול
+                </button>
+                <button
+                  onClick={confirmInProgressNote}
+                  style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  סמן כבטיפול
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+// ─── Factory Tab Button ──────────────────────────────────────────────────
+function FactoryTabButton({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1, background: active ? 'white' : 'transparent',
+        color: active ? '#0f172a' : '#64748b',
+        border: 'none', borderRadius: 8, padding: '8px 14px',
+        fontSize: 13, fontWeight: 700, cursor: 'pointer',
+        boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        transition: 'all 0.15s',
+      }}
+    >
+      {label}
+      <span style={{ background: active ? '#f1f5f9' : 'rgba(100,116,139,0.12)', color: active ? '#475569' : '#64748b', borderRadius: 999, padding: '1px 8px', fontSize: 11, fontWeight: 700 }}>
+        {count}
+      </span>
+    </button>
   )
 }
 
@@ -579,7 +732,8 @@ function PrintDialog({ orders, branches, onClose }: {
                     <th style={printThStyle}>לקוח</th>
                     <th style={printThStyle}>שעה</th>
                     <th style={printThStyle}>פרטי עוגה</th>
-                    <th style={printThStyle}>הערות</th>
+                    <th style={printThStyle}>פתק לקונדיטור</th>
+                    <th style={printThStyle}>הערות סניף</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -600,9 +754,13 @@ function PrintDialog({ orders, branches, onClose }: {
                         <div><strong>כתר:</strong> {o.crown}</div>
                         {o.extras && o.extras.length > 0 && <div><strong>תוספות:</strong> {o.extras.join(', ')}</div>}
                       </td>
+                      <td style={{ ...printTdStyle, background: o.factory_notes ? '#fff3cd' : 'transparent', borderWidth: o.factory_notes ? 2 : 1, fontWeight: o.factory_notes ? 'bold' : 'normal' }}>
+                        {o.factory_notes
+                          ? <div style={{ fontSize: 12, lineHeight: 1.5 }}>{o.factory_notes}</div>
+                          : <span style={{ color: '#999' }}>—</span>}
+                      </td>
                       <td style={printTdStyle}>
-                        {o.notes && <div>{o.notes}</div>}
-                        {o.factory_notes && <div style={{ marginTop: 4, borderTop: '1px dashed #888', paddingTop: 4 }}><strong>מפעל:</strong> {o.factory_notes}</div>}
+                        {o.notes ? <div>{o.notes}</div> : <span style={{ color: '#999' }}>—</span>}
                       </td>
                     </tr>
                   ))}
