@@ -178,13 +178,23 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   }
 
   async function fetchEntries() {
-    // Explicit .range bypasses PostgREST's default 1000-row cap so every record for the period is loaded.
-    const { data } = await supabase.from('branch_revenue').select('*')
-      .eq('branch_id', branchId)
-      .gte('date', from).lt('date', to)
-      .order('date', { ascending: false })
-      .range(0, 99999)
-    if (data) setEntries(data)
+    // Chunked pagination guarantees every row for the period — bypasses any PostgREST max-rows cap
+    // that might still apply despite an explicit .range() request.
+    const CHUNK = 1000
+    const all: Entry[] = []
+    let offset = 0
+    while (true) {
+      const { data } = await supabase.from('branch_revenue').select('*')
+        .eq('branch_id', branchId)
+        .gte('date', from).lt('date', to)
+        .order('date', { ascending: false })
+        .range(offset, offset + CHUNK - 1)
+      if (!data || data.length === 0) break
+      all.push(...(data as Entry[]))
+      if (data.length < CHUNK) break
+      offset += CHUNK
+    }
+    setEntries(all)
   }
 
   async function fetchCreditCustomers() {
@@ -266,7 +276,8 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
   const totalCashier = legacyCashierTotal + closingsTotal
   const totalWebsite = entries.filter(e => e.source === 'website').reduce((s, e) => s + Number(e.amount), 0)
-  const totalCredit  = entries.filter(e => e.source === 'credit').reduce((s, e) => s + Number(e.amount), 0)
+  // B2B invoices insert branch_revenue rows with source='credit_b2b' — fold them into credit.
+  const totalCredit  = entries.filter(e => e.source === 'credit' || (e.source as string) === 'credit_b2b').reduce((s, e) => s + Number(e.amount), 0)
   const totalRevenue = totalCashier + totalWebsite + totalCredit
   const totalTx      = legacyCashierTx + closingsTx
   const avgBasket    = totalTx > 0 ? totalCashier / totalTx : 0
@@ -283,9 +294,13 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
       // כל המקורות מטבלת branch_revenue (כולל קופה היסטורית)
       for (const e of entries) {
         if (!acc[e.date]) acc[e.date] = { date: e.date, cashier: 0, website: 0, credit: 0, total: 0, transactions: 0 }
-        acc[e.date][e.source] += Number(e.amount)
-        acc[e.date].total += Number(e.amount)
-        if (e.source === 'cashier') acc[e.date].transactions += Number(e.transaction_count || 0)
+        // B2B invoices insert source='credit_b2b' — treat as credit so it lands in the הקפה column.
+        const bucket = (e.source as string) === 'credit_b2b' ? 'credit' : e.source
+        if (bucket === 'cashier' || bucket === 'website' || bucket === 'credit') {
+          acc[e.date][bucket] += Number(e.amount)
+          acc[e.date].total += Number(e.amount)
+          if (bucket === 'cashier') acc[e.date].transactions += Number(e.transaction_count || 0)
+        }
       }
       // קופה — מטבלת register_closings (מזומן + אשראי) — מתווסף למקור "קופה"
       for (const c of closingsInPeriod) {
