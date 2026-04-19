@@ -1,5 +1,5 @@
 // ─── Service Worker — martin-bakery PWA ──────────────────────────────────────
-const CACHE_NAME = 'martin-bakery-v1'
+const CACHE_NAME = 'martin-bakery-v2'
 const SUPABASE_HOST = 'nlklndgmtmwoacipjyek.supabase.co'
 
 // Static assets to pre-cache on install
