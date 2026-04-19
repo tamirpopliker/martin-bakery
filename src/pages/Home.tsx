@@ -523,7 +523,11 @@ export default function Home() {
                       <div className="text-[11px] text-slate-400 font-semibold mb-0.5">רווח תפעולי</div>
                       <div className="flex items-baseline gap-1.5">
                         <span className={`text-lg font-extrabold ${branchOperatingProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{fmtK(branchOperatingProfit)}</span>
-                        <DiffBadge curr={branchOperatingProfit} prev={prevBranchOperatingProfit} />
+                        {totalBranchRevenue > 0 && (
+                          <span className="text-xs font-bold mt-1" style={{ color: '#94a3b8' }}>
+                            {((branchOperatingProfit / totalBranchRevenue) * 100).toFixed(1)}%
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -537,7 +541,6 @@ export default function Home() {
                       <div className="text-[11px] text-slate-400 font-semibold mb-0.5">לייבור %</div>
                       <div className="flex items-baseline gap-1.5">
                         <span className="text-lg font-extrabold text-slate-900">{branchLaborPct.toFixed(1)}%</span>
-                        <DiffBadge curr={branchLaborPct} prev={prevBranchLaborPct} inverse />
                       </div>
                     </div>
                   </button>
@@ -551,7 +554,6 @@ export default function Home() {
                       <div className="text-[11px] text-slate-400 font-semibold mb-0.5">פחת %</div>
                       <div className="flex items-baseline gap-1.5">
                         <span className="text-lg font-extrabold text-slate-900">{branchWastePct.toFixed(1)}%</span>
-                        <DiffBadge curr={branchWastePct} prev={prevBranchWastePct} inverse />
                       </div>
                     </div>
                   </div>
