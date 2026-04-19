@@ -13,7 +13,8 @@ export interface PLResult {
   factoryPurchases: number      // branch_expenses WHERE from_factory=true
   externalSuppliers: number     // branch_expenses WHERE expense_type='suppliers' AND from_factory=false
   labor: number                 // branch_labor → employer_cost
-  managerSalary: number         // fixed_costs WHERE entity_id='mgmt'
+  managerSalary: number         // employer_costs WHERE is_manager=true (current month, else latest prior)
+  managerIsActual: boolean      // true when managerSalary is from current-month employer_costs
   waste: number                 // branch_waste
   repairs: number               // branch_expenses WHERE expense_type='repairs'
   deliveries: number            // branch_expenses WHERE expense_type='deliveries'
@@ -117,15 +118,33 @@ export async function calculateBranchPL(
     .select('actual_employer_cost, is_manager').eq('branch_id', branchId).eq('month', mMonth).eq('year', mYear)
   const laborIsActual = (actualLabAll && actualLabAll.length > 0) ? true : false
 
-  let labor: number, managerSalary: number
+  let labor: number
   if (laborIsActual) {
-    // Actual payroll data: split into regular labor and manager salary
     labor = actualLabAll!.filter(r => !r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
-    managerSalary = actualLabAll!.filter(r => r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
   } else {
-    // Estimated: labor from branch_labor, manager from fixed_costs
     labor = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
-    managerSalary = 0 // will be set from fixed_costs below
+  }
+
+  // Manager salary: prefer current-month employer_costs is_manager=true; otherwise the latest
+  // prior month that does have is_manager=true for this branch (summed across all manager rows).
+  const currentMonthManagers = (actualLabAll || []).filter(r => r.is_manager)
+  let managerSalary = 0
+  let managerIsActual = false
+  if (currentMonthManagers.length > 0) {
+    managerSalary = currentMonthManagers.reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    managerIsActual = true
+  } else {
+    const { data: prevMgr } = await supabase.from('employer_costs')
+      .select('actual_employer_cost, month, year')
+      .eq('branch_id', branchId).eq('is_manager', true)
+      .or(`year.lt.${mYear},and(year.eq.${mYear},month.lt.${mMonth})`)
+      .order('year', { ascending: false }).order('month', { ascending: false })
+    if (prevMgr && prevMgr.length > 0) {
+      const { year: lY, month: lM } = prevMgr[0]
+      managerSalary = prevMgr
+        .filter(r => r.year === lY && r.month === lM)
+        .reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    }
   }
 
   // Waste
@@ -142,16 +161,16 @@ export async function calculateBranchPL(
       fixedCosts += amt
     }
   }
-  if (!laborIsActual) {
+  // Legacy fallback: no manager data in employer_costs at all → fall back to fixed_costs mgmt.
+  if (managerSalary === 0) {
     if (mgmtFromFixed > 0) {
-      managerSalary += mgmtFromFixed
+      managerSalary = mgmtFromFixed
     } else {
-      // Fallback: fetch most recent mgmt cost from a previous month
       const { data: prevMgmt } = await supabase.from('fixed_costs')
         .select('amount').eq('entity_type', `branch_${branchId}`).eq('entity_id', 'mgmt')
         .lt('month', mk).order('month', { ascending: false }).limit(1)
       if (prevMgmt && prevMgmt.length > 0) {
-        managerSalary += Number(prevMgmt[0].amount)
+        managerSalary = Number(prevMgmt[0].amount)
       }
     }
   }
@@ -172,7 +191,7 @@ export async function calculateBranchPL(
   const operatingMargin = revenue > 0 ? (operatingProfit / revenue) * 100 : 0
 
   return {
-    revenue, factoryPurchases, externalSuppliers, labor, managerSalary,
+    revenue, factoryPurchases, externalSuppliers, labor, managerSalary, managerIsActual,
     waste, repairs, deliveries, infrastructure, otherExpenses,
     controllableProfit, controllableMargin,
     fixedCosts, overhead, operatingProfit, operatingMargin,

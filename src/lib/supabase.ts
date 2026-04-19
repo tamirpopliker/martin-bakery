@@ -507,6 +507,7 @@ export interface BranchPLResult {
   laborEmployer: number
   laborIsActual: boolean
   mgmtCosts: number
+  mgmtIsActual: boolean
   wasteTotal: number
   fixedCosts: number
   controllableMargin: number
@@ -596,14 +597,35 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     .select('actual_employer_cost, is_manager').eq('branch_id', branchId).eq('month', mMonth).eq('year', mYear)
   const laborIsActual = (actualLabAll && actualLabAll.length > 0) ? true : false
 
-  let laborEmployer: number, mgmtCosts: number
+  let laborEmployer: number
   if (laborIsActual) {
     laborEmployer = actualLabAll!.filter(r => !r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
-    mgmtCosts = actualLabAll!.filter(r => r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
   } else {
     laborEmployer = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
-    mgmtCosts = 0
   }
+
+  // Manager salary: prefer current-month employer_costs is_manager=true; otherwise the latest
+  // prior month that does have is_manager=true for this branch.
+  const currentMonthManagers = (actualLabAll || []).filter(r => r.is_manager)
+  let mgmtCosts = 0
+  let mgmtIsActual = false
+  if (currentMonthManagers.length > 0) {
+    mgmtCosts = currentMonthManagers.reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    mgmtIsActual = true
+  } else {
+    const { data: prevMgr } = await supabase.from('employer_costs')
+      .select('actual_employer_cost, month, year')
+      .eq('branch_id', branchId).eq('is_manager', true)
+      .or(`year.lt.${mYear},and(year.eq.${mYear},month.lt.${mMonth})`)
+      .order('year', { ascending: false }).order('month', { ascending: false })
+    if (prevMgr && prevMgr.length > 0) {
+      const { year: lY, month: lM } = prevMgr[0]
+      mgmtCosts = prevMgr
+        .filter(r => r.year === lY && r.month === lM)
+        .reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    }
+  }
+
   const wasteTotal = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
 
   let fixedCosts = 0
@@ -613,16 +635,16 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     if (r.entity_id === 'mgmt') { mgmtFromFixed += amt }
     else fixedCosts += amt
   }
-  if (!laborIsActual) {
+  // Legacy fallback: no manager data in employer_costs at all → fall back to fixed_costs mgmt.
+  if (mgmtCosts === 0) {
     if (mgmtFromFixed > 0) {
-      mgmtCosts += mgmtFromFixed
+      mgmtCosts = mgmtFromFixed
     } else {
-      // Fallback: fetch most recent mgmt cost from a previous month
       const { data: prevMgmt } = await supabase.from('fixed_costs')
         .select('amount').eq('entity_type', `branch_${branchId}`).eq('entity_id', 'mgmt')
         .lt('month', monthKey).order('month', { ascending: false }).limit(1)
       if (prevMgmt && prevMgmt.length > 0) {
-        mgmtCosts += Number(prevMgmt[0].amount)
+        mgmtCosts = Number(prevMgmt[0].amount)
       }
     }
   }
@@ -642,7 +664,7 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     { label: 'רכישות מפעל', amount: expSuppliersInternal, color: 'expense' },
     { label: 'ספקים חיצוניים', amount: expSuppliersExternal, color: 'expense' },
     { label: laborIsActual ? 'לייבור ✓' : 'לייבור ~', amount: laborEmployer, color: 'expense' },
-    { label: laborIsActual ? 'שכר מנהל ✓' : 'שכר מנהל (משוער)', amount: mgmtCosts, color: 'expense' },
+    { label: mgmtIsActual ? 'שכר מנהל ✓' : 'שכר מנהל (משוער)', amount: mgmtCosts, color: 'expense' },
     { label: 'פחת', amount: wasteTotal, color: 'expense' },
     { label: 'תיקונים', amount: expRepairs, color: 'expense' },
     { label: 'רווח נשלט', amount: controllableMargin, pct: pct(controllableMargin), bold: true, separator: true, color: 'profit' },
@@ -655,7 +677,7 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     revenue, revCashier, revWebsite, revCredit,
     expSuppliers, expSuppliersInternal, expSuppliersExternal,
     expRepairs, expInfra, expDelivery, expOther,
-    laborEmployer, laborIsActual, mgmtCosts, wasteTotal, fixedCosts,
+    laborEmployer, laborIsActual, mgmtCosts, mgmtIsActual, wasteTotal, fixedCosts,
     controllableMargin, overheadAmount, operatingProfit, rows,
   }
 }

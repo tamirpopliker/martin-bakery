@@ -49,7 +49,7 @@ const fadeIn = {
 interface BranchData {
   id: number; name: string; color: string
   revenue: number; expenses: number; expInternal: number; expExternal: number
-  labor: number; waste: number; managerSalary: number; repairs: number
+  labor: number; waste: number; managerSalary: number; managerIsActual: boolean; repairs: number
   fixedCosts: number; grossProfit: number; operatingProfit: number; overhead: number
   revCashier: number; revCredit: number; revWebsite: number
 }
@@ -223,6 +223,7 @@ export default function CEODashboard({ onBack }: Props) {
         labor: pl.labor,
         waste: pl.waste,
         managerSalary: pl.managerSalary,
+        managerIsActual: pl.managerIsActual,
         repairs: pl.repairs,
         fixedCosts: pl.fixedCosts,
         grossProfit: pl.controllableProfit,
@@ -952,7 +953,7 @@ export default function CEODashboard({ onBack }: Props) {
                 ] : []),
                 { label: isSegment ? 'ספקים חיצוניים' : 'חומרי גלם / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => br.expExternal, bold: false, color: '' },
                 { label: 'לייבור עובדים', factory: factoryLabor, getBr: br => br.labor, bold: false, color: '', kpiKey: 'labor' },
-                { label: 'שכר מנהלים', factory: 0, getBr: (br: BranchData) => br.managerSalary, bold: false, color: '' as const },
+                { label: 'שכר מנהלים' + (branches.every(b => b.managerIsActual) ? ' ✓' : ' ~'), factory: 0, getBr: (br: BranchData) => br.managerSalary, bold: false, color: '' as const },
                 ...(hqCost > 0 ? [{ label: 'עלות מטה' + (hasEmployerReport ? ' ✓' : ' ~'), factory: hqCost, getBr: () => 0, bold: false, color: '' as const }] : []),
                 { label: 'סה"כ לייבור', factory: factoryLabor + hqCost, getBr: (br: BranchData) => br.labor + br.managerSalary, bold: true, color: '' as const },
                 { label: 'פחת', factory: factoryWaste, getBr: br => br.waste, bold: false, color: '', kpiKey: 'waste' },
