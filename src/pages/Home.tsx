@@ -195,6 +195,8 @@ export default function Home() {
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
   useEffect(() => {
+    // Wait for the async branch list from BranchContext — otherwise .in('branch_id', []) returns 0 rows.
+    if (branchList.length === 0) return
     async function loadKpi() {
       const monthKey = period.monthKey || from.slice(0, 7)
       const overheadPct = await getOverheadPct()
@@ -344,7 +346,7 @@ export default function Home() {
       setPrevBranchOperatingProfit(pKpiOperating)
     }
     loadKpi()
-  }, [from, to])
+  }, [from, to, branchList.length])
 
   // Employee role gets their own dedicated home page (after all hooks)
   if (appUser?.role === 'employee') return <EmployeeHome onNavigate={(p: string) => setPage(p)} />
