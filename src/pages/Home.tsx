@@ -528,49 +528,6 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* ═══ New Cake Orders Alert (factory + admin only) ════════════════ */}
-        {newSpecialOrdersCount > 0 && (appUser?.role === 'factory' || appUser?.role === 'admin') && (
-          <motion.button
-            onClick={() => setPage('factory_special_orders')}
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 14,
-              background: 'linear-gradient(135deg, #fef2f2 0%, #ffedd5 100%)',
-              border: '2px solid #f97316', borderRadius: 14, padding: '14px 18px',
-              marginBottom: 16, cursor: 'pointer', textAlign: 'right', fontFamily: 'inherit',
-              boxShadow: '0 4px 14px rgba(249, 115, 22, 0.18)',
-              animation: 'pulse-cake-alert 2s ease-in-out infinite',
-            }}
-          >
-            <span style={{
-              background: '#ef4444', color: 'white', borderRadius: 999,
-              minWidth: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, fontWeight: 900, padding: '0 10px', flexShrink: 0,
-              boxShadow: '0 2px 8px rgba(239,68,68,0.5)',
-            }}>
-              {newSpecialOrdersCount}
-            </span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#9a3412' }}>
-                {newSpecialOrdersCount === 1
-                  ? 'הזמנת עוגה חדשה ממתינה לטיפול'
-                  : `${newSpecialOrdersCount} הזמנות עוגות חדשות ממתינות לטיפול`}
-              </div>
-              <div style={{ fontSize: 12, color: '#b45309', marginTop: 2 }}>
-                לחץ לצפייה ולעדכון סטטוס ל"בטיפול"
-              </div>
-            </div>
-            <ChevronLeft size={18} color="#b45309" />
-          </motion.button>
-        )}
-        <style>{`
-          @keyframes pulse-cake-alert {
-            0%, 100% { box-shadow: 0 4px 14px rgba(249, 115, 22, 0.18); }
-            50% { box-shadow: 0 4px 22px rgba(249, 115, 22, 0.35); }
-          }
-        `}</style>
-
         {/* ═══ 4-Card Grid Navigation ═══════════════════════════════════════ */}
         <motion.div
           variants={staggerContainer}
