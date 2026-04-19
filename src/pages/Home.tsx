@@ -170,6 +170,12 @@ export default function Home() {
   const [prevOperatingProfit, setPrevOperatingProfit] = useState(0)
   const [totalLabor, setTotalLabor] = useState(0)
   const [prevTotalLabor, setPrevTotalLabor] = useState(0)
+  const [branchOperatingProfit, setBranchOperatingProfit] = useState(0)
+  const [prevBranchOperatingProfit, setPrevBranchOperatingProfit] = useState(0)
+  const [branchLaborCost, setBranchLaborCost] = useState(0)
+  const [prevBranchLaborCost, setPrevBranchLaborCost] = useState(0)
+  const [branchWaste, setBranchWaste] = useState(0)
+  const [prevBranchWaste, setPrevBranchWaste] = useState(0)
 
   // B2B overdue badge
   const [overdueCount, setOverdueCount] = useState(0)
@@ -238,6 +244,16 @@ export default function Home() {
       setAlerts(alertCount)
       setTotalBranchGross(totalBranchRev > 0 ? totalBranchRev - totalBranchLab : 0)
       setOperatingProfit(factoryPL.operatingProfit + totalBranchOP)
+      setBranchOperatingProfit(totalBranchOP)
+      setBranchLaborCost(totalBranchLab)
+
+      // Branch waste for current period — summed across all branches in one query
+      const { data: wasteRows } = await supabase.from('branch_waste')
+        .select('amount')
+        .in('branch_id', branchIds)
+        .gte('date', from).lt('date', to)
+        .range(0, 99999)
+      setBranchWaste((wasteRows || []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0))
 
       // Previous period (comparison) via shared functions
       const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
@@ -260,6 +276,15 @@ export default function Home() {
       setPrevTotalLabor(prevFactoryPL.labor + pTotalBranchLab)
       setPrevBranchGross(pTotalBranchRev > 0 ? pTotalBranchRev - pTotalBranchLab : 0)
       setPrevOperatingProfit(prevFactoryPL.operatingProfit + pTotalBranchOP)
+      setPrevBranchOperatingProfit(pTotalBranchOP)
+      setPrevBranchLaborCost(pTotalBranchLab)
+
+      const { data: prevWasteRows } = await supabase.from('branch_waste')
+        .select('amount')
+        .in('branch_id', branchIds)
+        .gte('date', pFrom).lt('date', pTo)
+        .range(0, 99999)
+      setPrevBranchWaste((prevWasteRows || []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0))
     }
     loadKpi()
   }, [from, to])
@@ -459,71 +484,70 @@ export default function Home() {
         <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.1 }}>
           <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', marginBottom: 20, padding: 0 }}>
             <div className="kpi-grid flex items-center gap-0 flex-wrap" style={{ padding: '14px 24px' }}>
-              {/* הכנסות — clickable */}
-              {(() => { const grandRevenue = factoryRevenue + totalBranchRevenue; return (
-              <button onClick={() => setRevenueSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 pe-4 border-e border-slate-200 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#10B98115' }}>
-                  <RevenueIcon size={16} color="#10B981" />
-                </div>
-                <div>
-                  <div className="text-[11px] text-slate-400 font-semibold mb-0.5">הכנסות</div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-lg font-extrabold text-slate-900">{fmtK(grandRevenue)}</span>
-                    <DiffBadge curr={factoryRevenue + totalBranchRevenue} prev={prevFactoryRevenue + prevBranchRevenue} />
-                  </div>
-                </div>
-              </button>
-              )})()}
-              {/* רווח תפעולי */}
-              <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#7C3AED15' }}>
-                  <ProfitIcon size={16} color="#7C3AED" />
-                </div>
-                <div>
-                  <div className="text-[11px] text-slate-400 font-semibold mb-0.5">רווח תפעולי</div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className={`text-lg font-extrabold ${operatingProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{fmtK(operatingProfit)}</span>
-                    <DiffBadge curr={operatingProfit} prev={prevOperatingProfit} />
-                  </div>
-                </div>
-              </div>
-              {/* % לייבור — clickable */}
               {(() => {
-                const grandRevenue = factoryRevenue + totalBranchRevenue
-                const grandLaborPct = grandRevenue > 0 ? (totalLabor / grandRevenue) * 100 : 0
-                const prevGrandRevenue = prevFactoryRevenue + prevBranchRevenue
-                const prevGrandLaborPct = prevGrandRevenue > 0 ? (prevTotalLabor / prevGrandRevenue) * 100 : 0
-                return (
-              <button onClick={() => setLaborSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#3B82F615' }}>
-                  <LaborIcon size={16} color="#3B82F6" />
-                </div>
-                <div>
-                  <div className="text-[11px] text-slate-400 font-semibold mb-0.5">לייבור ממוצע</div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-lg font-extrabold text-slate-900">{fmtK(totalLabor)}</span>
-                    <DiffBadge curr={grandLaborPct} prev={prevGrandLaborPct} inverse />
+                // All four cards are scoped to the branches for the selected period.
+                const branchLaborPct = totalBranchRevenue > 0 ? (branchLaborCost / totalBranchRevenue) * 100 : 0
+                const prevBranchLaborPct = prevBranchRevenue > 0 ? (prevBranchLaborCost / prevBranchRevenue) * 100 : 0
+                const branchWastePct = totalBranchRevenue > 0 ? (branchWaste / totalBranchRevenue) * 100 : 0
+                const prevBranchWastePct = prevBranchRevenue > 0 ? (prevBranchWaste / prevBranchRevenue) * 100 : 0
+                return <>
+                  {/* הכנסות — clickable (drill-down) */}
+                  <button onClick={() => setRevenueSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 pe-4 border-e border-slate-200 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#10B98115' }}>
+                      <RevenueIcon size={16} color="#10B981" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-400 font-semibold mb-0.5">הכנסות</div>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-lg font-extrabold text-slate-900">{fmtK(totalBranchRevenue)}</span>
+                        <DiffBadge curr={totalBranchRevenue} prev={prevBranchRevenue} />
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* רווח תפעולי */}
+                  <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#7C3AED15' }}>
+                      <ProfitIcon size={16} color="#7C3AED" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-400 font-semibold mb-0.5">רווח תפעולי</div>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className={`text-lg font-extrabold ${branchOperatingProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{fmtK(branchOperatingProfit)}</span>
+                        <DiffBadge curr={branchOperatingProfit} prev={prevBranchOperatingProfit} />
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span className="text-[11px] font-bold text-slate-500">{grandLaborPct.toFixed(1)}%</span>
-                    {(() => { const avgT = Object.values(branchLaborTargets).length > 0 ? Object.values(branchLaborTargets).reduce((a, b) => a + b, 0) / Object.values(branchLaborTargets).length : 0; return avgT > 0 ? <span className={`text-[11px] font-bold ${grandLaborPct <= avgT ? 'text-emerald-400' : 'text-rose-400'}`}>{grandLaborPct <= avgT ? '\u2713' : '\u2717'}</span> : null })()}
+
+                  {/* לייבור % — clickable (drill-down) */}
+                  <button onClick={() => setLaborSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#3B82F615' }}>
+                      <LaborIcon size={16} color="#3B82F6" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-400 font-semibold mb-0.5">לייבור %</div>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-lg font-extrabold text-slate-900">{branchLaborPct.toFixed(1)}%</span>
+                        <DiffBadge curr={branchLaborPct} prev={prevBranchLaborPct} inverse />
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* פחת % */}
+                  <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 ps-4">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#F59E0B15' }}>
+                      <AlertTriangle size={16} color="#F59E0B" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-400 font-semibold mb-0.5">פחת %</div>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-lg font-extrabold text-slate-900">{branchWastePct.toFixed(1)}%</span>
+                        <DiffBadge curr={branchWastePct} prev={prevBranchWastePct} inverse />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </button>
-              )})()}
-              {/* התראות */}
-              <div className="flex-1 min-w-[100px] flex items-center gap-2.5 py-1 ps-4">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: alerts > 0 ? '#fb718515' : '#10B98115' }}>
-                  <AlertTriangle size={16} color={alerts > 0 ? '#fb7185' : '#10B981'} />
-                </div>
-                <div>
-                  <div className="text-[11px] text-slate-400 font-semibold mb-0.5">התראות</div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className={`text-lg font-extrabold ${alerts > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{alerts}</span>
-                    <span className="text-[11px] text-slate-400">{alerts === 0 ? 'תקין' : 'חריגה'}</span>
-                  </div>
-                </div>
-              </div>
+                </>
+              })()}
             </div>
           </div>
         </motion.div>
