@@ -326,7 +326,8 @@ export default function FactorySpecialOrders({ onBack }: Props) {
                       </Td>
                       <Td>
                         <div style={{ fontSize: 12, color: '#475569', maxWidth: 260, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {o.type} · {o.base_size} · {o.torte_flavor}
+                          {o.type} · {o.base_size}
+                          {o.preset_cake_name ? ` · ${o.preset_cake_name}` : ` · ${o.torte_flavor}`}
                         </div>
                       </Td>
                       <Td>
@@ -561,9 +562,15 @@ function OrderDetailModal({ order, branchName, onClose, onUpdateStatus, onSaveNo
           <Section title="פרטי עוגה">
             <Field label="סוג" value={order.type} />
             <Field label="גודל וצורה" value={order.base_size} />
-            <Field label="טעם טורט" value={order.torte_flavor} />
-            <Field label="קרם בין השכבות" value={order.cream_between} />
-            <Field label="מילוי" value={order.filling} />
+            {order.preset_cake_name ? (
+              <Field label="עוגה מוכנה" value={order.preset_cake_name} />
+            ) : (
+              <>
+                <Field label="טעם טורט" value={order.torte_flavor} />
+                <Field label="קרם בין השכבות" value={order.cream_between} />
+                <Field label="מילוי" value={order.filling} />
+              </>
+            )}
             <Field label="ציפוי" value={order.coating} />
             <Field label="כתר עליון" value={order.crown} />
             {order.extras && order.extras.length > 0 && <Field label="תוספות" value={order.extras.join(' · ')} />}
@@ -747,9 +754,15 @@ function PrintDialog({ orders, branches, onClose }: {
                       <td style={printTdStyle}>
                         <div><strong>סוג:</strong> {o.type}</div>
                         <div><strong>גודל:</strong> {o.base_size}</div>
-                        <div><strong>טורט:</strong> {o.torte_flavor}</div>
-                        <div><strong>קרם:</strong> {o.cream_between}</div>
-                        <div><strong>מילוי:</strong> {o.filling}</div>
+                        {o.preset_cake_name ? (
+                          <div><strong>עוגה מוכנה:</strong> {o.preset_cake_name}</div>
+                        ) : (
+                          <>
+                            <div><strong>טורט:</strong> {o.torte_flavor}</div>
+                            <div><strong>קרם:</strong> {o.cream_between}</div>
+                            <div><strong>מילוי:</strong> {o.filling}</div>
+                          </>
+                        )}
                         <div><strong>ציפוי:</strong> {o.coating}</div>
                         <div><strong>כתר:</strong> {o.crown}</div>
                         {o.extras && o.extras.length > 0 && <div><strong>תוספות:</strong> {o.extras.join(', ')}</div>}

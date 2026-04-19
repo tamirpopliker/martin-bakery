@@ -32,10 +32,13 @@ export interface SpecialOrder {
   extras: string[] | null
   notes: string | null
   factory_notes: string | null
+  preset_cake_name: string | null       // set when a ready-made medium-round cake was chosen
   status: 'new' | 'in_progress' | 'sent_to_branch' | 'delivered_to_customer' | 'cancelled'
   created_by: string | null
   created_at: string
 }
+
+type CakeType = 'חלבי' | 'פרווה'
 
 export function displayOrderNumber(o: Pick<SpecialOrder, 'order_number' | 'order_number_manual'>): string {
   return o.order_number_manual?.trim() || o.order_number
@@ -51,10 +54,21 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string; 
 
 const HISTORY_STATUSES = ['sent_to_branch', 'delivered_to_customer', 'cancelled']
 
-const BASE_SIZES = ['עגולה גדולה', 'ריבוע', 'רבע פלטה', 'לב']
+const MEDIUM_ROUND = 'עגולה בינונית'
+const BASE_SIZES = ['עגולה גדולה', MEDIUM_ROUND, 'ריבוע', 'רבע פלטה', 'לב']
 const TORTE_FLAVORS = ['וניל', 'שוקולד']
-const CREAMS_BETWEEN = ['שאנטי שוקולד', 'וניל']
-const FILLINGS = ['ריבת חלב', 'תות', 'אוכמניות', 'שוקולד']
+const CREAMS_BETWEEN: Record<CakeType, string[]> = {
+  'חלבי':  ['שאנטי שוקולד', 'וניל'],
+  'פרווה': ['קרם שוקולד פרווה', 'קרם וניל פרווה'],
+}
+const FILLINGS: Record<CakeType, string[]> = {
+  'חלבי':  ['ריבת חלב', 'תות', 'אוכמניות', 'שוקולד'],
+  'פרווה': ['תות', 'אוכמניות', 'שוקולד', 'קרמל'],
+}
+const PRESET_CAKES: Record<CakeType, string[]> = {
+  'חלבי':  ['ריבת חלב', 'שאנטי שוקולד', 'פירות יער', 'היער השחור'],
+  'פרווה': ['קרם שוקולד', 'שוקו שוקו', 'קרמל', 'אוכמניות'],
+}
 const COATINGS = ['מזרה סוכריות', 'קוקוס קלוי', 'אגוזי מלח טחונים', 'קרם חלק', 'שתי וערב']
 const CROWNS = ['ללא', 'לבן', 'חום', 'ורוד', 'תכלת', 'תכלת-לבן', 'ורוד-לבן', 'חום-לבן']
 const EXTRAS = ['דובדבנים', 'דובדבנים אקסטרה', 'כדורי שוקולד', 'אגוזי מלך (בתוך העוגה)']
@@ -429,9 +443,15 @@ function OrderView({ order, branchName, onClose, onCancel, onDeliverToCustomer, 
         <Section title="פרטי עוגה">
           <Field label="סוג" value={order.type} />
           <Field label="גודל וצורה" value={order.base_size} />
-          <Field label="טעם טורט" value={order.torte_flavor} />
-          <Field label="קרם בין השכבות" value={order.cream_between} />
-          <Field label="מילוי" value={order.filling} />
+          {order.preset_cake_name ? (
+            <Field label="עוגה מוכנה" value={order.preset_cake_name} />
+          ) : (
+            <>
+              <Field label="טעם טורט" value={order.torte_flavor} />
+              <Field label="קרם בין השכבות" value={order.cream_between} />
+              <Field label="מילוי" value={order.filling} />
+            </>
+          )}
           <Field label="ציפוי" value={order.coating} />
           <Field label="כתר עליון" value={order.crown} />
           {order.extras && order.extras.length > 0 && (
@@ -557,9 +577,15 @@ function PrintConfirmation({ order, branchName, onClose }: { order: SpecialOrder
           </div>
           <PrintRow label="סוג" value={order.type} />
           <PrintRow label="גודל וצורה" value={order.base_size} />
-          <PrintRow label="טעם טורט" value={order.torte_flavor} />
-          <PrintRow label="קרם בין השכבות" value={order.cream_between} />
-          <PrintRow label="מילוי" value={order.filling} />
+          {order.preset_cake_name ? (
+            <PrintRow label="עוגה מוכנה" value={order.preset_cake_name} strong />
+          ) : (
+            <>
+              <PrintRow label="טעם טורט" value={order.torte_flavor} />
+              <PrintRow label="קרם בין השכבות" value={order.cream_between} />
+              <PrintRow label="מילוי" value={order.filling} />
+            </>
+          )}
           <PrintRow label="ציפוי" value={order.coating} />
           <PrintRow label="כתר עליון" value={order.crown} />
           {order.extras && order.extras.length > 0 && <PrintRow label="תוספות" value={order.extras.join(' · ')} />}
@@ -672,17 +698,37 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
   const [orderNumberManual, setOrderNumberManual] = useState('')
   const [pickupDate, setPickupDate] = useState('')
   const [pickupTime, setPickupTime] = useState('')
-  const [type, setType] = useState<'חלבי' | 'פרווה'>('חלבי')
-  const [baseSize, setBaseSize] = useState('')
+  const [type, setTypeRaw] = useState<CakeType>('חלבי')
+  const [baseSize, setBaseSizeRaw] = useState('')
   const [torteFlavor, setTorteFlavor] = useState('')
   const [creamBetween, setCreamBetween] = useState('')
   const [filling, setFilling] = useState('')
+  const [presetCake, setPresetCake] = useState('')
   const [coating, setCoating] = useState('')
   const [crown, setCrown] = useState('')
   const [extras, setExtras] = useState<string[]>([])
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const isPresetMode = baseSize === MEDIUM_ROUND && !!presetCake
+  const creamOptions = CREAMS_BETWEEN[type]
+  const fillingOptions = FILLINGS[type]
+  const presetOptions = PRESET_CAKES[type]
+
+  // Reset selections that are no longer valid when the type changes
+  function setType(newType: CakeType) {
+    setTypeRaw(newType)
+    if (!CREAMS_BETWEEN[newType].includes(creamBetween)) setCreamBetween('')
+    if (!FILLINGS[newType].includes(filling)) setFilling('')
+    if (presetCake && !PRESET_CAKES[newType].includes(presetCake)) setPresetCake('')
+  }
+
+  // Clear the preset when a non-medium base size is chosen
+  function setBaseSize(newSize: string) {
+    setBaseSizeRaw(newSize)
+    if (newSize !== MEDIUM_ROUND) setPresetCake('')
+  }
 
   function toggleExtra(v: string) {
     setExtras(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])
@@ -694,9 +740,14 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
     if (!orderNumberManual.trim()) return setError('מספר הזמנה חובה')
     if (!pickupDate) return setError('תאריך איסוף חובה')
     if (!baseSize) return setError('גודל וצורת בסיס חובה')
-    if (!torteFlavor) return setError('טעם טורט חובה')
-    if (!creamBetween) return setError('קרם בין השכבות חובה')
-    if (!filling) return setError('מילוי חובה')
+    if (isPresetMode) {
+      if (!presetCake) return setError('יש לבחור עוגה מוכנה')
+    } else {
+      if (baseSize === MEDIUM_ROUND) return setError('יש לבחור עוגה מוכנה')
+      if (!torteFlavor) return setError('טעם טורט חובה')
+      if (!creamBetween) return setError('קרם בין השכבות חובה')
+      if (!filling) return setError('מילוי חובה')
+    }
     if (!coating) return setError('ציפוי חובה')
     if (!crown) return setError('כתר עליון חובה')
 
@@ -704,6 +755,11 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
 
     const systemOrderNumber = generateOrderNumber(branchId)
     const manualNumber = orderNumberManual.trim()
+    // When a preset is chosen the torte/cream/filling columns are NOT NULL, so
+    // reuse the preset name to satisfy the constraint — displays key off preset_cake_name.
+    const torteForSave = isPresetMode ? presetCake : torteFlavor
+    const creamForSave = isPresetMode ? presetCake : creamBetween
+    const fillingForSave = isPresetMode ? presetCake : filling
     const { data: inserted, error: insErr } = await supabase.from('special_orders').insert({
       order_number: systemOrderNumber,
       order_number_manual: manualNumber,
@@ -714,9 +770,10 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
       pickup_time: pickupTime || null,
       type,
       base_size: baseSize,
-      torte_flavor: torteFlavor,
-      cream_between: creamBetween,
-      filling,
+      torte_flavor: torteForSave,
+      cream_between: creamForSave,
+      filling: fillingForSave,
+      preset_cake_name: isPresetMode ? presetCake : null,
       coating,
       crown,
       extras: extras.length > 0 ? extras : null,
@@ -764,13 +821,44 @@ function OrderForm({ branchId, branchColor, userId, onClose, onSaved }: {
         </div>
 
         {/* Type */}
-        <RadioGroup label="סוג *" value={type} onChange={(v) => setType(v as 'חלבי' | 'פרווה')} options={['חלבי', 'פרווה']} color={branchColor} />
+        <RadioGroup label="סוג *" value={type} onChange={(v) => setType(v as CakeType)} options={['חלבי', 'פרווה']} color={branchColor} />
 
         {/* Required cake fields */}
         <SelectGroup label="גודל וצורת בסיס *" value={baseSize} onChange={setBaseSize} options={BASE_SIZES} color={branchColor} />
-        <SelectGroup label="טעם טורט *" value={torteFlavor} onChange={setTorteFlavor} options={TORTE_FLAVORS} color={branchColor} />
-        <SelectGroup label="קרם בין השכבות *" value={creamBetween} onChange={setCreamBetween} options={CREAMS_BETWEEN} color={branchColor} />
-        <SelectGroup label="מילוי *" value={filling} onChange={setFilling} options={FILLINGS} color={branchColor} />
+
+        {/* Preset cake picker — only for 'עגולה בינונית' */}
+        {baseSize === MEDIUM_ROUND && (
+          <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#3730a3', marginBottom: 6 }}>
+              בחר עוגה מוכנה *
+            </div>
+            <select
+              value={presetCake}
+              onChange={e => setPresetCake(e.target.value)}
+              style={{
+                width: '100%', border: '1px solid #c7d2fe', borderRadius: 8,
+                padding: '9px 10px', fontSize: 14, fontFamily: 'inherit', background: 'white', direction: 'rtl',
+              }}
+            >
+              <option value="">— בחר —</option>
+              {presetOptions.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            {presetCake && (
+              <div style={{ fontSize: 12, color: '#4338ca', marginTop: 8 }}>
+                שדות טעם טורט · קרם · מילוי אינם נדרשים — העוגה המוכנה מגדירה אותם.
+              </div>
+            )}
+          </div>
+        )}
+
+        {!isPresetMode && (
+          <>
+            <SelectGroup label="טעם טורט *" value={torteFlavor} onChange={setTorteFlavor} options={TORTE_FLAVORS} color={branchColor} />
+            <SelectGroup label="קרם בין השכבות *" value={creamBetween} onChange={setCreamBetween} options={creamOptions} color={branchColor} />
+            <SelectGroup label="מילוי *" value={filling} onChange={setFilling} options={fillingOptions} color={branchColor} />
+          </>
+        )}
+
         <SelectGroup label="ציפוי *" value={coating} onChange={setCoating} options={COATINGS} color={branchColor} />
         <SelectGroup label="כתר עליון *" value={crown} onChange={setCrown} options={CROWNS} color={branchColor} />
 
