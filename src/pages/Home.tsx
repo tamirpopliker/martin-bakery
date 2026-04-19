@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase, monthEnd, getFixedCostTotal, fetchFactoryPL, getOverheadPct } from '../lib/supabase'
 import { fetchAllBranchesProfit } from '../lib/profitCalc'
+import { calculateConsolidatedPL } from '../lib/calculatePL'
 import { usePeriod } from '../lib/PeriodContext'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
@@ -249,47 +250,14 @@ export default function Home() {
       setBranchOperatingProfit(totalBranchOP)
       setBranchLaborCost(totalBranchLab)
 
-      // ─── Direct KPI queries for the 4 summary cards ──────────────────
-      // Authoritative totals pulled straight from source tables (not the P&L view),
-      // so every branch_revenue source (cashier/website/credit) + newer register_closings
-      // are summed into the headline cards.
-      const [brRev, brLab, brWst, brFc, brCls] = await Promise.all([
-        supabase.from('branch_revenue').select('amount, source, branch_id, date')
-          .in('branch_id', branchIds).gte('date', from).lt('date', to).range(0, 99999),
-        supabase.from('branch_labor').select('employer_cost')
-          .in('branch_id', branchIds).gte('date', from).lt('date', to).range(0, 99999),
-        supabase.from('branch_waste').select('amount')
-          .in('branch_id', branchIds).gte('date', from).lt('date', to).range(0, 99999),
-        supabase.from('fixed_costs').select('amount, entity_type')
-          .like('entity_type', 'branch_%').eq('month', monthKey),
-        supabase.from('register_closings').select('cash_sales, credit_sales')
-          .in('branch_id', branchIds).gte('date', from).lt('date', to).range(0, 99999),
-      ])
-
-      const legacyRevenue = (brRev.data || []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0)
-      const closingsRevenue = (brCls.data || []).reduce((s: number, c: any) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0)
-      const kpiRevenue = legacyRevenue + closingsRevenue
-      const kpiLabor = (brLab.data || []).reduce((s: number, r: any) => s + Number(r.employer_cost || 0), 0)
-      const kpiWaste = (brWst.data || []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0)
-      const kpiFixed = (brFc.data || []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0)
-      const kpiOperating = kpiRevenue - kpiLabor - kpiWaste - kpiFixed
-
-      // Debug — confirms every source is being summed (remove when happy).
-      console.log('[Home KPI] period', from, '→', to)
-      console.log('[Home KPI] branch_revenue rows:', brRev.data?.length, 'sum:', legacyRevenue,
-        'by source:', (brRev.data || []).reduce((a: any, r: any) => { a[r.source || 'unknown'] = (a[r.source || 'unknown'] || 0) + Number(r.amount || 0); return a }, {}))
-      console.log('[Home KPI] register_closings rows:', brCls.data?.length, 'sum:', closingsRevenue)
-      console.log('[Home KPI] total revenue:', kpiRevenue)
-      console.log('[Home KPI] branch_labor rows:', brLab.data?.length, 'sum:', kpiLabor)
-      console.log('[Home KPI] branch_waste rows:', brWst.data?.length, 'sum:', kpiWaste)
-      console.log('[Home KPI] fixed_costs rows:', brFc.data?.length, 'sum:', kpiFixed)
-      console.log('[Home KPI] operating profit (rev-lab-wst-fc):', kpiOperating)
-
-      // Override the headline cards with these authoritative totals.
-      setTotalBranchRevenue(kpiRevenue)
-      setBranchLaborCost(kpiLabor)
-      setBranchWaste(kpiWaste)
-      setBranchOperatingProfit(kpiOperating)
+      // ─── Consolidated KPI (intercompany-eliminated) — matches CEODashboard ──────
+      // calculateConsolidatedPL sums all branches + factory external revenue, eliminates
+      // factory-to-branch internal sales, and returns the canonical operating profit.
+      const cons = await calculateConsolidatedPL(branchIds, from, to, overheadPct, monthKey)
+      setTotalBranchRevenue(cons.consolidated.revenue)
+      setBranchLaborCost(cons.consolidated.labor)
+      setBranchWaste(cons.consolidated.waste)
+      setBranchOperatingProfit(cons.consolidated.operatingProfit)
 
       // Previous period (comparison) via shared functions
       const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
@@ -312,38 +280,13 @@ export default function Home() {
       setPrevTotalLabor(prevFactoryPL.labor + pTotalBranchLab)
       setPrevBranchGross(pTotalBranchRev > 0 ? pTotalBranchRev - pTotalBranchLab : 0)
       setPrevOperatingProfit(prevFactoryPL.operatingProfit + pTotalBranchOP)
-      setPrevBranchOperatingProfit(pTotalBranchOP)
-      setPrevBranchLaborCost(pTotalBranchLab)
 
-      // ─── Direct KPI queries for the comparison period ────────────────
-      const [pBrRev, pBrLab, pBrWst, pBrFc, pBrCls] = await Promise.all([
-        supabase.from('branch_revenue').select('amount, source')
-          .in('branch_id', branchIds).gte('date', pFrom).lt('date', pTo).range(0, 99999),
-        supabase.from('branch_labor').select('employer_cost')
-          .in('branch_id', branchIds).gte('date', pFrom).lt('date', pTo).range(0, 99999),
-        supabase.from('branch_waste').select('amount')
-          .in('branch_id', branchIds).gte('date', pFrom).lt('date', pTo).range(0, 99999),
-        supabase.from('fixed_costs').select('amount')
-          .like('entity_type', 'branch_%').eq('month', pMonthKey),
-        supabase.from('register_closings').select('cash_sales, credit_sales')
-          .in('branch_id', branchIds).gte('date', pFrom).lt('date', pTo).range(0, 99999),
-      ])
-
-      const pLegacyRevenue = (pBrRev.data || []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0)
-      const pClosingsRevenue = (pBrCls.data || []).reduce((s: number, c: any) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0)
-      const pKpiRevenue = pLegacyRevenue + pClosingsRevenue
-      const pKpiLabor = (pBrLab.data || []).reduce((s: number, r: any) => s + Number(r.employer_cost || 0), 0)
-      const pKpiWaste = (pBrWst.data || []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0)
-      const pKpiFixed = (pBrFc.data || []).reduce((s: number, r: any) => s + Number(r.amount || 0), 0)
-      const pKpiOperating = pKpiRevenue - pKpiLabor - pKpiWaste - pKpiFixed
-
-      console.log('[Home KPI prev] period', pFrom, '→', pTo,
-        'rev:', pKpiRevenue, 'labor:', pKpiLabor, 'waste:', pKpiWaste, 'fixed:', pKpiFixed, 'op:', pKpiOperating)
-
-      setPrevBranchRevenue(pKpiRevenue)
-      setPrevBranchLaborCost(pKpiLabor)
-      setPrevBranchWaste(pKpiWaste)
-      setPrevBranchOperatingProfit(pKpiOperating)
+      // ─── Consolidated KPI for the comparison period ────────────────────
+      const prevCons = await calculateConsolidatedPL(branchIds, pFrom, pTo, overheadPct, pMonthKey)
+      setPrevBranchRevenue(prevCons.consolidated.revenue)
+      setPrevBranchLaborCost(prevCons.consolidated.labor)
+      setPrevBranchWaste(prevCons.consolidated.waste)
+      setPrevBranchOperatingProfit(prevCons.consolidated.operatingProfit)
     }
     loadKpi()
   }, [from, to, branchList.length])
