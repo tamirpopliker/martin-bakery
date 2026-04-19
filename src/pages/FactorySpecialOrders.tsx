@@ -284,73 +284,18 @@ export default function FactorySpecialOrders({ onBack }: Props) {
             </div>
           </div>
         ) : (
-          <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead style={{ background: '#f8fafc' }}>
-                <tr>
-                  <Th>מס׳ הזמנה</Th>
-                  <Th>סניף</Th>
-                  <Th>לקוח</Th>
-                  <Th>איסוף</Th>
-                  <Th>פרטי עוגה</Th>
-                  <Th>סטטוס</Th>
-                  <Th>פעולה</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(o => {
-                  const branchName = getBranchName(o.branch_id)
-                  const cs = getBranchColorScheme(branchName)
-                  const st = STATUS_LABELS[o.status]
-                  const flow = STATUS_FLOW[o.status]
-                  return (
-                    <tr
-                      key={o.id}
-                      onClick={() => setViewOrder(o)}
-                      style={{ borderTop: '1px solid #f1f5f9', cursor: 'pointer' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = '#fafbff')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'white')}
-                    >
-                      <Td><span style={{ color: '#2563eb', fontWeight: 700 }}>{displayOrderNumber(o)}</span></Td>
-                      <Td>
-                        <span style={{ background: cs.bg, color: cs.text, borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 700, display: 'inline-block' }}>
-                          {branchName}
-                        </span>
-                      </Td>
-                      <Td>
-                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{o.customer_name}</div>
-                      </Td>
-                      <Td>
-                        <div style={{ fontWeight: 600 }}>{new Date(o.pickup_date).toLocaleDateString('he-IL')}</div>
-                        {o.pickup_time && <div style={{ fontSize: 11, color: '#94a3b8' }}>{o.pickup_time}</div>}
-                      </Td>
-                      <Td>
-                        <div style={{ fontSize: 12, color: '#475569', maxWidth: 260, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {o.type} · {o.base_size}
-                          {o.preset_cake_name ? ` · ${o.preset_cake_name}` : ` · ${o.torte_flavor}`}
-                        </div>
-                      </Td>
-                      <Td>
-                        <span style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}`, borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 700, display: 'inline-block' }}>
-                          {st.label}
-                        </span>
-                      </Td>
-                      <Td>
-                        {flow && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); requestStatusChange(o, flow.next) }}
-                            style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                          >
-                            {flow.label}
-                            <ArrowRight size={12} />
-                          </button>
-                        )}
-                      </Td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {filtered.map(o => (
+              <FactoryOrderCard
+                key={o.id}
+                order={o}
+                today={today}
+                branchName={getBranchName(o.branch_id)}
+                branchColor={getBranchColorScheme(getBranchName(o.branch_id))}
+                onDetails={() => setViewOrder(o)}
+                onRequestStatusChange={(s) => requestStatusChange(o, s)}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -504,12 +449,141 @@ function FilterDate({ label, value, onChange }: { label: string; value: string; 
   )
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return <th style={{ textAlign: 'right', padding: '10px 14px', fontSize: 12, fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap' }}>{children}</th>
-}
+// ─── Factory Order Card ──────────────────────────────────────────────────
+function FactoryOrderCard({ order, today, branchName, branchColor, onDetails, onRequestStatusChange }: {
+  order: SpecialOrder
+  today: string
+  branchName: string
+  branchColor: { bg: string; text: string }
+  onDetails: () => void
+  onRequestStatusChange: (s: string) => void
+}) {
+  const st = STATUS_LABELS[order.status]
+  const flow = STATUS_FLOW[order.status]
+  const isToday = order.pickup_date === today && order.status !== 'cancelled' && order.status !== 'delivered_to_customer'
+  const mainFilling = order.preset_cake_name || order.filling
+  const summary = `${order.type} · ${order.base_size} · ${mainFilling}`
+  const pickupDateLabel = new Date(order.pickup_date).toLocaleDateString('he-IL')
+  const pickupTimeLabel = order.pickup_time ? ` · ${order.pickup_time}` : ''
 
-function Td({ children }: { children: React.ReactNode }) {
-  return <td style={{ padding: '10px 14px', verticalAlign: 'middle' }}>{children}</td>
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  // Factory-side status transitions: flow.next (new→in_progress→sent_to_branch) + cancel
+  const nextActions: { key: string; label: string; danger?: boolean }[] = []
+  if (flow) nextActions.push({ key: flow.next, label: flow.label })
+  if (order.status === 'new' || order.status === 'in_progress') {
+    nextActions.push({ key: 'cancelled', label: 'בטל הזמנה', danger: true })
+  }
+
+  return (
+    <div
+      style={{
+        background: 'white',
+        border: '1px solid #f1f5f9',
+        borderRight: isToday ? '3px solid #E24B4A' : '1px solid #f1f5f9',
+        borderRadius: 12,
+        padding: '14px 16px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        position: 'relative',
+      }}
+    >
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 500, color: '#0f172a' }}>{order.customer_name}</div>
+        </div>
+        <span style={{
+          background: branchColor.bg, color: branchColor.text,
+          borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 700, flexShrink: 0,
+        }}>
+          {branchName}
+        </span>
+        <span style={{
+          background: '#dbeafe', color: '#1e40af',
+          borderRadius: 6, padding: '3px 10px', fontSize: 12, fontWeight: 700, flexShrink: 0,
+        }}>
+          #{displayOrderNumber(order)}
+        </span>
+        <span style={{
+          background: st.bg, color: st.color, border: `1px solid ${st.border}`,
+          borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 700, flexShrink: 0,
+        }}>
+          {st.label}
+        </span>
+      </div>
+
+      {/* Cake summary */}
+      <div style={{ fontSize: 13, color: '#475569', marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {summary}
+      </div>
+
+      {/* Pickup line */}
+      <div style={{ fontSize: 13, marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ color: isToday ? '#E24B4A' : '#64748b', fontWeight: isToday ? 700 : 500 }}>
+          איסוף: {pickupDateLabel}{pickupTimeLabel}
+        </span>
+        {isToday && (
+          <span style={{ background: '#E24B4A', color: 'white', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800 }}>
+            היום
+          </span>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        {nextActions.length > 0 && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setMenuOpen(v => !v)}
+              style={{
+                background: 'white', color: '#475569', border: '1px solid #e2e8f0',
+                borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              שנה סטטוס ▾
+            </button>
+            {menuOpen && (
+              <>
+                <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
+                <div style={{
+                  position: 'absolute', top: '100%', marginTop: 4, left: 0,
+                  background: 'white', border: '1px solid #e2e8f0', borderRadius: 10,
+                  boxShadow: '0 6px 20px rgba(15,23,42,0.12)', padding: 4, zIndex: 21,
+                  minWidth: 160, display: 'flex', flexDirection: 'column', gap: 2,
+                }}>
+                  {nextActions.map(a => (
+                    <button
+                      key={a.key}
+                      onClick={() => { setMenuOpen(false); onRequestStatusChange(a.key) }}
+                      style={{
+                        background: 'none', border: 'none',
+                        color: a.danger ? '#991b1b' : '#0f172a',
+                        borderRadius: 6, padding: '8px 10px', fontSize: 13, fontWeight: 600,
+                        cursor: 'pointer', textAlign: 'right', fontFamily: 'inherit',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = a.danger ? '#fee2e2' : '#f8fafc')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        <button
+          onClick={onDetails}
+          style={{
+            background: '#6366f1', color: 'white', border: 'none',
+            borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          }}
+        >
+          פרטים
+        </button>
+      </div>
+    </div>
+  )
 }
 
 // ─── Detail Modal ─────────────────────────────────────────────────────────

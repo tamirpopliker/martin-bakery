@@ -139,17 +139,19 @@ export default function BranchSpecialOrders({ branchId, branchName, branchColor,
         displayOrderNumber(o).toLowerCase().includes(searchLower))
     : afterStatusFilter
 
-  async function cancelOrder(o: SpecialOrder) {
-    if (!confirm(`לבטל את הזמנה ${displayOrderNumber(o)}?`)) return
-    await supabase.from('special_orders').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', o.id)
-    setViewOrder(null)
+  async function changeStatus(o: SpecialOrder, newStatus: SpecialOrder['status']) {
+    await supabase.from('special_orders').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', o.id)
+    if (viewOrder?.id === o.id) setViewOrder(null)
     fetchOrders()
   }
 
+  async function cancelOrder(o: SpecialOrder) {
+    if (!confirm(`לבטל את הזמנה ${displayOrderNumber(o)}?`)) return
+    await changeStatus(o, 'cancelled')
+  }
+
   async function markDeliveredToCustomer(o: SpecialOrder) {
-    await supabase.from('special_orders').update({ status: 'delivered_to_customer', updated_at: new Date().toISOString() }).eq('id', o.id)
-    setViewOrder(null)
-    fetchOrders()
+    await changeStatus(o, 'delivered_to_customer')
   }
 
   return (
@@ -158,19 +160,6 @@ export default function BranchSpecialOrders({ branchId, branchName, branchColor,
         title={`הזמנות מיוחדות — סניף ${branchName}`}
         subtitle="עוגות מעוצבות · לפי הזמנה"
         onBack={onBack}
-        action={
-          <button
-            onClick={() => setShowForm(true)}
-            style={{
-              background: branchColor, color: 'white', border: 'none', borderRadius: 8,
-              padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}
-          >
-            <Plus size={16} />
-            הזמנה חדשה
-          </button>
-        }
       />
 
       <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
@@ -257,11 +246,40 @@ export default function BranchSpecialOrders({ branchId, branchName, branchColor,
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {filtered.map(o => (
-              <OrderRow key={o.id} order={o} onClick={() => setViewOrder(o)} />
+              <OrderCard
+                key={o.id}
+                order={o}
+                today={today}
+                onDetails={() => setViewOrder(o)}
+                onChangeStatus={(s) => changeStatus(o, s)}
+                onCancel={() => cancelOrder(o)}
+              />
             ))}
           </div>
         )}
       </div>
+
+      {/* ─── Floating Action Button (only in active tab) ───────────── */}
+      {tab === 'active' && (
+        <button
+          onClick={() => setShowForm(true)}
+          title="הזמנה חדשה"
+          aria-label="הזמנה חדשה"
+          style={{
+            position: 'fixed', bottom: 24, right: 24, zIndex: 50,
+            width: 56, height: 56, borderRadius: '50%',
+            background: '#6366f1', color: 'white', border: 'none',
+            fontSize: 28, lineHeight: 1, fontWeight: 300,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 6px 20px rgba(99, 102, 241, 0.4)',
+            transition: 'transform 0.15s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.06)')}
+          onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+        >
+          +
+        </button>
+      )}
 
       {/* ─── Order Form Modal ─────────────────────────────────────── */}
       {showForm && (
@@ -370,42 +388,143 @@ function FilterChip({ label, active, count, onClick, color }: { label: string; a
   )
 }
 
-// ─── Order Row ────────────────────────────────────────────────────────────
-function OrderRow({ order, onClick }: { order: SpecialOrder; onClick: () => void }) {
+// ─── Order Card ──────────────────────────────────────────────────────────
+function OrderCard({ order, today, onDetails, onChangeStatus, onCancel }: {
+  order: SpecialOrder
+  today: string
+  onDetails: () => void
+  onChangeStatus: (s: SpecialOrder['status']) => void
+  onCancel: () => void
+}) {
   const st = STATUS_LABELS[order.status]
-  const summary = `${order.type} · ${order.base_size} · ${order.torte_flavor}`
+  const isToday = order.pickup_date === today && !HISTORY_STATUSES.includes(order.status)
+  const mainFilling = order.preset_cake_name || order.filling
+  const summary = `${order.type} · ${order.base_size} · ${mainFilling}`
+  const pickupDateLabel = new Date(order.pickup_date).toLocaleDateString('he-IL')
+  const pickupTimeLabel = order.pickup_time ? ` · ${order.pickup_time}` : ''
+
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  // Branch-side status transitions available on the card
+  const nextActions: { key: SpecialOrder['status']; label: string; danger?: boolean }[] = []
+  if (order.status === 'sent_to_branch') {
+    nextActions.push({ key: 'delivered_to_customer', label: 'יצאה ללקוח' })
+  }
+  if (!HISTORY_STATUSES.includes(order.status)) {
+    nextActions.push({ key: 'cancelled', label: 'בטל הזמנה', danger: true })
+  }
+
   return (
-    <button
-      onClick={onClick}
+    <div
       style={{
-        background: 'white', border: '1px solid #f1f5f9', borderRadius: 12,
-        padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14,
-        cursor: 'pointer', textAlign: 'right', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-        transition: 'all 0.15s',
+        background: 'white',
+        border: '1px solid #f1f5f9',
+        borderRight: isToday ? '3px solid #E24B4A' : '1px solid #f1f5f9',
+        borderRadius: 12,
+        padding: '14px 16px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        position: 'relative',
       }}
-      onMouseEnter={e => (e.currentTarget.style.borderColor = '#c7d2fe')}
-      onMouseLeave={e => (e.currentTarget.style.borderColor = '#f1f5f9')}
     >
-      <div style={{ flexShrink: 0, minWidth: 120 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#2563eb' }}>{displayOrderNumber(order)}</div>
-        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{new Date(order.order_date).toLocaleDateString('he-IL')}</div>
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{order.customer_name}</div>
-        <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-          איסוף: {new Date(order.pickup_date).toLocaleDateString('he-IL')}{order.pickup_time ? ` · ${order.pickup_time}` : ''}
+      {/* Header: customer name + order number badge + status */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 500, color: '#0f172a' }}>{order.customer_name}</div>
         </div>
-        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {summary}
-        </div>
+        <span style={{
+          background: '#dbeafe', color: '#1e40af',
+          borderRadius: 6, padding: '3px 10px', fontSize: 12, fontWeight: 700, flexShrink: 0,
+        }}>
+          #{displayOrderNumber(order)}
+        </span>
+        <span style={{
+          background: st.bg, color: st.color, border: `1px solid ${st.border}`,
+          borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 700, flexShrink: 0,
+        }}>
+          {st.label}
+        </span>
       </div>
-      <span style={{
-        background: st.bg, color: st.color, border: `1px solid ${st.border}`,
-        borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 700, flexShrink: 0,
-      }}>
-        {st.label}
-      </span>
-    </button>
+
+      {/* Cake summary */}
+      <div style={{ fontSize: 13, color: '#475569', marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {summary}
+      </div>
+
+      {/* Pickup line — red if today */}
+      <div style={{ fontSize: 13, marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ color: isToday ? '#E24B4A' : '#64748b', fontWeight: isToday ? 700 : 500 }}>
+          איסוף: {pickupDateLabel}{pickupTimeLabel}
+        </span>
+        {isToday && (
+          <span style={{ background: '#E24B4A', color: 'white', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 800 }}>
+            היום
+          </span>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end', flexWrap: 'wrap', position: 'relative' }}>
+        {nextActions.length > 0 && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setMenuOpen(v => !v)}
+              style={{
+                background: 'white', color: '#475569', border: '1px solid #e2e8f0',
+                borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              שנה סטטוס ▾
+            </button>
+            {menuOpen && (
+              <>
+                <div
+                  onClick={() => setMenuOpen(false)}
+                  style={{ position: 'fixed', inset: 0, zIndex: 20 }}
+                />
+                <div
+                  style={{
+                    position: 'absolute', top: '100%', marginTop: 4, left: 0,
+                    background: 'white', border: '1px solid #e2e8f0', borderRadius: 10,
+                    boxShadow: '0 6px 20px rgba(15,23,42,0.12)', padding: 4, zIndex: 21,
+                    minWidth: 160, display: 'flex', flexDirection: 'column', gap: 2,
+                  }}
+                >
+                  {nextActions.map(a => (
+                    <button
+                      key={a.key}
+                      onClick={() => {
+                        setMenuOpen(false)
+                        if (a.key === 'cancelled') { onCancel(); return }
+                        onChangeStatus(a.key)
+                      }}
+                      style={{
+                        background: 'none', border: 'none',
+                        color: a.danger ? '#991b1b' : '#0f172a',
+                        borderRadius: 6, padding: '8px 10px', fontSize: 13, fontWeight: 600,
+                        cursor: 'pointer', textAlign: 'right', fontFamily: 'inherit',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = a.danger ? '#fee2e2' : '#f8fafc')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        <button
+          onClick={onDetails}
+          style={{
+            background: '#6366f1', color: 'white', border: 'none',
+            borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          }}
+        >
+          פרטים
+        </button>
+      </div>
+    </div>
   )
 }
 
