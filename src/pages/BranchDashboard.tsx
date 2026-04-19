@@ -156,14 +156,17 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
     const data = await Promise.all(months.map(async (m) => {
       const mFrom = m + '-01'
       const mTo = new Date(new Date(mFrom).getFullYear(), new Date(mFrom).getMonth() + 1, 1).toISOString().slice(0, 10)
-      const [rev, lab, exp, wst, fc] = await Promise.all([
-        supabase.from('branch_revenue').select('amount').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo),
-        supabase.from('branch_labor').select('employer_cost').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo),
-        supabase.from('branch_expenses').select('amount').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo),
-        supabase.from('branch_waste').select('amount').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo),
+      const [rev, lab, exp, wst, fc, closings] = await Promise.all([
+        supabase.from('branch_revenue').select('amount').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo).range(0, 99999),
+        supabase.from('branch_labor').select('employer_cost').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo).range(0, 99999),
+        supabase.from('branch_expenses').select('amount').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo).range(0, 99999),
+        supabase.from('branch_waste').select('amount').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo).range(0, 99999),
         supabase.from('fixed_costs').select('amount').eq('entity_type', 'branch_' + branchId).eq('month', m),
+        supabase.from('register_closings').select('cash_sales, credit_sales').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo).range(0, 99999),
       ])
-      const revenue = (rev.data || []).reduce((s, r) => s + Number(r.amount), 0)
+      const legacyRevenue = (rev.data || []).reduce((s, r) => s + Number(r.amount), 0)
+      const closingsRevenue = (closings.data || []).reduce((s, c) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0)
+      const revenue = legacyRevenue + closingsRevenue
       const labor = (lab.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
       const expenses = (exp.data || []).reduce((s, r) => s + Number(r.amount), 0)
       const waste = (wst.data || []).reduce((s, r) => s + Number(r.amount), 0)

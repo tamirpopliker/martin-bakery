@@ -62,24 +62,29 @@ export async function calculateBranchPL(
     pct = Number(branchData?.overhead_pct ?? 5.0)
   }
 
-  const [revRes, expRes, labRes, wasteRes, fcRes, intSalesRes] = await Promise.all([
+  const [revRes, expRes, labRes, wasteRes, fcRes, intSalesRes, closingsRes] = await Promise.all([
     supabase.from('branch_revenue').select('amount')
-      .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd),
+      .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
     supabase.from('branch_expenses').select('expense_type, amount, from_factory')
-      .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd),
+      .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
     supabase.from('branch_labor').select('employer_cost')
-      .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd),
+      .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
     supabase.from('branch_waste').select('amount')
-      .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd),
+      .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
     supabase.from('fixed_costs').select('amount, entity_id')
       .eq('entity_type', `branch_${branchId}`).eq('month', mk),
     supabase.from('internal_sales').select('total_amount')
       .eq('branch_id', branchId).eq('status', 'completed')
-      .gte('order_date', periodStart).lt('order_date', periodEnd),
+      .gte('order_date', periodStart).lt('order_date', periodEnd).range(0, 99999),
+    // Register closings (cash + credit) merge into the cashier bucket for current-period revenue.
+    supabase.from('register_closings').select('cash_sales, credit_sales')
+      .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
   ])
 
-  // Revenue
-  const revenue = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+  // Revenue (legacy branch_revenue + newer register_closings)
+  const legacyRevenue = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+  const closingsRevenue = (closingsRes.data || []).reduce((s, c) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0)
+  const revenue = legacyRevenue + closingsRevenue
 
   // Factory purchases: prefer internal_sales (completed), fallback to branch_expenses from_factory
   const intSalesTotal = (intSalesRes.data || []).reduce((s, r) => s + Number(r.total_amount), 0)

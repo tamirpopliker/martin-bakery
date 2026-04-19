@@ -239,12 +239,20 @@ export interface BranchWasteTrend { month: string; label: string; finished: numb
 export async function fetchBranchRevenueTrend(branchId: number, refMonth: string): Promise<BranchRevenueTrend[]> {
   const months = getLast6Months(refMonth)
   const tFrom = months[0] + '-01', tTo = monthEnd(months[5])
-  const { data } = await supabase.from('branch_revenue').select('date, amount, source').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo)
+  const [revRes, closingsRes] = await Promise.all([
+    supabase.from('branch_revenue').select('date, amount, source').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo).range(0, 99999),
+    supabase.from('register_closings').select('date, cash_sales, credit_sales').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo).range(0, 99999),
+  ])
   const byM: Record<string, { cashier: number; website: number; credit: number }> = {}
   months.forEach(m => { byM[m] = { cashier: 0, website: 0, credit: 0 } })
-  ;(data || []).forEach((r: any) => {
+  ;(revRes.data || []).forEach((r: any) => {
     const m = r.date?.slice(0, 7)
     if (m && byM[m]) byM[m][r.source as 'cashier' | 'website' | 'credit'] += Number(r.amount || 0)
+  })
+  // Merge register_closings into the cashier bucket so the trend shows the real register revenue.
+  ;(closingsRes.data || []).forEach((c: any) => {
+    const m = c.date?.slice(0, 7)
+    if (m && byM[m]) byM[m].cashier += Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
   })
   return months.map(m => ({ month: m, label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1], ...byM[m], total: byM[m].cashier + byM[m].website + byM[m].credit }))
 }
@@ -252,9 +260,10 @@ export async function fetchBranchRevenueTrend(branchId: number, refMonth: string
 export async function fetchBranchLaborTrend(branchId: number, refMonth: string): Promise<BranchLaborTrend[]> {
   const months = getLast6Months(refMonth)
   const tFrom = months[0] + '-01', tTo = monthEnd(months[5])
-  const [labRes, revRes] = await Promise.all([
-    supabase.from('branch_labor').select('date, employer_cost').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
-    supabase.from('branch_revenue').select('date, amount').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
+  const [labRes, revRes, closingsRes] = await Promise.all([
+    supabase.from('branch_labor').select('date, employer_cost').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo).range(0, 99999),
+    supabase.from('branch_revenue').select('date, amount').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo).range(0, 99999),
+    supabase.from('register_closings').select('date, cash_sales, credit_sales').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo).range(0, 99999),
   ])
   const grp = (data: any[] | null, field: string) => {
     const map: Record<string, number> = {}
@@ -263,6 +272,11 @@ export async function fetchBranchLaborTrend(branchId: number, refMonth: string):
   }
   const labByM = grp(labRes.data, 'employer_cost')
   const revByM = grp(revRes.data, 'amount')
+  // Add register_closings revenue to the denominator so the labor % reflects the true register take.
+  ;(closingsRes.data || []).forEach((c: any) => {
+    const m = c.date?.slice(0, 7)
+    if (m) revByM[m] = (revByM[m] || 0) + Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
+  })
   return months.map(m => {
     const laborCost = labByM[m] || 0, revenue = revByM[m] || 0
     return { month: m, label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1], laborCost, revenue, laborPct: revenue > 0 ? Math.round((laborCost / revenue) * 1000) / 10 : 0 }
@@ -530,13 +544,15 @@ export interface ConsolidatedPLResult {
  * Fetch complete P&L for a branch.
  */
 export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: string, monthKey: string, overheadPct = 5): Promise<BranchPLResult> {
-  const [revRes, expRes, labRes, wasteRes, fcRes, intSalesRes] = await Promise.all([
-    supabase.from('branch_revenue').select('source, amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
-    supabase.from('branch_expenses').select('expense_type, amount, from_factory').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
-    supabase.from('branch_labor').select('employer_cost').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
-    supabase.from('branch_waste').select('amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
+  const [revRes, expRes, labRes, wasteRes, fcRes, intSalesRes, closingsRes] = await Promise.all([
+    supabase.from('branch_revenue').select('source, amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo).range(0, 99999),
+    supabase.from('branch_expenses').select('expense_type, amount, from_factory').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo).range(0, 99999),
+    supabase.from('branch_labor').select('employer_cost').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo).range(0, 99999),
+    supabase.from('branch_waste').select('amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo).range(0, 99999),
     supabase.from('fixed_costs').select('amount, entity_id').eq('entity_type', `branch_${branchId}`).eq('month', monthKey),
-    supabase.from('internal_sales').select('total_amount').eq('branch_id', branchId).eq('status', 'completed').gte('order_date', dateFrom).lt('order_date', dateTo),
+    supabase.from('internal_sales').select('total_amount').eq('branch_id', branchId).eq('status', 'completed').gte('order_date', dateFrom).lt('order_date', dateTo).range(0, 99999),
+    // Cashier revenue from the newer register_closings system (cash + credit sold at the register).
+    supabase.from('register_closings').select('cash_sales, credit_sales').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo).range(0, 99999),
   ])
 
   let revCashier = 0, revWebsite = 0, revCredit = 0
@@ -546,6 +562,10 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     else if (r.source === 'website') revWebsite += amt
     else if (r.source === 'credit') revCredit += amt
     else revCashier += amt // default to cashier
+  }
+  // Merge register_closings (new source) into the cashier bucket.
+  for (const c of (closingsRes.data || [])) {
+    revCashier += Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
   }
   const revenue = revCashier + revWebsite + revCredit
 

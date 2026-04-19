@@ -178,10 +178,12 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   }
 
   async function fetchEntries() {
+    // Explicit .range bypasses PostgREST's default 1000-row cap so every record for the period is loaded.
     const { data } = await supabase.from('branch_revenue').select('*')
       .eq('branch_id', branchId)
       .gte('date', from).lt('date', to)
       .order('date', { ascending: false })
+      .range(0, 99999)
     if (data) setEntries(data)
   }
 
@@ -205,6 +207,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         .eq('branch_id', branchId)
         .gte('date', from).lt('date', to)
         .order('date')
+        .range(0, 99999)
       setClosingsInPeriod((data || []) as any)
     }
     loadClosings()
