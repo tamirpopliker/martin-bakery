@@ -883,11 +883,23 @@ export default function CEODashboard({ onBack }: Props) {
             </motion.div>
 
             {/* ═══ ROW 1: 4 Golden KPIs ═══ */}
+            {/*
+             * KPI values MUST match the P&L table totals below. The table adds each row as
+             * factory + sum(branches); we mirror that exact math so the card and the table
+             * agree. Prior computations (consRevenue / consGross / consOperating / grandLabor)
+             * silently omitted manager salary, branch repairs, deliveries, fixed costs and
+             * overhead — producing e.g. a +₪129k "profit" while the table totalled -₪185k.
+             */}
             {(() => {
-              const kpiRev = viewMode === 'consolidated' ? consRevenue : grandRevenue
-              const kpiGross = viewMode === 'consolidated' ? consGross : grandGross
-              const kpiOp = viewMode === 'consolidated' ? consOperating : grandOperating
-              const kpiLaborPct = kpiRev > 0 ? (grandLabor / kpiRev) * 100 : 0
+              const isSegment = viewMode === 'segment'
+              const fRevKpi = isSegment ? factorySales : factorySales - factoryInternalSales
+              const factoryControllableKpi = fRevKpi - factorySuppliers - factoryLabor - factoryWaste - factoryRepairs
+              const factoryOpKpi = factoryControllableKpi - factoryFixed
+              const kpiRev = fRevKpi + branches.reduce((s, b) => s + b.revenue, 0)
+              const kpiGross = factoryControllableKpi + branches.reduce((s, b) => s + b.grossProfit, 0)
+              const kpiOp = factoryOpKpi + branches.reduce((s, b) => s + b.operatingProfit, 0)
+              const kpiTotalLabor = factoryLabor + hqCost + branches.reduce((s, b) => s + b.labor + b.managerSalary, 0)
+              const kpiLaborPct = kpiRev > 0 ? (kpiTotalLabor / kpiRev) * 100 : 0
               return (
             <motion.div className="grid grid-cols-4 gap-3 mb-3" variants={staggerContainer} initial="hidden" animate="visible">
               <motion.div variants={fadeUp}>
