@@ -257,7 +257,12 @@ export default function Home() {
       setTotalBranchRevenue(cons.consolidated.revenue)
       setBranchLaborCost(cons.consolidated.labor)
       setBranchWaste(cons.consolidated.waste)
-      setBranchOperatingProfit(cons.consolidated.operatingProfit)
+      // Match the CEODashboard consolidated P&L table total for רווח תפעולי:
+      // factoryConsOp = factory operating profit with internal revenue eliminated,
+      // plus each branch's operatingProfit (already includes fixed costs, overhead, manager salary).
+      const factoryConsOp = cons.factory.operatingProfit - cons.factory.internalRevenue
+      const totalConsOp = factoryConsOp + cons.branches.reduce((s, b) => s + b.operatingProfit, 0)
+      setBranchOperatingProfit(totalConsOp)
 
       // Previous period (comparison) via shared functions
       const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
@@ -286,7 +291,9 @@ export default function Home() {
       setPrevBranchRevenue(prevCons.consolidated.revenue)
       setPrevBranchLaborCost(prevCons.consolidated.labor)
       setPrevBranchWaste(prevCons.consolidated.waste)
-      setPrevBranchOperatingProfit(prevCons.consolidated.operatingProfit)
+      const prevFactoryConsOp = prevCons.factory.operatingProfit - prevCons.factory.internalRevenue
+      const prevTotalConsOp = prevFactoryConsOp + prevCons.branches.reduce((s, b) => s + b.operatingProfit, 0)
+      setPrevBranchOperatingProfit(prevTotalConsOp)
     }
     loadKpi()
   }, [from, to, branchList.length])
