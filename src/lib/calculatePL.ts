@@ -3,7 +3,7 @@
  * Uses actual DB schema: branch_revenue, branch_expenses (expense_type, from_factory),
  * branch_labor, branch_waste, fixed_costs (entity_type, entity_id).
  */
-import { supabase } from './supabase'
+import { supabase, fetchGlobalEmployees, calcGlobalLaborForDept, getWorkingDays } from './supabase'
 
 export interface PLResult {
   // Revenue
@@ -225,7 +225,7 @@ export async function calculateFactoryPL(
     supabase.from('factory_sales').select('amount').eq('is_internal', true).gte('date', periodStart).lt('date', periodEnd),
     supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', periodStart).lt('date', periodEnd),
     supabase.from('factory_b2b_sales').select('amount').eq('is_internal', true).gte('date', periodStart).lt('date', periodEnd),
-    supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', periodStart).lt('date', periodEnd),
+    supabase.from('labor').select('employer_cost, employee_name').eq('entity_type', 'factory').gte('date', periodStart).lt('date', periodEnd),
     supabase.from('supplier_invoices').select('amount').gte('date', periodStart).lt('date', periodEnd),
     supabase.from('factory_waste').select('amount').gte('date', periodStart).lt('date', periodEnd),
     supabase.from('factory_repairs').select('amount').gte('date', periodStart).lt('date', periodEnd),
@@ -242,13 +242,30 @@ export async function calculateFactoryPL(
   const internalRevenue = intSalesTotal > 0 ? intSalesTotal : legacyInternal
   const revenue = externalRevenue + internalRevenue
   const suppliers = sum(fSupp)
-  // Factory labor — check employer_costs first (branch_id IS NULL, not HQ)
+  // Factory labor — priority order:
+  //   1. employer_costs (branch_id IS NULL, is_headquarters=false) — "actual" payroll from Excel upload
+  //   2. estimate: fixed monthly salary of global employees + hourly employer_cost from the `labor`
+  //      table, EXCLUDING rows of global employees. Global employees earn a fixed monthly salary
+  //      that already covers any hours worked, so any hours of theirs that also appear in `labor`
+  //      are informational only and must not be double-counted.
   const [mYear, mMonth] = mk.split('-').map(Number)
   const { data: actualFactLab } = await supabase.from('employer_costs')
     .select('actual_employer_cost').is('branch_id', null).eq('is_headquarters', false).eq('month', mMonth).eq('year', mYear)
-  const labor = (actualFactLab && actualFactLab.length > 0)
-    ? actualFactLab.reduce((s, r) => s + Number(r.actual_employer_cost), 0)
-    : sum(fLab)
+  let labor: number
+  if (actualFactLab && actualFactLab.length > 0) {
+    labor = actualFactLab.reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+  } else {
+    const globalEmps = await fetchGlobalEmployees()
+    const globalNames = new Set(globalEmps.map(e => e.name))
+    const workingDaysInMonth = await getWorkingDays(mk)
+    const globalLabor =
+      calcGlobalLaborForDept(globalEmps, 'creams', workingDaysInMonth)
+      + calcGlobalLaborForDept(globalEmps, 'dough', workingDaysInMonth)
+    const hourlyLabor = (fLab.data || [])
+      .filter((r: any) => !globalNames.has(r.employee_name))
+      .reduce((s: number, r: any) => s + Number(r.employer_cost || 0), 0)
+    labor = globalLabor + hourlyLabor
+  }
   const waste = sum(fWaste)
   const repairs = sum(fRepairs)
   const fixedCosts = sum(fFixed)
