@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake } from 'lucide-react'
+import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PageHeader from '../components/PageHeader'
-import { useAppUser } from '../lib/UserContext'
+import { useAppUser, isRestrictedBranchUser } from '../lib/UserContext'
 import BranchRevenue from './BranchRevenue'
 import BranchExpenses from './BranchExpenses'
 import BranchLabor from './BranchLabor'
@@ -28,6 +28,7 @@ import BranchCommunication from './BranchCommunication'
 import RegisterClosings from './RegisterClosings'
 import ChangeFund from './ChangeFund'
 import BranchSpecialOrders from './BranchSpecialOrders'
+import ChangePassword from './ChangePassword'
 // calculateBranchPL moved to BranchManagerDashboard
 
 // ─── אנימציות ─────────────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ type BranchPage =
   | 'register_closings'
   | 'change_fund'
   | 'special_orders'
+  | 'change_password'
 
 interface MenuItem {
   page: BranchPage
@@ -98,6 +100,7 @@ const MENU_ITEMS: MenuItem[] = [
   // BranchPL removed — P&L now integrated in BranchDashboard
   { page: 'settings',     label: 'הגדרות סניף',    subtitle: 'KPI · עלויות קבועות · עובדים', Icon: Settings,    ready: true },
   { page: 'data_import',  label: 'ייבוא נתונים',   subtitle: 'CSV מ-Base44 · העלאה',         Icon: Upload,      ready: true },
+  { page: 'change_password', label: 'שינוי סיסמה',  subtitle: 'עדכון סיסמת הכניסה',          Icon: KeyRound,    ready: true },
 ]
 
 export default function BranchHome({ branch, onBack }: Props) {
@@ -202,6 +205,9 @@ export default function BranchHome({ branch, onBack }: Props) {
   if (page === 'special_orders') return (
     <BranchSpecialOrders branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
+  if (page === 'change_password') return (
+    <ChangePassword onBack={() => setPage(null)} />
+  )
   if (page === 'branch-team') return (
     <BranchTeam branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} onNavigate={(p) => setPage(p as BranchPage)} />
   )
@@ -288,8 +294,14 @@ export default function BranchHome({ branch, onBack }: Props) {
           {MENU_ITEMS.filter(item => {
             // Scheduler can only see team management
             if (appUser?.role === 'scheduler') return item.page === 'branch-team'
+            // Username-auth branch users: restricted to scheduling + special orders + password change
+            if (appUser && isRestrictedBranchUser(appUser)) {
+              return ['branch-team', 'special_orders', 'change_password'].includes(item.page)
+            }
             // Hide settings and data_import for non-admin users
             if (!isAdmin && (item.page === 'settings' || item.page === 'data_import')) return false
+            // Hide change_password for email-auth branch users; they manage it via settings
+            if (item.page === 'change_password' && !isRestrictedBranchUser(appUser || ({ role: '', email: '' } as any))) return false
             return true
           }).map(item => {
             const Icon = item.Icon

@@ -71,12 +71,35 @@ function getBranchFromPage(pageKey: string): number | null {
   return match ? parseInt(match[1]) : null
 }
 
+// Branch users whose email is under this domain authenticate via username
+// (synthetic email) and have a restricted scope: scheduling + special orders only.
+export const USERNAME_AUTH_DOMAIN = '@martin.local'
+export function isRestrictedBranchUser(user: { role: string; email: string }): boolean {
+  return user.role === 'branch' && user.email.toLowerCase().endsWith(USERNAME_AUTH_DOMAIN)
+}
+
 function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
   const isDeptManager = user.role === 'factory' && !!user.managed_department
+  const restricted = isRestrictedBranchUser(user)
 
   return (pageKey: string) => {
     // Admin can access everything
     if (user.role === 'admin') return true
+
+    // Restricted branch user (username-based login): schedule + special orders only.
+    // Own-branch gate is handled further down via getBranchFromPage().
+    if (restricted) {
+      const allowed = [
+        'branch-team', 'weekly-schedule', 'schedule-history',
+        'manager-constraints', 'shift-settings',
+        'special_orders', 'change_password',
+      ]
+      if (allowed.includes(pageKey)) return true
+      // Allow routing to their own branch home
+      const branchId = getBranchFromPage(pageKey)
+      if (branchId !== null) return user.branch_id === branchId
+      return false
+    }
 
     // Employee can only access employee pages
     if (user.role === 'employee') {
