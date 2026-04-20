@@ -684,37 +684,27 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
 
 /**
  * Fetch complete P&L for the factory.
+ *
+ * Thin wrapper around `calculateFactoryPL` (lib/calculatePL.ts) — the canonical
+ * factory-PL function, which handles the employer_costs / global-employees /
+ * labor-table priority chain for factory labor. This wrapper just adapts the
+ * return shape to the legacy `FactoryPLResult` used by Home.tsx and the
+ * consolidated-PL helper below (sales vs revenue, controllableMargin vs
+ * controllableProfit, plus a pre-rendered `rows` array).
  */
 export async function fetchFactoryPL(dateFrom: string, dateTo: string, monthKey: string): Promise<FactoryPLResult> {
-  const [salesFs, salesB2b, salesFsInt, salesB2bInt, labRes, suppRes, wasteRes, repairsRes, intSalesRes] = await Promise.all([
-    supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', dateFrom).lt('date', dateTo),
-    supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', dateFrom).lt('date', dateTo),
-    supabase.from('factory_sales').select('amount').eq('is_internal', true).gte('date', dateFrom).lt('date', dateTo),
-    supabase.from('factory_b2b_sales').select('amount').eq('is_internal', true).gte('date', dateFrom).lt('date', dateTo),
-    supabase.from('labor').select('employer_cost').eq('entity_type', 'factory').gte('date', dateFrom).lt('date', dateTo),
-    supabase.from('supplier_invoices').select('amount').gte('date', dateFrom).lt('date', dateTo),
-    supabase.from('factory_waste').select('amount').gte('date', dateFrom).lt('date', dateTo),
-    supabase.from('factory_repairs').select('amount').gte('date', dateFrom).lt('date', dateTo),
-    supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', dateFrom).lt('order_date', dateTo),
-  ])
+  const { calculateFactoryPL } = await import('./calculatePL')
+  const pl = await calculateFactoryPL(dateFrom, dateTo, monthKey)
 
-  const salesExternal = (salesFs.data || []).reduce((s, r) => s + Number(r.amount), 0)
-                      + (salesB2b.data || []).reduce((s, r) => s + Number(r.amount), 0)
-  // Internal revenue: prefer internal_sales, fallback to factory_sales/b2b is_internal
-  const intSalesTotal = (intSalesRes.data || []).reduce((s, r) => s + Number(r.total_amount), 0)
-  const legacyInternal = (salesFsInt.data || []).reduce((s, r) => s + Number(r.amount), 0)
-                       + (salesB2bInt.data || []).reduce((s, r) => s + Number(r.amount), 0)
-  const salesInternal = intSalesTotal > 0 ? intSalesTotal : legacyInternal
-  const sales = salesExternal + salesInternal
-
-  const labor = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
-  const suppliers = (suppRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
-  const waste = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
-  const repairs = (repairsRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
-  const fixedCosts = await getFixedCostTotal('factory', monthKey)
-
-  const controllableMargin = sales - suppliers - labor - waste - repairs
-  const operatingProfit = controllableMargin - fixedCosts
+  const sales = pl.revenue
+  const salesInternal = pl.internalRevenue
+  const suppliers = pl.suppliers
+  const labor = pl.labor
+  const waste = pl.waste
+  const repairs = pl.repairs
+  const fixedCosts = pl.fixedCosts
+  const controllableMargin = pl.controllableProfit
+  const operatingProfit = pl.operatingProfit
 
   const pct = (n: number) => sales > 0 ? (n / sales) * 100 : 0
 
