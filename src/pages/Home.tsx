@@ -257,8 +257,11 @@ export default function Home() {
       // ─── Consolidated KPI (intercompany-eliminated) — matches CEODashboard ──────
       // calculateConsolidatedPL sums all branches + factory external revenue, eliminates
       // factory-to-branch internal sales, and returns the canonical operating profit.
+      // NOTE: totalBranchRevenue is intentionally NOT overwritten here — we want it to
+      // reflect the sum of branch-only revenue (set above from bp.revenue). Overwriting it
+      // with cons.consolidated.revenue (which already includes factory.externalRevenue)
+      // caused the factory external to be double-counted in the home-page grandRevenue.
       const cons = await calculateConsolidatedPL(branchIds, from, to, overheadPct, monthKey)
-      setTotalBranchRevenue(cons.consolidated.revenue)
       setBranchLaborCost(cons.consolidated.labor)
       setBranchWaste(cons.consolidated.waste)
       // Match the CEODashboard consolidated P&L table total for רווח תפעולי:
@@ -291,8 +294,9 @@ export default function Home() {
       setPrevOperatingProfit(prevFactoryPL.operatingProfit + pTotalBranchOP)
 
       // ─── Consolidated KPI for the comparison period ────────────────────
+      // Same as current period: keep prevBranchRevenue as sum of branch-only revenue
+      // so the DiffBadge compares like-for-like (both include factory external, or neither).
       const prevCons = await calculateConsolidatedPL(branchIds, pFrom, pTo, overheadPct, pMonthKey)
-      setPrevBranchRevenue(prevCons.consolidated.revenue)
       setPrevBranchLaborCost(prevCons.consolidated.labor)
       setPrevBranchWaste(prevCons.consolidated.waste)
       const prevFactoryConsOp = prevCons.factory.operatingProfit - prevCons.factory.internalRevenue
