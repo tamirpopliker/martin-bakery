@@ -761,6 +761,7 @@ martin-bakery/
 10. **Auto-provision עובדים** — trigger על auth.users שמזהה עובד לפי email ויוצר app_users אוטומטית עם role='employee' (008_auth_trigger.sql)
 11. **תמיכת PWA** — כפתור התקנה, זיהוי standalone mode (InstallPWA)
 12. **דשבורדים** — דשבורד סניף, השוואת סניפים, דשבורד מנכ"ל, דשבורד מחלקתי (BranchDashboard, BranchManagerDashboard, CEODashboard, DepartmentDashboard)
+13. **תיקון חישוב הכנסות מאוחד** — VIEW `branch_pl_summary` נבנה מחדש עם CTEs (היה LATERAL JOIN שגרם לכפל פי 3.7). `register_closings` הוא כעת המקור הקנוני להכנסות קופה; `branch_revenue` עם `source='cashier'` נעול מהזנה חדשה. תיקון ב-`Home.tsx`: הוסר overwrite של `totalBranchRevenue` (שורות 261, 295), נוסף state `factoryExternalRevenue = factoryPL.sales - factoryPL.salesInternal`.
 
 ---
 
@@ -774,6 +775,12 @@ martin-bakery/
    - **Race condition** — `saveAll()` (`EmployerCostsUpload.tsx:148-171`) מבצע DELETE ואז INSERT בנפרד ללא transaction. אם ה-INSERT נכשל אחרי ה-DELETE, הנתונים אובדים. בנוסף, עדכוני branch_employees רצים ברצף ב-loop במקום `Promise.all`.
    - **שדה `is_manager` חסר בסכמה** — הקוד (`EmployerCostsUpload.tsx:160`, `calculatePL.ts:104-105`, `supabase.ts:564`) קורא וכותב שדה `is_manager`, אבל `sql/020_employer_costs.sql` לא מכיל את העמודה. עלול לגרום לשגיאת INSERT.
    - **חיבור לדשבורדים לא אומת** — `employer_costs` נצרך ע"י `calculatePL.ts` ו-`supabase.ts:fetchBranchPL()` עם דגל `laborIsActual`. לא אומת שהדשבורדים (BranchDashboard, BranchManagerDashboard, CEODashboard) מציגים את הנתונים הנכונים בפועל לאחר העלאה.
+
+4. **לייבור מפעל לא מוצג באף דשבורד** — טבלת `labor` ריקה עבור `entity_type='factory'` באפריל 2026 (אפשר שגם בחודשים אחרים). צריך להחליט על מנגנון הזנה.
+
+5. **טבלת `employer_costs` ריקה לחלוטין לאפריל 2026** — ייתכן שההעלאה נכשלה בגלל הבאגים הידועים ב-EmployerCostsUpload (race condition, `is_manager` חסר, שדה מחלקת מפעל חסר בטופס עובד חדש). דחוף לתקן ולנסות להעלות שוב.
+
+6. **מכירות חיצוניות של המפעל לאפריל 2026 הן 1,120₪ בלבד** (מ-`factory_b2b_sales`). לאמת מול העסק האם אין באמת מכירות חיצוניות, או שיש ולא הוזנו.
 
 ---
 
@@ -795,10 +802,15 @@ martin-bakery/
 
 8. **מכירות פנימיות כ-workflow** — מכירה פנימית עוברת: upload Excel → `internal_sales` (pending) → סניף מאשר/עורך → completed. המחירים נלקחים מ-`products`.
 
+9. **מקור קנוני להכנסות קופה: `register_closings`** (לא `branch_revenue`). `branch_revenue` משמש רק למקורות לא-קופאיים (website, credit). ה-VIEW `branch_pl_summary` מיישם זאת עם `NOT EXISTS` — לכל `(branch_id, date)`, אם קיימת סגירת קופה היא מחליפה הזנה ידנית. לגבי נתונים היסטוריים: אין חפיפה באפריל 2026 (המעבר היה נקי ב-15-16/4), אבל ה-VIEW מוגן לעתיד.
+
 ---
 
 ## הערות לשיחה הבאה
 
+- **עדיפות 1**: לתקן את EmployerCostsUpload (3 באגים ידועים) ולהעלות עלויות מעסיק לאפריל 2026.
+- **עדיפות 2**: להבין למה אין נתוני לייבור מפעל בטבלת `labor`. לבדוק אם זו בעיית הזנה או שיש מנגנון נפרד שלא עובד.
+- **עדיפות 3**: לוודא מול העסק האם יש הכנסות חיצוניות של המפעל שלא נרשמות (B2B/אירועים/קייטרינג).
 - לתקן את עמודת `is_manager` החסרה ב-`employer_costs` — להריץ ALTER TABLE או לעדכן את `020_employer_costs.sql`.
 - לבדוק למה InsightsCard לא מוצג למשתמש ב-BranchDashboard — בדיקת runtime, console errors, ובדיקה ש-`generateInsights` מחזיר תוצאות.
 - לאמת את האחוזים ב-BranchManagerDashboard — להשוות נתוני DB לתצוגה בדפדפן.
