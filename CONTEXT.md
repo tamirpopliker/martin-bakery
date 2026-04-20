@@ -763,6 +763,7 @@ martin-bakery/
 12. **דשבורדים** — דשבורד סניף, השוואת סניפים, דשבורד מנכ"ל, דשבורד מחלקתי (BranchDashboard, BranchManagerDashboard, CEODashboard, DepartmentDashboard)
 13. **תיקון חישוב הכנסות מאוחד** — VIEW `branch_pl_summary` נבנה מחדש עם CTEs (היה LATERAL JOIN שגרם לכפל פי 3.7). `register_closings` הוא כעת המקור הקנוני להכנסות קופה; `branch_revenue` עם `source='cashier'` נעול מהזנה חדשה. תיקון ב-`Home.tsx`: הוסר overwrite של `totalBranchRevenue` (שורות 261, 295), נוסף state `factoryExternalRevenue = factoryPL.sales - factoryPL.salesInternal`.
 14. **תיקון חישוב לייבור מפעל — שילוב `employees(global)` ב-`calculateFactoryPL`** — כשאין `employer_costs` לחודש (כגון באפריל 2026 לפני העלאת דוח הנה"ח), הפונקציה נופלת כעת לחישוב מוערך של שכרי עובדים גלובליים (מ-`employees` עם `wage_type='global'`, באמצעות `calcGlobalLaborForDept` על creams + dough) בתוספת עובדים שעתיים מ-`labor` — פרט לאלה שמופיעים גם בטבלת `employees` עם `wage_type='global'` (כדי למנוע כפל ספירה). `fetchFactoryPL` ב-`supabase.ts` הפך ל-wrapper דק סביב `calculateFactoryPL` כדי שלא יהיה drift עתידי בין שני המסלולים.
+15. **תיקון כפילות שכר מנהלים** — שכר מנהלים הופיע פעמיים בחישוב הרווח התפעולי של הסניפים: פעם משורת "שכר מנהלים" (מ-`employer_costs` עם `is_manager=true`, עם fallback לחודש קודם) ופעם בתוך "עלויות קבועות" (`fixed_costs.manager_salary` עם `entity_id='branch_X'` במקום `'mgmt'` — כי `BranchSettings.tsx:143` מזין אוטומטית `entity_id = entityType`, והבדיקה `if (r.entity_id === 'mgmt')` ב-`calculateBranchPL` לא תפסה אותן). נמחקו 9 רשומות `manager_salary` מ-`fixed_costs`. רווח תפעולי של העסק עלה ב-68K לחודש (אברהם אבינו +22.7K, הפועלים +22.7K, יעקב כהן +22.7K — עבר מהפסד לרווח).
 
 ---
 
@@ -805,6 +806,8 @@ martin-bakery/
 
 9. **מקור קנוני להכנסות קופה: `register_closings`** (לא `branch_revenue`). `branch_revenue` משמש רק למקורות לא-קופאיים (website, credit). ה-VIEW `branch_pl_summary` מיישם זאת עם `NOT EXISTS` — לכל `(branch_id, date)`, אם קיימת סגירת קופה היא מחליפה הזנה ידנית. לגבי נתונים היסטוריים: אין חפיפה באפריל 2026 (המעבר היה נקי ב-15-16/4), אבל ה-VIEW מוגן לעתיד.
 
+10. **שכר מנהלים בסמכות `employer_costs` בלבד** — השכר מחושב ב-`calculateBranchPL` לפי `is_manager=true` ב-`employer_costs` (עם fallback לחודש האחרון שיש בו). אין להזין שכר מנהלים ב-`fixed_costs` (הוסר 2026-04-20). כפילות שכר מנהלים עלולה להיווצר שוב אם מזינים ידנית ב-BranchSettings שם כמו "שכר מנהל" — זה נכנס לעלויות הקבועות.
+
 ---
 
 ## הערות לשיחה הבאה
@@ -812,6 +815,7 @@ martin-bakery/
 - **עדיפות 1**: לתקן את EmployerCostsUpload (3 באגים ידועים) ולהעלות עלויות מעסיק לאפריל 2026.
 - **עדיפות 2**: להבין למה אין נתוני לייבור מפעל בטבלת `labor`. לבדוק אם זו בעיית הזנה או שיש מנגנון נפרד שלא עובד.
 - **עדיפות 3**: לוודא מול העסק האם יש הכנסות חיצוניות של המפעל שלא נרשמות (B2B/אירועים/קייטרינג).
+- **עדיפות 4**: ולידציה ב-`BranchSettings.tsx:addCost` שתחסום שמות כמו `manager_salary`/"שכר מנהל"/"שכר הנהלה" ב-`fixed_costs` ותציג הודעה מסבירה שהשדה נכנס דרך דוח עלויות מעסיק. אחרת הכפילות שתוקנה ב-2026-04-20 עלולה לחזור.
 - לתקן את עמודת `is_manager` החסרה ב-`employer_costs` — להריץ ALTER TABLE או לעדכן את `020_employer_costs.sql`.
 - לבדוק למה InsightsCard לא מוצג למשתמש ב-BranchDashboard — בדיקת runtime, console errors, ובדיקה ש-`generateInsights` מחזיר תוצאות.
 - לאמת את האחוזים ב-BranchManagerDashboard — להשוות נתוני DB לתצוגה בדפדפן.
