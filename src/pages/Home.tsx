@@ -41,6 +41,7 @@ import B2BCustomers from './B2BCustomers'
 import EmployerCostsUpload from './EmployerCostsUpload'
 import FactorySpecialOrders from './FactorySpecialOrders'
 import SuppliersReport from './SuppliersReport'
+import ManagementReports from './ManagementReports'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
@@ -70,6 +71,7 @@ const PANEL_FACTORY = [
 const PANEL_MANAGE = [
   { label: 'לקוחות הקפה (B2B)', subtitle: 'חשבוניות · תשלומים · מעקב חובות', Icon: CreditCard, color: '#dc2626', page: 'b2b_customers' },
   { label: 'דשבורד מנכ"ל', subtitle: 'מבט רשתי · כל הסניפים', Icon: TrophyIcon,   color: '#f59e0b', page: 'ceo_dashboard' },
+  { label: 'דוחות ניהול', subtitle: 'בקרת הכנסות · לייבור · קופות · שלמות נתונים', Icon: ClipboardList, color: '#6366f1', page: 'management_reports' },
   { label: 'דוח ספקים מאוחד', subtitle: 'איחוד שמות ספקים · סיכום לפי סניף', Icon: Briefcase, color: '#6366f1', page: 'suppliers_report' },
   { label: 'דוחות והתראות', subtitle: 'לוג דוחות · כללי התראה', Icon: Mail,         color: '#f59e0b', page: 'reports_alerts' },
   { label: 'הגדרות מערכת', subtitle: 'העמסת מטה · הגדרות כלליות', Icon: Settings, color: '#64748b', page: 'system_settings' },
@@ -372,6 +374,7 @@ export default function Home() {
 
     if (page === 'b2b_customers') return <B2BCustomers onBack={() => setPage(null)} />
     if (page === 'suppliers_report') return <SuppliersReport onBack={() => setPage(null)} />
+    if (page === 'management_reports') return <ManagementReports onBack={() => setPage(null)} />
     if (page === 'employer_costs') return <EmployerCostsUpload onBack={() => setPage(null)} onNavigate={(p) => setPage(p)} />
     if (page === 'factory_departments') return <FactoryDepartments onBack={() => setPage(null)} />
     if (page === 'factory_equipment')  return <FactoryEquipment onBack={() => setPage(null)} />

@@ -29,7 +29,7 @@ import {
   Pencil, Merge, TrendingUp, TrendingDown, Tag, Factory, Store, X, Check,
 } from 'lucide-react'
 
-interface Props { onBack: () => void }
+interface Props { onBack: () => void; hideHeader?: boolean }
 
 interface UnifiedSupplier {
   id: number
@@ -123,7 +123,7 @@ function prevPeriod(from: string, to: string): { from: string; to: string } {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function SuppliersReport({ onBack }: Props) {
+export default function SuppliersReport({ onBack, hideHeader }: Props) {
   const { period, setPeriod, from, to } = usePeriod()
   const { branches } = useBranches()
 
@@ -413,10 +413,10 @@ export default function SuppliersReport({ onBack }: Props) {
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
-      <PageHeader title="דוח ספקים מאוחד" onBack={onBack} />
+    <div style={{ minHeight: hideHeader ? 0 : '100vh', background: hideHeader ? 'transparent' : '#f8fafc', direction: 'rtl' }}>
+      {!hideHeader && <PageHeader title="דוח ספקים מאוחד" onBack={onBack} />}
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '16px 20px 32px' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: hideHeader ? 0 : '16px 20px 32px' }}>
 
         {/* Filters bar */}
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
