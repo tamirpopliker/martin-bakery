@@ -92,7 +92,8 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
     // ─── Admin-only pages ───
     if (pageKey === 'user_management' || pageKey === 'data_import' ||
         pageKey === 'ceo_dashboard' || pageKey === 'reports_alerts' ||
-        pageKey === 'branch_dashboard' || pageKey === 'branch_comparison') {
+        pageKey === 'branch_dashboard' || pageKey === 'branch_comparison' ||
+        pageKey === 'suppliers_report') {
       return false
     }
 
