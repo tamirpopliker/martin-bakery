@@ -762,6 +762,7 @@ martin-bakery/
 11. **תמיכת PWA** — כפתור התקנה, זיהוי standalone mode (InstallPWA)
 12. **דשבורדים** — דשבורד סניף, השוואת סניפים, דשבורד מנכ"ל, דשבורד מחלקתי (BranchDashboard, BranchManagerDashboard, CEODashboard, DepartmentDashboard)
 13. **תיקון חישוב הכנסות מאוחד** — VIEW `branch_pl_summary` נבנה מחדש עם CTEs (היה LATERAL JOIN שגרם לכפל פי 3.7). `register_closings` הוא כעת המקור הקנוני להכנסות קופה; `branch_revenue` עם `source='cashier'` נעול מהזנה חדשה. תיקון ב-`Home.tsx`: הוסר overwrite של `totalBranchRevenue` (שורות 261, 295), נוסף state `factoryExternalRevenue = factoryPL.sales - factoryPL.salesInternal`.
+14. **תיקון חישוב לייבור מפעל — שילוב `employees(global)` ב-`calculateFactoryPL`** — כשאין `employer_costs` לחודש (כגון באפריל 2026 לפני העלאת דוח הנה"ח), הפונקציה נופלת כעת לחישוב מוערך של שכרי עובדים גלובליים (מ-`employees` עם `wage_type='global'`, באמצעות `calcGlobalLaborForDept` על creams + dough) בתוספת עובדים שעתיים מ-`labor` — פרט לאלה שמופיעים גם בטבלת `employees` עם `wage_type='global'` (כדי למנוע כפל ספירה). `fetchFactoryPL` ב-`supabase.ts` הפך ל-wrapper דק סביב `calculateFactoryPL` כדי שלא יהיה drift עתידי בין שני המסלולים.
 
 ---
 
