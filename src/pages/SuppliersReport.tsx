@@ -27,6 +27,7 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
 import {
   ChevronDown, ChevronLeft, Download, Search, Plus, Trash2,
   Pencil, Merge, TrendingUp, TrendingDown, Tag, Factory, Store, X, Check,
+  Sparkles, AlertCircle,
 } from 'lucide-react'
 
 interface Props { onBack: () => void; hideHeader?: boolean }
@@ -568,6 +569,14 @@ export default function SuppliersReport({ onBack, hideHeader }: Props) {
 }
 
 // ─── Manage Sheet ─────────────────────────────────────────────────────────────
+interface AnalysisResult {
+  allNames: Array<{ display: string; count: number; assigned: boolean }>
+  clusters: Array<{ canonical: string; members: string[]; totalCount: number }>
+  createdCount: number
+  skippedCount: number
+  errors: string[]
+}
+
 function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -575,11 +584,130 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
   unassignedGroups: SupplierGroup[]
   onRefresh: () => void
 }) {
-  const [tab, setTab] = useState<'unassigned' | 'all'>('unassigned')
+  const [tab, setTab] = useState<'unassigned' | 'all' | 'auto'>('unassigned')
   const [newCanonical, setNewCanonical] = useState('')
   const [newCategory, setNewCategory] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState<{ canonical: string; aliases: string; category: string }>({ canonical: '', aliases: '', category: '' })
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
+
+  async function runAutoAnalysis() {
+    setAnalyzing(true)
+    setAnalysis(null)
+    try {
+      // Step 1: fetch all supplier names from both sources
+      const [beRes, siRes] = await Promise.all([
+        supabase.from('branch_expenses').select('supplier').not('supplier', 'is', null).range(0, 99999),
+        supabase.from('supplier_invoices').select('suppliers(name)').range(0, 99999),
+      ])
+
+      const counts = new Map<string, number>()
+      const displayBy = new Map<string, string>()
+      const addName = (raw: string | null | undefined) => {
+        if (!raw) return
+        const clean = String(raw).trim()
+        if (!clean) return
+        const norm = normalizeName(clean)
+        counts.set(norm, (counts.get(norm) || 0) + 1)
+        // prefer the longer/more-descriptive display form
+        if (!displayBy.has(norm) || displayBy.get(norm)!.length < clean.length) {
+          displayBy.set(norm, clean)
+        }
+      }
+      for (const r of (beRes.data || [])) addName((r as any).supplier)
+      for (const r of (siRes.data || [])) addName((r as any).suppliers?.name)
+
+      // Mark which names are already assigned to an existing unified supplier
+      const assignedNorm = new Set<string>()
+      for (const u of unified) {
+        assignedNorm.add(normalizeName(u.canonical_name))
+        for (const a of (u.aliases || [])) assignedNorm.add(normalizeName(a))
+      }
+
+      const allNames = [...counts.entries()]
+        .map(([norm, count]) => ({ norm, display: displayBy.get(norm)!, count, assigned: assignedNorm.has(norm) }))
+        .sort((a, b) => b.count - a.count)
+
+      // Step 2: cluster the unassigned names via union-find
+      const unassignedNorms = allNames.filter(n => !n.assigned).map(n => n.norm)
+      const parent = new Map<string, string>()
+      const find = (x: string): string => {
+        const p = parent.get(x)!
+        if (p === x) return x
+        const root = find(p)
+        parent.set(x, root)
+        return root
+      }
+      const unite = (a: string, b: string) => {
+        const ra = find(a), rb = find(b)
+        if (ra !== rb) parent.set(ra, rb)
+      }
+      for (const n of unassignedNorms) parent.set(n, n)
+
+      for (let i = 0; i < unassignedNorms.length; i++) {
+        for (let j = i + 1; j < unassignedNorms.length; j++) {
+          const a = unassignedNorms[i], b = unassignedNorms[j]
+          const shortLen = Math.min(a.length, b.length)
+          if (shortLen < 3) continue
+          // Substring containment — if one is contained in the other
+          // (e.g. "בלקן" ⊂ "בית הבלקן", "ליאם" ⊂ "ליאם אריזות").
+          if (shortLen >= 4 && (a.includes(b) || b.includes(a))) { unite(a, b); continue }
+          // Edit distance of 1 — typos and missing space
+          if (shortLen >= 3 && levenshtein(a, b) <= 1) { unite(a, b); continue }
+          // Higher Levenshtein similarity on longer strings
+          if (shortLen >= 4 && similarity(a, b) >= 0.85) unite(a, b)
+        }
+      }
+
+      const clusterMap = new Map<string, string[]>()
+      for (const n of unassignedNorms) {
+        const root = find(n)
+        const arr = clusterMap.get(root) || []
+        arr.push(n)
+        clusterMap.set(root, arr)
+      }
+
+      // Step 3: create unified_suppliers rows
+      const existingCanonicalNorms = new Set(unified.map(u => normalizeName(u.canonical_name)))
+      const clustersOut: AnalysisResult['clusters'] = []
+      const toInsert: Array<{ canonical_name: string; aliases: string[]; active: boolean }> = []
+      for (const members of clusterMap.values()) {
+        if (members.length === 0) continue
+        const info = members.map(m => ({ norm: m, display: displayBy.get(m)!, count: counts.get(m) || 0 }))
+        // Choose canonical: most frequent (with longer name as tie-breaker)
+        info.sort((a, b) => (b.count - a.count) || (b.display.length - a.display.length))
+        const canonical = info[0].display
+        const aliases = info.slice(1).map(m => m.display)
+        const totalCount = info.reduce((s, m) => s + m.count, 0)
+        clustersOut.push({ canonical, members: info.map(m => m.display), totalCount })
+        if (!existingCanonicalNorms.has(normalizeName(canonical))) {
+          toInsert.push({ canonical_name: canonical, aliases, active: true })
+        }
+      }
+      clustersOut.sort((a, b) => b.totalCount - a.totalCount)
+
+      // Insert one-by-one so a single UNIQUE conflict doesn't fail the whole batch
+      let createdCount = 0, skippedCount = 0
+      const errors: string[] = []
+      for (const row of toInsert) {
+        const { error } = await supabase.from('unified_suppliers').insert(row)
+        if (error) {
+          skippedCount++
+          // unique-violation on canonical_name is expected if the same batch inserted
+          // the same canonical elsewhere; ignore it but surface other failures.
+          if (!/duplicate|unique/i.test(error.message)) errors.push(`${row.canonical_name}: ${error.message}`)
+        } else {
+          createdCount++
+        }
+      }
+
+      setAnalysis({ allNames, clusters: clustersOut, createdCount, skippedCount, errors })
+      await onRefresh()
+    } finally {
+      setAnalyzing(false)
+    }
+  }
 
   async function mergeIntoExisting(unifiedId: number, rawName: string) {
     const u = unified.find(x => x.id === unifiedId)
@@ -644,6 +772,9 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
             </TabButton>
             <TabButton active={tab === 'all'} onClick={() => setTab('all')}>
               כל הספקים המאוחדים ({unified.length})
+            </TabButton>
+            <TabButton active={tab === 'auto'} onClick={() => setTab('auto')}>
+              ניתוח אוטומטי
             </TabButton>
           </div>
 
@@ -756,9 +887,113 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
               })}
             </div>
           )}
+
+          {tab === 'auto' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 10, padding: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#3730a3', marginBottom: 6, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Sparkles size={14} /> ניתוח אוטומטי וייצור ספקים מאוחדים
+                </div>
+                <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5, marginBottom: 10 }}>
+                  שולף את כל שמות הספקים הייחודיים מ-<code>branch_expenses.supplier</code> ומ-<code>supplier_invoices</code> (דרך <code>suppliers.name</code>),
+                  מזהה כפילויות (שמות זהים, הכלה, edit-distance ≤1, דמיון ≥85%), ויוצר רשומות ב-<code>unified_suppliers</code> עם aliases לכל הווריאציות.
+                </div>
+                <Button onClick={runAutoAnalysis} disabled={analyzing}
+                  className="bg-indigo-500 hover:bg-indigo-600"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Sparkles size={14} /> {analyzing ? 'מנתח...' : 'הרץ ניתוח'}
+                </Button>
+              </div>
+
+              {analysis && (
+                <>
+                  {/* Summary */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+                    <Stat label="שמות ייחודיים" value={analysis.allNames.length} />
+                    <Stat label="כבר מאוחדים" value={analysis.allNames.filter(n => n.assigned).length} />
+                    <Stat label="אשכולות" value={analysis.clusters.length} />
+                    <Stat label="נוצרו" value={analysis.createdCount} emphasis />
+                  </div>
+
+                  {analysis.errors.length > 0 && (
+                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: 10, fontSize: 12, color: '#991b1b' }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <AlertCircle size={12} /> שגיאות
+                      </div>
+                      {analysis.errors.map((e, i) => <div key={i}>• {e}</div>)}
+                    </div>
+                  )}
+
+                  {/* Clusters created */}
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+                      אשכולות שזוהו ({analysis.clusters.length})
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {analysis.clusters.map((c, i) => (
+                        <div key={i} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{c.canonical}</div>
+                            <div style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>{c.totalCount} הופעות</div>
+                          </div>
+                          {c.members.length > 1 && (
+                            <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                              {c.members.slice(1).map(m => (
+                                <span key={m} style={{ fontSize: 10, color: '#64748b', background: 'white', border: '1px solid #e2e8f0', padding: '1px 7px', borderRadius: 999 }}>{m}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* All names with counts */}
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+                      רשימה מלאה של שמות ייחודיים ({analysis.allNames.length})
+                    </div>
+                    <div style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead style={{ position: 'sticky', top: 0, background: '#f8fafc' }}>
+                          <tr style={{ color: '#64748b', fontSize: 11, fontWeight: 700 }}>
+                            <th style={{ padding: '6px 10px', textAlign: 'right' }}>שם ספק</th>
+                            <th style={{ padding: '6px 10px', textAlign: 'center' }}>הופעות</th>
+                            <th style={{ padding: '6px 10px', textAlign: 'center' }}>סטטוס</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {analysis.allNames.map(n => (
+                            <tr key={n.display} style={{ borderTop: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '6px 10px', color: '#0f172a' }}>{n.display}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'center', color: '#475569', fontFamily: 'monospace' }}>{n.count}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                                {n.assigned
+                                  ? <span style={{ fontSize: 10, fontWeight: 700, color: '#166534', background: '#dcfce7', padding: '1px 7px', borderRadius: 999 }}>מאוחד</span>
+                                  : <span style={{ fontSize: 10, fontWeight: 700, color: '#92400e', background: '#fef3c7', padding: '1px 7px', borderRadius: 999 }}>חדש</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </SheetContent>
       </SheetPortal>
     </Sheet>
+  )
+}
+
+function Stat({ label, value, emphasis }: { label: string; value: number; emphasis?: boolean }) {
+  return (
+    <div style={{ background: emphasis ? '#dcfce7' : 'white', border: '1px solid ' + (emphasis ? '#86efac' : '#e2e8f0'), borderRadius: 8, padding: '8px 10px' }}>
+      <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: emphasis ? '#166534' : '#0f172a' }}>{value}</div>
+    </div>
   )
 }
 
