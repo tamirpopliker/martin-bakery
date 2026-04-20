@@ -878,6 +878,8 @@ export default function Home() {
                   {[
                     { label: 'לקוחות הקפה (B2B)', subtitle: 'חשבוניות · תשלומים · מעקב חובות', Icon: CreditCard, color: '#dc2626', page: 'b2b_customers' },
                     { label: 'דוח מעסיק', subtitle: 'עלות שכר אמיתית · חודשי', Icon: Briefcase, color: '#0ea5e9', page: 'employer_costs' },
+                    { label: 'דוחות ניהול', subtitle: 'בקרת הכנסות · לייבור · קופות · שלמות נתונים', Icon: ClipboardList, color: '#6366f1', page: 'management_reports' },
+                    { label: 'דוח ספקים מאוחד', subtitle: 'איחוד שמות ספקים · סיכום לפי סניף', Icon: Briefcase, color: '#6366f1', page: 'suppliers_report' },
                     { label: 'ניהול משתמשים', subtitle: 'הרשאות · משתמשים · סניפים', Icon: UserCog, color: '#8b5cf6', page: 'user_management' },
                     { label: 'דוחות והתראות', subtitle: 'לוג דוחות · כללי התראה', Icon: Mail, color: '#f59e0b', page: 'reports_alerts' },
                     { label: 'הגדרות מערכת', subtitle: 'העמסת מטה · הגדרות כלליות', Icon: Settings, color: '#64748b', page: 'system_settings' },
