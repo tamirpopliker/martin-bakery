@@ -160,6 +160,10 @@ export default function Home() {
 
   // KPI data
   const [factoryRevenue, setFactoryRevenue] = useState(0)
+  // External-only factory sales (factoryPL.sales minus internal sales to branches).
+  // Used for the "פירוט הכנסות" drill-down where the row must not double-count
+  // factory→branch transfers that already appear as branch revenue.
+  const [factoryExternalRevenue, setFactoryExternalRevenue] = useState(0)
   const [factoryGross, setFactoryGross]     = useState(0)
   const [totalBranchRevenue, setTotalBranchRevenue] = useState(0)
   const [totalBranchGross, setTotalBranchGross]     = useState(0)
@@ -211,6 +215,7 @@ export default function Home() {
       const fSales = factoryPL.sales
       const fLabor = factoryPL.labor
       setFactoryRevenue(fSales)
+      setFactoryExternalRevenue(fSales - (factoryPL.salesInternal || 0))
       setFactoryLabor(fLabor)
       setFactoryGross(factoryPL.controllableMargin)
 
@@ -955,10 +960,13 @@ export default function Home() {
               <SheetTitle className="text-base font-bold text-slate-900">פירוט הכנסות — {period.label}</SheetTitle>
             </SheetHeader>
           {(() => {
-            const grandRevenue = factoryRevenue + totalBranchRevenue
+            // Use factory EXTERNAL only — factoryRevenue (= factoryPL.sales) includes
+            // internal factory→branch transfers, which would double-count against
+            // the branch revenue rows above.
+            const grandRevenue = factoryExternalRevenue + totalBranchRevenue
             const rows = [
               ...branchKpi.map(br => ({ name: br.name, revenue: br.revenue, pct: grandRevenue > 0 ? (br.revenue / grandRevenue) * 100 : 0 })),
-              { name: 'מפעל (חיצוני)', revenue: factoryRevenue, pct: grandRevenue > 0 ? (factoryRevenue / grandRevenue) * 100 : 0 },
+              { name: 'מפעל (חיצוני)', revenue: factoryExternalRevenue, pct: grandRevenue > 0 ? (factoryExternalRevenue / grandRevenue) * 100 : 0 },
             ]
             return (
               <Table>
