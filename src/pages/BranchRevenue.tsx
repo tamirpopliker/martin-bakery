@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { supabase, fetchBranchRevenueTrend } from '../lib/supabase'
 import type { BranchRevenueTrend } from '../lib/supabase'
+import { safeDbOperation } from '../lib/dbHelpers'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import PageHeader from '../components/PageHeader'
@@ -86,6 +87,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   const [editId, setEditId]         = useState<number | null>(null)
   const [editData, setEditData]     = useState<Partial<Entry>>({})
   const [loading, setLoading]       = useState(false)
+  const [saveError, setSaveError]   = useState('')
   const [openRegisters, setOpenRegisters] = useState(0)
 
   // טופס
@@ -240,12 +242,21 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
     if (!amount || !date) return
     if (tab === 'credit' && !customer) return
     setLoading(true)
-    await supabase.from('branch_revenue').insert({
-      branch_id: branchId, source: tab, date,
-      amount: parseFloat(amount),
-      transaction_count: txCount ? parseInt(txCount) : null,
-      customer: customer || null, doc_number: docNumber || null, notes: notes || null
-    })
+    setSaveError('')
+    const res = await safeDbOperation(
+      () => supabase.from('branch_revenue').insert({
+        branch_id: branchId, source: tab, date,
+        amount: parseFloat(amount),
+        transaction_count: txCount ? parseInt(txCount) : null,
+        customer: customer || null, doc_number: docNumber || null, notes: notes || null
+      }),
+      'הוספת הכנסה',
+    )
+    if (!res.ok) {
+      setSaveError(res.error)
+      setLoading(false)
+      return
+    }
     if (tab === 'credit' && customer && !creditCustomers.includes(customer))
       setCreditCustomers(p => [...p, customer].sort())
     setAmount(''); setTxCount(''); setDocNumber(''); setNotes(''); setCustomer('')
@@ -255,12 +266,20 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
   async function deleteEntry(id: number) {
     if (!confirm('למחוק?')) return
-    await supabase.from('branch_revenue').delete().eq('id', id)
+    const res = await safeDbOperation(
+      () => supabase.from('branch_revenue').delete().eq('id', id),
+      'מחיקת רשומת הכנסה',
+    )
+    if (!res.ok) { setSaveError(res.error); return }
     await fetchEntries()
   }
 
   async function saveEdit(id: number) {
-    await supabase.from('branch_revenue').update(editData).eq('id', id)
+    const res = await safeDbOperation(
+      () => supabase.from('branch_revenue').update(editData).eq('id', id),
+      'עדכון רשומת הכנסה',
+    )
+    if (!res.ok) { setSaveError(res.error); return }
     setEditId(null); await fetchEntries()
   }
 
@@ -325,6 +344,15 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
       <PageHeader title="הכנסות" subtitle={branchName} onBack={onBack} />
+
+      {saveError && (
+        <div style={{ maxWidth: 1000, margin: '12px auto 0', padding: '0 20px' }}>
+          <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '10px 14px', borderRadius: 10, fontSize: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <span>{saveError}</span>
+            <button onClick={() => setSaveError('')} style={{ background: 'transparent', border: 'none', color: '#991b1b', fontWeight: 700, cursor: 'pointer', fontSize: 18 }}>×</button>
+          </div>
+        </div>
+      )}
 
       {/* Close register CTA */}
       {onNavigate && (BRANCH_REGISTERS[branchId] || []).length > 0 && (

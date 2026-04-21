@@ -273,7 +273,8 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
         if (error) throw error
         closingId = existing.id
         // Remove previous auto change_fund entries linked to this closing, they will be re-inserted with fresh state
-        await supabase.from('change_fund').delete().eq('related_closing_id', closingId)
+        const { error: delErr } = await supabase.from('change_fund').delete().eq('related_closing_id', closingId)
+        if (delErr) throw delErr
       } else {
         const { data: inserted, error } = await supabase.from('register_closings').insert(row).select().single()
         if (error) throw error
@@ -310,7 +311,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
       let balance = await getCurrentFundBalance()
       for (const u of fundUpdates) {
         balance += u.amount
-        await supabase.from('change_fund').insert({
+        const { error: fundErr } = await supabase.from('change_fund').insert({
           branch_id: branchId,
           date,
           type: u.type,
@@ -320,11 +321,14 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
           related_closing_id: closingId,
           related_register_number: registerNumber,
         })
+        if (fundErr) throw fundErr
       }
 
       onSaved()
     } catch (e: any) {
-      alert('שגיאת שמירה: ' + (e?.message || 'לא ידוע'))
+      const msg = e?.message || 'שגיאה לא צפויה'
+      alert(`שמירת סגירת הקופה נכשלה: ${msg}. נסה שוב בעוד מספר שניות.`)
+      console.error('[RegisterClosings saveClosing] error:', e)
     }
     setSaving(false)
   }
@@ -732,7 +736,7 @@ function ActivateDialog({ branchId, registerNumber, fundBalance, onClose, onSave
       if (error) throw error
 
       const newBalance = fundBalance - amt
-      await supabase.from('change_fund').insert({
+      const { error: fundErr } = await supabase.from('change_fund').insert({
         branch_id: branchId,
         date: today,
         type: 'withdraw_to_register',
@@ -742,9 +746,12 @@ function ActivateDialog({ branchId, registerNumber, fundBalance, onClose, onSave
         related_closing_id: inserted.id,
         related_register_number: registerNumber,
       })
+      if (fundErr) throw fundErr
       onSaved()
     } catch (e: any) {
-      alert('שגיאה: ' + (e?.message || 'לא ידוע'))
+      const msg = e?.message || 'שגיאה לא צפויה'
+      alert(`הפעלת הקופה נכשלה: ${msg}. נסה שוב.`)
+      console.error('[RegisterClosings activate] error:', e)
     }
     setSaving(false)
   }
@@ -826,7 +833,7 @@ function EmptyDialog({ branchId, registerNumber, openingAmount, fundBalance, onC
 
       if (openingAmount > 0) {
         const newBalance = fundBalance + openingAmount
-        await supabase.from('change_fund').insert({
+        const { error: fundErr } = await supabase.from('change_fund').insert({
           branch_id: branchId,
           date: today,
           type: 'push_from_register',
@@ -836,10 +843,13 @@ function EmptyDialog({ branchId, registerNumber, openingAmount, fundBalance, onC
           related_closing_id: inserted.id,
           related_register_number: registerNumber,
         })
+        if (fundErr) throw fundErr
       }
       onSaved()
     } catch (e: any) {
-      alert('שגיאה: ' + (e?.message || 'לא ידוע'))
+      const msg = e?.message || 'שגיאה לא צפויה'
+      alert(`ריקון הקופה נכשל: ${msg}. נסה שוב.`)
+      console.error('[RegisterClosings doEmpty] error:', e)
     }
     setSaving(false)
   }
@@ -899,7 +909,8 @@ function DeleteDialog({ closing, onClose, onDeleted }: {
     setDeleting(true)
     try {
       // Delete related change_fund rows first (either via FK relation or by related_closing_id)
-      await supabase.from('change_fund').delete().eq('related_closing_id', closing.id)
+      const { error: fundErr } = await supabase.from('change_fund').delete().eq('related_closing_id', closing.id)
+      if (fundErr) throw fundErr
       const { error } = await supabase.from('register_closings').delete().eq('id', closing.id)
       if (error) throw error
       onDeleted()

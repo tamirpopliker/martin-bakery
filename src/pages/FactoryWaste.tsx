@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { safeDbOperation } from '../lib/dbHelpers'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
@@ -35,6 +36,7 @@ export default function FactoryWaste({ department, onBack }: Props) {
   const [category, setCategory] = useState('raw_materials')
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [editId, setEditId] = useState<number | null>(null)
   const [editData, setEditData] = useState<Partial<Entry>>({})
 
@@ -56,19 +58,32 @@ export default function FactoryWaste({ department, onBack }: Props) {
   async function handleAdd() {
     if (!amount || !date) return
     setLoading(true)
-    await supabase.from('factory_waste').insert({ department, date, amount: parseFloat(amount), category, description })
+    setSaveError('')
+    const res = await safeDbOperation(
+      () => supabase.from('factory_waste').insert({ department, date, amount: parseFloat(amount), category, description }),
+      'הוספת רשומת פחת',
+    )
+    if (!res.ok) { setSaveError(res.error); setLoading(false); return }
     setAmount(''); setDescription('')
     await fetchEntries()
     setLoading(false)
   }
 
   async function handleDelete(id: number) {
-    await supabase.from('factory_waste').delete().eq('id', id)
+    const res = await safeDbOperation(
+      () => supabase.from('factory_waste').delete().eq('id', id),
+      'מחיקת רשומת פחת',
+    )
+    if (!res.ok) { setSaveError(res.error); return }
     await fetchEntries()
   }
 
   async function handleEdit(id: number) {
-    await supabase.from('factory_waste').update(editData).eq('id', id)
+    const res = await safeDbOperation(
+      () => supabase.from('factory_waste').update(editData).eq('id', id),
+      'עדכון רשומת פחת',
+    )
+    if (!res.ok) { setSaveError(res.error); return }
     setEditId(null)
     await fetchEntries()
   }
@@ -80,6 +95,15 @@ export default function FactoryWaste({ department, onBack }: Props) {
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
       <PageHeader title="פחת מפעל" subtitle={deptName[department]} onBack={onBack} />
+
+      {saveError && (
+        <div style={{ maxWidth: 900, margin: '12px auto 0', padding: '0 20px' }}>
+          <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '10px 14px', borderRadius: 10, fontSize: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <span>{saveError}</span>
+            <button onClick={() => setSaveError('')} style={{ background: 'transparent', border: 'none', color: '#991b1b', fontWeight: 700, cursor: 'pointer', fontSize: 18 }}>×</button>
+          </div>
+        </div>
+      )}
 
       <div style={{ padding: '0 20px 28px', maxWidth: 900, margin: '0 auto' }}>
         {/* Add form card */}

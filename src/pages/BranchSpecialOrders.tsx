@@ -140,7 +140,12 @@ export default function BranchSpecialOrders({ branchId, branchName, branchColor,
     : afterStatusFilter
 
   async function changeStatus(o: SpecialOrder, newStatus: SpecialOrder['status']) {
-    await supabase.from('special_orders').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', o.id)
+    const { error } = await supabase.from('special_orders').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', o.id)
+    if (error) {
+      console.error('[BranchSpecialOrders changeStatus] error:', error)
+      alert(`עדכון סטטוס ההזמנה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     if (viewOrder?.id === o.id) setViewOrder(null)
     fetchOrders()
   }
@@ -920,7 +925,11 @@ function OrderForm({ branchId, branchName, branchColor, userId, onClose, onSaved
         order_id: inserted.id,
         message,
       }))
-      await supabase.from('order_notifications').insert(notifications)
+      const { error: notifErr } = await supabase.from('order_notifications').insert(notifications)
+      if (notifErr) {
+        // The order saved. Only the notifications failed — warn but don't block the user.
+        console.warn('[BranchSpecialOrders] notifications insert failed:', notifErr)
+      }
     }
 
     setSaving(false)

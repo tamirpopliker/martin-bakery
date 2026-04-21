@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Upload, CheckCircle, AlertTriangle, FileSpreadsheet, Trash2, History, Clock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { safeDbOperation } from '../lib/dbHelpers'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
 import PageHeader from '../components/PageHeader'
@@ -167,8 +168,16 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
   }
 
   async function replaceDuplicate() {
-    await supabase.from('employer_costs').delete().eq('month', reportMonth).eq('year', reportYear)
-    await supabase.from('employer_costs_uploads').delete().eq('month', reportMonth).eq('year', reportYear)
+    const delCosts = await safeDbOperation(
+      () => supabase.from('employer_costs').delete().eq('month', reportMonth).eq('year', reportYear),
+      'מחיקת רשומות עלות מעסיק קיימות',
+    )
+    if (!delCosts.ok) { setError(delCosts.error); setStep('upload'); return }
+    const delUpload = await safeDbOperation(
+      () => supabase.from('employer_costs_uploads').delete().eq('month', reportMonth).eq('year', reportYear),
+      'מחיקת רשומת ההעלאה הקודמת',
+    )
+    if (!delUpload.ok) { setError(delUpload.error); setStep('upload'); return }
     setExistingUpload(null); setStep('preview')
   }
 
@@ -177,8 +186,23 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
     const remaining = employees.filter(e => !e.matched && !e.is_headquarters && !e.is_manager).length
     if (remaining > 0 && step !== 'confirm_save') { setStep('confirm_save'); return }
 
+    setError('')
     setStep('saving')
-    await supabase.from('employer_costs').delete().eq('month', reportMonth).eq('year', reportYear)
+
+    // Step A: delete any existing rows for this month. If this fails we must
+    // NOT proceed — an INSERT afterwards would leave the table in an unknown
+    // state (some rows from the old payload + some from the new).
+    const delRes = await safeDbOperation(
+      () => supabase.from('employer_costs').delete().eq('month', reportMonth).eq('year', reportYear),
+      'ניקוי רשומות קודמות לחודש זה',
+    )
+    if (!delRes.ok) {
+      setError(delRes.error + '. נסה שוב בעוד מספר שניות או פנה למנהל המערכת.')
+      setStep('preview')
+      return
+    }
+
+    // Step B: insert the new payload.
     const payload = employees.map(emp => ({
       employee_number: emp.employee_number, employee_name: emp.employee_name,
       month: reportMonth, year: reportYear,
@@ -187,23 +211,69 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
       branch_id: emp.branch_id, is_headquarters: emp.is_headquarters, is_manager: emp.is_manager,
       uploaded_by: appUser?.name || null,
     }))
-    await supabase.from('employer_costs').insert(payload)
-    const branchUpdates = employees.filter(e => e.matched_employee_id && ![2, 5, 6, 7, 8].includes(e.department_number))
-    await Promise.all(
-      branchUpdates.map(emp => supabase.from('branch_employees').update({ payroll_number: emp.employee_number }).eq('id', emp.matched_employee_id!))
+    const insertRes = await safeDbOperation(
+      () => supabase.from('employer_costs').insert(payload),
+      'שמירת דוח עלות מעסיק',
     )
-    await supabase.from('employer_costs_uploads').insert({
-      month: reportMonth, year: reportYear, filename: parsedFileName,
-      uploaded_by: appUser?.name || null, status: 'completed',
-      unmatched_count: employees.filter(e => !e.matched && !e.is_headquarters && !e.is_manager).length,
-    })
+    if (!insertRes.ok) {
+      // The old rows were already deleted. Record a 'failed' upload marker so
+      // the history tab reflects the truth rather than a misleading "completed".
+      await safeDbOperation(
+        () => supabase.from('employer_costs_uploads').insert({
+          month: reportMonth, year: reportYear, filename: parsedFileName,
+          uploaded_by: appUser?.name || null, status: 'failed',
+          unmatched_count: 0,
+        }),
+        'רישום ניסיון העלאה כושל',
+      )
+      setError(insertRes.error + '. הנתונים הישנים (אם היו) נמחקו — יש להעלות מחדש.')
+      setStep('preview')
+      return
+    }
+
+    // Step C: best-effort link payroll_number on branch_employees. Not fatal
+    // if this fails — the P&L calculations do not depend on the link.
+    const branchUpdates = employees.filter(e => e.matched_employee_id && ![2, 5, 6, 7, 8].includes(e.department_number))
+    const updateResults = await Promise.all(
+      branchUpdates.map(emp => safeDbOperation(
+        () => supabase.from('branch_employees').update({ payroll_number: emp.employee_number }).eq('id', emp.matched_employee_id!),
+        `עדכון מספר שכר לעובד ${emp.employee_name}`,
+      ))
+    )
+    const failedUpdates = updateResults.filter(r => !r.ok).length
+    if (failedUpdates > 0) {
+      console.warn(`[EmployerCostsUpload] ${failedUpdates}/${branchUpdates.length} payroll_number updates failed`)
+    }
+
+    // Step D: record a completed upload only after the INSERT succeeded.
+    const logRes = await safeDbOperation(
+      () => supabase.from('employer_costs_uploads').insert({
+        month: reportMonth, year: reportYear, filename: parsedFileName,
+        uploaded_by: appUser?.name || null, status: 'completed',
+        unmatched_count: employees.filter(e => !e.matched && !e.is_headquarters && !e.is_manager).length,
+      }),
+      'רישום בהיסטוריית העלאות',
+    )
+    if (!logRes.ok) {
+      // The data itself saved fine; only the history log entry failed.
+      // Warn but proceed to the done screen.
+      console.warn('[EmployerCostsUpload] data saved but history log failed:', logRes.error)
+    }
     setStep('done')
   }
 
   async function deleteUpload(id: number, month: number, year: number) {
     if (!confirm(`למחוק דוח מעסיק ${month}/${year}?`)) return
-    await supabase.from('employer_costs').delete().eq('month', month).eq('year', year)
-    await supabase.from('employer_costs_uploads').delete().eq('id', id)
+    const delCosts = await safeDbOperation(
+      () => supabase.from('employer_costs').delete().eq('month', month).eq('year', year),
+      'מחיקת רשומות עלות מעסיק',
+    )
+    if (!delCosts.ok) { alert(delCosts.error); return }
+    const delLog = await safeDbOperation(
+      () => supabase.from('employer_costs_uploads').delete().eq('id', id),
+      'מחיקת רשומת ההעלאה',
+    )
+    if (!delLog.ok) { alert(delLog.error); return }
     loadUploads()
   }
 

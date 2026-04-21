@@ -169,20 +169,34 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
       recipient_role: form.recipient_type === 'role' ? form.recipient_role || null : null,
     }
     if (editId) {
-      await supabase.from('branch_messages').update(payload).eq('id', editId); setEditId(null)
+      const { error } = await supabase.from('branch_messages').update(payload).eq('id', editId)
+      if (error) {
+        console.error('[BranchCommunication updateMsg] error:', error)
+        alert(`עדכון ההודעה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        return
+      }
+      setEditId(null)
     } else {
-      const { data: inserted } = await supabase.from('branch_messages').insert(payload).select().single()
+      const { data: inserted, error: insErr } = await supabase.from('branch_messages').insert(payload).select().single()
+      if (insErr || !inserted) {
+        console.error('[BranchCommunication insertMsg] error:', insErr)
+        alert(`שמירת ההודעה נכשלה: ${insErr?.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        return
+      }
       // Upload files
-      if (inserted && selectedFiles.length > 0) {
+      if (selectedFiles.length > 0) {
         for (const file of selectedFiles) {
           const path = `${branchId}/${inserted.id}/${Date.now()}_${file.name}`
           const { error: upErr } = await supabase.storage.from('message-attachments').upload(path, file)
           if (!upErr) {
             const { data: urlData } = supabase.storage.from('message-attachments').getPublicUrl(path)
-            await supabase.from('message_attachments').insert({
+            const { error: attachErr } = await supabase.from('message_attachments').insert({
               message_id: inserted.id, file_name: file.name,
               file_url: urlData.publicUrl, file_size: file.size,
             })
+            if (attachErr) console.warn('[BranchCommunication attachment] DB row insert failed:', attachErr)
+          } else {
+            console.warn('[BranchCommunication attachment] storage upload failed:', upErr)
           }
         }
       }
@@ -196,12 +210,34 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  async function deleteMsg(id: number) { if (!confirm('למחוק הודעה זו?')) return; await supabase.from('branch_messages').delete().eq('id', id); loadMessages() }
-  async function togglePin(msg: Message) { await supabase.from('branch_messages').update({ is_pinned: !msg.is_pinned }).eq('id', msg.id); loadMessages() }
+  async function deleteMsg(id: number) {
+    if (!confirm('למחוק הודעה זו?')) return
+    const { error } = await supabase.from('branch_messages').delete().eq('id', id)
+    if (error) {
+      console.error('[BranchCommunication deleteMsg] error:', error)
+      alert(`מחיקת ההודעה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
+    loadMessages()
+  }
+  async function togglePin(msg: Message) {
+    const { error } = await supabase.from('branch_messages').update({ is_pinned: !msg.is_pinned }).eq('id', msg.id)
+    if (error) {
+      console.error('[BranchCommunication togglePin] error:', error)
+      alert(`עדכון סימון ההצמדה נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
+      return
+    }
+    loadMessages()
+  }
 
   async function markRead(msgId: number) {
     if (!employeeId || myReads.has(msgId)) return
-    await supabase.from('message_reads').insert({ message_id: msgId, employee_id: employeeId })
+    const { error } = await supabase.from('message_reads').insert({ message_id: msgId, employee_id: employeeId })
+    if (error) {
+      // Non-critical: reading the message is not blocked by the log failing.
+      console.warn('[BranchCommunication markRead] error:', error)
+      return
+    }
     setMyReads(prev => new Set([...prev, msgId])); loadMessages()
   }
 

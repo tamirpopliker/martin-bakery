@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, Pencil, Trash2, Check, X, Upload, Search, ChevronLeft, Users, Receipt, BarChart3, AlertTriangle, CheckCircle, Download } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { safeDbOperation } from '../lib/dbHelpers'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
 import PageHeader from '../components/PageHeader'
@@ -217,27 +218,77 @@ export default function B2BCustomers({ onBack }: Props) {
     const dueDateStr = calcDueDate(dateDb, cust?.payment_terms || null)
     if (inv.invoice_number) {
       const { data: existing } = await supabase.from('b2b_invoices').select('id').eq('invoice_number', inv.invoice_number).maybeSingle()
-      if (existing) { if (!confirm(`חשבונית ${inv.invoice_number} כבר קיימת. לעדכן?`)) return; await supabase.from('b2b_invoices').update({ customer_id: customerId, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: Number(inv.total_before_vat) || 0, total_with_vat: Number(inv.total_before_vat) * 1.17 || 0 }).eq('id', existing.id); setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p)); loadInvoices(); return }
+      if (existing) {
+        if (!confirm(`חשבונית ${inv.invoice_number} כבר קיימת. לעדכן?`)) return
+        const updRes = await safeDbOperation(
+          () => supabase.from('b2b_invoices').update({ customer_id: customerId, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: Number(inv.total_before_vat) || 0, total_with_vat: Number(inv.total_before_vat) * 1.17 || 0 }).eq('id', existing.id),
+          'עדכון חשבונית קיימת',
+        )
+        if (!updRes.ok) { alert(updRes.error + '. נסה שוב.'); return }
+        setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p))
+        loadInvoices()
+        return
+      }
     }
     const branchId = inv.branch_id || null; const amount = Number(inv.total_before_vat) || 0
-    await supabase.from('b2b_invoices').insert({ customer_id: customerId, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', uploaded_by: appUser?.name })
-    if (branchId) { await supabase.from('branch_revenue').insert({ branch_id: branchId, date: dateDb, source: 'credit_b2b', amount, doc_number: inv.invoice_number || null }) }
-    else { await supabase.from('external_sales').insert({ customer_name: inv.customer_name || '', invoice_number: inv.invoice_number || null, invoice_date: dateDb, total_before_vat: amount, uploaded_by: appUser?.name }) }
-    setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p)); loadInvoices()
+    const invRes = await safeDbOperation(
+      () => supabase.from('b2b_invoices').insert({ customer_id: customerId, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', uploaded_by: appUser?.name }),
+      'יצירת חשבונית B2B',
+    )
+    if (!invRes.ok) { alert(invRes.error + '. נסה שוב או פנה למנהל המערכת.'); return }
+    // Record the matching revenue row. If this fails, the invoice already saved,
+    // so surface the error without rolling back — manual reconciliation is safer
+    // than cascading deletes at this layer.
+    if (branchId) {
+      const revRes = await safeDbOperation(
+        () => supabase.from('branch_revenue').insert({ branch_id: branchId, date: dateDb, source: 'credit_b2b', amount, doc_number: inv.invoice_number || null }),
+        'רישום הכנסה לסניף',
+      )
+      if (!revRes.ok) { alert('החשבונית נשמרה אך רישום ההכנסה לסניף נכשל: ' + revRes.error) }
+    } else {
+      const extRes = await safeDbOperation(
+        () => supabase.from('external_sales').insert({ customer_name: inv.customer_name || '', invoice_number: inv.invoice_number || null, invoice_date: dateDb, total_before_vat: amount, uploaded_by: appUser?.name }),
+        'רישום מכירה חיצונית',
+      )
+      if (!extRes.ok) { alert('החשבונית נשמרה אך רישום המכירה החיצונית נכשל: ' + extRes.error) }
+    }
+    setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p))
+    loadInvoices()
   }
 
   async function confirmCreateCustomerAndSave(idx: number, customerName: string) {
-    const { data: newCust } = await supabase.from('b2b_customers').insert({ name: customerName }).select().single()
-    if (!newCust) { alert('שגיאה ביצירת לקוח'); return }
+    const custRes = await safeDbOperation<{ id: number }>(
+      () => supabase.from('b2b_customers').insert({ name: customerName }).select().single(),
+      'יצירת לקוח B2B חדש',
+      { requireData: true },
+    )
+    if (!custRes.ok) { alert(custRes.error + '. נסה שוב.'); return }
+    const newCust = custRes.data
     setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, customer_id: newCust.id } : p))
     setNewCustConfirm(null); loadCustomers()
     const inv = parsedPdfs[idx]; let dateDb = inv.invoice_date_db
     if (inv.invoice_date && inv.invoice_date.includes('/')) { const p = inv.invoice_date.split('/'); if (p.length === 3) dateDb = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}` }
     const dueDateStr = calcDueDate(dateDb, 'שוטף + 30'); const branchId = inv.branch_id || null; const amount = Number(inv.total_before_vat) || 0
-    await supabase.from('b2b_invoices').insert({ customer_id: newCust.id, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', uploaded_by: appUser?.name })
-    if (branchId) { await supabase.from('branch_revenue').insert({ branch_id: branchId, date: dateDb, source: 'credit_b2b', amount, doc_number: inv.invoice_number || null }) }
-    else { await supabase.from('external_sales').insert({ customer_name: customerName, invoice_number: inv.invoice_number || null, invoice_date: dateDb, total_before_vat: amount, uploaded_by: appUser?.name }) }
-    setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p)); loadInvoices()
+    const invRes = await safeDbOperation(
+      () => supabase.from('b2b_invoices').insert({ customer_id: newCust.id, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', uploaded_by: appUser?.name }),
+      'יצירת חשבונית B2B',
+    )
+    if (!invRes.ok) { alert(invRes.error + '. הלקוח נוצר אך החשבונית לא — נסה לשמור אותה שוב מהרשימה.'); return }
+    if (branchId) {
+      const revRes = await safeDbOperation(
+        () => supabase.from('branch_revenue').insert({ branch_id: branchId, date: dateDb, source: 'credit_b2b', amount, doc_number: inv.invoice_number || null }),
+        'רישום הכנסה לסניף',
+      )
+      if (!revRes.ok) { alert('החשבונית נשמרה אך רישום ההכנסה לסניף נכשל: ' + revRes.error) }
+    } else {
+      const extRes = await safeDbOperation(
+        () => supabase.from('external_sales').insert({ customer_name: customerName, invoice_number: inv.invoice_number || null, invoice_date: dateDb, total_before_vat: amount, uploaded_by: appUser?.name }),
+        'רישום מכירה חיצונית',
+      )
+      if (!extRes.ok) { alert('החשבונית נשמרה אך רישום המכירה החיצונית נכשל: ' + extRes.error) }
+    }
+    setParsedPdfs(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p))
+    loadInvoices()
   }
 
   // ═══ LOAD REPORTS ═══

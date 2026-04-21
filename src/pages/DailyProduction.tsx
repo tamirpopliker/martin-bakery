@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { safeDbOperation } from '../lib/dbHelpers'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Plus, Pencil, Trash2, CheckCircle, XCircle, TrendingUp } from 'lucide-react'
@@ -142,6 +143,7 @@ export default function DailyProduction({ department, onBack }: Props) {
   const [date, setDate]                 = useState(new Date().toISOString().split('T')[0])
   const [amount, setAmount]             = useState('')
   const [loading, setLoading]           = useState(false)
+  const [saveError, setSaveError]       = useState('')
   const [todayEntered, setTodayEntered] = useState(false)
   const [editId, setEditId]             = useState<number | null>(null)
   const [editAmount, setEditAmount]     = useState('')
@@ -181,9 +183,14 @@ export default function DailyProduction({ department, onBack }: Props) {
   async function handleAdd() {
     if (!amount || !date) return
     setLoading(true)
-    await supabase.from('daily_production').insert({
-      department, date, amount: parseFloat(amount)
-    })
+    setSaveError('')
+    const res = await safeDbOperation(
+      () => supabase.from('daily_production').insert({
+        department, date, amount: parseFloat(amount)
+      }),
+      'הוספת רשומת ייצור',
+    )
+    if (!res.ok) { setSaveError(res.error); setLoading(false); return }
     setAmount('')
     await fetchEntries()
     setLoading(false)
@@ -192,13 +199,21 @@ export default function DailyProduction({ department, onBack }: Props) {
   // ─── מחיקה ──────────────────────────────────────────────────────────────
   async function handleDelete(id: number) {
     if (!confirm('למחוק רשומה זו?')) return
-    await supabase.from('daily_production').delete().eq('id', id)
+    const res = await safeDbOperation(
+      () => supabase.from('daily_production').delete().eq('id', id),
+      'מחיקת רשומת ייצור',
+    )
+    if (!res.ok) { setSaveError(res.error); return }
     await fetchEntries()
   }
 
   // ─── עריכה ──────────────────────────────────────────────────────────────
   async function handleEdit(id: number) {
-    await supabase.from('daily_production').update({ amount: parseFloat(editAmount) }).eq('id', id)
+    const res = await safeDbOperation(
+      () => supabase.from('daily_production').update({ amount: parseFloat(editAmount) }).eq('id', id),
+      'עדכון רשומת ייצור',
+    )
+    if (!res.ok) { setSaveError(res.error); return }
     setEditId(null)
     await fetchEntries()
   }
@@ -242,6 +257,15 @@ export default function DailyProduction({ department, onBack }: Props) {
           </div>
         }
       />
+
+      {saveError && (
+        <div style={{ maxWidth: 960, margin: '12px auto 0', padding: '0 32px' }}>
+          <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '10px 14px', borderRadius: 10, fontSize: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <span>{saveError}</span>
+            <button onClick={() => setSaveError('')} style={{ background: 'transparent', border: 'none', color: '#991b1b', fontWeight: 700, cursor: 'pointer', fontSize: 18 }}>×</button>
+          </div>
+        </div>
+      )}
 
       <div className="page-container" style={{ padding: '28px 32px', maxWidth: '960px', margin: '0 auto' }}>
 
