@@ -142,7 +142,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
   async function addEntry() {
     if (!canAdd) return
     setLoading(true)
-    await supabase.from('branch_expenses').insert({
+    const { error } = await supabase.from('branch_expenses').insert({
       branch_id: branchId, date, expense_type: expType,
       supplier: supplier || '—',
       amount: parseFloat(amount),
@@ -150,6 +150,12 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
       notes: notes || null,
       from_factory: false
     })
+    if (error) {
+      console.error('[BranchExpenses addEntry] error:', error)
+      alert(`הוספת ההוצאה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoading(false)
+      return
+    }
     setAmount(''); setDocNumber(''); setNotes('')
     await fetchEntries()
     setLoading(false)
@@ -157,12 +163,22 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
 
   async function deleteEntry(id: number) {
     if (!confirm('למחוק הוצאה זו?')) return
-    await supabase.from('branch_expenses').delete().eq('id', id)
+    const { error } = await supabase.from('branch_expenses').delete().eq('id', id)
+    if (error) {
+      console.error('[BranchExpenses deleteEntry] error:', error)
+      alert(`מחיקת ההוצאה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchEntries()
   }
 
   async function saveEdit(id: number) {
-    await supabase.from('branch_expenses').update(editData).eq('id', id)
+    const { error } = await supabase.from('branch_expenses').update(editData).eq('id', id)
+    if (error) {
+      console.error('[BranchExpenses saveEdit] error:', error)
+      alert(`עדכון ההוצאה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditId(null); await fetchEntries()
   }
 

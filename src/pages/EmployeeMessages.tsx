@@ -78,7 +78,11 @@ export default function EmployeeMessages({ onBack }: Props) {
 
   async function markRead(msgId: number) {
     if (!employeeId || myReads.has(msgId)) return
-    await supabase.from('message_reads').insert({ message_id: msgId, employee_id: employeeId })
+    const { error } = await supabase.from('message_reads').insert({ message_id: msgId, employee_id: employeeId })
+    if (error) {
+      console.warn('[EmployeeMessages markRead] non-fatal error:', error)
+      return
+    }
     setMyReads(prev => new Set([...prev, msgId]))
   }
 

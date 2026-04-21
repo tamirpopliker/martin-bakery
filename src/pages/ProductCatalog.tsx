@@ -85,18 +85,30 @@ export default function ProductCatalog({ onBack }: Props) {
       updates.current_price = newPrice
       updates.price_updated_at = new Date().toISOString()
     }
-    await supabase.from('products').update(updates).eq('id', p.id)
-    // Sync department mapping
-    await supabase.from('product_department_mapping')
+    const { error } = await supabase.from('products').update(updates).eq('id', p.id)
+    if (error) {
+      console.error('[ProductCatalog save] error:', error)
+      alert(`עדכון המוצר נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
+    // Sync department mapping (best-effort — non-fatal)
+    const { error: mapErr } = await supabase.from('product_department_mapping')
       .upsert({ product_name: p.product_name, department: editDept }, { onConflict: 'product_name' })
+    if (mapErr) console.warn('[ProductCatalog save mapping] non-fatal:', mapErr)
     setEditId(null)
     loadProducts()
   }
 
   async function updateDeptInline(p: Product, dept: string) {
-    await supabase.from('products').update({ department: dept }).eq('id', p.id)
-    await supabase.from('product_department_mapping')
+    const { error } = await supabase.from('products').update({ department: dept }).eq('id', p.id)
+    if (error) {
+      console.error('[ProductCatalog updateDeptInline] error:', error)
+      alert(`שינוי המחלקה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
+    const { error: mapErr } = await supabase.from('product_department_mapping')
       .upsert({ product_name: p.product_name, department: dept }, { onConflict: 'product_name' })
+    if (mapErr) console.warn('[ProductCatalog updateDeptInline mapping] non-fatal:', mapErr)
     setProducts(prev => prev.map(pr => pr.id === p.id ? { ...pr, department: dept } : pr))
   }
 

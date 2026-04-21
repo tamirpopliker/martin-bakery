@@ -168,9 +168,19 @@ export default function FactorySettings({ onBack }: Props) {
       const target = kpiTargets[dept.key]
       const { id, department, ...fields } = target as KpiTarget & { id?: number }
       if (id) {
-        await supabase.from('kpi_targets').update(fields).eq('id', id)
+        const { error } = await supabase.from('kpi_targets').update(fields).eq('id', id)
+        if (error) {
+          console.error('[FactorySettings saveKpi update] error:', error)
+          alert(`שמירת יעדי KPI נכשלה למחלקת ${dept.label}: ${error.message || 'שגיאת מסד נתונים'}.`)
+          return
+        }
       } else {
-        const { data } = await supabase.from('kpi_targets').insert({ department: dept.key, ...fields }).select().single()
+        const { data, error } = await supabase.from('kpi_targets').insert({ department: dept.key, ...fields }).select().single()
+        if (error) {
+          console.error('[FactorySettings saveKpi insert] error:', error)
+          alert(`יצירת יעדי KPI נכשלה למחלקת ${dept.label}: ${error.message || 'שגיאת מסד נתונים'}.`)
+          return
+        }
         if (data) setKpiTargets(prev => ({ ...prev, [dept.key]: data }))
       }
     }
@@ -183,24 +193,40 @@ export default function FactorySettings({ onBack }: Props) {
   async function addCost() {
     if (!newCostName || !newCostAmount) return
     setLoadingCost(true)
-    await supabase.from('fixed_costs').insert({
+    const { error } = await supabase.from('fixed_costs').insert({
       name: newCostName, amount: parseFloat(newCostAmount),
       month: costMonth, entity_type: 'factory', entity_id: 'factory'
     })
+    if (error) {
+      console.error('[FactorySettings addCost] error:', error)
+      alert(`הוספת עלות קבועה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoadingCost(false)
+      return
+    }
     setNewCostName(''); setNewCostAmount('')
     await fetchCosts()
     setLoadingCost(false)
   }
 
   async function saveCost(id: number) {
-    await supabase.from('fixed_costs').update(editCostData).eq('id', id)
+    const { error } = await supabase.from('fixed_costs').update(editCostData).eq('id', id)
+    if (error) {
+      console.error('[FactorySettings saveCost] error:', error)
+      alert(`עדכון עלות קבועה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditCostId(null)
     await fetchCosts()
   }
 
   async function deleteCost(id: number) {
     if (!confirm('למחוק עלות זו?')) return
-    await supabase.from('fixed_costs').delete().eq('id', id)
+    const { error } = await supabase.from('fixed_costs').delete().eq('id', id)
+    if (error) {
+      console.error('[FactorySettings deleteCost] error:', error)
+      alert(`מחיקת עלות קבועה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchCosts()
   }
 
@@ -210,8 +236,17 @@ export default function FactorySettings({ onBack }: Props) {
     const { data } = await supabase.from('fixed_costs').select('*').eq('month', prev).eq('entity_type', 'factory')
     if (!data || data.length === 0) { alert('אין עלויות בחודש הקודם'); return }
     setLoadingCost(true)
+    let copied = 0
     for (const c of data) {
-      await supabase.from('fixed_costs').insert({ name: c.name, amount: c.amount, month: costMonth, entity_type: 'factory', entity_id: 'factory' })
+      const { error } = await supabase.from('fixed_costs').insert({ name: c.name, amount: c.amount, month: costMonth, entity_type: 'factory', entity_id: 'factory' })
+      if (error) {
+        console.error('[FactorySettings copyFromPrevMonth] error:', error)
+        alert(`העתקת עלויות נעצרה אחרי ${copied} שורות: ${error.message || 'שגיאת מסד נתונים'}.`)
+        await fetchCosts()
+        setLoadingCost(false)
+        return
+      }
+      copied++
     }
     await fetchCosts()
     setLoadingCost(false)
@@ -223,10 +258,17 @@ export default function FactorySettings({ onBack }: Props) {
     const existingNames = new Set(costs.map(c => c.name))
     for (const d of DEFAULT_FIXED_COSTS) {
       if (!existingNames.has(d.name)) {
-        await supabase.from('fixed_costs').insert({
+        const { error } = await supabase.from('fixed_costs').insert({
           name: d.name, amount: d.amount,
           month: costMonth, entity_type: 'factory', entity_id: 'factory'
         })
+        if (error) {
+          console.error('[FactorySettings loadDefaults] error:', error)
+          alert(`טעינת ברירות מחדל נעצרה: ${error.message || 'שגיאת מסד נתונים'}.`)
+          await fetchCosts()
+          setLoadingCost(false)
+          return
+        }
       }
     }
     await fetchCosts()
@@ -237,7 +279,7 @@ export default function FactorySettings({ onBack }: Props) {
   async function addEmployee() {
     if (!newEmp.name || !newEmp.department || !newEmp.wage_type) return
     setLoadingEmp(true)
-    await supabase.from('employees').insert({
+    const { error } = await supabase.from('employees').insert({
       name: newEmp.name,
       employee_number: newEmp.employee_number || null,
       department: newEmp.department,
@@ -246,6 +288,12 @@ export default function FactorySettings({ onBack }: Props) {
       global_daily_rate: newEmp.wage_type === 'global' ? (newEmp.global_daily_rate || null) : null,
       bonus: newEmp.bonus || null
     })
+    if (error) {
+      console.error('[FactorySettings addEmployee] error:', error)
+      alert(`הוספת עובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoadingEmp(false)
+      return
+    }
     setNewEmp({ wage_type: 'hourly', department: 'creams' })
     setShowAddEmp(false)
     await fetchEmployees()
@@ -253,43 +301,73 @@ export default function FactorySettings({ onBack }: Props) {
   }
 
   async function saveEmployee(id: number) {
-    await supabase.from('employees').update(editEmpData).eq('id', id)
+    const { error } = await supabase.from('employees').update(editEmpData).eq('id', id)
+    if (error) {
+      console.error('[FactorySettings saveEmployee] error:', error)
+      alert(`עדכון פרטי עובד נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditEmpId(null)
     await fetchEmployees()
   }
 
   async function deleteEmployee(id: number) {
     if (!confirm('למחוק עובד זה?')) return
-    await supabase.from('employees').delete().eq('id', id)
+    const { error } = await supabase.from('employees').delete().eq('id', id)
+    if (error) {
+      console.error('[FactorySettings deleteEmployee] error:', error)
+      alert(`מחיקת עובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchEmployees()
   }
 
   async function toggleActive(emp: Employee) {
-    await supabase.from('employees').update({ active: !emp.active }).eq('id', emp.id)
+    const { error } = await supabase.from('employees').update({ active: !emp.active }).eq('id', emp.id)
+    if (error) {
+      console.error('[FactorySettings toggleActive] error:', error)
+      alert(`שינוי סטטוס פעילות נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
+      return
+    }
     await fetchEmployees()
   }
 
   // ─── ימי עבודה CRUD ──────────────────────────────────────────────────────
   async function addWorkingDay() {
     if (!newWdMonth) return
-    await supabase.from('fixed_costs').insert({
+    const { error } = await supabase.from('fixed_costs').insert({
       entity_type: 'working_days', entity_id: 'factory',
       name: 'ימי עבודה', month: newWdMonth, amount: newWdCount,
     })
+    if (error) {
+      console.error('[FactorySettings addWorkingDay] error:', error)
+      alert(`הוספת ימי עבודה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setNewWdMonth('')
     setNewWdCount(26)
     await fetchWorkingDays()
   }
 
   async function saveWorkingDay(id: number) {
-    await supabase.from('fixed_costs').update({ amount: editWdVal }).eq('id', id)
+    const { error } = await supabase.from('fixed_costs').update({ amount: editWdVal }).eq('id', id)
+    if (error) {
+      console.error('[FactorySettings saveWorkingDay] error:', error)
+      alert(`עדכון ימי עבודה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditWdId(null)
     await fetchWorkingDays()
   }
 
   async function deleteWorkingDay(id: number) {
     if (!confirm('למחוק?')) return
-    await supabase.from('fixed_costs').delete().eq('id', id)
+    const { error } = await supabase.from('fixed_costs').delete().eq('id', id)
+    if (error) {
+      console.error('[FactorySettings deleteWorkingDay] error:', error)
+      alert(`מחיקת ימי עבודה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchWorkingDays()
   }
 

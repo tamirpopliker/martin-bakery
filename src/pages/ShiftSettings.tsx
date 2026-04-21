@@ -153,14 +153,24 @@ function RolesTab({ branchId }: { branchId: number }) {
 
   async function addRole() {
     if (!newName.trim()) return
-    await supabase.from('shift_roles').insert({ branch_id: branchId, name: newName.trim(), color: newColor, is_active: true })
+    const { error } = await supabase.from('shift_roles').insert({ branch_id: branchId, name: newName.trim(), color: newColor, is_active: true })
+    if (error) {
+      console.error('[ShiftSettings addRole] error:', error)
+      alert(`הוספת תפקיד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setNewName('')
     setNewColor(ROLE_COLORS[0])
     fetchRoles()
   }
 
   async function deleteRole(id: number) {
-    await supabase.from('shift_roles').update({ is_active: false }).eq('id', id)
+    const { error } = await supabase.from('shift_roles').update({ is_active: false }).eq('id', id)
+    if (error) {
+      console.error('[ShiftSettings deleteRole] error:', error)
+      alert(`השבתת התפקיד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     fetchRoles()
   }
 
@@ -277,17 +287,25 @@ function ShiftsTab({ branchId }: { branchId: number }) {
       days_of_week: form.days_of_week,
       is_active: true,
     }
-    if (editId) {
-      await supabase.from('branch_shifts').update(payload).eq('id', editId)
-    } else {
-      await supabase.from('branch_shifts').insert(payload)
+    const { error } = editId
+      ? await supabase.from('branch_shifts').update(payload).eq('id', editId)
+      : await supabase.from('branch_shifts').insert(payload)
+    if (error) {
+      console.error('[ShiftSettings handleSave] error:', error)
+      alert(`שמירת המשמרת נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
     }
     setDialogOpen(false)
     fetchShifts()
   }
 
   async function deleteShift(id: number) {
-    await supabase.from('branch_shifts').update({ is_active: false }).eq('id', id)
+    const { error } = await supabase.from('branch_shifts').update({ is_active: false }).eq('id', id)
+    if (error) {
+      console.error('[ShiftSettings deleteShift] error:', error)
+      alert(`השבתת המשמרת נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     fetchShifts()
   }
 
@@ -782,33 +800,39 @@ function HolidaysTab({ branchId }: { branchId: number }) {
   async function addSelectedHolidays() {
     const selected = hebcalItems.filter(h => h.selected)
     if (selected.length === 0) return
-    try {
-      const rows = selected.map(h => ({
-        branch_id: branchId,
-        date: h.date,
-        name: h.title,
-        type: 'holiday',
-        source: 'hebcal',
-        staffing_multiplier: 1.5,
-        shift_pattern: 'friday',
-      }))
-      await supabase.from('special_days').insert(rows)
-      setHebcalItems([])
-      fetchSpecialDays()
-    } catch {
-      alert('שגיאה בהוספת חגים')
+    const rows = selected.map(h => ({
+      branch_id: branchId,
+      date: h.date,
+      name: h.title,
+      type: 'holiday',
+      source: 'hebcal',
+      staffing_multiplier: 1.5,
+      shift_pattern: 'friday',
+    }))
+    const { error } = await supabase.from('special_days').insert(rows)
+    if (error) {
+      console.error('[ShiftSettings addSelectedHolidays] error:', error)
+      alert(`הוספת החגים נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
     }
+    setHebcalItems([])
+    fetchSpecialDays()
   }
 
   async function updateShiftPattern(id: number, val: string) {
-    await supabase.from('special_days').update({ shift_pattern: val }).eq('id', id)
+    const { error } = await supabase.from('special_days').update({ shift_pattern: val }).eq('id', id)
+    if (error) {
+      console.error('[ShiftSettings updateShiftPattern] error:', error)
+      alert(`עדכון תבנית המשמרת נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
+      return
+    }
     setSpecialDays(prev => prev.map(d => d.id === id ? { ...d, shift_pattern: val } : d))
   }
 
   async function addSpecialDay() {
     if (!addForm.date || !addForm.name.trim()) return
     const pattern = addForm.type === 'blocked' ? 'closed' : newShiftPattern
-    await supabase.from('special_days').insert({
+    const { error } = await supabase.from('special_days').insert({
       branch_id: branchId,
       date: addForm.date,
       name: addForm.name.trim(),
@@ -816,6 +840,11 @@ function HolidaysTab({ branchId }: { branchId: number }) {
       staffing_multiplier: addForm.type === 'blocked' ? 0 : addForm.staffing_multiplier,
       shift_pattern: pattern,
     })
+    if (error) {
+      console.error('[ShiftSettings addSpecialDay] error:', error)
+      alert(`הוספת היום המיוחד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setAddForm({ date: '', name: '', type: 'holiday', staffing_multiplier: 1.5 })
     setNewShiftPattern('regular')
     setShowAddForm(false)
@@ -823,7 +852,12 @@ function HolidaysTab({ branchId }: { branchId: number }) {
   }
 
   async function deleteSpecialDay(id: number) {
-    await supabase.from('special_days').delete().eq('id', id)
+    const { error } = await supabase.from('special_days').delete().eq('id', id)
+    if (error) {
+      console.error('[ShiftSettings deleteSpecialDay] error:', error)
+      alert(`מחיקת היום המיוחד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     fetchSpecialDays()
   }
 

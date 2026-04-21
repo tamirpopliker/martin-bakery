@@ -420,10 +420,15 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     setShowAutoDialog(false)
 
     // Delete existing assignments for this week
-    await supabase.from('shift_assignments').delete()
+    const { error: delErr } = await supabase.from('shift_assignments').delete()
       .eq('branch_id', branchId)
       .gte('date', weekDates[0])
       .lte('date', weekDates[5])
+    if (delErr) {
+      console.error('[WeeklySchedule runAutoSchedule delete] error:', delErr)
+      alert(`ניקוי הסידור הקיים נכשל: ${delErr.message || 'שגיאת מסד נתונים'}. הריצה האוטומטית בוטלה.`)
+      return
+    }
 
     const newAssignments: { branch_id: number; shift_id: number; employee_id: number; role_id: number; date: string }[] = []
     const empWeeklyHours: Record<number, number> = {}
@@ -490,7 +495,13 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     }
 
     if (newAssignments.length > 0) {
-      await supabase.from('shift_assignments').insert(newAssignments)
+      const { error: insErr } = await supabase.from('shift_assignments').insert(newAssignments)
+      if (insErr) {
+        console.error('[WeeklySchedule runAutoSchedule insert] error:', insErr)
+        alert(`שמירת הסידור החדש נכשלה: ${insErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        await loadData()
+        return
+      }
     }
 
     await loadData()
@@ -515,21 +526,31 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
 
   async function clearWeekAssignments() {
     setShowClearDialog(false)
-    await supabase.from('shift_assignments').delete()
+    const { error } = await supabase.from('shift_assignments').delete()
       .eq('branch_id', branchId)
       .gte('date', weekDates[0])
       .lte('date', weekDates[5])
+    if (error) {
+      console.error('[WeeklySchedule clearWeekAssignments] error:', error)
+      alert(`ניקוי הסידור נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setAssignments([])
   }
 
   async function publishSchedule() {
     setShowPublishDialog(false)
     const { data: session } = await supabase.auth.getSession()
-    await supabase.from('schedule_publications').upsert({
+    const { error } = await supabase.from('schedule_publications').upsert({
       branch_id: branchId,
       week_start: weekDates[0],
       published_by: session?.session?.user?.id
     }, { onConflict: 'branch_id,week_start' })
+    if (error) {
+      console.error('[WeeklySchedule publishSchedule] error:', error)
+      alert(`פרסום הסידור נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setIsPublished(true)
     setPublishedAt(new Date().toISOString())
     try {

@@ -119,10 +119,13 @@ export default function BranchCreditCustomers({ branchId, branchName, branchColo
       notes: formNotes || null,
       active: true,
     }
-    if (editId) {
-      await supabase.from('branch_credit_customers').update(payload).eq('id', editId)
-    } else {
-      await supabase.from('branch_credit_customers').insert(payload)
+    const { error } = editId
+      ? await supabase.from('branch_credit_customers').update(payload).eq('id', editId)
+      : await supabase.from('branch_credit_customers').insert(payload)
+    if (error) {
+      console.error('[BranchCreditCustomers save] error:', error)
+      alert(`שמירת פרטי לקוח ההקפה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
     }
     resetForm()
     setTab('list')
@@ -131,7 +134,12 @@ export default function BranchCreditCustomers({ branchId, branchName, branchColo
 
   async function deleteCustomer(id: number) {
     if (!confirm('למחוק לקוח?')) return
-    await supabase.from('branch_credit_customers').delete().eq('id', id)
+    const { error } = await supabase.from('branch_credit_customers').delete().eq('id', id)
+    if (error) {
+      console.error('[BranchCreditCustomers deleteCustomer] error:', error)
+      alert(`מחיקת לקוח ההקפה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. ייתכן שיש לו תשלומים פעילים.`)
+      return
+    }
     await fetchCustomers()
   }
 
@@ -150,13 +158,18 @@ export default function BranchCreditCustomers({ branchId, branchName, branchColo
 
   async function addPayment(customerName: string) {
     if (!payAmount || parseFloat(payAmount) <= 0) return
-    await supabase.from('branch_credit_payments').insert({
+    const { error } = await supabase.from('branch_credit_payments').insert({
       branch_id: branchId,
       customer_name: customerName,
       date: payDate,
       amount: parseFloat(payAmount),
       notes: payNotes || null,
     })
+    if (error) {
+      console.error('[BranchCreditCustomers addPayment] error:', error)
+      alert(`רישום תשלום ההקפה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setPayAmount(''); setPayNotes('')
     const customer = customers.find(c => c.name === customerName)
     if (customer) await fetchDetails(customer)

@@ -280,16 +280,38 @@ export default function BranchCommunication({ branchId, branchName, branchColor,
       schedule_type: schedForm.schedule_type, days_of_week: schedForm.days_of_week, send_time: schedForm.send_time,
       is_active: schedForm.is_active, next_send_at: nextSend, created_by: appUser?.name || null,
     }
-    if (editSchedId) { await supabase.from('scheduled_messages').update(payload).eq('id', editSchedId); setEditSchedId(null) }
-    else { await supabase.from('scheduled_messages').insert(payload) }
+    const { error } = editSchedId
+      ? await supabase.from('scheduled_messages').update(payload).eq('id', editSchedId)
+      : await supabase.from('scheduled_messages').insert(payload)
+    if (error) {
+      console.error('[BranchCommunication saveScheduled] error:', error)
+      alert(`שמירת ההודעה הקבועה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
+    if (editSchedId) setEditSchedId(null)
     setShowAddSched(false); setSchedForm({ title: '', body: '', type: 'info', recipient_type: 'all', recipient_id: 0, recipient_role: '', schedule_type: 'weekly', days_of_week: [], send_time: '07:00', is_active: true, specific_date: '', day_of_month: 28, days_before_holiday: 1 }); loadScheduled()
   }
 
   async function toggleSchedActive(id: number, current: boolean) {
-    await supabase.from('scheduled_messages').update({ is_active: !current }).eq('id', id); loadScheduled()
+    const { error } = await supabase.from('scheduled_messages').update({ is_active: !current }).eq('id', id)
+    if (error) {
+      console.error('[BranchCommunication toggleSchedActive] error:', error)
+      alert(`שינוי מצב הפעלת ההודעה הקבועה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
+    loadScheduled()
   }
 
-  async function deleteSched(id: number) { if (!confirm('למחוק הודעה קבועה זו?')) return; await supabase.from('scheduled_messages').delete().eq('id', id); loadScheduled() }
+  async function deleteSched(id: number) {
+    if (!confirm('למחוק הודעה קבועה זו?')) return
+    const { error } = await supabase.from('scheduled_messages').delete().eq('id', id)
+    if (error) {
+      console.error('[BranchCommunication deleteSched] error:', error)
+      alert(`מחיקת ההודעה הקבועה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
+    loadScheduled()
+  }
 
   async function viewSchedLog(id: number) {
     setSchedLogView(id)

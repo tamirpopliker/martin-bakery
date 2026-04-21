@@ -155,8 +155,13 @@ export default function ProductionReportUpload({ onBack }: Props) {
 
   // ─── Delete handler ───
   async function handleDelete(date: string, dept: string) {
-    await supabase.from('production_reports').delete()
+    const { error } = await supabase.from('production_reports').delete()
       .eq('report_date', date).eq('department', dept)
+    if (error) {
+      console.error('[ProductionReportUpload handleDelete] error:', error)
+      alert(`מחיקת דוח הייצור נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setDeleteConfirm(null)
     loadHistory()
   }
@@ -188,12 +193,18 @@ export default function ProductionReportUpload({ onBack }: Props) {
   async function saveEdit() {
     setEditSaving(true)
     for (const row of editRows) {
-      await supabase.from('production_reports').update({
+      const { error } = await supabase.from('production_reports').update({
         department: row.department,
         quantity: row.quantity,
         unit_price: row.unit_price,
         total_cost: row.total_cost,
       }).eq('id', row.id)
+      if (error) {
+        console.error('[ProductionReportUpload saveEdit row] error:', error)
+        alert(`עדכון שורה בדוח נכשל: ${error.message || 'שגיאת מסד נתונים'}. חלק מהשינויים אולי לא נשמרו — בדוק.`)
+        setEditSaving(false)
+        return
+      }
     }
     setEditSaving(false)
     setEditDate(null)

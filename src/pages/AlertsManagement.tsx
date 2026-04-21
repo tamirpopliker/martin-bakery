@@ -129,10 +129,14 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
       threshold_type: form.threshold_type,
       active: true,
     }
-    if (form.id) {
-      await supabase.from('alert_rules').update(payload).eq('id', form.id)
-    } else {
-      await supabase.from('alert_rules').insert(payload)
+    const { error } = form.id
+      ? await supabase.from('alert_rules').update(payload).eq('id', form.id)
+      : await supabase.from('alert_rules').insert(payload)
+    if (error) {
+      console.error('[AlertsManagement save] error:', error)
+      alert(`שמירת כלל ההתרעה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setSaving(false)
+      return
     }
     setSaving(false)
     setSheetOpen(false)
@@ -140,7 +144,12 @@ export default function AlertsManagement({ onBack }: { onBack: () => void }) {
   }
 
   async function toggleActive(rule: AlertRule) {
-    await supabase.from('alert_rules').update({ active: !rule.active }).eq('id', rule.id)
+    const { error } = await supabase.from('alert_rules').update({ active: !rule.active }).eq('id', rule.id)
+    if (error) {
+      console.error('[AlertsManagement toggleActive] error:', error)
+      alert(`שינוי מצב הפעלת ההתרעה נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
+      return
+    }
     loadRules()
   }
 

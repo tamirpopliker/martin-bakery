@@ -192,14 +192,20 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
       const [date, shiftIdStr] = key.split('_')
       const shiftId = Number(shiftIdStr)
       // Always remove the previous record for this slot
-      await supabase.from('schedule_constraints')
+      const { error: delErr } = await supabase.from('schedule_constraints')
         .delete()
         .eq('employee_id', manualDialog.empId)
         .eq('date', date)
         .eq('shift_id', shiftId)
+      if (delErr) {
+        console.error('[ManagerConstraintsView saveManualAvailability delete] error:', delErr)
+        alert(`שמירת הזמינות נכשלה: ${delErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        setSaving(false)
+        return
+      }
       // 'unset' = no submission — don't insert a row
       if (availability === 'unset') continue
-      await supabase.from('schedule_constraints').insert({
+      const { error: insErr } = await supabase.from('schedule_constraints').insert({
         employee_id: manualDialog.empId,
         branch_id: branchId,
         date,
@@ -208,6 +214,12 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
         submitted_by_name: appUser?.name || 'מנהל',
         updated_at: new Date().toISOString(),
       })
+      if (insErr) {
+        console.error('[ManagerConstraintsView saveManualAvailability insert] error:', insErr)
+        alert(`שמירת הזמינות נכשלה: ${insErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        setSaving(false)
+        return
+      }
     }
 
     setSaving(false)

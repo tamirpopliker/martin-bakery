@@ -60,10 +60,13 @@ export default function BranchSuppliers({ branchId, branchName, branchColor, onB
       notes: formNotes || null,
       active: true,
     }
-    if (editId) {
-      await supabase.from('branch_suppliers').update(payload).eq('id', editId)
-    } else {
-      await supabase.from('branch_suppliers').insert(payload)
+    const { error } = editId
+      ? await supabase.from('branch_suppliers').update(payload).eq('id', editId)
+      : await supabase.from('branch_suppliers').insert(payload)
+    if (error) {
+      console.error('[BranchSuppliers save] error:', error)
+      alert(`שמירת פרטי הספק נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
     }
     resetForm()
     setTab('list')
@@ -71,13 +74,23 @@ export default function BranchSuppliers({ branchId, branchName, branchColor, onB
   }
 
   async function toggleActive(id: number, current: boolean) {
-    await supabase.from('branch_suppliers').update({ active: !current }).eq('id', id)
+    const { error } = await supabase.from('branch_suppliers').update({ active: !current }).eq('id', id)
+    if (error) {
+      console.error('[BranchSuppliers toggleActive] error:', error)
+      alert(`שינוי סטטוס פעילות הספק נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
+      return
+    }
     await fetchSuppliers()
   }
 
   async function deleteSup(id: number) {
     if (!confirm('למחוק ספק?')) return
-    await supabase.from('branch_suppliers').delete().eq('id', id)
+    const { error } = await supabase.from('branch_suppliers').delete().eq('id', id)
+    if (error) {
+      console.error('[BranchSuppliers deleteSup] error:', error)
+      alert(`מחיקת הספק נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchSuppliers()
   }
 

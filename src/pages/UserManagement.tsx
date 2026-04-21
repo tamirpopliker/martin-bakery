@@ -139,7 +139,13 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
     if (update.role !== 'factory') { update.excluded_departments = []; update.managed_department = null }
     if (update.role !== 'employee') { update.employee_id = null }
     if (update.role === 'admin') { update.can_settings = true; update.branch_id = null; update.excluded_departments = []; update.managed_department = null }
-    await supabase.from('app_users').update(update).eq('id', id)
+    const { error } = await supabase.from('app_users').update(update).eq('id', id)
+    if (error) {
+      console.error('[UserManagement handleSave] error:', error)
+      alert(`עדכון פרטי המשתמש נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setSaving(false)
+      return
+    }
     setEditingId(null)
     setSaving(false)
     loadUsers()
@@ -152,7 +158,13 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
     if (insert.role !== 'factory') { insert.excluded_departments = []; insert.managed_department = null }
     if (insert.role !== 'employee') { insert.employee_id = null }
     if (insert.role === 'admin') { insert.can_settings = true; insert.branch_id = null; insert.excluded_departments = []; insert.managed_department = null }
-    await supabase.from('app_users').insert(insert)
+    const { error } = await supabase.from('app_users').insert(insert)
+    if (error) {
+      console.error('[UserManagement handleAdd] error:', error)
+      alert(`הוספת משתמש נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setSaving(false)
+      return
+    }
     setAddMode(false)
     setNewUser({ email: '', name: '', role: 'branch', branch_id: 1, excluded_departments: [], can_settings: false, managed_department: null, employee_id: null })
     setSaving(false)
@@ -180,7 +192,13 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
       excluded_departments: [],
       managed_department: null,
     }))
-    await supabase.from('app_users').insert(rows)
+    const { error } = await supabase.from('app_users').insert(rows)
+    if (error) {
+      console.error('[UserManagement handleImportEmployees] error:', error)
+      setImportSuccess(`יצירת חשבונות העובדים נכשלה: ${error.message || 'שגיאת מסד נתונים'}.`)
+      setImportSaving(false)
+      return
+    }
     setImportSaving(false)
     const msg = withoutEmail.length > 0
       ? `נוצרו ${withEmail.length} חשבונות עובדים (${withoutEmail.length} דולגו — ללא אימייל)`
@@ -221,7 +239,12 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
 
   async function handleDelete(id: string) {
     if (!confirm('האם למחוק את המשתמש?')) return
-    await supabase.from('app_users').delete().eq('id', id)
+    const { error } = await supabase.from('app_users').delete().eq('id', id)
+    if (error) {
+      console.error('[UserManagement handleDelete] error:', error)
+      alert(`מחיקת המשתמש נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     loadUsers()
   }
 
@@ -599,7 +622,11 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                     onBlur={async (e) => {
                       const val = Number(e.target.value)
                       if (isNaN(val)) return
-                      await supabase.from('branches').update({ overhead_pct: val }).eq('id', branch.id)
+                      const { error } = await supabase.from('branches').update({ overhead_pct: val }).eq('id', branch.id)
+                      if (error) {
+                        console.error('[UserManagement overhead_pct] error:', error)
+                        alert(`עדכון אחוז ההעמסה נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
+                      }
                     }}
                     style={{ width: 50, textAlign: 'center', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px' }}
                   />%
@@ -614,7 +641,12 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                   </button>
                   <button onClick={async () => {
                     if (!confirm(`האם להשבית את סניף "${branch.name}"?`)) return
-                    await supabase.from('branches').update({ active: false }).eq('id', branch.id)
+                    const { error } = await supabase.from('branches').update({ active: false }).eq('id', branch.id)
+                    if (error) {
+                      console.error('[UserManagement deactivate branch] error:', error)
+                      alert(`השבתת הסניף נכשלה: ${error.message || 'שגיאת מסד נתונים'}.`)
+                      return
+                    }
                     refreshBranches()
                   }}
                     style={{ background: '#fff1f2', color: '#fb7185', border: 'none', borderRadius: '6px', padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
@@ -662,19 +694,23 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
                 onClick={async () => {
                   if (!editBranch.name.trim()) return
                   setBranchSaving(true)
-                  if (editBranch.id) {
-                    await supabase.from('branches').update({
-                      name: editBranch.name.trim(),
-                      short_name: editBranch.short_name.trim() || editBranch.name.trim(),
-                      address: editBranch.address.trim(),
-                    }).eq('id', editBranch.id)
-                  } else {
-                    await supabase.from('branches').insert({
-                      name: editBranch.name.trim(),
-                      short_name: editBranch.short_name.trim() || editBranch.name.trim(),
-                      address: editBranch.address.trim(),
-                      active: true,
-                    })
+                  const { error } = editBranch.id
+                    ? await supabase.from('branches').update({
+                        name: editBranch.name.trim(),
+                        short_name: editBranch.short_name.trim() || editBranch.name.trim(),
+                        address: editBranch.address.trim(),
+                      }).eq('id', editBranch.id)
+                    : await supabase.from('branches').insert({
+                        name: editBranch.name.trim(),
+                        short_name: editBranch.short_name.trim() || editBranch.name.trim(),
+                        address: editBranch.address.trim(),
+                        active: true,
+                      })
+                  if (error) {
+                    console.error('[UserManagement save branch] error:', error)
+                    alert(`שמירת פרטי הסניף נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+                    setBranchSaving(false)
+                    return
                   }
                   setBranchSaving(false)
                   setBranchSheetOpen(false)

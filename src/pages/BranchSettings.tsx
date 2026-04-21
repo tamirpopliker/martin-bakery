@@ -63,6 +63,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
   // ── KPI ──
   const [kpi, setKpi] = useState<BranchKpi>({ branch_id: branchId, labor_pct: 0, waste_pct: 3, revenue_target: 0, basket_target: 0, transaction_target: 0, controllable_margin_pct: 0 })
   const [kpiSaved, setKpiSaved] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
 
   // ── fixed costs ──
   const [costs, setCosts]             = useState<FixedCost[]>([])
@@ -105,6 +106,7 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
 
   // ─── KPI save ─────────────────────────────────────────────────────────────
   async function saveKpi() {
+    setErrorMsg('')
     const payload = {
       branch_id: branchId, labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct,
       revenue_target: kpi.revenue_target, basket_target: kpi.basket_target, transaction_target: kpi.transaction_target,
@@ -116,15 +118,24 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
       .select().single()
     if (error) {
       console.error('saveKpi error:', error)
+      // Fall back to explicit update/insert when upsert isn't supported.
       if (kpi.id) {
-        await supabase.from('branch_kpi_targets').update({
+        const { error: updErr } = await supabase.from('branch_kpi_targets').update({
           labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct, revenue_target: kpi.revenue_target,
           basket_target: kpi.basket_target, transaction_target: kpi.transaction_target,
           controllable_margin_pct: kpi.controllable_margin_pct,
           factory_purchases_pct: kpi.factory_purchases_pct ?? 40,
         }).eq('id', kpi.id)
+        if (updErr) {
+          setErrorMsg(`שמירת יעדי KPI נכשלה: ${updErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+          return
+        }
       } else {
-        const { data: ins } = await supabase.from('branch_kpi_targets').insert(payload).select().single()
+        const { data: ins, error: insErr } = await supabase.from('branch_kpi_targets').insert(payload).select().single()
+        if (insErr) {
+          setErrorMsg(`שמירת יעדי KPI נכשלה: ${insErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+          return
+        }
         if (ins) setKpi(ins)
       }
     } else if (data) {
@@ -137,35 +148,64 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
   // ─── fixed costs CRUD ───────────────────────────────────────────────────
   async function addCost() {
     if (!newCostName || !newCostAmt) return
+    setErrorMsg('')
     setLoadingCost(true)
-    await supabase.from('fixed_costs').insert({
+    const { error } = await supabase.from('fixed_costs').insert({
       name: newCostName, amount: parseFloat(newCostAmt),
       month: costMonth, entity_type: entityType, entity_id: entityType
     })
+    if (error) {
+      console.error('[BranchSettings addCost] error:', error)
+      setErrorMsg(`הוספת עלות קבועה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoadingCost(false)
+      return
+    }
     setNewCostName(''); setNewCostAmt('')
     await fetchCosts()
     setLoadingCost(false)
   }
 
   async function saveCost(id: number) {
-    await supabase.from('fixed_costs').update(editCostData).eq('id', id)
+    setErrorMsg('')
+    const { error } = await supabase.from('fixed_costs').update(editCostData).eq('id', id)
+    if (error) {
+      console.error('[BranchSettings saveCost] error:', error)
+      setErrorMsg(`עדכון עלות קבועה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditCostId(null); await fetchCosts()
   }
 
   async function deleteCost(id: number) {
     if (!confirm('למחוק עלות זו?')) return
-    await supabase.from('fixed_costs').delete().eq('id', id)
+    setErrorMsg('')
+    const { error } = await supabase.from('fixed_costs').delete().eq('id', id)
+    if (error) {
+      console.error('[BranchSettings deleteCost] error:', error)
+      setErrorMsg(`מחיקת עלות קבועה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchCosts()
   }
 
   async function copyFromPrev() {
+    setErrorMsg('')
     const [y, m] = costMonth.split('-').map(Number)
     const prev = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`
     const { data } = await supabase.from('fixed_costs').select('*').eq('month', prev).eq('entity_type', entityType)
     if (!data || data.length === 0) { alert('אין עלויות בחודש הקודם'); return }
     setLoadingCost(true)
+    let copied = 0
     for (const c of data) {
-      await supabase.from('fixed_costs').insert({ name: c.name, amount: c.amount, month: costMonth, entity_type: entityType, entity_id: entityType })
+      const { error } = await supabase.from('fixed_costs').insert({ name: c.name, amount: c.amount, month: costMonth, entity_type: entityType, entity_id: entityType })
+      if (error) {
+        console.error('[BranchSettings copyFromPrev] error:', error)
+        setErrorMsg(`העתקת עלויות נעצרה אחרי ${copied} שורות: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        await fetchCosts()
+        setLoadingCost(false)
+        return
+      }
+      copied++
     }
     await fetchCosts()
     setLoadingCost(false)
@@ -175,31 +215,62 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
   async function addEmployee() {
     const name = newEmpName.trim()
     if (!name) return
+    setErrorMsg('')
     setLoadingEmp(true)
-    await supabase.from('branch_employees').insert({ branch_id: branchId, name, active: true })
+    const { error } = await supabase.from('branch_employees').insert({ branch_id: branchId, name, active: true })
+    if (error) {
+      console.error('[BranchSettings addEmployee] error:', error)
+      setErrorMsg(`הוספת עובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoadingEmp(false)
+      return
+    }
     setNewEmpName('')
     await fetchEmployees()
     setLoadingEmp(false)
   }
 
   async function saveEmployee(id: number) {
-    await supabase.from('branch_employees').update(editEmpData).eq('id', id)
+    setErrorMsg('')
+    const { error } = await supabase.from('branch_employees').update(editEmpData).eq('id', id)
+    if (error) {
+      console.error('[BranchSettings saveEmployee] error:', error)
+      setErrorMsg(`עדכון פרטי העובד נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditEmpId(null); await fetchEmployees()
   }
 
   async function deleteEmployee(id: number) {
     if (!confirm('למחוק עובד?')) return
-    await supabase.from('branch_employees').delete().eq('id', id)
+    setErrorMsg('')
+    const { error } = await supabase.from('branch_employees').delete().eq('id', id)
+    if (error) {
+      console.error('[BranchSettings deleteEmployee] error:', error)
+      setErrorMsg(`מחיקת העובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchEmployees()
   }
 
   async function toggleActive(emp: BranchEmployee) {
-    await supabase.from('branch_employees').update({ active: !emp.active }).eq('id', emp.id)
+    setErrorMsg('')
+    const { error } = await supabase.from('branch_employees').update({ active: !emp.active }).eq('id', emp.id)
+    if (error) {
+      console.error('[BranchSettings toggleActive] error:', error)
+      setErrorMsg(`שינוי סטטוס פעילות נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
+      return
+    }
     await fetchEmployees()
   }
 
   async function toggleManager(emp: BranchEmployee) {
-    await supabase.from('branch_employees').update({ is_manager: !emp.is_manager }).eq('id', emp.id)
+    setErrorMsg('')
+    const { error } = await supabase.from('branch_employees').update({ is_manager: !emp.is_manager }).eq('id', emp.id)
+    if (error) {
+      console.error('[BranchSettings toggleManager] error:', error)
+      setErrorMsg(`שינוי סימון "מנהל" נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
+      return
+    }
     setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, is_manager: !e.is_manager } : e))
   }
 
@@ -224,6 +295,15 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
       <PageHeader title="הגדרות סניף" subtitle={branchName} onBack={onBack} />
+
+      {errorMsg && (
+        <div style={{ maxWidth: 800, margin: '12px auto 0', padding: '0 20px' }}>
+          <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '10px 14px', borderRadius: 10, fontSize: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <span>{errorMsg}</span>
+            <button onClick={() => setErrorMsg('')} style={{ background: 'transparent', border: 'none', color: '#991b1b', fontWeight: 700, cursor: 'pointer', fontSize: 18 }}>×</button>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '0 20px', display: 'flex', gap: 0 }}>

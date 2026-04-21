@@ -165,12 +165,22 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
   }
 
   async function toggleUserField(userId: string, field: string, value: boolean) {
-    await supabase.from('app_users').update({ [field]: value }).eq('id', userId)
+    const { error } = await supabase.from('app_users').update({ [field]: value }).eq('id', userId)
+    if (error) {
+      console.error('[ReportsAlerts toggleUserField] error:', error)
+      alert(`עדכון הגדרת המשתמש נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
+      return
+    }
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, [field]: value } : u))
   }
 
   async function toggleGlobalSetting(key: string, value: boolean) {
-    await supabase.from('system_settings').upsert({ key, value: String(value), updated_at: new Date().toISOString() })
+    const { error } = await supabase.from('system_settings').upsert({ key, value: String(value), updated_at: new Date().toISOString() })
+    if (error) {
+      console.error('[ReportsAlerts toggleGlobalSetting] error:', error)
+      alert(`עדכון הגדרת המערכת נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
+      return
+    }
     if (key === 'reports_global_enabled') setReportsGlobalEnabled(value)
     if (key === 'alerts_global_enabled') setAlertsGlobalEnabled(value)
   }
@@ -205,12 +215,25 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
       metric: alertForm.metric, condition: alertForm.condition, threshold: Number(alertForm.threshold),
       threshold_type: alertForm.threshold_type, active: true,
     }
-    if (alertForm.id) await supabase.from('alert_rules').update(payload).eq('id', alertForm.id)
-    else await supabase.from('alert_rules').insert(payload)
+    const { error } = alertForm.id
+      ? await supabase.from('alert_rules').update(payload).eq('id', alertForm.id)
+      : await supabase.from('alert_rules').insert(payload)
+    if (error) {
+      console.error('[ReportsAlerts handleAlertSave] error:', error)
+      alert(`שמירת כלל ההתרעה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setAlertSaving(false)
+      return
+    }
     setAlertSaving(false); setAlertSheetOpen(false); loadAlertRules()
   }
   async function toggleAlertActive(rule: AlertRule) {
-    await supabase.from('alert_rules').update({ active: !rule.active }).eq('id', rule.id); loadAlertRules()
+    const { error } = await supabase.from('alert_rules').update({ active: !rule.active }).eq('id', rule.id)
+    if (error) {
+      console.error('[ReportsAlerts toggleAlertActive] error:', error)
+      alert(`שינוי מצב הפעלת ההתרעה נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
+      return
+    }
+    loadAlertRules()
   }
   function openNewAlert() {
     setAlertForm({ id: undefined, name: '', entity_type: 'branch', entity_id: branches[0]?.id?.toString() || '1', metric: 'revenue', condition: 'below', threshold: '', threshold_type: 'absolute' })

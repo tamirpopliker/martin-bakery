@@ -55,19 +55,35 @@ export default function FactoryRepairs({ department, onBack }: Props) {
   async function handleAdd() {
     if (!amount || !date) return
     setLoading(true)
-    await supabase.from('factory_repairs').insert({ department, date, amount: parseFloat(amount), type, description })
+    const { error } = await supabase.from('factory_repairs').insert({ department, date, amount: parseFloat(amount), type, description })
+    if (error) {
+      console.error('[FactoryRepairs handleAdd] error:', error)
+      alert(`הוספת רשומת תיקונים נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoading(false)
+      return
+    }
     setAmount(''); setDescription('')
     await fetchEntries()
     setLoading(false)
   }
 
   async function handleDelete(id: number) {
-    await supabase.from('factory_repairs').delete().eq('id', id)
+    const { error } = await supabase.from('factory_repairs').delete().eq('id', id)
+    if (error) {
+      console.error('[FactoryRepairs handleDelete] error:', error)
+      alert(`מחיקת רשומת תיקונים נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchEntries()
   }
 
   async function handleEdit(id: number) {
-    await supabase.from('factory_repairs').update(editData).eq('id', id)
+    const { error } = await supabase.from('factory_repairs').update(editData).eq('id', id)
+    if (error) {
+      console.error('[FactoryRepairs handleEdit] error:', error)
+      alert(`עדכון רשומת תיקונים נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditId(null)
     await fetchEntries()
   }

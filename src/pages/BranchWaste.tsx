@@ -100,25 +100,34 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
   async function addEntry() {
     if (!amount || !date) return
     setLoading(true)
-    await supabase.from('branch_waste').insert({
+    const { error } = await supabase.from('branch_waste').insert({
       branch_id: branchId, date, amount: parseFloat(amount),
       category, product_id: selectedProduct, notes: notes || null
     })
+    if (error) {
+      console.error('[BranchWaste addEntry] error:', error)
+      alert(`הוספת רשומת פחת נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoading(false)
+      return
+    }
     setAmount(''); setNotes(''); setSelectedProduct(null); setProductSearch('')
     await fetchEntries()
     setLoading(false)
   }
 
   async function addProduct(name: string) {
-    const { data } = await supabase.from('products').insert({
+    const { data, error } = await supabase.from('products').insert({
       name, is_active: true, created_by_branch_id: branchId
     }).select('id, name').single()
-    if (data) {
-      setProducts(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
-      setSelectedProduct(data.id)
-      setProductSearch(data.name)
-      setShowProductDropdown(false)
+    if (error || !data) {
+      console.error('[BranchWaste addProduct] error:', error)
+      alert(`הוספת המוצר נכשלה: ${error?.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
     }
+    setProducts(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+    setSelectedProduct(data.id)
+    setProductSearch(data.name)
+    setShowProductDropdown(false)
   }
 
   const filteredProducts = products.filter(p =>
@@ -127,12 +136,22 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
 
   async function deleteEntry(id: number) {
     if (!confirm('למחוק?')) return
-    await supabase.from('branch_waste').delete().eq('id', id)
+    const { error } = await supabase.from('branch_waste').delete().eq('id', id)
+    if (error) {
+      console.error('[BranchWaste deleteEntry] error:', error)
+      alert(`מחיקת רשומת פחת נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchEntries()
   }
 
   async function saveEdit(id: number) {
-    await supabase.from('branch_waste').update(editData).eq('id', id)
+    const { error } = await supabase.from('branch_waste').update(editData).eq('id', id)
+    if (error) {
+      console.error('[BranchWaste saveEdit] error:', error)
+      alert(`עדכון רשומת פחת נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditId(null)
     await fetchEntries()
   }

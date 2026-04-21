@@ -90,7 +90,7 @@ export default function FactoryEmployees({ onBack }: Props) {
   async function addEmployee() {
     if (!newEmp.name || !newEmp.department || !newEmp.wage_type) return
     setLoadingEmp(true)
-    await supabase.from('employees').insert({
+    const { error } = await supabase.from('employees').insert({
       name: newEmp.name,
       employee_number: newEmp.employee_number || null,
       department: newEmp.department,
@@ -99,6 +99,12 @@ export default function FactoryEmployees({ onBack }: Props) {
       global_daily_rate: newEmp.wage_type === 'global' ? (newEmp.global_daily_rate || null) : null,
       bonus: newEmp.bonus || null,
     })
+    if (error) {
+      console.error('[FactoryEmployees addEmployee] error:', error)
+      alert(`הוספת עובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoadingEmp(false)
+      return
+    }
     setNewEmp({ wage_type: 'hourly', department: allowedDepts[0] })
     setShowAddEmp(false)
     await fetchEmployees()
@@ -106,13 +112,23 @@ export default function FactoryEmployees({ onBack }: Props) {
   }
 
   async function saveEmployee(id: number) {
-    await supabase.from('employees').update(editEmpData).eq('id', id)
+    const { error } = await supabase.from('employees').update(editEmpData).eq('id', id)
+    if (error) {
+      console.error('[FactoryEmployees saveEmployee] error:', error)
+      alert(`עדכון פרטי עובד נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditEmpId(null)
     await fetchEmployees()
   }
 
   async function toggleActive(emp: Employee) {
-    await supabase.from('employees').update({ active: !emp.active }).eq('id', emp.id)
+    const { error } = await supabase.from('employees').update({ active: !emp.active }).eq('id', emp.id)
+    if (error) {
+      console.error('[FactoryEmployees toggleActive] error:', error)
+      alert(`שינוי סטטוס פעילות נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
+      return
+    }
     await fetchEmployees()
   }
 

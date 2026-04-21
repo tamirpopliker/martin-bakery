@@ -714,7 +714,12 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
     if (!u) return
     const aliases = [...(u.aliases || []), rawName.trim()]
     const dedup = [...new Set(aliases.filter(Boolean))]
-    await supabase.from('unified_suppliers').update({ aliases: dedup }).eq('id', unifiedId)
+    const { error } = await supabase.from('unified_suppliers').update({ aliases: dedup }).eq('id', unifiedId)
+    if (error) {
+      console.error('[SuppliersReport mergeIntoExisting] error:', error)
+      alert(`איחוד הספק נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await onRefresh()
   }
 
@@ -741,18 +746,28 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
 
   async function saveEdit(id: number) {
     const aliases = editDraft.aliases.split(',').map(s => s.trim()).filter(Boolean)
-    await supabase.from('unified_suppliers').update({
+    const { error } = await supabase.from('unified_suppliers').update({
       canonical_name: editDraft.canonical.trim(),
       aliases,
       category: editDraft.category.trim() || null,
     }).eq('id', id)
+    if (error) {
+      console.error('[SuppliersReport saveEdit] error:', error)
+      alert(`עדכון פרטי ספק מאוחד נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditingId(null)
     await onRefresh()
   }
 
   async function deleteUnified(id: number) {
     if (!confirm('למחוק ספק מאוחד זה? (החשבוניות עצמן לא יושפעו)')) return
-    await supabase.from('unified_suppliers').delete().eq('id', id)
+    const { error } = await supabase.from('unified_suppliers').delete().eq('id', id)
+    if (error) {
+      console.error('[SuppliersReport deleteUnified] error:', error)
+      alert(`מחיקת ספק מאוחד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await onRefresh()
   }
 

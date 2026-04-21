@@ -679,10 +679,19 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       // Get all unique dates in the payload
       const dates = [...new Set(payloads.map(p => p.date))]
 
-      // Delete existing rows for these dates + branch (batch replace)
+      // Delete existing rows for these dates + branch (batch replace).
+      // If a delete fails, abort before INSERT so we don't leave the table
+      // half-overwritten (some old rows + some new rows for the same dates).
       for (const d of dates) {
-        await supabase.from('branch_labor').delete()
+        const { error: delErr } = await supabase.from('branch_labor').delete()
           .eq('branch_id', branchId).eq('date', d)
+        if (delErr) {
+          console.error('[BranchLabor] delete error for date', d, delErr)
+          setUploadStatus('error')
+          setUploadMsg(`ניקוי רשומות קודמות נכשל לתאריך ${d}: ${delErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+          setLoading(false)
+          return
+        }
       }
 
       // Batch insert in chunks of 50
@@ -744,7 +753,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
     if (!manName || !manGross) return
     setLoading(true)
     const gross = parseFloat(manGross)
-    await supabase.from('branch_labor').insert({
+    const { error } = await supabase.from('branch_labor').insert({
       branch_id: branchId, date: manDate,
       employee_name: manName,
       hours: parseFloat(manHours) || 0,
@@ -752,19 +761,38 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
       employer_cost: parseFloat((gross * EMPLOYER_FACTOR).toFixed(2)),
       notes: manNotes || null
     })
+    if (error) {
+      console.error('[BranchLabor addManual] error:', error)
+      setUploadStatus('error')
+      setUploadMsg(`הוספת רשומת לייבור נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoading(false)
+      return
+    }
     setManName(''); setManHours(''); setManGross(''); setManNotes('')
     await fetchEntries(); setLoading(false)
   }
 
   async function deleteEntry(id: number) {
     if (!confirm('למחוק?')) return
-    await supabase.from('branch_labor').delete().eq('id', id)
+    const { error } = await supabase.from('branch_labor').delete().eq('id', id)
+    if (error) {
+      console.error('[BranchLabor deleteEntry] error:', error)
+      setUploadStatus('error')
+      setUploadMsg(`מחיקת רשומת לייבור נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchEntries()
   }
 
   async function saveEdit(id: number) {
     const upd = { ...editData, employer_cost: parseFloat((Number(editData.gross_salary || 0) * EMPLOYER_FACTOR).toFixed(2)) }
-    await supabase.from('branch_labor').update(upd).eq('id', id)
+    const { error } = await supabase.from('branch_labor').update(upd).eq('id', id)
+    if (error) {
+      console.error('[BranchLabor saveEdit] error:', error)
+      setUploadStatus('error')
+      setUploadMsg(`עדכון רשומת לייבור נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditId(null); await fetchEntries()
   }
 

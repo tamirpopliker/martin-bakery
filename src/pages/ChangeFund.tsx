@@ -100,10 +100,13 @@ export default function ChangeFund({ branchId, branchName, onBack }: Props) {
     const key = `change_fund_base_${branchId}`
     const val = parseFloat(baseInput) || 0
     const { data: existing } = await supabase.from('system_settings').select('id').eq('key', key).maybeSingle()
-    if (existing) {
-      await supabase.from('system_settings').update({ value: String(val) }).eq('key', key)
-    } else {
-      await supabase.from('system_settings').insert({ key, value: String(val) })
+    const { error } = existing
+      ? await supabase.from('system_settings').update({ value: String(val) }).eq('key', key)
+      : await supabase.from('system_settings').insert({ key, value: String(val) })
+    if (error) {
+      console.error('[ChangeFund saveBaseFund] error:', error)
+      alert(`שמירת קרן בסיס נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
     }
     setBaseFund(val)
   }
@@ -123,11 +126,12 @@ export default function ChangeFund({ branchId, branchName, onBack }: Props) {
       const newOpening = Math.max(0, Number(latest.next_opening_balance) + delta)
       // If the latest closing is from today, update it directly (avoid dup today rows)
       if (latest.date === today) {
-        await supabase.from('register_closings').update({
+        const { error } = await supabase.from('register_closings').update({
           next_opening_balance: newOpening,
           actual_cash: Math.max(0, Number(latest.actual_cash) + delta),
           notes: (latest.notes ? latest.notes + ' · ' : '') + noteLabel,
         }).eq('id', latest.id)
+        if (error) throw error
         return latest.id
       }
       // Insert a "stub" closing for today that just reflects the opening change

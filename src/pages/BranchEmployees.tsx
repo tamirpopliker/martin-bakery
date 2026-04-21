@@ -87,7 +87,12 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   async function connectToApp(empId: number, name: string, email: string) {
     if (!email.trim()) return
     // Save email to branch_employees if not set
-    await supabase.from('branch_employees').update({ email: email.trim().toLowerCase() }).eq('id', empId)
+    const { error } = await supabase.from('branch_employees').update({ email: email.trim().toLowerCase() }).eq('id', empId)
+    if (error) {
+      console.error('[BranchEmployees connectToApp] error:', error)
+      alert(`שמירת האימייל לעובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. ההזמנה לא נשלחה.`)
+      return
+    }
     // Send invitation
     await sendInvite(email.trim().toLowerCase(), name)
     // Update local status
@@ -111,10 +116,14 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
     // Only include retention_bonus if the column exists (avoid 400 if PostgREST cache is stale)
     const bonusVal = parseFloat(form.retention_bonus) || 0
     if (bonusVal > 0) payload.retention_bonus = bonusVal
-    if (form.id) {
-      await supabase.from('branch_employees').update(payload).eq('id', form.id)
-    } else {
-      await supabase.from('branch_employees').insert(payload)
+    const { error } = form.id
+      ? await supabase.from('branch_employees').update(payload).eq('id', form.id)
+      : await supabase.from('branch_employees').insert(payload)
+    if (error) {
+      console.error('[BranchEmployees handleSave] error:', error)
+      alert(`שמירת פרטי העובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setSaving(false)
+      return
     }
     setSaving(false)
     setSheetOpen(false)
@@ -122,7 +131,12 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   }
 
   async function toggleActive(emp: Employee) {
-    await supabase.from('branch_employees').update({ active: !emp.active }).eq('id', emp.id)
+    const { error } = await supabase.from('branch_employees').update({ active: !emp.active }).eq('id', emp.id)
+    if (error) {
+      console.error('[BranchEmployees toggleActive] error:', error)
+      alert(`שינוי סטטוס פעילות נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     fetchEmployees()
   }
 
@@ -197,7 +211,13 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
       excluded_departments: [],
       managed_department: null,
     }))
-    await supabase.from('app_users').insert(rows)
+    const { error } = await supabase.from('app_users').insert(rows)
+    if (error) {
+      console.error('[BranchEmployees handleImport] error:', error)
+      setImportMsg(`יצירת חשבונות העובדים נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setImportSaving(false)
+      return
+    }
     setImportSaving(false)
     const msg = withoutEmail.length > 0
       ? `נוצרו ${withEmail.length} חשבונות (${withoutEmail.length} דולגו — ללא אימייל)`

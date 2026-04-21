@@ -249,12 +249,23 @@ export default function EmployeeConstraints({ onBack }: Props) {
     if (!resolvedEmpId) return
     const existing = assignments.find(a => a.employee_id === resolvedEmpId && a.role_id === roleId)
     if (existing) {
+      const prevAssignments = assignments
       setAssignments(prev => prev.filter(a => a.id !== existing.id))
-      await supabase.from('employee_role_assignments').delete().eq('id', existing.id)
+      const { error } = await supabase.from('employee_role_assignments').delete().eq('id', existing.id)
+      if (error) {
+        console.error('[EmployeeConstraints toggleRole delete] error:', error)
+        setAssignments(prevAssignments)
+        alert(`עדכון התפקיד נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      }
     } else {
-      const { data } = await supabase.from('employee_role_assignments')
+      const { data, error } = await supabase.from('employee_role_assignments')
         .insert({ employee_id: resolvedEmpId, role_id: roleId })
         .select()
+      if (error) {
+        console.error('[EmployeeConstraints toggleRole insert] error:', error)
+        alert(`עדכון התפקיד נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        return
+      }
       if (data && data[0]) {
         setAssignments(prev => [...prev, data[0] as EmployeeRoleAssignment])
       }

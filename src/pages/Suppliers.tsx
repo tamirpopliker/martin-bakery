@@ -125,11 +125,17 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
     const sup = suppliers.find(s => s.name === invSupplier)
     if (!sup) { alert('ספק לא נמצא — הוסף אותו תחילה בטאב ספקים'); return }
     setLoadingInv(true)
-    await supabase.from('supplier_invoices').insert({
+    const { error } = await supabase.from('supplier_invoices').insert({
       date: invDate, supplier_id: sup.id,
       doc_type: invDocType, doc_number: invDocNum,
       amount: parseFloat(invAmount), notes: invNotes
     })
+    if (error) {
+      console.error('[Suppliers addInvoice] error:', error)
+      alert(`הוספת חשבונית נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoadingInv(false)
+      return
+    }
     setInvAmount(''); setInvDocNum(''); setInvNotes('')
     await fetchInvoices()
     setLoadingInv(false)
@@ -137,7 +143,12 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
 
   async function deleteInvoice(id: number) {
     if (!confirm('למחוק חשבונית זו?')) return
-    await supabase.from('supplier_invoices').delete().eq('id', id)
+    const { error } = await supabase.from('supplier_invoices').delete().eq('id', id)
+    if (error) {
+      console.error('[Suppliers deleteInvoice] error:', error)
+      alert(`מחיקת החשבונית נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchInvoices()
   }
 
@@ -148,7 +159,12 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
       if (sup) data.supplier_id = sup.id
       delete data.supplier_name
     }
-    await supabase.from('supplier_invoices').update(data).eq('id', id)
+    const { error } = await supabase.from('supplier_invoices').update(data).eq('id', id)
+    if (error) {
+      console.error('[Suppliers saveInvoice] error:', error)
+      alert(`עדכון החשבונית נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditInvId(null)
     await fetchInvoices()
   }
@@ -157,21 +173,37 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
   async function addSupplier() {
     if (!newSuppName.trim()) return
     setLoadingSupp(true)
-    await supabase.from('suppliers').insert({ name: newSuppName.trim() })
+    const { error } = await supabase.from('suppliers').insert({ name: newSuppName.trim() })
+    if (error) {
+      console.error('[Suppliers addSupplier] error:', error)
+      alert(`הוספת ספק נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoadingSupp(false)
+      return
+    }
     setNewSuppName('')
     await fetchSuppliers()
     setLoadingSupp(false)
   }
 
   async function saveSupplier(id: number) {
-    await supabase.from('suppliers').update({ name: editSuppName }).eq('id', id)
+    const { error } = await supabase.from('suppliers').update({ name: editSuppName }).eq('id', id)
+    if (error) {
+      console.error('[Suppliers saveSupplier] error:', error)
+      alert(`עדכון פרטי ספק נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditSuppId(null)
     await fetchSuppliers()
   }
 
   async function deleteSupplier(id: number) {
     if (!confirm('למחוק ספק זה? חשבוניות קיימות לא יימחקו.')) return
-    await supabase.from('suppliers').delete().eq('id', id)
+    const { error } = await supabase.from('suppliers').delete().eq('id', id)
+    if (error) {
+      console.error('[Suppliers deleteSupplier] error:', error)
+      alert(`מחיקת הספק נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchSuppliers()
   }
 

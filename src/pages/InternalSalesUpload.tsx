@@ -194,9 +194,16 @@ export default function InternalSalesUpload({ onBack }: Props) {
     setStep('saving')
     setDuplicateOrder(null)
 
-    // If overwriting, delete old
+    // If overwriting, delete old. Abort on failure so we don't end up with
+    // both old and new sale rows for the same order_number.
     if (overwriteId) {
-      await supabase.from('internal_sales').delete().eq('id', overwriteId)
+      const { error: delErr } = await supabase.from('internal_sales').delete().eq('id', overwriteId)
+      if (delErr) {
+        console.error('[InternalSalesUpload overwrite delete] error:', delErr)
+        setError(`מחיקת ההזמנה הקודמת נכשלה: ${delErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        setStep('preview')
+        return
+      }
     }
 
     const totalAmount = items.reduce((s, i) => s + i.total_price, 0)
@@ -209,9 +216,10 @@ export default function InternalSalesUpload({ onBack }: Props) {
       uploaded_by: appUser?.name || null,
     }).select().single()
 
-    if (saleErr || !sale) { setError('שגיאה בשמירה: ' + (saleErr?.message || '')); setStep('preview'); return }
+    if (saleErr || !sale) { setError('שמירת ההזמנה נכשלה: ' + (saleErr?.message || 'שגיאת מסד נתונים') + '. נסה שוב.'); setStep('preview'); return }
 
-    // Save items
+    // Save items — if this fails the parent sale row already exists; report
+    // clearly so the user knows to retry from the history list.
     const itemPayload = items.map(i => ({
       sale_id: sale.id,
       product_name: i.product_name,
@@ -220,15 +228,22 @@ export default function InternalSalesUpload({ onBack }: Props) {
       unit_price: i.unit_price,
       total_price: i.total_price,
     }))
-    await supabase.from('internal_sale_items').insert(itemPayload)
+    const { error: itemsErr } = await supabase.from('internal_sale_items').insert(itemPayload)
+    if (itemsErr) {
+      console.error('[InternalSalesUpload items insert] error:', itemsErr)
+      setError(`שמירת פריטי ההזמנה נכשלה: ${itemsErr.message || 'שגיאת מסד נתונים'}. ההזמנה ${sale.order_number || sale.id} נשמרה ריקה — נסה לערוך אותה מההיסטוריה.`)
+      setStep('preview')
+      return
+    }
 
-    // Save department mappings
+    // Save department mappings (best-effort — non-fatal)
     const mappings = items.filter(i => i.department !== 'אחר').map(i => ({
       product_name: i.product_name,
       department: i.department,
     }))
     if (mappings.length > 0) {
-      await supabase.from('product_department_mapping').upsert(mappings, { onConflict: 'product_name' })
+      const { error: mapErr } = await supabase.from('product_department_mapping').upsert(mappings, { onConflict: 'product_name' })
+      if (mapErr) console.warn('[InternalSalesUpload department mappings] non-fatal:', mapErr)
     }
 
     setStep('done')
@@ -311,41 +326,75 @@ export default function InternalSalesUpload({ onBack }: Props) {
     if (!editSale) return
     setEditSaving(true)
     for (const item of editItems) {
-      await supabase.from('internal_sale_items').update({
+      const { error } = await supabase.from('internal_sale_items').update({
         department: item.department, quantity_supplied: item.quantity_supplied,
         unit_price: item.unit_price, total_price: item.total_price,
       }).eq('id', item.id)
+      if (error) {
+        console.error('[InternalSalesUpload saveEdit item] error:', error)
+        alert(`עדכון פריט ההזמנה נכשל: ${error.message || 'שגיאת מסד נתונים'}. חלק מהפריטים אולי לא נשמרו — בדוק.`)
+        setEditSaving(false)
+        return
+      }
     }
     const newTotal = editItems.reduce((s, i) => s + Number(i.total_price), 0)
-    await supabase.from('internal_sales').update({ total_amount: newTotal }).eq('id', editSale.id)
+    const { error: totalErr } = await supabase.from('internal_sales').update({ total_amount: newTotal }).eq('id', editSale.id)
+    if (totalErr) {
+      console.error('[InternalSalesUpload saveEdit total] error:', totalErr)
+      alert(`עדכון סך ההזמנה נכשל: ${totalErr.message || 'שגיאת מסד נתונים'}. הפריטים נשמרו אך הסכום הכולל לא — נסה שוב.`)
+      setEditSaving(false)
+      return
+    }
     setEditSaving(false); setEditSale(null); setEditItems([]); loadHistory()
   }
 
   async function handleDelete(sale: SaleRow) {
-    // For completed orders — also remove linked factory_sales + branch_expenses
+    // For completed orders — also remove linked factory_sales + branch_expenses.
+    // If any of these fail, abort before deleting the parent — better to leave
+    // a completed sale half-deleted than orphan a child row in another table.
     if (sale.status === 'completed' && sale.order_number) {
-      await supabase.from('factory_sales').delete()
+      const { error: fsErr } = await supabase.from('factory_sales').delete()
         .eq('doc_number', sale.order_number).eq('is_internal', true)
-      await supabase.from('branch_expenses').delete()
+      if (fsErr) {
+        console.error('[InternalSalesUpload handleDelete factory_sales] error:', fsErr)
+        alert(`מחיקת רישומי המפעל הקשורים נכשלה: ${fsErr.message || 'שגיאת מסד נתונים'}. ההזמנה לא נמחקה.`)
+        return
+      }
+      const { error: beErr } = await supabase.from('branch_expenses').delete()
         .eq('branch_id', sale.branch_id).eq('from_factory', true)
         .ilike('description', `%${sale.order_number}%`)
+      if (beErr) {
+        console.error('[InternalSalesUpload handleDelete branch_expenses] error:', beErr)
+        alert(`מחיקת רישומי הוצאות הסניף נכשלה: ${beErr.message || 'שגיאת מסד נתונים'}. ההזמנה לא נמחקה.`)
+        return
+      }
     }
-    await supabase.from('internal_sales').delete().eq('id', sale.id)
+    const { error } = await supabase.from('internal_sales').delete().eq('id', sale.id)
+    if (error) {
+      console.error('[InternalSalesUpload handleDelete sale] error:', error)
+      alert(`מחיקת ההזמנה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setDeleteConfirm(null); loadHistory(); loadModifiedCount()
   }
 
   async function completeModified(sale: SaleRow) {
     // Mark completed + record in factory_sales as internal
-    await supabase.from('internal_sales').update({
+    const { error: statusErr } = await supabase.from('internal_sales').update({
       status: 'completed', completed_at: new Date().toISOString(),
       confirmed_by: appUser?.name || null,
     }).eq('id', sale.id)
+    if (statusErr) {
+      console.error('[InternalSalesUpload completeModified status] error:', statusErr)
+      alert(`עדכון סטטוס ההזמנה נכשל: ${statusErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
 
     // Add to factory_sales as internal revenue
     const { data: saleItems } = await supabase.from('internal_sale_items').select('*').eq('sale_id', sale.id)
     const finalTotal = (saleItems || []).reduce((s: number, i: any) => s + Number(i.total_price), 0)
 
-    await supabase.from('factory_sales').insert({
+    const { error: fsErr } = await supabase.from('factory_sales').insert({
       date: sale.order_date,
       department: sale.department || 'creams',
       customer: branches.find(b => b.id === sale.branch_id)?.name || '',
@@ -355,9 +404,14 @@ export default function InternalSalesUpload({ onBack }: Props) {
       target_branch_id: sale.branch_id,
       branch_status: 'approved',
     })
+    if (fsErr) {
+      console.error('[InternalSalesUpload completeModified factory_sales] error:', fsErr)
+      alert(`רישום במכירות מפעל נכשל: ${fsErr.message || 'שגיאת מסד נתונים'}. ההזמנה סומנה הושלמה אך לא נספרה כהכנסה — פנה למנהל המערכת.`)
+      return
+    }
 
     // Add to branch_expenses
-    await supabase.from('branch_expenses').insert({
+    const { error: beErr } = await supabase.from('branch_expenses').insert({
       branch_id: sale.branch_id,
       date: sale.order_date,
       category: 'factory_purchase',
@@ -365,8 +419,13 @@ export default function InternalSalesUpload({ onBack }: Props) {
       amount: finalTotal,
       from_factory: true,
     })
+    if (beErr) {
+      console.error('[InternalSalesUpload completeModified branch_expenses] error:', beErr)
+      alert(`רישום בהוצאות הסניף נכשל: ${beErr.message || 'שגיאת מסד נתונים'}. הסניף לא יראה את הרכישה ב-P&L — פנה למנהל המערכת.`)
+      return
+    }
 
-    // Sync products catalog
+    // Sync products catalog (best-effort — failures here don't block the order completion)
     if (saleItems) {
       for (const item of saleItems) {
         const price = Number(item.unit_price)
@@ -374,24 +433,27 @@ export default function InternalSalesUpload({ onBack }: Props) {
         const { data: existing } = await supabase.from('products')
           .select('id, current_price').eq('product_name', item.product_name).maybeSingle()
         if (existing) {
-          await supabase.from('products').update({
+          const { error: prodErr } = await supabase.from('products').update({
             last_price: existing.current_price,
             current_price: price,
             department: dept,
             price_updated_at: new Date().toISOString(),
           }).eq('id', existing.id)
+          if (prodErr) console.warn('[InternalSalesUpload products update] non-fatal:', prodErr)
         } else {
-          await supabase.from('products').insert({
+          const { error: prodErr } = await supabase.from('products').insert({
             product_name: item.product_name,
             department: dept,
             current_price: price,
             price_updated_at: new Date().toISOString(),
           })
+          if (prodErr) console.warn('[InternalSalesUpload products insert] non-fatal:', prodErr)
         }
         // Update department mapping
         if (dept) {
-          await supabase.from('product_department_mapping')
+          const { error: mapErr } = await supabase.from('product_department_mapping')
             .upsert({ product_name: item.product_name, department: dept }, { onConflict: 'product_name' })
+          if (mapErr) console.warn('[InternalSalesUpload mapping upsert] non-fatal:', mapErr)
         }
       }
     }
@@ -405,15 +467,25 @@ export default function InternalSalesUpload({ onBack }: Props) {
     const { data: saleItems } = await supabase.from('internal_sale_items').select('*').eq('sale_id', sale.id)
     if (saleItems) {
       for (const item of saleItems) {
-        await supabase.from('internal_sale_items').update({
+        const { error } = await supabase.from('internal_sale_items').update({
           quantity_confirmed: null,
           total_price: Number(item.quantity_supplied) * Number(item.unit_price),
         }).eq('id', item.id)
+        if (error) {
+          console.error('[InternalSalesUpload rejectModified item] error:', error)
+          alert(`איפוס פריט ההזמנה נכשל: ${error.message || 'שגיאת מסד נתונים'}. חלק מהפריטים אולי באמצע — נסה שוב.`)
+          return
+        }
       }
       const originalTotal = saleItems.reduce((s: number, i: any) => s + Number(i.quantity_supplied) * Number(i.unit_price), 0)
-      await supabase.from('internal_sales').update({
+      const { error: salErr } = await supabase.from('internal_sales').update({
         status: 'pending', total_amount: originalTotal, confirmed_by: null,
       }).eq('id', sale.id)
+      if (salErr) {
+        console.error('[InternalSalesUpload rejectModified sale] error:', salErr)
+        alert(`החזרת ההזמנה לסטטוס "ממתין" נכשלה: ${salErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        return
+      }
     }
     setViewSale(null); setViewItems([]); loadHistory(); loadModifiedCount()
   }

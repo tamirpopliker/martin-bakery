@@ -108,9 +108,14 @@ export default function FactorySpecialOrders({ onBack }: Props) {
     if (factoryNoteOverride !== undefined) {
       patch.factory_notes = factoryNoteOverride.trim() || null
     }
-    await supabase.from('special_orders').update(patch).eq('id', order.id)
+    const { error } = await supabase.from('special_orders').update(patch).eq('id', order.id)
+    if (error) {
+      console.error('[FactorySpecialOrders updateStatus] error:', error)
+      alert(`עדכון סטטוס ההזמנה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
 
-    // Notify branch manager when the order leaves the factory
+    // Notify branch manager when the order leaves the factory (best-effort)
     if (newStatus === 'sent_to_branch') {
       const { data: branchUsers } = await supabase.from('app_users')
         .select('id')
@@ -122,7 +127,8 @@ export default function FactorySpecialOrders({ onBack }: Props) {
           order_id: order.id,
           message: `הזמנה ${displayOrderNumber(order)} נשלחה לסניף — ${order.customer_name}`,
         }))
-        await supabase.from('order_notifications').insert(notifications)
+        const { error: notifErr } = await supabase.from('order_notifications').insert(notifications)
+        if (notifErr) console.warn('[FactorySpecialOrders notifications] non-fatal:', notifErr)
       }
     }
 

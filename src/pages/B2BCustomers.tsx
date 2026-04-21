@@ -110,12 +110,28 @@ export default function B2BCustomers({ onBack }: Props) {
 
   async function saveCust() {
     const payload = { name: custForm.name, company_number: custForm.company_number || null, phone: custForm.phone || null, address: custForm.address || null, branch_id: custForm.branch_id || null, credit_limit: parseFloat(custForm.credit_limit) || 0, payment_terms: custForm.payment_terms || null, notes: custForm.notes || null }
-    if (editCustId) { await supabase.from('b2b_customers').update(payload).eq('id', editCustId); setEditCustId(null) }
-    else { await supabase.from('b2b_customers').insert(payload) }
+    const { error } = editCustId
+      ? await supabase.from('b2b_customers').update(payload).eq('id', editCustId)
+      : await supabase.from('b2b_customers').insert(payload)
+    if (error) {
+      console.error('[B2BCustomers saveCust] error:', error)
+      alert(`שמירת פרטי הלקוח נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
+    if (editCustId) setEditCustId(null)
     setCustForm({ name: '', company_number: '', phone: '', address: '', branch_id: 0, credit_limit: '', payment_terms: 'שוטף + 30', notes: '' }); setShowAddCust(false); loadCustomers()
   }
 
-  async function deleteCust(id: number) { if (!confirm('למחוק לקוח זה?')) return; await supabase.from('b2b_customers').delete().eq('id', id); loadCustomers() }
+  async function deleteCust(id: number) {
+    if (!confirm('למחוק לקוח זה?')) return
+    const { error } = await supabase.from('b2b_customers').delete().eq('id', id)
+    if (error) {
+      console.error('[B2BCustomers deleteCust] error:', error)
+      alert(`מחיקת הלקוח נכשלה: ${error.message || 'שגיאת מסד נתונים'}. ייתכן שיש לו חשבוניות פעילות.`)
+      return
+    }
+    loadCustomers()
+  }
 
   async function openCustDetail(c: Customer) {
     setViewCust(c)
@@ -167,26 +183,65 @@ export default function B2BCustomers({ onBack }: Props) {
     const cust = customers.find(c => c.id === invForm.customer_id)
     const dueDate = invForm.due_date || calcDueDate(invForm.invoice_date, cust?.payment_terms || null)
     const payload = { customer_id: invForm.customer_id, invoice_number: invForm.invoice_number || null, invoice_date: invForm.invoice_date, due_date: dueDate, total_before_vat: parseFloat(invForm.total_before_vat) || 0, total_with_vat: parseFloat(invForm.total_with_vat) || 0, branch_id: invForm.branch_id || null, status: 'open', uploaded_by: appUser?.name || null }
-    if (editInvId) { await supabase.from('b2b_invoices').update(payload).eq('id', editInvId); setEditInvId(null) }
-    else {
+    if (editInvId) {
+      const { error } = await supabase.from('b2b_invoices').update(payload).eq('id', editInvId)
+      if (error) {
+        console.error('[B2BCustomers saveInvoice update] error:', error)
+        alert(`עדכון החשבונית נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        return
+      }
+      setEditInvId(null)
+    } else {
       if (invForm.invoice_number) {
         const { data: existing } = await supabase.from('b2b_invoices').select('id').eq('invoice_number', invForm.invoice_number).maybeSingle()
-        if (existing) { if (!confirm(`חשבונית ${invForm.invoice_number} כבר קיימת. לעדכן?`)) return; await supabase.from('b2b_invoices').update(payload).eq('id', existing.id); setShowAddInv(false); loadInvoices(); return }
+        if (existing) {
+          if (!confirm(`חשבונית ${invForm.invoice_number} כבר קיימת. לעדכן?`)) return
+          const { error } = await supabase.from('b2b_invoices').update(payload).eq('id', existing.id)
+          if (error) {
+            console.error('[B2BCustomers saveInvoice overwrite] error:', error)
+            alert(`עדכון החשבונית הקיימת נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+            return
+          }
+          setShowAddInv(false); loadInvoices(); return
+        }
       }
-      await supabase.from('b2b_invoices').insert(payload)
+      const { error } = await supabase.from('b2b_invoices').insert(payload)
+      if (error) {
+        console.error('[B2BCustomers saveInvoice insert] error:', error)
+        alert(`יצירת החשבונית נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        return
+      }
     }
     setShowAddInv(false); setInvForm({ customer_id: 0, invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], due_date: '', total_before_vat: '', total_with_vat: '', branch_id: 0 }); loadInvoices()
   }
 
-  async function deleteInvoice(inv: Invoice) { await supabase.from('b2b_invoices').delete().eq('id', inv.id); setDeleteInv(null); loadInvoices() }
+  async function deleteInvoice(inv: Invoice) {
+    const { error } = await supabase.from('b2b_invoices').delete().eq('id', inv.id)
+    if (error) {
+      console.error('[B2BCustomers deleteInvoice] error:', error)
+      alert(`מחיקת החשבונית נכשלה: ${error.message || 'שגיאת מסד נתונים'}. ייתכן שיש לה תשלומים.`)
+      return
+    }
+    setDeleteInv(null); loadInvoices()
+  }
 
   async function savePayment() {
     if (!paymentInv || !payForm.amount) return
     const amount = parseFloat(payForm.amount)
-    await supabase.from('b2b_payments').insert({ invoice_id: paymentInv.id, payment_date: payForm.payment_date, amount, payment_method: payForm.payment_method, receipt_number: payForm.receipt_number || null, notes: payForm.notes || null })
+    const { error: payErr } = await supabase.from('b2b_payments').insert({ invoice_id: paymentInv.id, payment_date: payForm.payment_date, amount, payment_method: payForm.payment_method, receipt_number: payForm.receipt_number || null, notes: payForm.notes || null })
+    if (payErr) {
+      console.error('[B2BCustomers savePayment insert] error:', payErr)
+      alert(`רישום התשלום נכשל: ${payErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     const totalPaid = (paymentInv.paid_amount || 0) + amount
     const newStatus = totalPaid >= paymentInv.total_with_vat ? 'paid' : 'partial'
-    await supabase.from('b2b_invoices').update({ status: newStatus }).eq('id', paymentInv.id)
+    const { error: stErr } = await supabase.from('b2b_invoices').update({ status: newStatus }).eq('id', paymentInv.id)
+    if (stErr) {
+      console.error('[B2BCustomers savePayment status] error:', stErr)
+      // The payment is already recorded; only the status update failed.
+      alert(`התשלום נשמר אך עדכון סטטוס החשבונית נכשל: ${stErr.message || 'שגיאת מסד נתונים'}. הסטטוס יתעדכן אוטומטית בטעינה הבאה.`)
+    }
     setPaymentInv(null); setPayForm({ amount: '', payment_date: new Date().toISOString().split('T')[0], payment_method: 'העברה בנקאית', receipt_number: '', notes: '' }); loadInvoices(); loadCustomers()
   }
 

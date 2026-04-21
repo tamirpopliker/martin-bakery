@@ -40,7 +40,12 @@ export default function EmployeeArchive({ branchId, branchName, onBack }: Props)
 
   async function reactivate(empId: number, empName: string) {
     if (!confirm(`להחזיר את ${empName} לרשימה הפעילה?`)) return
-    await supabase.from('branch_employees').update({ active: true }).eq('id', empId)
+    const { error } = await supabase.from('branch_employees').update({ active: true }).eq('id', empId)
+    if (error) {
+      console.error('[EmployeeArchive reactivate] error:', error)
+      alert(`החזרת העובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     loadArchived()
   }
 

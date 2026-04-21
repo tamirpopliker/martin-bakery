@@ -152,12 +152,18 @@ export default function DepartmentLabor({ department, onBack }: Props) {
     setLoading(true)
     const employer_cost = calcCost(emp, h100, h125, h150)
     const gross_salary = calcGross(emp, h100, h125, h150)
-    await supabase.from('labor').insert({
+    const { error } = await supabase.from('labor').insert({
       entity_type: 'factory', entity_id: department,
       date: manDate, employee_id: emp.id, employee_name: emp.name,
       hours_100: h100, hours_125: h125, hours_150: h150,
       gross_salary, employer_cost, is_casual: false
     })
+    if (error) {
+      console.error('[DepartmentLabor addManual] error:', error)
+      alert(`הוספת רשומת לייבור נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoading(false)
+      return
+    }
     setManH100(''); setManH125(''); setManH150('')
     await fetchEntries()
     setLoading(false)
@@ -174,12 +180,18 @@ export default function DepartmentLabor({ department, onBack }: Props) {
     const rate = parseFloat(casRate)
     const employer_cost = calcCost(null, h100, h125, h150, rate)
     const gross_salary = calcGross(null, h100, h125, h150, rate)
-    await supabase.from('labor').insert({
+    const { error } = await supabase.from('labor').insert({
       entity_type: 'factory', entity_id: department,
       date: casDate, employee_id: null, employee_name: casName,
       hours_100: h100, hours_125: h125, hours_150: h150,
       gross_salary, employer_cost, is_casual: true, hourly_rate: rate
     })
+    if (error) {
+      console.error('[DepartmentLabor addCasual] error:', error)
+      alert(`הוספת עובד מזדמן נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setLoading(false)
+      return
+    }
     setCasName(''); setCasH100(''); setCasH125(''); setCasH150(''); setCasRate('')
     await fetchEntries()
     setLoading(false)
@@ -188,12 +200,22 @@ export default function DepartmentLabor({ department, onBack }: Props) {
   // ─── מחיקה / עריכה ───────────────────────────────────────────────────────
   async function deleteEntry(id: number) {
     if (!confirm('למחוק רשומה זו?')) return
-    await supabase.from('labor').delete().eq('id', id)
+    const { error } = await supabase.from('labor').delete().eq('id', id)
+    if (error) {
+      console.error('[DepartmentLabor deleteEntry] error:', error)
+      alert(`מחיקת רשומת לייבור נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchEntries()
   }
 
   async function saveEdit(id: number) {
-    await supabase.from('labor').update(editData).eq('id', id)
+    const { error } = await supabase.from('labor').update(editData).eq('id', id)
+    if (error) {
+      console.error('[DepartmentLabor saveEdit] error:', error)
+      alert(`עדכון רשומת לייבור נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditId(null)
     await fetchEntries()
   }

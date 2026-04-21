@@ -87,34 +87,54 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
     if (noChanges) {
       // Confirm as-is
       for (const item of editInternalItems) {
-        await supabase.from('internal_sale_items').update({
+        const { error } = await supabase.from('internal_sale_items').update({
           quantity_confirmed: item.quantity_supplied,
           total_price: item.quantity_supplied * item.unit_price,
         }).eq('id', item.id)
+        if (error) {
+          console.error('[BranchOrders confirmInternalOrder item] error:', error)
+          alert(`עדכון פריט בהזמנה נכשל: ${error.message || 'שגיאת מסד נתונים'}. חלק מהשינויים אולי לא נשמרו.`)
+          return
+        }
       }
-      await supabase.from('internal_sales').update({
+      const { error } = await supabase.from('internal_sales').update({
         status: 'completed',
         confirmed_by: 'branch',
         completed_at: new Date().toISOString(),
       }).eq('id', viewInternal.id)
+      if (error) {
+        console.error('[BranchOrders confirmInternalOrder status] error:', error)
+        alert(`אישור ההזמנה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        return
+      }
     } else {
       // Save with modifications
       let hasChanges = false
       for (const item of editInternalItems) {
         const qty = Number(item.qty_edit) || 0
         if (qty !== item.quantity_supplied) hasChanges = true
-        await supabase.from('internal_sale_items').update({
+        const { error } = await supabase.from('internal_sale_items').update({
           quantity_confirmed: qty,
           total_price: qty * item.unit_price,
         }).eq('id', item.id)
+        if (error) {
+          console.error('[BranchOrders confirmInternalOrder item-mod] error:', error)
+          alert(`עדכון פריט בהזמנה נכשל: ${error.message || 'שגיאת מסד נתונים'}. חלק מהשינויים אולי לא נשמרו.`)
+          return
+        }
       }
       const newTotal = editInternalItems.reduce((s: number, i: any) => s + (Number(i.qty_edit) || 0) * Number(i.unit_price), 0)
-      await supabase.from('internal_sales').update({
+      const { error } = await supabase.from('internal_sales').update({
         status: hasChanges ? 'modified' : 'completed',
         total_amount: newTotal,
         confirmed_by: 'branch',
         ...(hasChanges ? {} : { completed_at: new Date().toISOString() }),
       }).eq('id', viewInternal.id)
+      if (error) {
+        console.error('[BranchOrders confirmInternalOrder status-mod] error:', error)
+        alert(`עדכון סטטוס ההזמנה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+        return
+      }
     }
     setViewInternal(null)
     setViewInternalItems([])
@@ -168,7 +188,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
       .maybeSingle()
     if (existing) return // already exists
 
-    await supabase.from('branch_expenses').insert({
+    const { error } = await supabase.from('branch_expenses').insert({
       branch_id: branchId,
       date: order.date,
       expense_type: 'suppliers',
@@ -178,6 +198,10 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
       from_factory: true,
       notes: 'הזמנה פנימית מהמפעל — אושרה אוטומטית',
     })
+    if (error) {
+      console.error('[BranchOrders createBranchExpense] error:', error)
+      throw new Error(`רישום ההוצאה בסניף נכשל: ${error.message || 'שגיאת מסד נתונים'}`)
+    }
   }
 
   // ─── פעולות ─────────────────────────────────────────────────────────────────
@@ -242,7 +266,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
     const fsPending = list.filter(o => o.source_table === 'factory_sales').map(o => o.id)
     const b2bPending = list.filter(o => o.source_table === 'factory_b2b_sales').map(o => o.id)
 
-    const updates = []
+    const updates: Array<PromiseLike<{ data: any; error: any }>> = []
     if (fsPending.length > 0) {
       updates.push(
         supabase.from('factory_sales').update({ branch_status: 'approved' }).in('id', fsPending)
@@ -253,9 +277,23 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
         supabase.from('factory_b2b_sales').update({ branch_status: 'approved' }).in('id', b2bPending)
       )
     }
-    await Promise.all(updates)
-    // Create branch expenses for all approved orders
-    await Promise.all(list.map(o => createBranchExpense(o)))
+    const updateResults = await Promise.all(updates)
+    const updateError = updateResults.find(r => r?.error)?.error
+    if (updateError) {
+      console.error('[BranchOrders approveOrders update] error:', updateError)
+      alert(`אישור ההזמנות נכשל: ${updateError.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
+    // Create branch expenses for all approved orders. createBranchExpense
+    // throws if a row insert fails — surface the message to the user instead
+    // of letting the page silently appear "approved" while the expense is
+    // missing.
+    try {
+      await Promise.all(list.map(o => createBranchExpense(o)))
+    } catch (err: any) {
+      console.error('[BranchOrders approveOrders expense] error:', err)
+      alert(`רישום הוצאות הסניף נכשל חלקית: ${err?.message || 'שגיאה לא צפויה'}. הסטטוסים אושרו אך ייתכן שחלק מההוצאות לא נרשמו — בדוק.`)
+    }
     await fetchOrders()
   }
 

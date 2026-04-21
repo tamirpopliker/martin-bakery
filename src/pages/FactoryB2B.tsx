@@ -95,13 +95,19 @@ export default function FactoryB2B({ onBack }: Props) {
   async function addManual() {
     if (!manualCustomer || !manualAmount || !manualDate) return
     setManualSaving(true)
-    await supabase.from('external_sales').insert({
+    const { error } = await supabase.from('external_sales').insert({
       customer_name: manualCustomer,
       invoice_number: manualInvoice || null,
       invoice_date: manualDate,
       total_before_vat: parseFloat(manualAmount),
       uploaded_by: appUser?.name || null,
     })
+    if (error) {
+      console.error('[FactoryB2B addManual] error:', error)
+      alert(`שמירת המכירה החיצונית נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      setManualSaving(false)
+      return
+    }
     setManualCustomer(''); setManualInvoice(''); setManualAmount('')
     setManualSaving(false)
     alert('נשמר בהצלחה')
@@ -189,10 +195,13 @@ export default function FactoryB2B({ onBack }: Props) {
       uploaded_by: appUser?.name || null,
     }
 
-    if (overwrite && inv.duplicateId) {
-      await supabase.from('external_sales').update(payload).eq('id', inv.duplicateId)
-    } else {
-      await supabase.from('external_sales').insert(payload)
+    const { error } = overwrite && inv.duplicateId
+      ? await supabase.from('external_sales').update(payload).eq('id', inv.duplicateId)
+      : await supabase.from('external_sales').insert(payload)
+    if (error) {
+      console.error('[FactoryB2B saveParsedInvoice] error:', error)
+      alert(`שמירת החשבונית נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
     }
 
     setParsedInvoices(prev => prev.map((p, i) => i === idx ? { ...p, status: 'saved' } : p))
@@ -204,12 +213,22 @@ export default function FactoryB2B({ onBack }: Props) {
 
   // ─── History CRUD ───
   async function saveEdit(id: number) {
-    await supabase.from('external_sales').update(editData).eq('id', id)
+    const { error } = await supabase.from('external_sales').update(editData).eq('id', id)
+    if (error) {
+      console.error('[FactoryB2B saveEdit] error:', error)
+      alert(`עדכון החשבונית נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditId(null); loadHistory()
   }
 
   async function handleDelete(sale: ExtSale) {
-    await supabase.from('external_sales').delete().eq('id', sale.id)
+    const { error } = await supabase.from('external_sales').delete().eq('id', sale.id)
+    if (error) {
+      console.error('[FactoryB2B handleDelete] error:', error)
+      alert(`מחיקת החשבונית נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setDeleteConfirm(null); loadHistory()
   }
 

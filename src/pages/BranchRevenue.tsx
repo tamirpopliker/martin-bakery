@@ -156,11 +156,16 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
       if (existing && existing.length > 0) {
         // Update existing
-        await supabase.from('branch_revenue').update({
+        const { error } = await supabase.from('branch_revenue').update({
           amount: row.amount,
           transaction_count: row.transactions || null,
         }).eq('id', existing[0].id)
-        imported++
+        if (error) {
+          console.error('[BranchRevenue importPdfRows update] error:', error)
+          skipped++
+        } else {
+          imported++
+        }
       } else {
         // Insert new
         const { error } = await supabase.from('branch_revenue').insert({

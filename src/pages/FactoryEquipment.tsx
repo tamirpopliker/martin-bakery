@@ -112,23 +112,38 @@ export default function FactoryEquipment({ onBack }: Props) {
   async function addWaste() {
     if (!wasteAmount || !wasteDate) return
     const dbDept = DEPT_TO_DB[wasteDept] || 'creams'
-    await supabase.from('factory_waste').insert({
+    const { error } = await supabase.from('factory_waste').insert({
       date: wasteDate, description: wasteDesc, amount: parseFloat(wasteAmount),
       category: wasteCategory, department: dbDept,
     })
+    if (error) {
+      console.error('[FactoryEquipment addWaste] error:', error)
+      alert(`הוספת רשומת פחת נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setWasteDesc(''); setWasteAmount(''); setShowAddWaste(false); loadWaste()
   }
 
   async function saveWasteEdit(id: number) {
     const updates: any = { ...editWasteData }
     if (updates.department && DEPT_TO_DB[updates.department]) updates.department = DEPT_TO_DB[updates.department]
-    await supabase.from('factory_waste').update(updates).eq('id', id)
+    const { error } = await supabase.from('factory_waste').update(updates).eq('id', id)
+    if (error) {
+      console.error('[FactoryEquipment saveWasteEdit] error:', error)
+      alert(`עדכון רשומת פחת נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditWasteId(null); loadWaste()
   }
 
   async function deleteWaste(id: number) {
     if (!confirm('למחוק רשומה זו?')) return
-    await supabase.from('factory_waste').delete().eq('id', id)
+    const { error } = await supabase.from('factory_waste').delete().eq('id', id)
+    if (error) {
+      console.error('[FactoryEquipment deleteWaste] error:', error)
+      alert(`מחיקת רשומת פחת נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     loadWaste()
   }
 
@@ -157,13 +172,18 @@ export default function FactoryEquipment({ onBack }: Props) {
   async function addRepair() {
     if (!newAmount || !newDate) return
     const dbDept = DEPT_TO_DB[newDept] || 'creams'
-    await supabase.from('factory_repairs').insert({
+    const { error } = await supabase.from('factory_repairs').insert({
       date: newDate,
       description: newDesc,
       amount: parseFloat(newAmount),
       type: newType,
       department: dbDept,
     })
+    if (error) {
+      console.error('[FactoryEquipment addRepair] error:', error)
+      alert(`הוספת רשומת תיקונים נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setNewDesc(''); setNewAmount(''); setShowAddRepair(false)
     loadRepairs()
   }
@@ -173,13 +193,23 @@ export default function FactoryEquipment({ onBack }: Props) {
     if (updates.department && DEPT_TO_DB[updates.department]) {
       updates.department = DEPT_TO_DB[updates.department]
     }
-    await supabase.from('factory_repairs').update(updates).eq('id', id)
+    const { error } = await supabase.from('factory_repairs').update(updates).eq('id', id)
+    if (error) {
+      console.error('[FactoryEquipment saveRepairEdit] error:', error)
+      alert(`עדכון רשומת תיקונים נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditRepairId(null); loadRepairs()
   }
 
   async function deleteRepair(id: number) {
     if (!confirm('למחוק רשומה זו?')) return
-    await supabase.from('factory_repairs').delete().eq('id', id)
+    const { error } = await supabase.from('factory_repairs').delete().eq('id', id)
+    if (error) {
+      console.error('[FactoryEquipment deleteRepair] error:', error)
+      alert(`מחיקת רשומת תיקונים נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     loadRepairs()
   }
 

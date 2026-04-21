@@ -138,13 +138,23 @@ export default function Labor({ onBack }: Props) {
 
   async function deleteHistoryRow(id: number) {
     if (!confirm('למחוק רשומה זו?')) return
-    await supabase.from('labor').delete().eq('id', id)
+    const { error } = await supabase.from('labor').delete().eq('id', id)
+    if (error) {
+      console.error('[Labor deleteHistoryRow] error:', error)
+      alert(`מחיקת רשומת לייבור נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     fetchHistory()
   }
 
   async function deleteHistoryDay(date: string) {
     if (!confirm(`למחוק את כל הרשומות ליום ${new Date(date + 'T12:00:00').toLocaleDateString('he-IL')}?`)) return
-    await supabase.from('labor').delete().eq('entity_type', 'factory').eq('date', date)
+    const { error } = await supabase.from('labor').delete().eq('entity_type', 'factory').eq('date', date)
+    if (error) {
+      console.error('[Labor deleteHistoryDay] error:', error)
+      alert(`מחיקת רשומות היום נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setExpandedDate(null)
     fetchHistory()
   }
@@ -159,7 +169,12 @@ export default function Labor({ onBack }: Props) {
       gross_salary = (hours_100 * emp.hourly_rate) + (hours_125 * emp.hourly_rate * 1.25) + (hours_150 * emp.hourly_rate * 1.5) + ((emp.bonus || 0) * (hours_100 + hours_125 + hours_150))
       employer_cost = (hours_100 * emp.hourly_rate * EMPLOYER_FACTOR) + (hours_125 * emp.hourly_rate * 1.25) + (hours_150 * emp.hourly_rate * 1.5) + ((emp.bonus || 0) * (hours_100 + hours_125 + hours_150))
     }
-    await supabase.from('labor').update({ hours_100, hours_125, hours_150, gross_salary, employer_cost }).eq('id', editHistId)
+    const { error } = await supabase.from('labor').update({ hours_100, hours_125, hours_150, gross_salary, employer_cost }).eq('id', editHistId)
+    if (error) {
+      console.error('[Labor saveHistoryEdit] error:', error)
+      alert(`עדכון רשומת הלייבור נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditHistId(null)
     fetchHistory()
   }
@@ -291,9 +306,15 @@ export default function Labor({ onBack }: Props) {
     setSaving(true)
     if (duplicateDates.length > 0 && replaceMode) {
       for (const d of duplicateDates) {
-        await supabase.from('labor').delete()
+        const { error: delErr } = await supabase.from('labor').delete()
           .eq('entity_type', 'factory')
           .eq('date', d)
+        if (delErr) {
+          console.error('[Labor handleSave delete] error:', delErr)
+          alert(`ניקוי רשומות קודמות נכשל לתאריך ${d}: ${delErr.message || 'שגיאת מסד נתונים'}. ההעלאה בוטלה.`)
+          setSaving(false)
+          return
+        }
       }
     }
     const inserts = knownRows.map(r => ({
@@ -309,7 +330,13 @@ export default function Labor({ onBack }: Props) {
       employer_cost: calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150, workingDays).total
     }))
     for (let i = 0; i < inserts.length; i += 100) {
-      await supabase.from('labor').insert(inserts.slice(i, i + 100))
+      const { error } = await supabase.from('labor').insert(inserts.slice(i, i + 100))
+      if (error) {
+        console.error('[Labor handleSave insert] error:', error)
+        alert(`שמירת חבילה ${i / 100 + 1} נכשלה: ${error.message || 'שגיאת מסד נתונים'}. חלק מהשורות אולי נשמרו — בדוק בהיסטוריה.`)
+        setSaving(false)
+        return
+      }
     }
     setSaving(false)
     setSaved(true)
@@ -325,7 +352,7 @@ export default function Labor({ onBack }: Props) {
 
   async function handleAddEmployee() {
     if (!addForm.name) return
-    await supabase.from('employees').insert({
+    const { error } = await supabase.from('employees').insert({
       name: addForm.name,
       employee_number: addForm.employee_number,
       department: addForm.department,
@@ -334,18 +361,33 @@ export default function Labor({ onBack }: Props) {
       global_daily_rate: parseFloat(addForm.global_daily_rate) || 0,
       bonus: parseFloat(addForm.bonus) || 0,
     })
+    if (error) {
+      console.error('[Labor handleAddEmployee] error:', error)
+      alert(`הוספת עובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchEmployees()
     setShowAddEmp(false)
     setAddForm(emptyForm)
   }
 
   async function handleDeleteEmployee(id: number) {
-    await supabase.from('employees').update({ active: false }).eq('id', id)
+    const { error } = await supabase.from('employees').update({ active: false }).eq('id', id)
+    if (error) {
+      console.error('[Labor handleDeleteEmployee] error:', error)
+      alert(`השבתת העובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     await fetchEmployees()
   }
 
   async function handleEditEmployee(id: number) {
-    await supabase.from('employees').update(editEmpData).eq('id', id)
+    const { error } = await supabase.from('employees').update(editEmpData).eq('id', id)
+    if (error) {
+      console.error('[Labor handleEditEmployee] error:', error)
+      alert(`עדכון פרטי העובד נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
     setEditEmpId(null)
     await fetchEmployees()
   }
