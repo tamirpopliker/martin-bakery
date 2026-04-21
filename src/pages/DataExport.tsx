@@ -171,6 +171,10 @@ const EXPORT_TABLES: TableExport[] = [
     label: 'לקוחות',
     columns: ['name', 'phone', 'type', 'credit_limit', 'notes', 'active'],
     query: async () => {
+      // TODO: הטבלה 'customers' לא קיימת ב-DB (רק b2b_customers,
+      // branch_credit_customers, internal_customer_map). הקריאה הזו
+      // תמיד מחזירה [] דרך ה-try/catch. להחליף ל-branch_credit_customers
+      // או להסיר את הסעיף כולו. (מזוהה 2026-04-21 במהלך RLS שלב 1.)
       try {
         const { data } = await supabase.from('customers').select('*').order('name')
         return data || []
