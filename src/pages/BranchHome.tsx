@@ -273,8 +273,8 @@ export default function BranchHome({ branch, onBack }: Props) {
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
 
       <PageHeader title={`סניף ${branch.name}`} subtitle={today}
-        onBack={appUser?.role === 'branch' || appUser?.role === 'scheduler' ? undefined : onBack}
-        action={(appUser?.role === 'branch' || appUser?.role === 'scheduler') ? (
+        onBack={appUser?.role === 'branch' ? undefined : onBack}
+        action={appUser?.role === 'branch' ? (
           <button onClick={() => { supabase.auth.signOut() }} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
             התנתק
           </button>
@@ -292,8 +292,6 @@ export default function BranchHome({ branch, onBack }: Props) {
           animate="visible"
         >
           {MENU_ITEMS.filter(item => {
-            // Scheduler can only see team management
-            if (appUser?.role === 'scheduler') return item.page === 'branch-team'
             // Username-auth branch users: restricted to scheduling + special orders + password change
             if (appUser && isRestrictedBranchUser(appUser)) {
               return ['branch-team', 'special_orders', 'change_password'].includes(item.page)

@@ -327,20 +327,6 @@ export default function Home() {
     }
   }
 
-  // Scheduler goes directly to their branch's team management page
-  if (appUser?.role === 'scheduler' && appUser.branch_id) {
-    const schedulerBranch = branchList.find(b => b.id === appUser.branch_id)
-    if (schedulerBranch) {
-      return <BranchHome branch={{ id: schedulerBranch.id, name: schedulerBranch.name, color: schedulerBranch.color }} onBack={() => supabase.auth.signOut()} />
-    }
-    // Branches not loaded yet — show loading
-    if (branchList.length === 0) {
-      return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
-        <div style={{ textAlign: 'center', color: '#94a3b8' }}>טוען...</div>
-      </div>
-    }
-  }
-
   // ─── Page routing with floating home button ────────────────────────────────
   function renderPage(): JSX.Element | null {
     if (page === 'creams_production')    return <DailyProduction department="creams"    onBack={() => setPage(null)} />

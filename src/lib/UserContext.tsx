@@ -7,7 +7,7 @@ export interface AppUser {
   id: string
   email: string
   name: string
-  role: 'admin' | 'factory' | 'branch' | 'employee' | 'scheduler'
+  role: 'admin' | 'factory' | 'branch' | 'employee'
   branch_id: number | null
   excluded_departments: string[]
   can_settings: boolean
@@ -104,12 +104,6 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
     // Employee can only access employee pages
     if (user.role === 'employee') {
       return ['employee-home', 'employee-schedule', 'employee-constraints', 'employee-tasks'].includes(pageKey)
-    }
-
-    // Scheduler can only access shift scheduling features
-    if (user.role === 'scheduler') {
-      return ['branch-team', 'weekly-schedule', 'schedule-history',
-              'manager-constraints', 'shift-settings'].includes(pageKey)
     }
 
     // ─── Admin-only pages ───

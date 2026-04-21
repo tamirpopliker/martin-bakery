@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 
-// Branch/scheduler users log in with a username → synthetic email under this domain.
+// Branch users log in with a username → synthetic email under this domain.
 // This keeps Supabase Auth (JWT, RLS via auth.uid()) while exposing a username-only UX.
 const USERNAME_DOMAIN = '@martin.local'
 

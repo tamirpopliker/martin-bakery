@@ -321,7 +321,7 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
                         <tr key={emp.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                           <td style={{ padding: '8px 12px', fontWeight: 500, color: '#1e293b', position: 'sticky', right: 0, background: 'white', zIndex: 1, whiteSpace: 'nowrap' }}>
                             {emp.name}
-                            {(appUser?.role === 'admin' || appUser?.role === 'branch' || appUser?.role === 'scheduler') && (
+                            {(appUser?.role === 'admin' || appUser?.role === 'branch') && (
                               <button
                                 onClick={() => openManualDialog(emp.id, emp.name)}
                                 title="הגש זמינות"
@@ -335,7 +335,7 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
                             if (!status) {
                               return <td key={date} style={{ padding: '8px 4px', textAlign: 'center', color: '#cbd5e1', fontSize: 11 }}>—</td>
                             }
-                            const canEdit = appUser?.role === 'admin' || appUser?.role === 'branch' || appUser?.role === 'scheduler'
+                            const canEdit = appUser?.role === 'admin' || appUser?.role === 'branch'
                             return (
                               <td key={date} style={{ padding: '6px 4px', textAlign: 'center' }}>
                                 <button
