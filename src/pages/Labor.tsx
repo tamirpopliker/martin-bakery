@@ -18,6 +18,19 @@ interface Employee {
   global_daily_rate: number
   bonus: number
   active: boolean
+  is_manager?: boolean
+}
+
+// Fallback list — משמש כש-employees.is_manager לא סומן (לפני migration 026)
+// או כשאין match בין labor.employee_name ל-employees.name (אי-עקביות באיות).
+const MANAGER_NAMES_FALLBACK = ['נאור אורן', 'אורן נאור', 'תמיר רוזנברג', 'רוזנברג תמיר']
+
+function isManagerByName(name: string | undefined): boolean {
+  if (!name) return false
+  const normalized = name.trim().replace(/\s+/g, ' ')
+  return MANAGER_NAMES_FALLBACK.some(m =>
+    normalized === m || normalized.includes(m) || m.includes(normalized)
+  )
 }
 
 interface ParsedRow {
@@ -70,13 +83,16 @@ const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, tra
 
 export default function Labor({ onBack }: Props) {
   const { appUser } = useAppUser()
-  const isDeptManager = appUser?.role === 'factory' && !!appUser?.managed_department
 
-  function shouldHideSalary(emp: Employee | undefined): boolean {
-    if (!isDeptManager || !emp) return false
-    const myDept = appUser?.managed_department
-    if (myDept === 'creams' && emp.wage_type === 'global' && emp.department === 'dough') return true
-    if (myDept === 'dough' && emp.wage_type === 'global' && emp.department === 'creams') return true
+  function shouldHideSalary(emp: Employee | undefined, employeeNameFromLabor?: string): boolean {
+    // admin → רואה הכל
+    if (appUser?.role === 'admin') return false
+    // is_manager מהכתובת ב-DB (אחרי migration 026)
+    if (emp?.is_manager === true) return true
+    // fallback לפי שם מ-labor.employee_name (מטפל ב-mismatch בין labor.employee_name ל-employees.name)
+    if (employeeNameFromLabor && isManagerByName(employeeNameFromLabor)) return true
+    // fallback לפי שם ב-employee record (לפני migration 026 או עובד שלא סומן)
+    if (emp?.name && isManagerByName(emp.name)) return true
     return false
   }
 
@@ -528,7 +544,7 @@ export default function Labor({ onBack }: Props) {
                           {!row.found && <AlertTriangle size={13} color="#f59e0b" />}
                           <span style={{ fontWeight: 600, color: row.found ? '#374151' : '#92400e', fontSize: 13 }}>{row.name}</span>
                         </div>
-                        {row.found && row.employee && !shouldHideSalary(row.employee) && (
+                        {row.found && row.employee && !shouldHideSalary(row.employee, row.employee.name) && (
                           <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
                             {row.employee.wage_type === 'global'
                               ? `גלובלי: ₪${Math.round(row.employee.global_daily_rate).toLocaleString()}/חודש${row.employee.bonus ? ` + בונוס ₪${Math.round(row.employee.bonus).toLocaleString()}/חודש` : ''}`
@@ -545,7 +561,7 @@ export default function Labor({ onBack }: Props) {
                           <input type="number" value={row.hours_150} onChange={e => updateRow(row.id, 'hours_150', e.target.value)} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 6px', fontSize: 13, width: 60 }} />
                           <span style={{ fontSize: 12, color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
                           <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>
-                            {row.employee ? (shouldHideSalary(row.employee) ? '—' : '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150, workingDays).total.toFixed(0)) : '—'}
+                            {row.employee ? (shouldHideSalary(row.employee, row.employee.name) ? '—' : '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150, workingDays).total.toFixed(0)) : '—'}
                           </span>
                           <button onClick={() => saveRowEdit(row.id)} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer' }}>
                             <Check size={13} />
@@ -561,7 +577,7 @@ export default function Labor({ onBack }: Props) {
                           <span style={{ fontSize: 13, color: row.hours_150 > 0 ? '#ef4444' : '#94a3b8', fontWeight: row.hours_150 > 0 ? 600 : 400 }}>{row.hours_150 || '—'}</span>
                           <span style={{ fontSize: 12, color: '#64748b' }}>{row.employee ? deptOptions.find(d => d.value === row.employee!.department)?.label : '—'}</span>
                           <span style={{ fontWeight: 700, color: row.found ? '#0f172a' : '#94a3b8', fontSize: 13 }}>
-                            {row.found && row.employee ? (shouldHideSalary(row.employee) ? '—' : '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150, workingDays).total.toFixed(0)) : '—'}
+                            {row.found && row.employee ? (shouldHideSalary(row.employee, row.employee.name) ? '—' : '₪' + calcWage(row.employee, row.hours_100, row.hours_125, row.hours_150, workingDays).total.toFixed(0)) : '—'}
                           </span>
                           <button onClick={() => startEdit(row.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
                             <Pencil size={13} color="#94a3b8" />
@@ -731,7 +747,7 @@ export default function Labor({ onBack }: Props) {
                                     <span style={{ color: r.hours_125 > 0 ? '#f59e0b' : '#d1d5db', fontWeight: r.hours_125 > 0 ? 600 : 400 }}>{r.hours_125 || '—'}</span>
                                     <span style={{ color: r.hours_150 > 0 ? '#ef4444' : '#d1d5db', fontWeight: r.hours_150 > 0 ? 600 : 400 }}>{r.hours_150 || '—'}</span>
                                     <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 12 }}>
-                                      {shouldHideSalary(allEmployees.find(e => e.name === r.employee_name)) ? '—' : `₪${Math.round(r.employer_cost || 0).toLocaleString()}`}
+                                      {shouldHideSalary(allEmployees.find(e => e.name === r.employee_name), r.employee_name) ? '—' : `₪${Math.round(r.employer_cost || 0).toLocaleString()}`}
                                     </span>
                                     <div style={{ display: 'flex', gap: 2 }}>
                                       <button onClick={() => { setEditHistId(r.id); setEditHistData({ ...r }) }}
@@ -797,14 +813,18 @@ export default function Labor({ onBack }: Props) {
                           {emp.wage_type === 'hourly' ? 'שעתי' : 'גלובאלי'}
                         </span>
                         <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                          {emp.wage_type === 'hourly'
-                            ? (emp.hourly_rate ? `₪${emp.hourly_rate}/ש׳` : '—')
-                            : (emp.global_daily_rate ? '₪' + Math.round(emp.global_daily_rate).toLocaleString() + '/חודש' : '—')}
+                          {shouldHideSalary(emp, emp.name)
+                            ? '—'
+                            : emp.wage_type === 'hourly'
+                              ? (emp.hourly_rate ? `₪${emp.hourly_rate}/ש׳` : '—')
+                              : (emp.global_daily_rate ? '₪' + Math.round(emp.global_daily_rate).toLocaleString() + '/חודש' : '—')}
                         </span>
                         <span style={{ fontSize: 12, color: emp.bonus ? '#64748b' : '#d1d5db', fontWeight: 600 }}>
-                          {emp.bonus
-                            ? (emp.wage_type === 'hourly' ? `₪${emp.bonus}/ש׳` : '₪' + Math.round(emp.bonus).toLocaleString() + '/חודש')
-                            : '—'}
+                          {shouldHideSalary(emp, emp.name)
+                            ? '—'
+                            : emp.bonus
+                              ? (emp.wage_type === 'hourly' ? `₪${emp.bonus}/ש׳` : '₪' + Math.round(emp.bonus).toLocaleString() + '/חודש')
+                              : '—'}
                         </span>
                         <button onClick={() => { setEditEmpId(emp.id); setEditEmpData(emp) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
                           <Pencil size={14} color="#94a3b8" />
