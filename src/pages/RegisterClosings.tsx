@@ -1404,65 +1404,85 @@ function KpiCard({ Icon, color, label, value }: { Icon: any; color: string; labe
 // ═══════════════════════════════════════════════════════════════════════════
 function DepositCalculator({ totalCash, onClose }: { totalCash: number; onClose: () => void }) {
   const [billCounts, setBillCounts] = useState<Record<string, number>>({})
-  const DENOMS = [200, 100, 50, 20, 10]
-  const depositedAmount = totalFromCounts(DENOMS, billCounts)
+  const [coinCounts, setCoinCounts] = useState<Record<string, number>>({})
+  const BILL_DENOMS_DEPOSIT = [200, 100, 50, 20, 10]
+  const COIN_DENOMS_DEPOSIT = [5, 2, 1, 0.5, 0.1]
+  const depositedAmount =
+    totalFromCounts(BILL_DENOMS_DEPOSIT, billCounts) +
+    totalFromCounts(COIN_DENOMS_DEPOSIT, coinCounts)
   const remaining = totalCash - depositedAmount
+  const isExact = Math.abs(remaining) < 0.01
+  const isShort = remaining > 0.01
+  const isOver  = remaining < -0.01
   const progress = totalCash > 0 ? Math.min(100, (depositedAmount / totalCash) * 100) : 0
   const todayStr = new Date().toLocaleDateString('he-IL')
-
-  const remainingLabel = Math.abs(remaining) < 0.01
-    ? 'תואם'
-    : remaining > 0
-      ? `נשאר להפקיד: ₪${remaining.toFixed(2)}`
-      : `עודף: ₪${Math.abs(remaining).toFixed(2)}`
-  const remainingColor = Math.abs(remaining) < 0.01 ? '#059669' : remaining > 0 ? '#b45309' : '#dc2626'
-  const remainingBg = Math.abs(remaining) < 0.01 ? '#ecfdf5' : remaining > 0 ? '#fef3c7' : '#fee2e2'
-  const remainingBorder = Math.abs(remaining) < 0.01 ? '#a7f3d0' : remaining > 0 ? '#fcd34d' : '#fecaca'
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onClose}>
       <motion.div onClick={e => e.stopPropagation()}
         initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-        style={{ background: '#f8fafc', width: '100%', maxWidth: 720, maxHeight: '96vh', overflow: 'auto', borderRadius: '20px 20px 0 0', direction: 'rtl', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ position: 'sticky', top: 0, background: 'white', padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Calculator size={20} color="#7c3aed" /> חישוב הפקדה
-            </div>
-            <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{todayStr}</div>
-          </div>
-          <button onClick={onClose}
-            style={{ width: 44, height: 44, background: '#f8fafc', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <X size={22} color="#64748b" />
-          </button>
-        </div>
+        style={{ background: '#f8fafc', width: '100%', maxWidth: 720, maxHeight: '96vh', overflowY: 'auto', borderRadius: '20px 20px 0 0', direction: 'rtl', display: 'flex', flexDirection: 'column', position: 'relative' }}>
 
-        <div style={{ padding: 16 }}>
-          <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)', borderRadius: 16, padding: 20, marginBottom: 14, color: 'white', textAlign: 'center' }}>
-            <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 700, marginBottom: 6 }}>סה"כ מזומן להפקדה</div>
-            <div style={{ fontSize: 34, fontWeight: 900, letterSpacing: -0.5 }}>₪{totalCash.toFixed(2)}</div>
-          </div>
-
-          <DenomCounter denoms={[200, 100, 50, 20]} counts={billCounts} setCounts={setBillCounts} label="שטרות" kind="bill" />
-          <DenomCounter denoms={[10]} counts={billCounts} setCounts={setBillCounts} label="מטבע ₪10" kind="coin" />
-
-          <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 16 }}>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 4 }}>סכום הופקד</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: '#059669' }}>₪{depositedAmount.toFixed(2)}</div>
-            </div>
-            <div style={{ padding: 12, background: remainingBg, borderRadius: 10, border: `1.5px solid ${remainingBorder}`, marginBottom: 12 }}>
-              <div style={{ fontSize: 18, fontWeight: 900, color: remainingColor, textAlign: 'center' }}>
-                {remainingLabel}
+        {/* Sticky purple header — totals, status, progress */}
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+          color: '#fff',
+          padding: 16,
+          boxShadow: '0 4px 12px rgba(124,58,237,0.3)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Calculator size={18} /> חישוב הפקדה
               </div>
+              <div style={{ fontSize: 11, opacity: 0.85, fontWeight: 600, marginTop: 2 }}>{todayStr}</div>
             </div>
-            <div style={{ width: '100%', height: 10, background: '#f1f5f9', borderRadius: 999, overflow: 'hidden' }}>
-              <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, #6366f1, #7c3aed)', transition: 'width 0.3s ease' }} />
+            <button onClick={onClose}
+              style={{ width: 40, height: 40, background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={20} color="#fff" />
+            </button>
+          </div>
+
+          <div style={{ textAlign: 'center', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 700, marginBottom: 2 }}>סה"כ מזומן להפקדה</div>
+            <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: -0.5 }}>₪{totalCash.toFixed(2)}</div>
+          </div>
+
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 8 }}>
+            <div style={{ textAlign: 'center', marginBottom: 10, minHeight: 24 }}>
+              {isExact && (
+                <div style={{ fontSize: 18, fontWeight: 900, color: '#d1fae5' }}>
+                  ✓ תואם
+                </div>
+              )}
+              {isShort && (
+                <div style={{ fontSize: 16, fontWeight: 800 }}>
+                  נשאר להפקיד: <span style={{ fontSize: 20 }}>₪{remaining.toFixed(2)}</span>
+                </div>
+              )}
+              {isOver && (
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#fecaca' }}>
+                  ⚠️ עודף בספירה: ₪{Math.abs(remaining).toFixed(2)} — בדוק
+                </div>
+              )}
+            </div>
+            <div style={{ width: '100%', height: 8, background: 'rgba(255,255,255,0.2)', borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ width: `${progress}%`, height: '100%', background: '#fff', transition: 'width 0.3s ease' }} />
             </div>
           </div>
         </div>
 
-        <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid #f1f5f9', padding: '14px 16px', display: 'flex', justifyContent: 'flex-end' }}>
+        {/* Body — denomination counters */}
+        <div style={{ padding: 16, flex: 1 }}>
+          <DenomCounter denoms={BILL_DENOMS_DEPOSIT} counts={billCounts} setCounts={setBillCounts} label="שטרות" kind="bill" />
+          <DenomCounter denoms={COIN_DENOMS_DEPOSIT} counts={coinCounts} setCounts={setCoinCounts} label="מטבעות" kind="coin" />
+        </div>
+
+        {/* Sticky bottom close */}
+        <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid #f1f5f9', padding: '14px 16px', display: 'flex', justifyContent: 'flex-end', zIndex: 10 }}>
           <button onClick={onClose}
             style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: 'pointer', minHeight: 56 }}>
             סגור
