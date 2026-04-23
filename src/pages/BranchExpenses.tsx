@@ -29,7 +29,13 @@ interface Entry {
   from_factory: boolean
 }
 
-interface Supplier { id: number; name: string }
+interface Supplier {
+  id: number
+  name: string
+  scope?: 'factory' | 'branch' | 'shared'
+  branch_id?: number | null
+  category?: string | null
+}
 
 const TYPE_CONFIG: Record<ExpenseType, { label: string; color: string; bg: string }> = {
   suppliers:      { label: 'ספקים / מלאי',  color: '#818cf8', bg: '#e0e7ff' },
@@ -104,8 +110,14 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
   }
 
   async function fetchSuppliers() {
-    const { data } = await supabase.from('suppliers').select('id,name').order('name')
-    if (data) setSuppliers(data)
+    const { data, error } = await supabase
+      .from('suppliers_new')
+      .select('id, name, scope, branch_id, category')
+      .or(`scope.eq.shared,and(scope.eq.branch,branch_id.eq.${branchId})`)
+      .eq('active', true)
+      .order('name')
+    if (error) { console.error('[BranchExpenses fetchSuppliers] error:', error); return }
+    if (data) setSuppliers(data as Supplier[])
   }
 
   async function fetchBranchNames() {

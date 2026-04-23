@@ -140,8 +140,20 @@ export default function SuppliersReport({ onBack, hideHeader }: Props) {
 
   // ─── Data loading ───────────────────────────────────────────────────────────
   async function loadUnified() {
-    const { data } = await supabase.from('unified_suppliers').select('*').order('canonical_name')
-    setUnified((data || []) as UnifiedSupplier[])
+    // Phase B: קוראים ישירות מ-suppliers_new (המקור הקנוני החדש).
+    // aliases[] לא רלוונטי יותר — כל ספק הוא כבר unified.
+    const { data } = await supabase.from('suppliers_new')
+      .select('id, name, scope, branch_id, category, active, notes')
+      .order('name')
+    const mapped = (data || []).map((s: any) => ({
+      id: s.id,
+      canonical_name: s.name,
+      aliases: [],
+      category: s.category,
+      notes: s.notes,
+      active: s.active,
+    })) as UnifiedSupplier[]
+    setUnified(mapped)
   }
 
   async function loadInvoices(periodFrom: string, periodTo: string): Promise<Invoice[]> {
@@ -201,11 +213,21 @@ export default function SuppliersReport({ onBack, hideHeader }: Props) {
     setLoading(true)
     const prev = prevPeriod(from, to)
     const [u, inv, prevInv] = await Promise.all([
-      supabase.from('unified_suppliers').select('*').order('canonical_name'),
+      supabase.from('suppliers_new')
+        .select('id, name, scope, branch_id, category, active, notes')
+        .order('name'),
       loadInvoices(from, to),
       loadInvoices(prev.from, prev.to),
     ])
-    setUnified(((u.data || []) as UnifiedSupplier[]))
+    const mappedU: UnifiedSupplier[] = (u.data || []).map((s: any) => ({
+      id: s.id,
+      canonical_name: s.name,
+      aliases: [],
+      category: s.category,
+      notes: s.notes,
+      active: s.active,
+    }))
+    setUnified(mappedU)
     setInvoices(inv)
     setPrevInvoices(prevInv)
     setLoading(false)
@@ -668,14 +690,13 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
         clusterMap.set(root, arr)
       }
 
-      // Step 3: create unified_suppliers rows
+      // Step 3: create suppliers_new rows (Phase B — aliases[] לא נשמר יותר, כל ספק עצמאי)
       const existingCanonicalNorms = new Set(unified.map(u => normalizeName(u.canonical_name)))
       const clustersOut: AnalysisResult['clusters'] = []
       const toInsert: Array<{ canonical_name: string; aliases: string[]; active: boolean }> = []
       for (const members of clusterMap.values()) {
         if (members.length === 0) continue
         const info = members.map(m => ({ norm: m, display: displayBy.get(m)!, count: counts.get(m) || 0 }))
-        // Choose canonical: most frequent (with longer name as tie-breaker)
         info.sort((a, b) => (b.count - a.count) || (b.display.length - a.display.length))
         const canonical = info[0].display
         const aliases = info.slice(1).map(m => m.display)
@@ -687,15 +708,18 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
       }
       clustersOut.sort((a, b) => b.totalCount - a.totalCount)
 
-      // Insert one-by-one so a single UNIQUE conflict doesn't fail the whole batch
+      // Insert ל-suppliers_new: scope='shared' (שייך לדוח הניהולי, לא לסניף ספציפי)
       let createdCount = 0, skippedCount = 0
       const errors: string[] = []
       for (const row of toInsert) {
-        const { error } = await supabase.from('unified_suppliers').insert(row)
+        const { error } = await supabase.from('suppliers_new').insert({
+          name: row.canonical_name,
+          scope: 'shared',
+          branch_id: null,
+          active: row.active,
+        })
         if (error) {
           skippedCount++
-          // unique-violation on canonical_name is expected if the same batch inserted
-          // the same canonical elsewhere; ignore it but surface other failures.
           if (!/duplicate|unique/i.test(error.message)) errors.push(`${row.canonical_name}: ${error.message}`)
         } else {
           createdCount++
@@ -709,24 +733,20 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
     }
   }
 
+  // Phase B: aliases לא נשמר יותר ב-suppliers_new. ה-merge מתנוון בפונקציה ריקה (UI אולי ישים לב).
   async function mergeIntoExisting(unifiedId: number, rawName: string) {
-    const u = unified.find(x => x.id === unifiedId)
-    if (!u) return
-    const aliases = [...(u.aliases || []), rawName.trim()]
-    const dedup = [...new Set(aliases.filter(Boolean))]
-    const { error } = await supabase.from('unified_suppliers').update({ aliases: dedup }).eq('id', unifiedId)
-    if (error) {
-      console.error('[SuppliersReport mergeIntoExisting] error:', error)
-      alert(`איחוד הספק נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
-      return
-    }
+    // No-op: aliases deprecated in Phase B. רשומות ספקים ב-suppliers_new הן עצמאיות.
+    console.info('[SuppliersReport mergeIntoExisting] aliases deprecated (Phase B) — no DB change', { unifiedId, rawName })
     await onRefresh()
   }
 
   async function createUnifiedFromRaw(rawName: string) {
     if (!rawName.trim()) return
-    const { error } = await supabase.from('unified_suppliers').insert({
-      canonical_name: rawName.trim(), aliases: [], active: true,
+    const { error } = await supabase.from('suppliers_new').insert({
+      name: rawName.trim(),
+      scope: 'shared',
+      branch_id: null,
+      active: true,
     })
     if (error) { alert('שגיאה: ' + error.message); return }
     await onRefresh()
@@ -734,10 +754,12 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
 
   async function createUnifiedExplicit() {
     if (!newCanonical.trim()) return
-    const { error } = await supabase.from('unified_suppliers').insert({
-      canonical_name: newCanonical.trim(),
+    const { error } = await supabase.from('suppliers_new').insert({
+      name: newCanonical.trim(),
       category: newCategory.trim() || null,
-      aliases: [], active: true,
+      scope: 'shared',
+      branch_id: null,
+      active: true,
     })
     if (error) { alert('שגיאה: ' + error.message); return }
     setNewCanonical(''); setNewCategory('')
@@ -745,15 +767,14 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
   }
 
   async function saveEdit(id: number) {
-    const aliases = editDraft.aliases.split(',').map(s => s.trim()).filter(Boolean)
-    const { error } = await supabase.from('unified_suppliers').update({
-      canonical_name: editDraft.canonical.trim(),
-      aliases,
+    // Phase B: aliases לא נשמר. שומרים רק name + category.
+    const { error } = await supabase.from('suppliers_new').update({
+      name: editDraft.canonical.trim(),
       category: editDraft.category.trim() || null,
     }).eq('id', id)
     if (error) {
       console.error('[SuppliersReport saveEdit] error:', error)
-      alert(`עדכון פרטי ספק מאוחד נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      alert(`עדכון פרטי ספק נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
       return
     }
     setEditingId(null)
@@ -762,7 +783,7 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
 
   async function deleteUnified(id: number) {
     if (!confirm('למחוק ספק מאוחד זה? (החשבוניות עצמן לא יושפעו)')) return
-    const { error } = await supabase.from('unified_suppliers').delete().eq('id', id)
+    const { error } = await supabase.from('suppliers_new').delete().eq('id', id)
     if (error) {
       console.error('[SuppliersReport deleteUnified] error:', error)
       alert(`מחיקת ספק מאוחד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)

@@ -19,6 +19,8 @@ interface Supplier {
   category: string | null
   notes: string | null
   active: boolean
+  scope: 'factory' | 'branch' | 'shared'
+  branch_id: number | null
 }
 
 const CATEGORIES = ['מזון', 'אריזה', 'ניקיון', 'ציוד', 'תשתיות', 'שונות']
@@ -41,9 +43,14 @@ export default function BranchSuppliers({ branchId, branchName, branchColor, onB
 
   async function fetchSuppliers() {
     setLoading(true)
-    const { data } = await supabase.from('branch_suppliers').select('*')
-      .eq('branch_id', branchId).order('active', { ascending: false }).order('name')
-    if (data) setSuppliers(data)
+    const { data, error } = await supabase
+      .from('suppliers_new')
+      .select('*')
+      .or(`scope.eq.shared,and(scope.eq.branch,branch_id.eq.${branchId})`)
+      .order('active', { ascending: false })
+      .order('name')
+    if (error) { console.error('[BranchSuppliers fetchSuppliers] error:', error); setLoading(false); return }
+    if (data) setSuppliers(data as Supplier[])
     setLoading(false)
   }
 
@@ -51,18 +58,29 @@ export default function BranchSuppliers({ branchId, branchName, branchColor, onB
 
   async function save() {
     if (!formName.trim()) return
+
+    // חסימת עריכת ספק משותף מדף הסניף
+    if (editId) {
+      const existing = suppliers.find(s => s.id === editId)
+      if (existing?.scope === 'shared') {
+        alert('ספק משותף — עריכה אפשרית רק מדף ניהול ספקי המפעל')
+        return
+      }
+    }
+
     const payload = {
-      branch_id: branchId,
       name: formName.trim(),
       contact: formContact || null,
       phone: formPhone || null,
       category: formCat || null,
       notes: formNotes || null,
       active: true,
+      scope: 'branch' as const,
+      branch_id: branchId,
     }
     const { error } = editId
-      ? await supabase.from('branch_suppliers').update(payload).eq('id', editId)
-      : await supabase.from('branch_suppliers').insert(payload)
+      ? await supabase.from('suppliers_new').update(payload).eq('id', editId)
+      : await supabase.from('suppliers_new').insert(payload)
     if (error) {
       console.error('[BranchSuppliers save] error:', error)
       alert(`שמירת פרטי הספק נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
@@ -74,7 +92,12 @@ export default function BranchSuppliers({ branchId, branchName, branchColor, onB
   }
 
   async function toggleActive(id: number, current: boolean) {
-    const { error } = await supabase.from('branch_suppliers').update({ active: !current }).eq('id', id)
+    const existing = suppliers.find(s => s.id === id)
+    if (existing?.scope === 'shared') {
+      alert('ספק משותף — שינוי סטטוס אפשרי רק מדף ניהול ספקי המפעל')
+      return
+    }
+    const { error } = await supabase.from('suppliers_new').update({ active: !current }).eq('id', id)
     if (error) {
       console.error('[BranchSuppliers toggleActive] error:', error)
       alert(`שינוי סטטוס פעילות הספק נכשל: ${error.message || 'שגיאת מסד נתונים'}.`)
@@ -84,8 +107,13 @@ export default function BranchSuppliers({ branchId, branchName, branchColor, onB
   }
 
   async function deleteSup(id: number) {
+    const existing = suppliers.find(s => s.id === id)
+    if (existing?.scope === 'shared') {
+      alert('ספק משותף — מחיקה אפשרית רק מדף ניהול ספקי המפעל')
+      return
+    }
     if (!confirm('למחוק ספק?')) return
-    const { error } = await supabase.from('branch_suppliers').delete().eq('id', id)
+    const { error } = await supabase.from('suppliers_new').delete().eq('id', id)
     if (error) {
       console.error('[BranchSuppliers deleteSup] error:', error)
       alert(`מחיקת הספק נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
@@ -176,6 +204,9 @@ export default function BranchSuppliers({ branchId, branchName, branchColor, onB
                             {s.active ? <CheckCircle size={16} color="#34d399" /> : <XCircle size={16} color="#94a3b8" />}
                           </button>
                           <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>{s.name}</span>
+                          {s.scope === 'shared' && (
+                            <span style={{ fontSize: 11, background: '#dbeafe', color: '#1e40af', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>משותף</span>
+                          )}
                         </div>
                         {s.notes && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2, marginRight: 24 }}>{s.notes}</div>}
                       </div>

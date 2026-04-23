@@ -10,7 +10,22 @@ import {
 import PageHeader from '../components/PageHeader'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
-interface Supplier { id: number; name: string; created_at: string }
+// SupplierLegacy מייצג את הטבלה הישנה `suppliers` — עדיין נדרש לפתרון FK של supplier_invoices.
+interface SupplierLegacy { id: number; name: string; created_at: string }
+
+// SupplierNew מייצג את `suppliers_new` — המקור הקנוני החדש (Phase B).
+interface SupplierNew {
+  id: number
+  name: string
+  scope: 'factory' | 'branch' | 'shared'
+  branch_id: number | null
+  category: string | null
+  contact: string | null
+  phone: string | null
+  notes: string | null
+  active: boolean
+  created_at: string
+}
 
 interface Invoice {
   id: number
@@ -75,7 +90,10 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
 
   // ── מצב חשבוניות ──
   const [invoices, setInvoices]       = useState<Invoice[]>([])
-  const [suppliers, setSuppliers]     = useState<Supplier[]>([])
+  // suppliersLegacy — מהטבלה הישנה `suppliers`, משמש לפתרון FK של supplier_invoices.supplier_id.
+  const [suppliersLegacy, setSuppliersLegacy] = useState<SupplierLegacy[]>([])
+  // suppliers — מהטבלה החדשה `suppliers_new` (scope IN factory/shared), מקור לדרופדאון ורשימת הניהול.
+  const [suppliers, setSuppliers]     = useState<SupplierNew[]>([])
   const [searchInv, setSearchInv]     = useState('')
   const [editInvId, setEditInvId]     = useState<number | null>(null)
   const [editInvData, setEditInvData] = useState<Partial<Invoice>>({})
@@ -100,8 +118,18 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
 
   // ─── שליפות ─────────────────────────────────────────────────────────────
   async function fetchSuppliers() {
-    const { data } = await supabase.from('suppliers').select('*').order('name')
-    if (data) setSuppliers(data)
+    // suppliers_new (המקור הקנוני) — factory + shared, עבור הדף הזה
+    const { data, error } = await supabase
+      .from('suppliers_new')
+      .select('*')
+      .in('scope', ['factory', 'shared'])
+      .order('name')
+    if (error) { console.error('[Suppliers fetchSuppliers] error:', error); return }
+    if (data) setSuppliers(data as SupplierNew[])
+
+    // מקביל — הטבלה הישנה, נדרשת לצורך resolve של supplier_invoices.supplier_id
+    const { data: legacy } = await supabase.from('suppliers').select('id, name, created_at').order('name')
+    if (legacy) setSuppliersLegacy(legacy as SupplierLegacy[])
   }
 
   async function fetchInvoices() {
@@ -116,13 +144,16 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
   useEffect(() => { fetchSuppliers() }, [])
   useEffect(() => { fetchInvoices()  }, [from, to])
 
-  const supplierName = (id: number) => suppliers.find(s => s.id === id)?.name || '—'
+  // שם ספק לפי ID ישן (supplier_invoices.supplier_id → suppliers.id) — חייב לעבור דרך הטבלה הישנה
+  const supplierName = (id: number) => suppliersLegacy.find(s => s.id === id)?.name || '—'
+  // דרופדאון — מ-suppliers_new (המקור הקנוני)
   const supplierNames = suppliers.map(s => s.name)
 
   // ─── חשבוניות CRUD ───────────────────────────────────────────────────────
   async function addInvoice() {
     if (!invAmount || !invDate || !invSupplier) return
-    const sup = suppliers.find(s => s.name === invSupplier)
+    // supplier_invoices.supplier_id הוא FK ל-`suppliers` (הטבלה הישנה) — ניגש אליה לאחר dual-write.
+    const sup = suppliersLegacy.find(s => s.name === invSupplier)
     if (!sup) { alert('ספק לא נמצא — הוסף אותו תחילה בטאב ספקים'); return }
     setLoadingInv(true)
     const { error } = await supabase.from('supplier_invoices').insert({
@@ -155,7 +186,8 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
   async function saveInvoice(id: number) {
     let data: any = { ...editInvData }
     if (editInvData.supplier_id === undefined && (editInvData as any).supplier_name) {
-      const sup = suppliers.find(s => s.name === (editInvData as any).supplier_name)
+      // supplier_invoices.supplier_id → suppliers (legacy)
+      const sup = suppliersLegacy.find(s => s.name === (editInvData as any).supplier_name)
       if (sup) data.supplier_id = sup.id
       delete data.supplier_name
     }
@@ -170,40 +202,83 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
   }
 
   // ─── ספקים CRUD ──────────────────────────────────────────────────────────
+  // dual-write זמני: כל mutation על suppliers_new משוכפל ל-`suppliers` (legacy)
+  // כדי לשמור על FK של supplier_invoices. TODO: הסר ב-phase D אחרי FK migration.
   async function addSupplier() {
-    if (!newSuppName.trim()) return
+    const trimmed = newSuppName.trim()
+    if (!trimmed) return
     setLoadingSupp(true)
-    const { error } = await supabase.from('suppliers').insert({ name: newSuppName.trim() })
+
+    // 1. insert ל-suppliers_new (canonical, scope='factory')
+    const { error } = await supabase.from('suppliers_new').insert({
+      name: trimmed,
+      scope: 'factory',
+      branch_id: null,
+      active: true,
+    })
     if (error) {
       console.error('[Suppliers addSupplier] error:', error)
       alert(`הוספת ספק נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
       setLoadingSupp(false)
       return
     }
+
+    // 2. dual-write ל-suppliers (legacy) — TODO phase D: הסר
+    const { error: legacyErr } = await supabase.from('suppliers').insert({ name: trimmed })
+    if (legacyErr && !/duplicate|unique/i.test(legacyErr.message)) {
+      console.warn('[Suppliers addSupplier] dual-write to legacy suppliers failed:', legacyErr)
+    }
+
     setNewSuppName('')
     await fetchSuppliers()
     setLoadingSupp(false)
   }
 
   async function saveSupplier(id: number) {
-    const { error } = await supabase.from('suppliers').update({ name: editSuppName }).eq('id', id)
+    // שמור את השם הישן כדי לעדכן את הטבלה הישנה לפי שם
+    const oldName = suppliers.find(s => s.id === id)?.name
+    const newName = editSuppName.trim()
+    if (!newName) return
+
+    const { error } = await supabase.from('suppliers_new').update({ name: newName }).eq('id', id)
     if (error) {
       console.error('[Suppliers saveSupplier] error:', error)
       alert(`עדכון פרטי ספק נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
       return
     }
+
+    // dual-write: עדכון ב-suppliers (legacy) לפי שם. TODO phase D: הסר.
+    if (oldName && oldName !== newName) {
+      const { error: legacyErr } = await supabase.from('suppliers').update({ name: newName }).eq('name', oldName)
+      if (legacyErr) {
+        console.warn('[Suppliers saveSupplier] dual-write to legacy suppliers failed:', legacyErr)
+      }
+    }
+
     setEditSuppId(null)
     await fetchSuppliers()
   }
 
   async function deleteSupplier(id: number) {
     if (!confirm('למחוק ספק זה? חשבוניות קיימות לא יימחקו.')) return
-    const { error } = await supabase.from('suppliers').delete().eq('id', id)
+    const name = suppliers.find(s => s.id === id)?.name
+
+    const { error } = await supabase.from('suppliers_new').delete().eq('id', id)
     if (error) {
       console.error('[Suppliers deleteSupplier] error:', error)
       alert(`מחיקת הספק נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
       return
     }
+
+    // dual-write: מחיקה ב-suppliers (legacy) לפי שם — best-effort (FK ל-supplier_invoices עלול לחסום).
+    // TODO phase D: הסר.
+    if (name) {
+      const { error: legacyErr } = await supabase.from('suppliers').delete().eq('name', name)
+      if (legacyErr) {
+        console.warn('[Suppliers deleteSupplier] dual-write delete of legacy suppliers failed (likely FK from invoices):', legacyErr)
+      }
+    }
+
     await fetchSuppliers()
   }
 
@@ -214,10 +289,17 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
   })
   const totalInv = filteredInv.reduce((s, i) => s + Number(i.amount), 0)
 
-  const bySupplier = suppliers.map(s => ({
-    name: s.name,
-    total: filteredInv.filter(i => i.supplier_id === s.id).reduce((a, i) => a + Number(i.amount), 0)
-  })).filter(s => s.total > 0).sort((a, b) => b.total - a.total)
+  // חשבוניות קשורות דרך legacy supplier_id — נגשר דרך שם הספק (dual-write מבטיח תאום שמות).
+  const legacyIdByName = new Map(suppliersLegacy.map(s => [s.name, s.id]))
+  const bySupplier = suppliers.map(s => {
+    const legacyId = legacyIdByName.get(s.name)
+    return {
+      name: s.name,
+      total: legacyId === undefined
+        ? 0
+        : filteredInv.filter(i => i.supplier_id === legacyId).reduce((a, i) => a + Number(i.amount), 0),
+    }
+  }).filter(s => s.total > 0).sort((a, b) => b.total - a.total)
 
   const filteredSupp = suppliers.filter(s =>
     !searchSupp || s.name.toLowerCase().includes(searchSupp.toLowerCase())
@@ -414,7 +496,11 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
                 {filteredSupp.length === 0 ? (
                   <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>אין ספקים</div>
                 ) : filteredSupp.map((sup, i) => {
-                  const monthTotal = invoices.filter(inv => inv.supplier_id === sup.id).reduce((a, inv) => a + Number(inv.amount), 0)
+                  // חשבוניות דרך legacy id לפי שם (dual-write)
+                  const legacyId = legacyIdByName.get(sup.name)
+                  const monthTotal = legacyId === undefined
+                    ? 0
+                    : invoices.filter(inv => inv.supplier_id === legacyId).reduce((a, inv) => a + Number(inv.amount), 0)
                   return (
                     <div key={sup.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 36px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid #f8fafc' }}>
                       {editSuppId === sup.id ? (
