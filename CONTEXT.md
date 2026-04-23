@@ -233,11 +233,35 @@ martin-bakery/
 | production_pct | NUMERIC | יעד ייצור % |
 | operating_profit_pct | NUMERIC | יעד רווח תפעולי % |
 
-### suppliers — ספקים (מפעל)
+### suppliers — ספקים (מפעל, legacy)
 | שדה | טיפוס | תיאור |
 |-----|--------|--------|
 | id | SERIAL PK | |
 | name | TEXT | שם ספק |
+
+**סטטוס (2026-04-23):** deprecated — שכבת compat בלבד. ה-FK של `supplier_invoices.supplier_id` עדיין מצביע לכאן, לכן dual-write ב-`Suppliers.tsx` שומר שם סנכרון. `branch_suppliers` ו-`unified_suppliers` גם הם legacy. מקור הנתונים הקנוני = `suppliers_new`. מחיקה תבוא בשלב D לאחר FK migration.
+
+### suppliers_new — טבלת ספקים מאוחדת (canonical, Phase A+B 2026-04-23)
+| שדה | טיפוס | תיאור |
+|-----|--------|--------|
+| id | SERIAL PK | |
+| name | TEXT NOT NULL | שם ספק |
+| scope | TEXT CHECK | `factory` / `branch` / `shared` |
+| branch_id | INT FK branches(id), NULL | חובה כש-`scope='branch'`, NULL אחרת (CHECK constraint) |
+| category | TEXT | מזון/ניקיון/... (ערכי חופש) |
+| contact | TEXT | |
+| phone | TEXT | |
+| notes | TEXT | |
+| active | BOOLEAN DEFAULT TRUE | |
+| created_at | TIMESTAMPTZ | |
+
+Constraints:
+- `branch_scope_requires_branch_id` — scope='branch' ↔ branch_id IS NOT NULL.
+- `unique_supplier_per_scope` — UNIQUE (name, scope, branch_id).
+
+RLS: admin=ALL, factory=SELECT WHERE scope IN (factory,shared), branch=SELECT WHERE scope='shared' OR (scope='branch' AND branch_id=own).
+
+סיכום נתונים לאחר הרצה + תיקונים ידניים: 50 רשומות — 23 factory + 18 branch + 9 shared.
 
 ### employees — עובדים גלובליים (שכר גלובלי)
 | שדה | טיפוס | תיאור |
@@ -774,6 +798,28 @@ martin-bakery/
    - **§4.3 — חידוד policies קיימות**: `branch_kpi_targets` (הוסר FOR ALL authenticated), `system_settings` (WRITE רק admin — חזרה ל-008), `branch_employees` (WRITE מסונן; SELECT נשאר פתוח — שלב 2), `branch_messages` + `message_reads` (תיקון role 'employee' נשען על `app_users.branch_id` מ-008, סינון `branch_id`).
    - כל FOR ALL כולל `WITH CHECK` למניעת UPDATE שמעביר שורה בין סניפים. הסקריפט אידמפוטנטי וטרנזקציוני.
 
+17. **תיקונים בדף סגירת קופות — 2026-04-23** — 4 תיקוני UI ב-`src/pages/RegisterClosings.tsx` (ללא migration):
+   - **עיגול לשתי ספרות** — כרטיסיות הסיכום העליונות + Kpi component (641-652) עברו מ-`fmt` ל-`fmtDec`. כל הסכומים בדף מציגים עכשיו ₪X.XX.
+   - **כפתור "חישוב הפקדה"** — מתחת לכרטיסיות הסיכום. פותח `DepositCalculator` (dialog עם sticky header סגול). תומך בשטרות 200/100/50/20/10 ומטבעות 10/5/2/1/0.5/0.1. 3 מצבים: "תואם" (ירוק), "נשאר להפקיד ₪X.XX" (כתום), "עודף בספירה — בדוק" (אדום). כולל progress bar.
+   - **אזהרה על פער > ₪50** — בשלב 3 (ספירת מזומן). אם `|variance| > 50` מופיעה אזהרה צהובה לא-חוסמת עם 2 כפתורים: "ספור שנית" (מאפס `billCounts`/`coinCounts`/`actualCashManual`) ו"הבנתי, ממשיך". כפתור "הבא" `disabled` עד אישור. אישור מתאפס אוטומטית כש-`countedCash` משתנה (useEffect).
+   - **האחדת "הפרש/פער"** — קומפוננטה חדשה `VarianceDisplay` מחליפה את `Kpi` בכל מקום שהציג "פער"/"הפרש" (wizard שלב 3+4, OverallCount, כרטיסיית סיכום יומי). ניסוח אחיד: "תואם"/"עודף ₪X.XX"/"חוסר ₪X.XX". הוסר באג של שתי נוסחאות שונות בשלב 3 (header השתמש ב-`countedCash - cash` לעומת KPI grid שהשתמש ב-`countedCash - (opening + cash)`) — נשארה הנכונה בלבד.
+   - **באג floating-point** — `next_opening_balance` נשמר ל-DB בלי עיגול, נטען כ-`207.30000000000018`. נוסף `Math.round(x*100)/100` בטעינה (184-202), ב-`defaultNextOpening` (213), וב-saveClosing (267-270).
+
+18. **הסתרת שכר מנהלי מפעל — 2026-04-23** — תמיר רוזנברג (בצקים) ונאור אורן (קרמים) הם מנהלי מחלקות ב-`employees.wage_type='global'`. הדף `Labor.tsx` חשף את שכרם לכל משתמש.
+   - **Migration 026** (`sql/026_employees_is_manager.sql`) — עמודה `is_manager BOOLEAN DEFAULT FALSE` ב-`employees` + UPDATE ל-4 ווריאציות שם ('נאור אורן'/'אורן נאור'/'תמיר רוזנברג'/'רוזנברג תמיר') + אינדקס חלקי.
+   - **`shouldHideSalary` חדש ב-Labor.tsx** — 3 שכבות הגנה: (א) `emp.is_manager === true`, (ב) `isManagerByName(labor.employee_name)` לטיפול באי-התאמת שמות, (ג) `isManagerByName(emp.name)` לפני הרצת המיגרציה. admin תמיד רואה הכל.
+   - **4 נקודות הפעלה** — upload rows (547, 564, 580), history row (750 — המקרה הקריטי), + טאב "עובדים" (816, 823) — חדש, השכר/בונוס מוסתרים.
+   - **סך-כל החודש נשאר מלא** — `totalCostAll`/`dayCost` מחושבים ישירות מ-`historyData` הגולמי, לא תלויים בתצוגת השורות.
+
+19. **איחוד ספקים לטבלה אחת — 2026-04-23 (שלב A+B)** — היו 3 טבלאות ספקים (`suppliers` 26, `branch_suppliers` 27, `unified_suppliers` 34) + TEXT חופשי ב-`branch_expenses.supplier`. dropdown ב-BranchExpenses שאב רק מ-`suppliers` (מפעל) — הסניפים לא ראו ספקים ייעודיים. החלטה: טבלה אחת עם `scope`.
+   - **שלב A — Migration 027** (`sql/027_unified_suppliers_migration.sql`) — יצירת `suppliers_new` (ראה חלק "טבלאות Supabase"). העברה + איחוד אוטומטי של כפילויות: 26 מ-suppliers → 23 factory + 3 shared (אופיס 2000, עולם הכלים, תבליני פארן); 27 מ-branch_suppliers → 18 branch + כפילויות שזוהו אוטומטית הועברו ל-shared. aliases ידניים ("ליאם אריזות", "מונייר"). דילוג על "מפעל ייצור" (legacy). לאחר תיקונים ידניים (UPDATE על `branch_expenses.supplier` לנרמול שמות: "לחם הבלקן", "הפנתר הורוד", "מונייר פוד דיזיין", "טרה"; הוספת "אגרו"/"דני וגלית" לסניף 3; העברת "בית הבגט" ל-shared; איחוד "ליאם אריזות") — מצב סופי: **50 ספקים = 23 factory + 18 branch + 9 shared**.
+   - **שלב B — עדכון 4 דפים** (`src/pages/`):
+     - **BranchExpenses** — `fetchSuppliers` עובר ל-`suppliers_new` עם `.or('scope.eq.shared,and(scope.eq.branch,branch_id.eq.X)')`. סוף סוף כל סניף רואה את שלו + shared.
+     - **BranchSuppliers** — CRUD על `suppliers_new` עם scope='branch'. ספקי shared חסומים לעריכה/מחיקה מדף הסניף (alert). badge כחול "משותף" בתצוגה.
+     - **Suppliers** (factory) — CRUD על `suppliers_new` עם scope='factory' + **dual-write ל-suppliers הישנה** (INSERT/UPDATE/DELETE) לשמירת FK של `supplier_invoices.supplier_id`. TODO ברור להסרה בשלב D. ה-invoice flow ממשיך לעבוד דרך `suppliersLegacy` state נפרד.
+     - **SuppliersReport** — קורא מ-`suppliers_new` (לא יותר `unified_suppliers`). `aliases[]` deprecated בקוד ובהתנהגות. ה-UI של "הרץ ניתוח" עדיין קיים אבל מכניס ל-`suppliers_new` עם `scope='shared'`.
+   - **שלב D פתוח** — מחיקת 3 הטבלאות הישנות + FK migration ב-supplier_invoices + הסרת dual-write. **לקחת רק לאחר 1-2 ימי שימוש מאששים.**
+
 ---
 
 ## פיצ'רים פתוחים
@@ -792,6 +838,12 @@ martin-bakery/
 5. **טבלת `employer_costs` ריקה לחלוטין לאפריל 2026** — ייתכן שההעלאה נכשלה בגלל הבאגים הידועים ב-EmployerCostsUpload (race condition, `is_manager` חסר, שדה מחלקת מפעל חסר בטופס עובד חדש). דחוף לתקן ולנסות להעלות שוב.
 
 6. **מכירות חיצוניות של המפעל לאפריל 2026 הן 1,120₪ בלבד** (מ-`factory_b2b_sales`). לאמת מול העסק האם אין באמת מכירות חיצוניות, או שיש ולא הוזנו.
+
+7. **"מפעל ייצור" ב-branch_expenses** — 349 רשומות ב-3 הסניפים, סה"כ ₪906,497. זהו legacy מהתקופה שלפני המעבר ל-`internal_sales`. דורש הצלבה מול `internal_sales` לזהות כפילות לפני מחיקה/מיזוג. לא טופל 2026-04-23.
+
+8. **"לא צוין" ב-branch_expenses** — 18 רשומות ב-2 סניפים, סה"כ ₪35,169. data quality issue — רשומות ללא ספק שזוהה. צריך להשלים ידנית או לסגור את הסיווג כ-"אחר". לא טופל 2026-04-23.
+
+9. **שלב D לאיחוד ספקים** — מחיקת 3 הטבלאות הישנות (`suppliers`, `branch_suppliers`, `unified_suppliers`) + FK migration ב-`supplier_invoices.supplier_id` (מ-`suppliers.id` ל-`suppliers_new.id`) + הסרת dual-write ב-`Suppliers.tsx`. דורש 1-2 ימי ייצוב לפני ביצוע.
 
 ---
 
@@ -817,6 +869,10 @@ martin-bakery/
 
 10. **שכר מנהלים בסמכות `employer_costs` בלבד** — השכר מחושב ב-`calculateBranchPL` לפי `is_manager=true` ב-`employer_costs` (עם fallback לחודש האחרון שיש בו). אין להזין שכר מנהלים ב-`fixed_costs` (הוסר 2026-04-20). כפילות שכר מנהלים עלולה להיווצר שוב אם מזינים ידנית ב-BranchSettings שם כמו "שכר מנהל" — זה נכנס לעלויות הקבועות.
 
+11. **איחוד ספקים עם scope (2026-04-23)** — `suppliers_new` היא הטבלה הקנונית לכל ניהול הספקים. העמודה `scope IN (factory, branch, shared)` קובעת איזה dropdowns יציגו כל רשומה: ספק factory נראה רק לניהול מפעל; branch רק לסניף שלו; shared לכולם. ה-UNIQUE constraint על `(name, scope, branch_id)` + RLS policies מחליפים את 3 הטבלאות הישנות. ה-FK של `supplier_invoices.supplier_id` עדיין מצביע ל-`suppliers` הישנה — dual-write זמני ב-`Suppliers.tsx` (TODO phase D). הטבלאות `suppliers`/`branch_suppliers`/`unified_suppliers` נשארות לזמן-ייצוב ואז יימחקו.
+
+12. **הסתרת שכר מנהלים במפעל (2026-04-23)** — `employees.is_manager=TRUE` מסמן מנהלי מחלקה (תמיר/נאור). `shouldHideSalary` ב-`Labor.tsx` בודק את הדגל + 2 fallbacks לפי שם (לטיפול באי-התאמה בין `labor.employee_name` ל-`employees.name`). admin תמיד רואה הכל. הסך-כל של החודש נשאר מלא — רק פירוט השורה מוסתר. הלוגיקה יכולה להתרחב למנהלים נוספים פשוט ב-`UPDATE employees SET is_manager=TRUE WHERE name=...`.
+
 ---
 
 ## הערות לשיחה הבאה
@@ -825,6 +881,9 @@ martin-bakery/
   1. **אימות ידני של שלב 1** — להיכנס עם branch user (אבי חורב / avi29030@gmail.com) ועם factory user (נאור / naor2708@gmail.com) לוודא שהמערכת לא שבורה ושהסינון לפי role עובד בפועל (branch רואה רק סניף שלו, factory רואה רק מפעל + `is_internal` שלו).
   2. **VIEW `branch_employees_safe`** — ליצור VIEW שחושף את כל העמודות של `branch_employees` *חוץ מ-*`hourly_rate` ו-`retention_bonus`. להדק את ה-SELECT policy על `branch_employees` עצמה (כרגע פתוח ל-interim). להחליף את כל ה-frontend-reads שצריך מ-safe במקום מהטבלה.
   3. **שלב 2 של התוכנית (§4.2)** — `daily_production`, `factory_repairs`, `factory_waste`, `kpi_targets`, `packaging_products` לפי `sql/rls_migration_plan.md`.
+- **שלב D לאיחוד ספקים** — לקחת רק לאחר 1-2 ימי שימוש מאששים שהכל עובד נקי. כולל: מחיקת 3 הטבלאות הישנות, FK migration של `supplier_invoices`, הסרת dual-write ב-`Suppliers.tsx`.
+- **חקירה של "מפעל ייצור" ב-branch_expenses** — 349 רשומות ₪906,497. הצלבה עם `internal_sales` לפני מחיקה/מיזוג.
+- **בדיקות ידניות של שלב B לאיחוד ספקים** — שברירי. רק dropdown בסניף הפועלים אומת ✅. יש לבדוק: branch users בסניפים 1 ו-3, admin בכל 4 הדפים (BranchExpenses/BranchSuppliers/Suppliers/SuppliersReport), וודא שהוספת ספק חדש ב-factory עושה dual-write נקי.
 - **עדיפות 1**: לתקן את EmployerCostsUpload (3 באגים ידועים) ולהעלות עלויות מעסיק לאפריל 2026.
 - **עדיפות 2**: להבין למה אין נתוני לייבור מפעל בטבלת `labor`. לבדוק אם זו בעיית הזנה או שיש מנגנון נפרד שלא עובד.
 - **עדיפות 3**: לוודא מול העסק האם יש הכנסות חיצוניות של המפעל שלא נרשמות (B2B/אירועים/קייטרינג).
