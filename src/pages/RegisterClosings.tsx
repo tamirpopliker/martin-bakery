@@ -668,8 +668,8 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
 
 function Kpi({ label, value, color, sub, emphasis, showSign }: { label: string; value: number; color: string; sub?: string; emphasis?: boolean; showSign?: boolean }) {
   const text = showSign
-    ? (value > 0 ? '+' : value < 0 ? '−' : '') + '₪' + Math.abs(value).toFixed(2).replace(/\.00$/, '')
-    : fmt(value)
+    ? (value > 0 ? '+' : value < 0 ? '−' : '') + '₪' + Math.abs(value).toFixed(2)
+    : fmtDec(value)
   return (
     <div style={{ padding: 12, background: emphasis ? '#ecfdf5' : '#f8fafc', borderRadius: 12, border: emphasis ? '1.5px solid #a7f3d0' : '1px solid #f1f5f9' }}>
       <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700 }}>{label}</div>
@@ -711,7 +711,7 @@ function OverallCount({ totalExpectedCash, onClose }: { totalExpectedCash: numbe
         <div style={{ position: 'sticky', top: 0, background: 'white', padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 900, color: '#0f172a' }}>ספירה כוללת</div>
-            <div style={{ fontSize: 13, color: '#94a3b8', fontWeight: 600 }}>סכום צפוי: {fmt(totalExpectedCash)}</div>
+            <div style={{ fontSize: 13, color: '#94a3b8', fontWeight: 600 }}>סכום צפוי: {fmtDec(totalExpectedCash)}</div>
           </div>
           <button onClick={onClose}
             style={{ width: 44, height: 44, background: '#f8fafc', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -816,7 +816,7 @@ function ActivateDialog({ branchId, registerNumber, fundBalance, onClose, onSave
         <div style={{ padding: 20 }}>
           <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 12, padding: 14, marginBottom: 16 }}>
             <div style={{ fontSize: 13, color: '#4338ca', fontWeight: 700 }}>
-              יתרת קופת עודף: <strong>{fmt(fundBalance)}</strong>
+              יתרת קופת עודף: <strong>{fmtDec(fundBalance)}</strong>
             </div>
           </div>
           <label style={{ fontSize: 14, fontWeight: 700, color: '#334155', marginBottom: 8, display: 'block' }}>
@@ -914,7 +914,7 @@ function EmptyDialog({ branchId, registerNumber, openingAmount, fundBalance, onC
         <div style={{ padding: 20 }}>
           <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 12, padding: 16, marginBottom: 16 }}>
             <div style={{ fontSize: 13, color: '#6d28d9', fontWeight: 700, marginBottom: 4 }}>יתרת פתיחה נוכחית</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: '#4c1d95' }}>{fmt(openingAmount)}</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: '#4c1d95' }}>{fmtDec(openingAmount)}</div>
             <div style={{ fontSize: 11, color: '#6d28d9', marginTop: 4 }}>
               {openingAmount > 0 ? 'מהסגירה האחרונה' : 'אין יתרה — הקופה כבר ריקה'}
             </div>
@@ -1216,8 +1216,8 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
                         {isClosedToday && closing && (
                           <>
                             <div style={{ fontSize: 13, color: '#065f46', fontWeight: 600, marginBottom: 8 }}>
-                              מזומן: {fmt(Number(closing.cash_sales))}<br />
-                              פער: {fmt(Number(closing.variance))}
+                              מזומן: {fmtDec(Number(closing.cash_sales))}<br />
+                              פער: {fmtDec(Number(closing.variance))}
                             </div>
                             <div style={{ display: 'flex', gap: 6 }}>
                               <button onClick={() => setEditClosing(closing)}
@@ -1247,7 +1247,7 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
                               סגור קופה
                             </button>
                             <button onClick={() => setEmptyingReg(r)}
-                              title={last ? `יתרת פתיחה נוכחית: ${fmt(Number(last.next_opening_balance))}` : ''}
+                              title={last ? `יתרת פתיחה נוכחית: ${fmtDec(Number(last.next_opening_balance))}` : ''}
                               style={{ width: '100%', background: 'white', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '7px', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                               <Archive size={12} /> רוקן קופה
                             </button>
@@ -1311,18 +1311,18 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
                       <tr key={c.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                         <td style={{ padding: '10px 10px', whiteSpace: 'nowrap' }}>{new Date(c.date + 'T12:00:00').toLocaleDateString('he-IL')}</td>
                         <td style={{ padding: '10px 10px', fontWeight: 800 }}>{c.register_number}</td>
-                        <td style={{ padding: '10px 10px' }}>{fmt(Number(c.opening_balance))}</td>
-                        <td style={{ padding: '10px 10px', color: '#10b981', fontWeight: 700 }}>{fmt(Number(c.cash_sales))}</td>
-                        <td style={{ padding: '10px 10px', color: '#3b82f6', fontWeight: 700 }}>{fmt(Number(c.credit_sales))}</td>
+                        <td style={{ padding: '10px 10px' }}>{fmtDec(Number(c.opening_balance))}</td>
+                        <td style={{ padding: '10px 10px', color: '#10b981', fontWeight: 700 }}>{fmtDec(Number(c.cash_sales))}</td>
+                        <td style={{ padding: '10px 10px', color: '#3b82f6', fontWeight: 700 }}>{fmtDec(Number(c.credit_sales))}</td>
                         <td style={{ padding: '10px 10px', color: '#64748b' }}>{c.transaction_count || '—'}</td>
-                        <td style={{ padding: '10px 10px' }}>{fmt(Number(c.actual_cash))}</td>
+                        <td style={{ padding: '10px 10px' }}>{fmtDec(Number(c.actual_cash))}</td>
                         <td style={{ padding: '10px 10px', color: Math.abs(Number(c.variance)) < 0.01 ? '#059669' : Number(c.variance) > 0 ? '#f59e0b' : '#dc2626', fontWeight: 800 }}>
-                          {Number(c.variance) > 0 ? '+' : ''}{fmt(Number(c.variance))}
+                          {Number(c.variance) > 0 ? '+' : ''}{fmtDec(Number(c.variance))}
                         </td>
                         <td style={{ padding: '10px 10px', fontSize: 11, color: '#64748b' }}>
                           {c.variance_action === 'surplus_fund' ? 'קופת עודף' : c.variance_action === 'documented' ? 'מתועד' : c.variance_action === 'kept' ? 'הושאר' : '—'}
                         </td>
-                        <td style={{ padding: '10px 10px' }}>{fmt(Number(c.next_opening_balance))}</td>
+                        <td style={{ padding: '10px 10px' }}>{fmtDec(Number(c.next_opening_balance))}</td>
                         <td style={{ padding: '10px 6px' }}>
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button onClick={() => setEditClosing(c)}
