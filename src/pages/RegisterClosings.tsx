@@ -179,6 +179,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
   )
   const [notes, setNotes] = useState(existing?.notes || '')
   const [saving, setSaving] = useState(false)
+  const [largeVarianceAcknowledged, setLargeVarianceAcknowledged] = useState(false)
 
   // Load previous closing's next_opening_balance as default (only in create mode)
   useEffect(() => {
@@ -191,8 +192,12 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
         .lt('date', date)
         .order('date', { ascending: false })
         .limit(1)
-      if (data && data.length > 0) setOpeningBalance(String(data[0].next_opening_balance))
-      else setOpeningBalance('0')
+      if (data && data.length > 0) {
+        const rounded = Math.round(Number(data[0].next_opening_balance) * 100) / 100
+        setOpeningBalance(String(rounded))
+      } else {
+        setOpeningBalance('0')
+      }
       setPrevBalanceLoaded(true)
     })()
   }, [branchId, registerNumber, isEdit])
@@ -206,8 +211,12 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
   const credit = parseFloat(creditSales) || 0
   const expectedCash = opening + cash
   const depositToBag = cash
-  const defaultNextOpening = countedCash - cash
+  const defaultNextOpening = Math.round((countedCash - cash) * 100) / 100
   const variance = countedCash - expectedCash
+  const isLargeVariance = Math.abs(variance) > 50
+
+  // Reset large-variance acknowledgment when the count changes
+  useEffect(() => { setLargeVarianceAcknowledged(false) }, [countedCash])
 
   async function handleZPhoto(file: File) {
     setZPhotoError(''); setZPhotoParsing(true)
@@ -261,9 +270,9 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
         transaction_count: txCount ? parseInt(txCount) : 0,
         actual_cash: countedCash,
         deposit_amount: deposit,
-        variance,
+        variance: Math.round(variance * 100) / 100,
         variance_action: variance !== 0 ? varianceAction : null,
-        next_opening_balance: chosenNext,
+        next_opening_balance: Math.round(chosenNext * 100) / 100,
         notes: notes || null,
       }
 
@@ -449,36 +458,23 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
           {/* Step 3 — Cash count */}
           {step === 3 && (
             <motion.div variants={fadeIn} initial="hidden" animate="visible">
-              {(() => {
-                const target = cash
-                const diff = countedCash - target
-                const diffColor = Math.abs(diff) < 0.005 ? '#94a3b8' : diff > 0 ? '#34d399' : '#fb7185'
-                const fmtNum = (n: number) => '₪' + n.toLocaleString('he-IL', { minimumFractionDigits: n % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })
-                return (
-                  <div style={{ position: 'sticky', top: 86, zIndex: 1, background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', borderRadius: 16, padding: '20px 18px', marginBottom: 14, color: 'white', boxShadow: '0 6px 20px rgba(99,102,241,0.25)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gap: 10, alignItems: 'end' }}>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 12, opacity: 0.9, fontWeight: 700, marginBottom: 4 }}>נספר</div>
-                        <div style={{ fontSize: 32, fontWeight: 900, lineHeight: 1, letterSpacing: -0.5 }}>
-                          {fmtNum(countedCash)}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'center', background: '#1d4ed8', borderRadius: 12, padding: '10px 6px' }}>
-                        <div style={{ fontSize: 11, opacity: 0.9, fontWeight: 700, marginBottom: 4 }}>יעד</div>
-                        <div style={{ fontSize: 20, fontWeight: 900, lineHeight: 1 }}>
-                          {fmtNum(target)}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.14)', borderRadius: 12, padding: '10px 6px' }}>
-                        <div style={{ fontSize: 11, opacity: 0.9, fontWeight: 700, marginBottom: 4 }}>הפרש</div>
-                        <div style={{ fontSize: 20, fontWeight: 900, lineHeight: 1, color: diffColor }}>
-                          {diff > 0 ? '+' : diff < 0 ? '−' : ''}{fmtNum(Math.abs(diff)).replace('₪', '₪')}
-                        </div>
-                      </div>
+              <div style={{ position: 'sticky', top: 86, zIndex: 1, background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', borderRadius: 16, padding: '20px 18px', marginBottom: 14, color: 'white', boxShadow: '0 6px 20px rgba(99,102,241,0.25)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 10, alignItems: 'end' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 12, opacity: 0.9, fontWeight: 700, marginBottom: 4 }}>נספר</div>
+                    <div style={{ fontSize: 32, fontWeight: 900, lineHeight: 1, letterSpacing: -0.5 }}>
+                      ₪{countedCash.toFixed(2)}
                     </div>
                   </div>
-                )
-              })()}
+                  <div style={{ textAlign: 'center', background: '#1d4ed8', borderRadius: 12, padding: '10px 6px' }}>
+                    <div style={{ fontSize: 11, opacity: 0.9, fontWeight: 700, marginBottom: 4 }}>יעד</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, lineHeight: 1 }}>
+                      ₪{cash.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <DenomCounter denoms={BILL_DENOMS} counts={billCounts} setCounts={setBillCounts} label="שטרות" kind="bill" />
               <DenomCounter denoms={COIN_DENOMS} counts={coinCounts} setCounts={setCoinCounts} label="מטבעות" kind="coin" />
 
@@ -498,9 +494,36 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                   <Kpi label="צפוי" value={expectedCash} color="#6366f1" sub="פתיחה + מזומן" />
                   <Kpi label="לשים בשקית" value={depositToBag} color="#059669" emphasis sub="מזומן בדיוק" />
                   <Kpi label="פתיחה מחר" value={defaultNextOpening} color="#7c3aed" sub="נספר − מזומן" />
-                  <Kpi label="פער" value={variance} color={Math.abs(variance) < 0.01 ? '#059669' : variance > 0 ? '#f59e0b' : '#dc2626'} sub="נספר − צפוי" showSign />
+                  <VarianceDisplay value={variance} />
                 </div>
               </div>
+
+              {isLargeVariance && !largeVarianceAcknowledged && (
+                <div style={{
+                  background: '#fef3c7', border: '2px solid #f59e0b', borderRadius: 12,
+                  padding: 16, marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <AlertCircle size={24} color="#b45309" />
+                    <div style={{ fontSize: 16, fontWeight: 900, color: '#92400e' }}>
+                      ⚠️ פער גדול בספירה
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 14, color: '#78350f', lineHeight: 1.5 }}>
+                    זיהינו {variance > 0 ? 'עודף' : 'חוסר'} של ₪{Math.abs(variance).toFixed(2)} — מומלץ לספור שנית לפני שממשיכים.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => { setBillCounts({}); setCoinCounts({}); setActualCashManual('') }}
+                      style={{ flex: 1, padding: '10px', borderRadius: 8, background: '#fff', border: '1.5px solid #f59e0b', color: '#92400e', fontWeight: 700, cursor: 'pointer' }}>
+                      ספור שנית
+                    </button>
+                    <button onClick={() => setLargeVarianceAcknowledged(true)}
+                      style={{ flex: 1, padding: '10px', borderRadius: 8, background: '#f59e0b', border: 'none', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+                      הבנתי, ממשיך
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <button type="button" onClick={() => { setManualEntryAmount(countedCash > 0 ? String(countedCash) : ''); setManualEntryOpen(true) }}
                 style={{ marginTop: 14, width: '100%', background: 'white', color: '#475569', border: '1.5px dashed #cbd5e1', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52 }}>
@@ -520,7 +543,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                   <Kpi label="אשראי" value={credit} color="#3b82f6" />
                   <Kpi label="נספר" value={countedCash} color="#0f172a" />
                   <Kpi label="לשים בשקית" value={depositToBag} color="#059669" emphasis />
-                  <Kpi label="פער" value={variance} color={Math.abs(variance) < 0.01 ? '#059669' : variance > 0 ? '#f59e0b' : '#dc2626'} showSign />
+                  <VarianceDisplay value={variance} />
                 </div>
 
                 {Math.abs(variance) >= 0.01 && (
@@ -568,13 +591,18 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
             style={{ background: step === 1 ? '#f1f5f9' : 'white', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, color: step === 1 ? '#cbd5e1' : '#475569', cursor: step === 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 56 }}>
             <ArrowRight size={17} /> הקודם
           </button>
-          {step < 4 ? (
-            <button onClick={() => setStep(step + 1)}
-              disabled={step === 2 && (!cashSales || !txCount || parseInt(txCount) <= 0)}
-              style={{ background: step === 2 && (!cashSales || !txCount || parseInt(txCount) <= 0) ? '#c7d2fe' : '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: step === 2 && (!cashSales || !txCount || parseInt(txCount) <= 0) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 56 }}>
-              הבא <ArrowLeft size={17} />
-            </button>
-          ) : (
+          {step < 4 ? (() => {
+            const nextDisabled =
+              (step === 2 && (!cashSales || !txCount || parseInt(txCount) <= 0)) ||
+              (step === 3 && isLargeVariance && !largeVarianceAcknowledged)
+            return (
+              <button onClick={() => setStep(step + 1)}
+                disabled={nextDisabled}
+                style={{ background: nextDisabled ? '#c7d2fe' : '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: nextDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 56 }}>
+                הבא <ArrowLeft size={17} />
+              </button>
+            )
+          })() : (
             <button onClick={save} disabled={saving}
               style={{ background: saving ? '#c7d2fe' : '#059669', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: saving ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 56 }}>
               <CheckCircle2 size={18} /> {saving ? 'שומר…' : isEdit ? 'עדכן סגירה' : 'אישור סגירה'}
@@ -651,6 +679,21 @@ function Kpi({ label, value, color, sub, emphasis, showSign }: { label: string; 
   )
 }
 
+function VarianceDisplay({ value }: { value: number }) {
+  const rounded = Math.round(value * 100) / 100
+  const isMatch = Math.abs(rounded) < 0.01
+  const label = isMatch ? 'תואם' : rounded > 0 ? `עודף ₪${Math.abs(rounded).toFixed(2)}` : `חוסר ₪${Math.abs(rounded).toFixed(2)}`
+  const bg = isMatch ? '#ecfdf5' : rounded > 0 ? '#ecfdf5' : '#fef2f2'
+  const color = isMatch ? '#059669' : rounded > 0 ? '#059669' : '#dc2626'
+  const border = isMatch ? '1.5px solid #a7f3d0' : rounded > 0 ? '1.5px solid #a7f3d0' : '1.5px solid #fecaca'
+  return (
+    <div style={{ padding: 12, background: bg, borderRadius: 12, border, textAlign: 'center' }}>
+      <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700 }}>סטייה</div>
+      <div style={{ fontSize: 20, fontWeight: 900, color }}>{label}</div>
+    </div>
+  )
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Overall count (after all registers closed)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -683,7 +726,7 @@ function OverallCount({ totalExpectedCash, onClose }: { totalExpectedCash: numbe
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
               <Kpi label="נספר" value={counted} color="#0f172a" />
               <Kpi label="אמור להיות" value={totalExpectedCash} color="#6366f1" />
-              <Kpi label="פער" value={diff} color={Math.abs(diff) < 0.01 ? '#059669' : '#dc2626'} showSign />
+              <VarianceDisplay value={diff} />
             </div>
             {Math.abs(diff) < 0.01 && totalExpectedCash > 0 && (
               <div style={{ marginTop: 12, padding: 12, background: '#ecfdf5', border: '1.5px solid #a7f3d0', borderRadius: 12, color: '#065f46', fontSize: 14, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -976,6 +1019,7 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
   const [emptyingReg, setEmptyingReg] = useState<number | null>(null)
   const [deletingClosing, setDeletingClosing] = useState<Closing | null>(null)
   const [overallOpen, setOverallOpen] = useState(false)
+  const [depositCalcOpen, setDepositCalcOpen] = useState(false)
   const [historyFrom, setHistoryFrom] = useState(() => {
     const d = new Date(); d.setDate(1)
     return d.toISOString().split('T')[0]
@@ -1107,12 +1151,36 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
             {/* KPI cards */}
             <motion.div variants={fadeIn} initial="hidden" animate="visible">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 18 }}>
-                <KpiCard Icon={DollarSign} color="#10b981" label='סה"כ מכירות מזומן' value={fmt(totalCash)} />
-                <KpiCard Icon={CreditCard} color="#3b82f6" label='סה"כ מכירות אשראי' value={fmt(totalCredit)} />
-                <KpiCard Icon={AlertCircle} color={Math.abs(totalVariance) < 0.01 ? '#10b981' : '#f59e0b'} label="סך פערים" value={(totalVariance >= 0 ? '+' : '') + fmt(totalVariance)} />
-                <KpiCard Icon={Wallet} color="#7c3aed" label="יתרת קופת עודף" value={fmt(fundBalance)} />
+                <KpiCard Icon={DollarSign} color="#10b981" label='סה"כ מכירות מזומן' value={fmtDec(totalCash)} />
+                <KpiCard Icon={CreditCard} color="#3b82f6" label='סה"כ מכירות אשראי' value={fmtDec(totalCredit)} />
+                <KpiCard
+                  Icon={AlertCircle}
+                  color={Math.abs(totalVariance) < 0.01 ? '#10b981' : totalVariance > 0 ? '#10b981' : '#dc2626'}
+                  label="סטיית יום"
+                  value={
+                    Math.abs(totalVariance) < 0.01
+                      ? 'תואם'
+                      : totalVariance > 0
+                        ? `עודף ₪${Math.abs(totalVariance).toFixed(2)}`
+                        : `חוסר ₪${Math.abs(totalVariance).toFixed(2)}`
+                  }
+                />
+                <KpiCard Icon={Wallet} color="#7c3aed" label="יתרת קופת עודף" value={fmtDec(fundBalance)} />
               </div>
             </motion.div>
+
+            {/* Deposit calculator — utility only, no DB save */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}>
+              <button onClick={() => setDepositCalcOpen(true)}
+                style={{
+                  padding: '14px 24px', borderRadius: 12,
+                  background: '#7c3aed', color: '#fff', fontWeight: 800, fontSize: 16,
+                  border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', gap: 8, width: '100%', maxWidth: 400
+                }}>
+                <Wallet size={20} /> חישוב הפקדה
+              </button>
+            </div>
 
             {/* Registers grid */}
             <motion.div variants={fadeIn} initial="hidden" animate="visible">
@@ -1293,6 +1361,9 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
       {overallOpen && (
         <OverallCount totalExpectedCash={totalCash} onClose={() => setOverallOpen(false)} />
       )}
+      {depositCalcOpen && (
+        <DepositCalculator totalCash={totalCash} onClose={() => setDepositCalcOpen(false)} />
+      )}
       {activatingReg !== null && (
         <ActivateDialog branchId={branchId} registerNumber={activatingReg} fundBalance={fundBalance}
           onClose={() => setActivatingReg(null)}
@@ -1324,6 +1395,80 @@ function KpiCard({ Icon, color, label, value }: { Icon: any; color: string; labe
         <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>{label}</div>
         <div style={{ fontSize: 19, fontWeight: 900, color: '#0f172a' }}>{value}</div>
       </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Deposit calculator — utility only (no DB save)
+// ═══════════════════════════════════════════════════════════════════════════
+function DepositCalculator({ totalCash, onClose }: { totalCash: number; onClose: () => void }) {
+  const [billCounts, setBillCounts] = useState<Record<string, number>>({})
+  const DENOMS = [200, 100, 50, 20, 10]
+  const depositedAmount = totalFromCounts(DENOMS, billCounts)
+  const remaining = totalCash - depositedAmount
+  const progress = totalCash > 0 ? Math.min(100, (depositedAmount / totalCash) * 100) : 0
+  const todayStr = new Date().toLocaleDateString('he-IL')
+
+  const remainingLabel = Math.abs(remaining) < 0.01
+    ? 'תואם'
+    : remaining > 0
+      ? `נשאר להפקיד: ₪${remaining.toFixed(2)}`
+      : `עודף: ₪${Math.abs(remaining).toFixed(2)}`
+  const remainingColor = Math.abs(remaining) < 0.01 ? '#059669' : remaining > 0 ? '#b45309' : '#dc2626'
+  const remainingBg = Math.abs(remaining) < 0.01 ? '#ecfdf5' : remaining > 0 ? '#fef3c7' : '#fee2e2'
+  const remainingBorder = Math.abs(remaining) < 0.01 ? '#a7f3d0' : remaining > 0 ? '#fcd34d' : '#fecaca'
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onClose}>
+      <motion.div onClick={e => e.stopPropagation()}
+        initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        style={{ background: '#f8fafc', width: '100%', maxWidth: 720, maxHeight: '96vh', overflow: 'auto', borderRadius: '20px 20px 0 0', direction: 'rtl', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'sticky', top: 0, background: 'white', padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Calculator size={20} color="#7c3aed" /> חישוב הפקדה
+            </div>
+            <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{todayStr}</div>
+          </div>
+          <button onClick={onClose}
+            style={{ width: 44, height: 44, background: '#f8fafc', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <X size={22} color="#64748b" />
+          </button>
+        </div>
+
+        <div style={{ padding: 16 }}>
+          <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)', borderRadius: 16, padding: 20, marginBottom: 14, color: 'white', textAlign: 'center' }}>
+            <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 700, marginBottom: 6 }}>סה"כ מזומן להפקדה</div>
+            <div style={{ fontSize: 34, fontWeight: 900, letterSpacing: -0.5 }}>₪{totalCash.toFixed(2)}</div>
+          </div>
+
+          <DenomCounter denoms={[200, 100, 50, 20]} counts={billCounts} setCounts={setBillCounts} label="שטרות" kind="bill" />
+          <DenomCounter denoms={[10]} counts={billCounts} setCounts={setBillCounts} label="מטבע ₪10" kind="coin" />
+
+          <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 16 }}>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 4 }}>סכום הופקד</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: '#059669' }}>₪{depositedAmount.toFixed(2)}</div>
+            </div>
+            <div style={{ padding: 12, background: remainingBg, borderRadius: 10, border: `1.5px solid ${remainingBorder}`, marginBottom: 12 }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: remainingColor, textAlign: 'center' }}>
+                {remainingLabel}
+              </div>
+            </div>
+            <div style={{ width: '100%', height: 10, background: '#f1f5f9', borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, #6366f1, #7c3aed)', transition: 'width 0.3s ease' }} />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid #f1f5f9', padding: '14px 16px', display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={onClose}
+            style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: 'pointer', minHeight: 56 }}>
+            סגור
+          </button>
+        </div>
+      </motion.div>
     </div>
   )
 }

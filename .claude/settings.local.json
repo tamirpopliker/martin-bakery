@@ -225,7 +225,14 @@
       "Bash(which supabase *)",
       "Bash(supabase projects *)",
       "Bash(supabase link *)",
-      "Bash(echo \"EXIT:$?\")"
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(find src *)",
+      "Bash(tee /tmp/tsc_after.txt)",
+      "Bash(grep -oE \"\\\\.from\\\\\\(['\\\\\"\\\\`][a-z_][a-z0-9_]*['\\\\\"\\\\`]\\\\\\)\")",
+      "Bash(git reset *)",
+      "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(code sql/025_rls_critical.sql)"
     ]
   }
 }

@@ -765,6 +765,15 @@ martin-bakery/
 14. **תיקון חישוב לייבור מפעל — שילוב `employees(global)` ב-`calculateFactoryPL`** — כשאין `employer_costs` לחודש (כגון באפריל 2026 לפני העלאת דוח הנה"ח), הפונקציה נופלת כעת לחישוב מוערך של שכרי עובדים גלובליים (מ-`employees` עם `wage_type='global'`, באמצעות `calcGlobalLaborForDept` על creams + dough) בתוספת עובדים שעתיים מ-`labor` — פרט לאלה שמופיעים גם בטבלת `employees` עם `wage_type='global'` (כדי למנוע כפל ספירה). `fetchFactoryPL` ב-`supabase.ts` הפך ל-wrapper דק סביב `calculateFactoryPL` כדי שלא יהיה drift עתידי בין שני המסלולים.
 15. **תיקון כפילות שכר מנהלים** — שכר מנהלים הופיע פעמיים בחישוב הרווח התפעולי של הסניפים: פעם משורת "שכר מנהלים" (מ-`employer_costs` עם `is_manager=true`, עם fallback לחודש קודם) ופעם בתוך "עלויות קבועות" (`fixed_costs.manager_salary` עם `entity_id='branch_X'` במקום `'mgmt'` — כי `BranchSettings.tsx:143` מזין אוטומטית `entity_id = entityType`, והבדיקה `if (r.entity_id === 'mgmt')` ב-`calculateBranchPL` לא תפסה אותן). נמחקו 9 רשומות `manager_salary` מ-`fixed_costs`. רווח תפעולי של העסק עלה ב-68K לחודש (אברהם אבינו +22.7K, הפועלים +22.7K, יעקב כהן +22.7K — עבר מהפסד לרווח).
 
+16. **RLS שלב 1 — הושלם 2026-04-23** — הופעל Row Level Security + policies על 18 טבלאות קריטיות (sql/025_rls_critical.sql). אומת: `rowsecurity=true` על כל 18, אדמין רואה דשבורד מנכ"ל מלא (כל הסניפים + מפעל). מקור התוכנית: `sql/rls_migration_plan.md` §4.1 + §4.3.
+   - **§4.1.1 — הכנסה/הוצאה/שכר/פסולת סניפים**: `branch_revenue`, `branch_expenses`, `branch_labor`, `branch_waste` → admin=all, branch=own, factory=none.
+   - **§4.1.2 — `fixed_costs`**: סינון לפי `entity_type` (לא `entity_id` — תיקון מול התוכנית המקורית). admin=all, branch=own branch row, factory=factory row.
+   - **§4.1.3 — `employees`**: factory רואה לפי `managed_department` (NULL ⇒ רואה הכל), admin=all, branch=none.
+   - **§4.1.4 — `factory_sales`, `factory_b2b_sales`**: branch רואה רק `is_internal=true` של הסניף שלו, factory=all, admin=all.
+   - **§4.1.5 — ספקים ולקוחות אשראי**: `suppliers`, `supplier_invoices`, `unified_suppliers`, `branch_suppliers`, `branch_credit_customers` → admin + branch-own.
+   - **§4.3 — חידוד policies קיימות**: `branch_kpi_targets` (הוסר FOR ALL authenticated), `system_settings` (WRITE רק admin — חזרה ל-008), `branch_employees` (WRITE מסונן; SELECT נשאר פתוח — שלב 2), `branch_messages` + `message_reads` (תיקון role 'employee' נשען על `app_users.branch_id` מ-008, סינון `branch_id`).
+   - כל FOR ALL כולל `WITH CHECK` למניעת UPDATE שמעביר שורה בין סניפים. הסקריפט אידמפוטנטי וטרנזקציוני.
+
 ---
 
 ## פיצ'רים פתוחים
@@ -798,7 +807,7 @@ martin-bakery/
 
 5. **Edge Functions עם CRON_SECRET** — כל ה-edge functions שרצות ב-cron מאומתות ע"י header `CRON_SECRET`. cron חיצוני דרך cron-job.org.
 
-6. **RLS על כל הטבלאות** — Row Level Security מופעל עם policies לפי role. admin רואה הכל, factory רואה מפעל, branch רואה סניף שלו, employee רואה מידע אישי.
+6. **RLS על כל הטבלאות** — Row Level Security מופעל עם policies לפי role. admin רואה הכל, factory רואה מפעל (לפי `managed_department` ב-`employees`; לפי `is_internal` ב-`factory_sales`/`factory_b2b_sales`), branch רואה סניף שלו (לפי `branch_id` תואם), employee רואה מידע אישי. שלב 1 הושלם 2026-04-23 על 18 טבלאות קריטיות (sql/025_rls_critical.sql, תוכנית ב-sql/rls_migration_plan.md). שלב 2 פתוח: §4.2 (`daily_production`, `factory_repairs`, `factory_waste`, `kpi_targets`, `packaging_products`) + הידוק SELECT על `branch_employees` עם VIEW `branch_employees_safe` שחושף הכל חוץ מ-`hourly_rate`/`retention_bonus`.
 
 7. **חישוב overhead** — אחוז העמסת מטה (`overhead_pct`) נשמר ב-`system_settings` ומוחל על הכנסות הסניפים ב-BranchManagerDashboard.
 
@@ -812,6 +821,10 @@ martin-bakery/
 
 ## הערות לשיחה הבאה
 
+- **RLS שלב 2 — לפתוח בצ'אט הבא ייעודי**:
+  1. **אימות ידני של שלב 1** — להיכנס עם branch user (אבי חורב / avi29030@gmail.com) ועם factory user (נאור / naor2708@gmail.com) לוודא שהמערכת לא שבורה ושהסינון לפי role עובד בפועל (branch רואה רק סניף שלו, factory רואה רק מפעל + `is_internal` שלו).
+  2. **VIEW `branch_employees_safe`** — ליצור VIEW שחושף את כל העמודות של `branch_employees` *חוץ מ-*`hourly_rate` ו-`retention_bonus`. להדק את ה-SELECT policy על `branch_employees` עצמה (כרגע פתוח ל-interim). להחליף את כל ה-frontend-reads שצריך מ-safe במקום מהטבלה.
+  3. **שלב 2 של התוכנית (§4.2)** — `daily_production`, `factory_repairs`, `factory_waste`, `kpi_targets`, `packaging_products` לפי `sql/rls_migration_plan.md`.
 - **עדיפות 1**: לתקן את EmployerCostsUpload (3 באגים ידועים) ולהעלות עלויות מעסיק לאפריל 2026.
 - **עדיפות 2**: להבין למה אין נתוני לייבור מפעל בטבלת `labor`. לבדוק אם זו בעיית הזנה או שיש מנגנון נפרד שלא עובד.
 - **עדיפות 3**: לוודא מול העסק האם יש הכנסות חיצוניות של המפעל שלא נרשמות (B2B/אירועים/קייטרינג).
