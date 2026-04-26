@@ -37,6 +37,34 @@ interface Supplier {
   category?: string | null
 }
 
+// שורה אחת בטופס הזנה רב-שורתית (לא נשמר ל-DB — רק מצב מקומי)
+interface ExpenseRow {
+  id: string
+  date: string
+  expenseType: ExpenseType
+  supplier: string
+  amount: string  // ללא מע"מ
+  docNumber: string
+  notes: string
+  error?: string  // הודעת שגיאה ספציפית לשורה אם השמירה נכשלה
+}
+
+type FormMessage = { type: 'success' | 'error' | 'warn'; text: string }
+
+function newEmptyRow(): ExpenseRow {
+  return {
+    id: (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
+      ? (crypto as any).randomUUID()
+      : 'r-' + Math.random().toString(36).slice(2),
+    date: new Date().toISOString().split('T')[0],
+    expenseType: 'suppliers',
+    supplier: '',
+    amount: '',
+    docNumber: '',
+    notes: '',
+  }
+}
+
 const TYPE_CONFIG: Record<ExpenseType, { label: string; color: string; bg: string }> = {
   suppliers:      { label: 'ספקים / מלאי',  color: '#818cf8', bg: '#e0e7ff' },
   repairs:        { label: 'תיקונים',         color: '#f97316', bg: '#fff7ed' },
@@ -89,16 +117,14 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
   const [searchFilter, setSearchFilter] = useState('')
   const [editId, setEditId]           = useState<number | null>(null)
   const [editData, setEditData]       = useState<Partial<Entry>>({})
-  const [loading, setLoading]         = useState(false)
-  const [showFactoryWarning, setShowFactoryWarning] = useState(false)
 
-  // טופס — supplier אינו חובה
-  const [date, setDate]       = useState(new Date().toISOString().split('T')[0])
-  const [expType, setExpType] = useState<ExpenseType>('suppliers')
-  const [supplier, setSupplier] = useState('')
-  const [amount, setAmount]   = useState('')
-  const [docNumber, setDocNumber] = useState('')
-  const [notes, setNotes]     = useState('')
+  // טופס רב-שורתי
+  const [rows, setRows] = useState<ExpenseRow[]>([newEmptyRow()])
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<FormMessage | null>(null)
+  // מערך השורות שגרם לאזהרת "מפעל" — ה-dialog מציג אותן ומבקש אישור
+  const [factoryWarningRows, setFactoryWarningRows] = useState<ExpenseRow[] | null>(null)
+
   const [trendData, setTrendData] = useState<BranchExpensesTrend[]>([])
 
   async function fetchEntries() {
@@ -139,39 +165,97 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
     return false
   }
 
-  // ─── כפתור פעיל כל עוד יש סכום ותאריך ──────────────────────────────────
-  const canAdd = !loading && !!amount && parseFloat(amount) > 0 && !!date
-
-  function handleAddEntry() {
-    if (!canAdd) return
-    if (expType === 'suppliers' && supplier && looksLikeFactorySupplier(supplier)) {
-      setShowFactoryWarning(true)
-      return
-    }
-    addEntry()
+  // ─── עזרי טופס רב-שורתי ─────────────────────────────────────────────────
+  function addRow() {
+    setRows(prev => [...prev, newEmptyRow()])
   }
 
-  async function addEntry() {
-    if (!canAdd) return
-    setLoading(true)
-    const { error } = await supabase.from('branch_expenses').insert({
-      branch_id: branchId, date, expense_type: expType,
-      supplier: supplier || '—',
-      amount: parseFloat(amount),
-      doc_number: docNumber || null,
-      notes: notes || null,
-      from_factory: false
+  function removeRow(id: string) {
+    setRows(prev => prev.length > 1 ? prev.filter(r => r.id !== id) : prev)
+  }
+
+  function updateRow<K extends keyof ExpenseRow>(id: string, field: K, value: ExpenseRow[K]) {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value, error: undefined } : r))
+  }
+
+  // ─── שמירה ב-batch ───────────────────────────────────────────────────────
+  function handleSaveAll() {
+    setMessage(null)
+    const filledRows = rows.filter(r => parseFloat(r.amount) > 0)
+    if (filledRows.length === 0) {
+      setMessage({ type: 'error', text: 'אין שורות למילוי — הזן לפחות שורה אחת עם סכום' })
+      return
+    }
+    // בדיקת ספקים שנראים כמו "מפעל ייצור" — דרושה אישור לפני שמירה
+    const factoryLike = filledRows.filter(r =>
+      r.expenseType === 'suppliers' && r.supplier && looksLikeFactorySupplier(r.supplier)
+    )
+    if (factoryLike.length > 0) {
+      setFactoryWarningRows(factoryLike)
+      return
+    }
+    saveAllConfirmed()
+  }
+
+  async function saveAllConfirmed() {
+    setFactoryWarningRows(null)
+    const filledRows = rows.filter(r => parseFloat(r.amount) > 0)
+    if (filledRows.length === 0) return
+
+    setSaving(true)
+    const results = await Promise.allSettled(
+      filledRows.map(async (row): Promise<string> => {
+        if (!row.expenseType) throw new Error('סוג הוצאה חסר')
+        const { error } = await supabase.from('branch_expenses').insert({
+          branch_id: branchId,
+          date: row.date,
+          expense_type: row.expenseType,
+          supplier: row.supplier || '—',
+          amount: parseFloat(row.amount),
+          doc_number: row.docNumber || null,
+          notes: row.notes || null,
+          from_factory: false,
+        })
+        if (error) throw new Error(error.message || 'שגיאת מסד נתונים')
+        return row.id
+      })
+    )
+    setSaving(false)
+
+    const successIds = new Set<string>()
+    const failedById = new Map<string, string>()  // id → error message
+    results.forEach((result, i) => {
+      const row = filledRows[i]
+      if (result.status === 'fulfilled') {
+        successIds.add(row.id)
+      } else {
+        const reason: any = result.reason
+        failedById.set(row.id, reason?.message || 'שגיאה לא ידועה')
+      }
     })
-    if (error) {
-      console.error('[BranchExpenses addEntry] error:', error)
-      alert(`הוספת ההוצאה נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
-      setLoading(false)
-      return
+
+    setRows(prev => {
+      const remaining = prev
+        .filter(r => !successIds.has(r.id))
+        .map(r => failedById.has(r.id) ? { ...r, error: failedById.get(r.id) } : r)
+      return remaining.length === 0 ? [newEmptyRow()] : remaining
+    })
+
+    const successCount = successIds.size
+    const failedCount = failedById.size
+    if (failedCount === 0) {
+      setMessage({ type: 'success', text: `נשמרו ${successCount} הוצאות בהצלחה ✓` })
+    } else if (successCount === 0) {
+      setMessage({ type: 'error', text: `כל ${failedCount} השורות נכשלו — בדוק הודעות שגיאה ליד כל שורה` })
+    } else {
+      setMessage({ type: 'warn', text: `${successCount} נשמרו, ${failedCount} נכשלו — הנכשלות נשארו לתיקון` })
     }
-    setAmount(''); setDocNumber(''); setNotes('')
+
     await fetchEntries()
-    setLoading(false)
   }
+
+  const filledCount = rows.filter(r => parseFloat(r.amount) > 0).length
+  const canSave = !saving && filledCount > 0
 
   async function deleteEntry(id: number) {
     if (!confirm('למחוק הוצאה זו?')) return
@@ -309,32 +393,39 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
           </div>
         )}
 
-        {/* Factory warning dialog */}
-        {showFactoryWarning && (
+        {/* Factory warning dialog — מציג את השורות שזוהו כרכישת מפעל */}
+        {factoryWarningRows && factoryWarningRows.length > 0 && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }}>
-            <div style={{ maxWidth: '440px', width: '90%', background: 'white', borderRadius: 12, boxShadow: '0 10px 40px rgba(0,0,0,0.15)', padding: '24px', textAlign: 'center' }}>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
-                  <div style={{ background: '#fef3c7', borderRadius: '50%', padding: '12px' }}>
-                    <AlertTriangle size={28} color="#f59e0b" />
+            <div style={{ maxWidth: '480px', width: '90%', background: 'white', borderRadius: 12, boxShadow: '0 10px 40px rgba(0,0,0,0.15)', padding: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+                <div style={{ background: '#fef3c7', borderRadius: '50%', padding: '12px' }}>
+                  <AlertTriangle size={28} color="#f59e0b" />
+                </div>
+              </div>
+              <h3 style={{ margin: '0 0 10px', fontSize: '16px', fontWeight: '700', color: '#374151', textAlign: 'center' }}>
+                {factoryWarningRows.length === 1 ? 'שורה זו נראית כמו רכישה מהמפעל' : `${factoryWarningRows.length} שורות נראות כמו רכישה מהמפעל`}
+              </h3>
+              <p style={{ margin: '0 0 14px', fontSize: '14px', color: '#64748b', lineHeight: '1.6', textAlign: 'center' }}>
+                אם הן רכישה מהמפעל הפנימי — אשר אותן בדף ההזמנות במקום כאן.
+              </p>
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 10, marginBottom: 16, fontSize: 13, color: '#78350f', maxHeight: 140, overflowY: 'auto' }}>
+                {factoryWarningRows.map(r => (
+                  <div key={r.id} style={{ marginBottom: 4 }}>
+                    • <strong>{r.supplier}</strong> — ₪{r.amount} ({r.date})
                   </div>
-                </div>
-                <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: '700', color: '#374151' }}>
-                  האם זו רכישה מהמפעל הפנימי?
-                </h3>
-                <p style={{ margin: '0 0 20px', fontSize: '14px', color: '#64748b', lineHeight: '1.6' }}>
-                  אם כן — אשר את ההזמנה בדף ההזמנות במקום להזין ידנית.
-                </p>
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                  <button onClick={() => { setShowFactoryWarning(false); onBack() }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #e2e8f0', background: 'none', borderRadius: 8, padding: '8px 18px', fontSize: '14px', fontWeight: '700', color: '#7c3aed', cursor: 'pointer' }}>
-                    <Factory size={16} />
-                    כן, עבור להזמנות
-                  </button>
-                  <button onClick={() => { setShowFactoryWarning(false); addEntry() }}
-                    style={{ background: '#64748b', color: 'white', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
-                    לא, ספק חיצוני
-                  </button>
-                </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                <button onClick={() => setFactoryWarningRows(null)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #e2e8f0', background: 'white', borderRadius: 8, padding: '8px 18px', fontSize: '14px', fontWeight: '700', color: '#7c3aed', cursor: 'pointer' }}>
+                  <Factory size={16} />
+                  ביטול — אעבור להזמנות
+                </button>
+                <button onClick={() => saveAllConfirmed()}
+                  style={{ background: '#64748b', color: 'white', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
+                  כל אלה ספקים חיצוניים — שמור
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -356,52 +447,118 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
           </button>
         </div>
 
-        {/* טופס הוספה */}
+        {/* טופס הוספה רב-שורתי */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
         <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px', marginBottom: 16 }}>
-          <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת הוצאה</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: '12px', marginBottom: '14px' }}>
+          <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת הוצאות (ניתן להזין מספר שורות יחד)</h2>
 
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>תאריך</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={S.input} />
+          {message && (
+            <div role="alert" style={{
+              marginBottom: 14, padding: '10px 14px', borderRadius: 10, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+              background: message.type === 'success' ? '#ecfdf5' : message.type === 'warn' ? '#fef3c7' : '#fef2f2',
+              border: '1px solid ' + (message.type === 'success' ? '#a7f3d0' : message.type === 'warn' ? '#fcd34d' : '#fecaca'),
+              color: message.type === 'success' ? '#065f46' : message.type === 'warn' ? '#92400e' : '#991b1b',
+            }}>
+              <span>{message.text}</span>
+              <button onClick={() => setMessage(null)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, fontWeight: 700, color: 'inherit' }}>×</button>
             </div>
+          )}
 
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>סוג הוצאה</label>
-              <select value={expType} onChange={e => setExpType(e.target.value as ExpenseType)}
-                style={{ ...S.input, background: 'white' }}>
-                {Object.entries(TYPE_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-              </select>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {rows.map((row) => {
+              const isOnlyRow = rows.length === 1
+              const amountValid = !!row.amount && parseFloat(row.amount) > 0
+              return (
+                <div key={row.id} style={{
+                  border: row.error ? '1.5px solid #fca5a5' : '1px solid #f1f5f9',
+                  borderRadius: 10, padding: 12, background: row.error ? '#fef2f2' : '#fafbfc'
+                }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                      <label style={S.label}>תאריך</label>
+                      <input type="date" value={row.date} onChange={e => updateRow(row.id, 'date', e.target.value)} style={S.input} />
+                    </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column' as const, gridColumn: 'span 2' }}>
-              <label style={S.label}>ספק <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
-              <AutocompleteInput value={supplier} onChange={setSupplier} options={supplierNames} placeholder="שם ספק..." color={branchColor} />
-            </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                      <label style={S.label}>סוג הוצאה</label>
+                      <select value={row.expenseType} onChange={e => updateRow(row.id, 'expenseType', e.target.value as ExpenseType)}
+                        style={{ ...S.input, background: 'white' }}>
+                        {Object.entries(TYPE_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                    </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>סכום ללא מע״מ (₪) *</label>
-              <input type="number" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddEntry()}
-                style={{ ...S.input, textAlign: 'right' as const, borderColor: amount ? '#e2e8f0' : '#fca5a5' }} />
-            </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' as const, gridColumn: 'span 2' }}>
+                      <label style={S.label}>ספק <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
+                      <AutocompleteInput value={row.supplier} onChange={v => updateRow(row.id, 'supplier', v)} options={supplierNames} placeholder="שם ספק..." color={branchColor} />
+                    </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>מספר מסמך <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
-              <input type="text" placeholder="מס׳ חשבונית" value={docNumber} onChange={e => setDocNumber(e.target.value)} style={S.input} />
-            </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                      <label style={S.label}>סכום ללא מע״מ (₪) *</label>
+                      <input type="number" placeholder="0" value={row.amount}
+                        onChange={e => updateRow(row.id, 'amount', e.target.value)}
+                        style={{ ...S.input, textAlign: 'right' as const, borderColor: amountValid ? '#e2e8f0' : '#fca5a5' }} />
+                    </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column' as const }}>
-              <label style={S.label}>הערות <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
-              <input type="text" placeholder="הערה..." value={notes} onChange={e => setNotes(e.target.value)} style={S.input} />
-            </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                      <label style={S.label}>מספר מסמך <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
+                      <input type="text" placeholder="מס׳ חשבונית" value={row.docNumber}
+                        onChange={e => updateRow(row.id, 'docNumber', e.target.value)} style={S.input} />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column' as const }}>
+                      <label style={S.label}>הערות <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
+                      <input type="text" placeholder="הערה..." value={row.notes}
+                        onChange={e => updateRow(row.id, 'notes', e.target.value)} style={S.input} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                    {row.error
+                      ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626', fontSize: 13, fontWeight: 600 }}>
+                          <AlertTriangle size={14} /> {row.error}
+                        </div>
+                      )
+                      : <span />
+                    }
+                    <button onClick={() => removeRow(row.id)} disabled={isOnlyRow}
+                      title={isOnlyRow ? 'לא ניתן למחוק את השורה האחרונה' : 'הסר שורה'}
+                      style={{
+                        background: 'transparent', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px',
+                        cursor: isOnlyRow ? 'not-allowed' : 'pointer',
+                        color: isOnlyRow ? '#cbd5e1' : '#dc2626', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600
+                      }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
-          <button onClick={handleAddEntry} disabled={!canAdd}
-            style={{ background: canAdd ? '#6366f1' : '#e2e8f0', color: canAdd ? 'white' : '#94a3b8', border: 'none', borderRadius: 8, padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: canAdd ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={18} />הוסף הוצאה
-          </button>
+          <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+            <button onClick={addRow}
+              style={{
+                background: 'white', border: '1.5px dashed #cbd5e1', borderRadius: 8,
+                padding: '10px 20px', fontSize: 14, fontWeight: 700, color: '#475569',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8
+              }}>
+              <Plus size={16} /> הוסף שורה נוספת
+            </button>
+            <button onClick={handleSaveAll} disabled={!canSave}
+              style={{
+                background: canSave ? '#6366f1' : '#e2e8f0',
+                color: canSave ? 'white' : '#94a3b8',
+                border: 'none', borderRadius: 8, padding: '10px 28px',
+                fontSize: 15, fontWeight: 700,
+                cursor: canSave ? 'pointer' : 'not-allowed',
+                display: 'flex', alignItems: 'center', gap: 8,
+                marginLeft: 'auto'
+              }}>
+              {saving ? '⏳ שומר…' : `💾 שמור הכל (${filledCount})`}
+            </button>
+          </div>
         </div>
         </motion.div>
 
