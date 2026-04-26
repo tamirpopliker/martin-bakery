@@ -19,6 +19,11 @@ const BRANCH_REGISTERS: Record<number, number[]> = {
 const BILL_DENOMS = [200, 100, 50, 20]
 const COIN_DENOMS = [10, 5, 2, 1, 0.5, 0.1]
 
+// VAT — המשתמש מזין ב-wizard ברוטו (כולל מע"מ). DB שומר רק נטו ב-cash_sales/credit_sales.
+// כל שאר השדות (actual_cash, deposit_amount, variance, opening, next_opening_balance) נשארים ברוטו פיזי.
+const VAT_RATE = 0.18
+const VAT_DIVIDER = 1 + VAT_RATE  // 1.18
+
 const BILL_IMAGES: Record<string, string> = {
   '200': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/INS-200-NIS-%282015%29-front.jpg/320px-INS-200-NIS-%282015%29-front.jpg',
   '100': 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/INS-100-NIS-%282017%29-front.jpg/320px-INS-100-NIS-%282017%29-front.jpg',
@@ -158,8 +163,16 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
   const [openingBalance, setOpeningBalance] = useState(existing ? String(existing.opening_balance) : '')
   const [prevBalanceLoaded, setPrevBalanceLoaded] = useState(isEdit)
 
-  const [cashSales, setCashSales] = useState(existing ? String(existing.cash_sales) : '')
-  const [creditSales, setCreditSales] = useState(existing ? String(existing.credit_sales) : '')
+  // NOTE: cash_sales/credit_sales ב-DB נשמרים נטו (ללא מע"מ).
+  // ה-wizard מציג ברוטו לקופאי — מכפילים ב-VAT_DIVIDER בעת טעינה.
+  // סגירות שנשמרו לפני העדכון של 2026-04-26 והיו עדיין ברוטו ב-DB
+  // צריכות להיות מתוקנות ידנית (חלוקה ב-1.18) לפני עריכה דרך ה-wizard.
+  const [cashSales, setCashSales] = useState(
+    existing ? String(Math.round(Number(existing.cash_sales) * VAT_DIVIDER * 100) / 100) : ''
+  )
+  const [creditSales, setCreditSales] = useState(
+    existing ? String(Math.round(Number(existing.credit_sales) * VAT_DIVIDER * 100) / 100) : ''
+  )
   const [txCount, setTxCount] = useState(existing?.transaction_count ? String(existing.transaction_count) : '')
   const [zPhotoParsing, setZPhotoParsing] = useState(false)
   const [zPhotoError, setZPhotoError] = useState('')
@@ -258,21 +271,27 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
     setSaving(true)
     try {
       const chosenNext = nextOpeningOverride !== '' ? parseFloat(nextOpeningOverride) : defaultNextOpening
-      const deposit = cash
+      // הקופאי הזין ברוטו (כולל מע"מ). DB שומר נטו.
+      // המרה רק כאן, בנקודת הקצה — כל שאר ה-state ב-wizard נשאר ברוטו.
+      const cashGross = cash       // ערך הברוטו מה-state (parseFloat(cashSales))
+      const creditGross = credit
+      const cashNet = Math.round((cashGross / VAT_DIVIDER) * 100) / 100
+      const creditNet = Math.round((creditGross / VAT_DIVIDER) * 100) / 100
+      const deposit = cashGross    // הברוטו = מה שמופקד פיזית (מזומן בקופה)
 
       const row = {
         branch_id: branchId,
         date,
         register_number: registerNumber,
-        opening_balance: opening,
-        cash_sales: cash,
-        credit_sales: credit,
+        opening_balance: opening,         // ברוטו פיזי
+        cash_sales: cashNet,              // ← נטו (לדוחות P&L)
+        credit_sales: creditNet,          // ← נטו (לדוחות P&L)
         transaction_count: txCount ? parseInt(txCount) : 0,
-        actual_cash: countedCash,
-        deposit_amount: deposit,
-        variance: Math.round(variance * 100) / 100,
+        actual_cash: countedCash,         // ברוטו פיזי (ספירה)
+        deposit_amount: deposit,          // ברוטו פיזי (לשקית הפקדה)
+        variance: Math.round(variance * 100) / 100,    // ברוטו (countedCash - opening - cashGross)
         variance_action: variance !== 0 ? varianceAction : null,
-        next_opening_balance: Math.round(chosenNext * 100) / 100,
+        next_opening_balance: Math.round(chosenNext * 100) / 100,  // ברוטו פיזי
         notes: notes || null,
       }
 
@@ -434,6 +453,30 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                     <input type="number" inputMode="numeric" value={txCount} onChange={e => setTxCount(e.target.value)} style={S.input} placeholder="0" />
                   </div>
                 </div>
+
+                {(parseFloat(cashSales) > 0 || parseFloat(creditSales) > 0) && (
+                  <div style={{
+                    marginTop: 12, padding: 12, background: '#f0f9ff',
+                    border: '1px solid #bae6fd', borderRadius: 8, fontSize: 13
+                  }}>
+                    <div style={{ fontWeight: 700, color: '#0369a1', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      💡 הסכומים שהזנת כוללים מע"מ — יישמרו במערכת ללא מע"מ
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div>
+                        <div style={{ color: '#64748b', fontSize: 11 }}>מזומן (נטו):</div>
+                        <div style={{ fontWeight: 800, color: '#0369a1' }}>₪{((parseFloat(cashSales) || 0) / VAT_DIVIDER).toFixed(2)}</div>
+                      </div>
+                      <div>
+                        <div style={{ color: '#64748b', fontSize: 11 }}>אשראי (נטו):</div>
+                        <div style={{ fontWeight: 800, color: '#0369a1' }}>₪{((parseFloat(creditSales) || 0) / VAT_DIVIDER).toFixed(2)}</div>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 6, color: '#64748b', fontSize: 11 }}>
+                      סה"כ נטו: ₪{(((parseFloat(cashSales) || 0) + (parseFloat(creditSales) || 0)) / VAT_DIVIDER).toFixed(2)}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ marginTop: 18, padding: 16, background: '#eef2ff', border: '1.5px dashed #c7d2fe', borderRadius: 12 }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: '#4338ca', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
