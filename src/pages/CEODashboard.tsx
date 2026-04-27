@@ -306,21 +306,28 @@ export default function CEODashboard({ onBack }: Props) {
     }
     setExpenseBreakdown(Object.entries(merged).filter(([, v]) => v > 0).map(([name, value]) => ({ name, value: Math.round(value) })))
 
-    const { data: dailyData } = await supabase.from('branch_revenue').select('branch_id, date, amount')
-      .in('branch_id', BRANCHES.map(b => b.id)).gte('date', from).lt('date', to)
-      .order('date')
-    if (dailyData) {
-      const byDate: Record<string, Record<string, number>> = {}
-      for (const r of dailyData) {
-        if (!byDate[r.date]) byDate[r.date] = {}
-        const brName = BRANCHES.find(b => b.id === r.branch_id)?.name || ''
-        byDate[r.date][brName] = (byDate[r.date][brName] || 0) + Number(r.amount)
-      }
-      setDailyRevenue(Object.entries(byDate).sort().map(([date, vals]) => ({
-        date: new Date(date + 'T12:00:00').toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' }),
-        ...vals,
-      })))
+    const branchIds = BRANCHES.map(b => b.id)
+    const [{ data: dailyData }, { data: closingsDaily }] = await Promise.all([
+      supabase.from('branch_revenue').select('branch_id, date, amount')
+        .in('branch_id', branchIds).gte('date', from).lt('date', to).order('date'),
+      supabase.from('register_closings').select('branch_id, date, cash_sales, credit_sales')
+        .in('branch_id', branchIds).gte('date', from).lt('date', to).order('date'),
+    ])
+    const byDate: Record<string, Record<string, number>> = {}
+    for (const r of (dailyData || [])) {
+      if (!byDate[r.date]) byDate[r.date] = {}
+      const brName = BRANCHES.find(b => b.id === r.branch_id)?.name || ''
+      byDate[r.date][brName] = (byDate[r.date][brName] || 0) + Number(r.amount)
     }
+    for (const c of (closingsDaily || [])) {
+      if (!byDate[c.date]) byDate[c.date] = {}
+      const brName = BRANCHES.find(b => b.id === c.branch_id)?.name || ''
+      byDate[c.date][brName] = (byDate[c.date][brName] || 0) + Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
+    }
+    setDailyRevenue(Object.entries(byDate).sort().map(([date, vals]) => ({
+      date: new Date(date + 'T12:00:00').toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' }),
+      ...vals,
+    })))
 
     // Comparison period using unified P&L
     const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
