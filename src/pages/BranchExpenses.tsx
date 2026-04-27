@@ -356,7 +356,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
               </div>
             </div>
             <span style={{ fontSize: '13px', color: '#94a3b8' }}>{entry.doc_number || '—'}</span>
-            <span style={{ fontWeight: '800', color: '#fb7185', fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString()}</span>
+            <span style={{ fontWeight: '800', color: '#fb7185', fontSize: '15px' }}>₪{Number(entry.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
             {isInternal ? (
               <>
                 <span />
@@ -386,7 +386,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
             {byType.map(t => (
               <button key={t.key} onClick={() => setTypeFilter(typeFilter === t.key ? 'all' : t.key)}
                 style={{ background: typeFilter === t.key ? '#f1f5f9' : 'white', border: '1px solid #e2e8f0', borderRadius: 20, padding: '8px 16px', cursor: 'pointer', textAlign: 'right' as const, transition: 'all 0.15s' }}>
-                <div style={{ fontSize: '16px', fontWeight: '700', color: typeFilter === t.key ? '#0f172a' : '#64748b' }}>₪{t.total.toLocaleString()}</div>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: typeFilter === t.key ? '#0f172a' : '#64748b' }}>₪{t.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                 <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t.label}</div>
               </button>
             ))}
@@ -587,7 +587,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
             {bySupplier.map((s) => (
               <div key={s.name} style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: '10px', padding: '6px 12px', fontSize: '12px' }}>
                 <span style={{ fontWeight: '600', color: '#374151' }}>{s.name}</span>
-                <span style={{ color: '#fb7185', fontWeight: '700', marginRight: '6px' }}>₪{s.total.toLocaleString()}</span>
+                <span style={{ color: '#fb7185', fontWeight: '700', marginRight: '6px' }}>₪{s.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                 <span style={{ color: '#94a3b8' }}>({s.count})</span>
               </div>
             ))}
@@ -606,7 +606,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
                   <span style={{ fontSize: '14px', fontWeight: '700', color: '#7c3aed' }}>רכישות מהמפעל</span>
                   <span style={{ fontSize: '11px', background: '#ede9fe', color: '#7c3aed', padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>{internalEntries.length} רשומות</span>
                 </div>
-                <span style={{ fontSize: '16px', fontWeight: '700', color: '#7c3aed' }}>סה"כ רכישות מפעל: ₪{internalTotal.toLocaleString()}</span>
+                <span style={{ fontSize: '16px', fontWeight: '700', color: '#7c3aed' }}>סה"כ רכישות מפעל: ₪{internalTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
               </div>
 
               {/* Column headers */}
@@ -644,7 +644,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
           {filtered.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid #f1f5f9' }}>
               <span style={{ fontSize: '14px', fontWeight: '700', color: '#374151' }}>סה"כ — {filtered.length} רשומות</span>
-              <span style={{ fontSize: '20px', fontWeight: '700', color: '#fb7185' }}>₪{total.toLocaleString()}</span>
+              <span style={{ fontSize: '20px', fontWeight: '700', color: '#fb7185' }}>₪{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
             </div>
           )}
         </div>
@@ -662,7 +662,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
                   <YAxis yAxisId="amount" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
                   <YAxis yAxisId="pct" orientation="left" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => v + '%'} />
-                  <Tooltip formatter={(value: number, name: string) => name === '% מהכנסות' ? value + '%' : '₪' + Math.round(value).toLocaleString()} />
+                  <Tooltip formatter={(value: number, name: string) => name === '% מהכנסות' ? value + '%' : '₪' + Math.round(value).toLocaleString(undefined, { maximumFractionDigits: 2 })} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
                   <Line yAxisId="amount" type="monotone" dataKey="factory" name="רכישות מפעל" stroke="#0ea5e9" strokeWidth={2} dot={{ r: 3 }} />
                   <Line yAxisId="amount" type="monotone" dataKey="supplier" name="ספקים" stroke="#818cf8" strokeWidth={2} dot={{ r: 3 }} />

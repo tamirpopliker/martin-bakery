@@ -54,7 +54,7 @@ const S = {
   } as React.CSSProperties),
 }
 
-const fmtMoney = (n: number) => '₪' + Math.round(n).toLocaleString()
+const fmtMoney = (n: number) => '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
 function getCurrentMonth(): string {
   const d = new Date()

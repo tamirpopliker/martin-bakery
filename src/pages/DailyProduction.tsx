@@ -33,8 +33,8 @@ const DEPT_CONFIG = {
 // ─── עזרים ─────────────────────────────────────────────────────────────────
 function formatVal(val: number, isQty: boolean) {
   return isQty
-    ? val.toLocaleString() + ' יח׳'
-    : '₪' + val.toLocaleString()
+    ? val.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' יח׳'
+    : '₪' + val.toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
 
 function hebrewDate(dateStr: string) {
@@ -116,7 +116,7 @@ function LineChart({ entries, color, isQty, previousData }: { entries: Entry[]; 
               x={toX(i)} y={toY(e.amount) - 10}
               textAnchor="middle" fontSize="10" fill={color} fontWeight="600"
             >
-              {isQty ? e.amount.toLocaleString() : '₪' + (e.amount / 1000).toFixed(0) + 'K'}
+              {isQty ? e.amount.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '₪' + (e.amount / 1000).toFixed(0) + 'K'}
             </text>
           )}
         </g>

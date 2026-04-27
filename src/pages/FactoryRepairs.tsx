@@ -130,7 +130,7 @@ export default function FactoryRepairs({ department, onBack }: Props) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <PeriodPicker period={period} onChange={setPeriod} />
           <div style={{ background: 'white', borderRadius: 10, padding: '8px 18px', fontWeight: 700, fontSize: 14, color: '#0f172a', border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            סה"כ: ₪{total.toLocaleString()}
+            סה"כ: ₪{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}
           </div>
         </div>
 
@@ -163,7 +163,7 @@ export default function FactoryRepairs({ department, onBack }: Props) {
                         {types.find(t => t.value === entry.type)?.label || entry.type}
                       </span>
                       <span style={{ fontSize: 13, color: '#64748b' }}>{entry.description || '—'}</span>
-                      <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>₪{Number(entry.amount).toLocaleString()}</span>
+                      <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>₪{Number(entry.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                       <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
                         <Pencil size={15} color="#94a3b8" />
                       </button>

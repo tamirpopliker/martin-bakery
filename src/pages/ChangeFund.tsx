@@ -47,7 +47,7 @@ const AUTO_TYPES = new Set(['auto_from_closing'])
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' as const } } }
 
-function fmt(n: number) { return '₪' + Math.round(n).toLocaleString() }
+function fmt(n: number) { return '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 function todayISO() { return new Date().toISOString().split('T')[0] }
 
 type ActionKey = 'income' | 'expense' | 'withdraw' | 'push' | 'reset'

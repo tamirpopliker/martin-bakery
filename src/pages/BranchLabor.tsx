@@ -827,11 +827,11 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
             <div style={{ fontSize: '12px', color: '#94a3b8' }}>לייבור/הכנסות{laborTargetPct > 0 ? ` · יעד ${laborTargetPct}%` : ''}</div>
           </div>
           <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px', textAlign: 'center' as const }}>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a' }}>₪{Math.round(totalEmployer).toLocaleString()}</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a' }}>₪{Math.round(totalEmployer).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
             <div style={{ fontSize: '12px', color: '#94a3b8' }}>עלות מעסיק</div>
           </div>
           <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px', textAlign: 'center' as const }}>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a' }}>₪{Math.round(totalGross).toLocaleString()}</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a' }}>₪{Math.round(totalGross).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
             <div style={{ fontSize: '12px', color: '#94a3b8' }}>ברוטו</div>
           </div>
         </div>
@@ -978,8 +978,8 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                           )}
                         </div>
                         <div style={{ textAlign: 'left' as const, fontSize: '13px' }}>
-                          <div style={{ color: '#64748b' }}>ברוטו: <strong style={{ color: branchColor }}>₪{parsedTotal.toLocaleString()}</strong></div>
-                          <div style={{ color: '#64748b' }}>עלות מעסיק: <strong style={{ color: '#fb7185' }}>₪{Math.round(parsedEmpTotal).toLocaleString()}</strong></div>
+                          <div style={{ color: '#64748b' }}>ברוטו: <strong style={{ color: branchColor }}>₪{parsedTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></div>
+                          <div style={{ color: '#64748b' }}>עלות מעסיק: <strong style={{ color: '#fb7185' }}>₪{Math.round(parsedEmpTotal).toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></div>
                         </div>
                       </div>
 
@@ -1044,8 +1044,8 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                                   style={{ width: '50px', border: '1.5px solid #e2e8f0', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', fontWeight: '600', textAlign: 'center', color: '#f59e0b' }} />
                               )
                             )}
-                            <span style={{ fontWeight: '700', color: branchColor, fontSize: '13px' }}>₪{Math.round(row.gross_salary).toLocaleString()}</span>
-                            <span style={{ fontWeight: '700', color: '#fb7185', fontSize: '13px' }}>₪{Math.round(row.employer_cost).toLocaleString()}</span>
+                            <span style={{ fontWeight: '700', color: branchColor, fontSize: '13px' }}>₪{Math.round(row.gross_salary).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                            <span style={{ fontWeight: '700', color: '#fb7185', fontSize: '13px' }}>₪{Math.round(row.employer_cost).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                           </div>
                         ))}
                       </div>
@@ -1109,7 +1109,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
               {manGross && parseFloat(manGross) > 0 && (
                 <div style={{ background: branchColor + '15', border: `1px solid ${branchColor}33`, borderRadius: '10px', padding: '10px 14px', marginBottom: '14px', display: 'flex', gap: '12px', alignItems: 'center' }}>
                   <span style={{ fontSize: '13px', color: '#64748b' }}>עלות מעסיק (×1.3):</span>
-                  <span style={{ fontSize: '18px', fontWeight: '800', color: branchColor }}>₪{Math.round(parseFloat(manGross) * EMPLOYER_FACTOR).toLocaleString()}</span>
+                  <span style={{ fontSize: '18px', fontWeight: '800', color: branchColor }}>₪{Math.round(parseFloat(manGross) * EMPLOYER_FACTOR).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                 </div>
               )}
               <button onClick={addManual} disabled={loading || !manName || !manGross}
@@ -1124,8 +1124,8 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
           <>
             <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', alignItems: 'center' }}>
               <div style={{ marginRight: 'auto', display: 'flex', gap: '16px', fontSize: '13px', color: '#64748b' }}>
-                <span>ברוטו: <strong style={{ color: branchColor }}>₪{Math.round(totalGross).toLocaleString()}</strong></span>
-                <span>עלות מעסיק: <strong style={{ color: '#fb7185' }}>₪{Math.round(totalEmployer).toLocaleString()}</strong></span>
+                <span>ברוטו: <strong style={{ color: branchColor }}>₪{Math.round(totalGross).toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></span>
+                <span>עלות מעסיק: <strong style={{ color: '#fb7185' }}>₪{Math.round(totalEmployer).toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></span>
                 <span>שעות: <strong>{totalHours.toFixed(1)}</strong></span>
               </div>
             </div>
@@ -1151,7 +1151,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                             <input type="text" value={editData.employee_name || ''} onChange={e => setEditData({ ...editData, employee_name: e.target.value })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 8px', fontSize: '13px', fontFamily: 'inherit' }} />
                             <input type="number" value={editData.hours || ''} onChange={e => setEditData({ ...editData, hours: parseFloat(e.target.value) })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' as const }} />
                             <input type="number" value={editData.gross_salary || ''} onChange={e => setEditData({ ...editData, gross_salary: parseFloat(e.target.value) })} style={{ border: '1px solid ' + branchColor, borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
-                            <span style={{ fontSize: '13px', color: '#fb7185', fontWeight: '700' }}>₪{Math.round(Number(editData.gross_salary || 0) * EMPLOYER_FACTOR).toLocaleString()}</span>
+                            <span style={{ fontSize: '13px', color: '#fb7185', fontWeight: '700' }}>₪{Math.round(Number(editData.gross_salary || 0) * EMPLOYER_FACTOR).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                             <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                             <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                           </>
@@ -1163,8 +1163,8 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                               {entry.notes && <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{entry.notes}</div>}
                             </div>
                             <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{Number(entry.hours) > 0 ? Number(entry.hours).toFixed(1) : '—'}</span>
-                            <span style={{ fontWeight: '700', color: branchColor, fontSize: '14px' }}>₪{Number(entry.gross_salary).toLocaleString()}</span>
-                            <span style={{ fontWeight: '700', color: '#fb7185', fontSize: '14px' }}>₪{Math.round(Number(entry.employer_cost)).toLocaleString()}</span>
+                            <span style={{ fontWeight: '700', color: branchColor, fontSize: '14px' }}>₪{Number(entry.gross_salary).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                            <span style={{ fontWeight: '700', color: '#fb7185', fontSize: '14px' }}>₪{Math.round(Number(entry.employer_cost)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                             <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
                             <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
                           </>
@@ -1176,8 +1176,8 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                         <span style={{ color: '#374151', fontSize: '13px' }}>סה"כ</span>
                         <span style={{ color: '#64748b', fontSize: '13px' }}>{entries.length} רשומות</span>
                         <span style={{ textAlign: 'center', color: '#64748b', fontSize: '13px' }}>{totalHours.toFixed(1)}</span>
-                        <span style={{ color: '#0f172a' }}>₪{Math.round(totalGross).toLocaleString()}</span>
-                        <span style={{ color: '#fb7185' }}>₪{Math.round(totalEmployer).toLocaleString()}</span>
+                        <span style={{ color: '#0f172a' }}>₪{Math.round(totalGross).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                        <span style={{ color: '#fb7185' }}>₪{Math.round(totalEmployer).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                         <span /><span />
                       </div>
                     )}
@@ -1205,7 +1205,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                   ].map(c => (
                     <div key={c.label} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px', textAlign: 'center' }}>
                         <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>{c.label}</div>
-                        <div style={{ fontSize: '24px', fontWeight: '700', color: c.color }}>₪{Math.round(c.value).toLocaleString()}</div>
+                        <div style={{ fontSize: '24px', fontWeight: '700', color: c.color }}>₪{Math.round(c.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                     </div>
                   ))}
                 </div>
@@ -1227,8 +1227,8 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                         <span style={{ textAlign: 'center', color: '#64748b' }}>{d.hours100 > 0 ? d.hours100.toFixed(1) : '—'}</span>
                         <span style={{ textAlign: 'center', color: '#64748b' }}>{d.hours125 > 0 ? d.hours125.toFixed(1) : '—'}</span>
                         <span style={{ textAlign: 'center', color: '#64748b' }}>{d.hours150 > 0 ? d.hours150.toFixed(1) : '—'}</span>
-                        <span style={{ fontWeight: '700', color: branchColor }}>₪{Math.round(d.gross).toLocaleString()}</span>
-                        <span style={{ fontWeight: '700', color: '#fb7185' }}>₪{Math.round(d.employer).toLocaleString()}</span>
+                        <span style={{ fontWeight: '700', color: branchColor }}>₪{Math.round(d.gross).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                        <span style={{ fontWeight: '700', color: '#fb7185' }}>₪{Math.round(d.employer).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                       </div>
                     ))}
                     <div style={{ display: 'grid', gridTemplateColumns: '100px 60px 70px 70px 70px 100px 110px', padding: '12px 16px', borderTop: '1px solid #f1f5f9', fontWeight: '700', fontSize: '13px' }}>
@@ -1237,8 +1237,8 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                       <span style={{ textAlign: 'center', color: '#64748b' }}>{dailyData.reduce((s, d) => s + d.hours100, 0).toFixed(1)}</span>
                       <span style={{ textAlign: 'center', color: '#64748b' }}>{dailyData.reduce((s, d) => s + d.hours125, 0).toFixed(1)}</span>
                       <span style={{ textAlign: 'center', color: '#64748b' }}>{dailyData.reduce((s, d) => s + d.hours150, 0).toFixed(1)}</span>
-                      <span style={{ color: '#0f172a' }}>₪{Math.round(dailyData.reduce((s, d) => s + d.gross, 0)).toLocaleString()}</span>
-                      <span style={{ color: '#fb7185' }}>₪{Math.round(dailyData.reduce((s, d) => s + d.employer, 0)).toLocaleString()}</span>
+                      <span style={{ color: '#0f172a' }}>₪{Math.round(dailyData.reduce((s, d) => s + d.gross, 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                      <span style={{ color: '#fb7185' }}>₪{Math.round(dailyData.reduce((s, d) => s + d.employer, 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                     </div>
                 </div>
 
@@ -1254,7 +1254,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => `₪${(v / 1000).toFixed(0)}K`} axisLine={false} tickLine={false} />
-                        <RTooltip formatter={(v: number) => [`₪${v.toLocaleString()}`, '']} />
+                        <RTooltip formatter={(v: number) => [`₪${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, '']} />
                         <Legend wrapperStyle={{ fontSize: '12px' }} />
                         <ReferenceLine y={0} stroke="#e2e8f0" />
                         <Line type="monotone" dataKey="עלות גולמית" stroke={branchColor} strokeWidth={2} dot={{ r: 3, fill: 'white', stroke: branchColor, strokeWidth: 2 }} />
@@ -1278,7 +1278,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
                   <YAxis yAxisId="cost" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
                   <YAxis yAxisId="pct" orientation="left" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => v + '%'} />
-                  <RTooltip formatter={(value: number, name: string) => name === '% לייבור' ? value + '%' : '₪' + Math.round(value).toLocaleString()} />
+                  <RTooltip formatter={(value: number, name: string) => name === '% לייבור' ? value + '%' : '₪' + Math.round(value).toLocaleString(undefined, { maximumFractionDigits: 2 })} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
                   {laborTargetPct > 0 && <ReferenceLine yAxisId="pct" y={laborTargetPct} stroke="#fb7185" strokeDasharray="5 5" label={{ value: `יעד ${laborTargetPct}%`, fill: '#fb7185', fontSize: 11 }} />}
                   <Line yAxisId="cost" type="monotone" dataKey="laborCost" name="עלות לייבור" stroke={branchColor} strokeWidth={2} dot={{ r: 3 }} />

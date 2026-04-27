@@ -190,7 +190,7 @@ export default function BranchCreditCustomers({ branchId, branchName, branchColo
         totalDebt > 0 ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <AlertTriangle size={14} color="#ef4444" />
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#ef4444' }}>₪{Math.round(totalDebt).toLocaleString()}</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#ef4444' }}>₪{Math.round(totalDebt).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
             <span style={{ fontSize: 11, color: '#94a3b8' }}>חוב פתוח</span>
           </div>
         ) : undefined
@@ -244,12 +244,12 @@ export default function BranchCreditCustomers({ branchId, branchName, branchColo
                           </div>
                           <div style={{ textAlign: 'center' }}>
                             {c.credit_limit > 0 && (
-                              <div style={{ fontSize: 12, color: '#94a3b8' }}>₪{c.credit_limit.toLocaleString()}</div>
+                              <div style={{ fontSize: 12, color: '#94a3b8' }}>₪{c.credit_limit.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                             )}
                           </div>
                           <div style={{ textAlign: 'left' as const }}>
                             <span style={{ fontSize: 15, fontWeight: 700, color: balance > 0 ? '#ef4444' : balance < 0 ? '#34d399' : '#94a3b8' }}>
-                              ₪{Math.round(Math.abs(balance)).toLocaleString()}
+                              ₪{Math.round(Math.abs(balance)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                             </span>
                             <div style={{ fontSize: 10, color: '#94a3b8' }}>{balance > 0 ? 'חוב' : balance < 0 ? 'יתרה לזכות' : 'מאוזן'}</div>
                           </div>
@@ -300,7 +300,7 @@ export default function BranchCreditCustomers({ branchId, branchName, branchColo
                                     {txs.map(tx => (
                                       <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderBottom: '1px solid #f8fafc', fontSize: 12 }}>
                                         <span style={{ color: '#64748b' }}>{new Date(tx.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
-                                        <span style={{ fontWeight: 600, color: '#ef4444' }}>₪{Number(tx.amount).toLocaleString()}</span>
+                                        <span style={{ fontWeight: 600, color: '#ef4444' }}>₪{Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                                       </div>
                                     ))}
                                   </div>
@@ -320,7 +320,7 @@ export default function BranchCreditCustomers({ branchId, branchName, branchColo
                                           {new Date(p.date + 'T12:00:00').toLocaleDateString('he-IL')}
                                           {p.notes && <span style={{ color: '#94a3b8', marginRight: 6 }}>({p.notes})</span>}
                                         </span>
-                                        <span style={{ fontWeight: 600, color: '#34d399' }}>₪{Number(p.amount).toLocaleString()}</span>
+                                        <span style={{ fontWeight: 600, color: '#34d399' }}>₪{Number(p.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                                       </div>
                                     ))}
                                   </div>

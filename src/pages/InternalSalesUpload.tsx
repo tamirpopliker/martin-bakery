@@ -61,7 +61,7 @@ const S = {
     background: 'none', color: active ? '#0f172a' : '#94a3b8',
   } as React.CSSProperties),
 }
-const fmtMoney = (n: number) => '₪' + Math.round(n).toLocaleString()
+const fmtMoney = (n: number) => '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 const fmtDate = (d: string) => { const [y, m, dd] = d.split('-'); return `${dd}/${m}/${y}` }
 const getCurrentMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 

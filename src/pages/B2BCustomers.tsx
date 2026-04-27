@@ -45,7 +45,7 @@ const S = {
   tab: (a: boolean) => ({ padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', border: 'none', borderBottom: a ? '2px solid #0f172a' : '2px solid transparent', background: 'none', color: a ? '#0f172a' : '#94a3b8' } as React.CSSProperties),
   kpi: (bg: string, color: string) => ({ background: bg, borderRadius: 10, padding: 16, textAlign: 'center' as const, flex: 1, minWidth: 130 }),
 }
-const fmtM = (n: number) => '₪' + Math.round(n).toLocaleString()
+const fmtM = (n: number) => '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 const fmtDate = (d: string) => { if (!d) return '—'; const [y, m, dd] = d.split('-'); return `${dd}/${m}/${y}` }
 const getCurrentMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 

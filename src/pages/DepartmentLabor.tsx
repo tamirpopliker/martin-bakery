@@ -68,7 +68,7 @@ function calcGross(emp: Employee | null, h100: number, h125: number, h150: numbe
   return basePay + ((h100 + h125 + h150) * hourlyBonus)
 }
 
-function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString() }
+function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 

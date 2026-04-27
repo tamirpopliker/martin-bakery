@@ -54,7 +54,7 @@ interface BranchData {
   revCashier: number; revCredit: number; revWebsite: number
 }
 
-function fmtN(n: number) { return '₪' + Math.round(n).toLocaleString() }
+function fmtN(n: number) { return '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 
 /**
  * Get KPI color based on target comparison.
@@ -82,7 +82,7 @@ function ChartTooltip({ active, payload, label }: any) {
             <div className="w-2 h-2 rounded-full" style={{ background: entry.color || entry.fill }} />
             <span className="text-[11px] text-slate-600">{entry.name}</span>
           </div>
-          <span className="text-[12px] font-bold text-slate-800">₪{Number(entry.value).toLocaleString()}</span>
+          <span className="text-[12px] font-bold text-slate-800">₪{Number(entry.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
         </div>
       ))}
     </div>
@@ -98,7 +98,7 @@ function PieTooltip({ active, payload }: any) {
         <div className="w-2.5 h-2.5 rounded-full" style={{ background: d.payload.fill }} />
         <span className="text-[12px] font-semibold text-slate-700">{d.name}</span>
       </div>
-      <div className="text-[13px] font-bold text-slate-900 mt-1">₪{Number(d.value).toLocaleString()}</div>
+      <div className="text-[13px] font-bold text-slate-900 mt-1">₪{Number(d.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
     </div>
   )
 }

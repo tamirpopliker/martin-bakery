@@ -18,7 +18,7 @@ interface Props {
 }
 
 
-function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString() }
+function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
@@ -382,7 +382,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                     <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'k'} />
-                    <Tooltip formatter={(value: number, name: string) => ['₪' + Math.round(value).toLocaleString(), name]} />
+                    <Tooltip formatter={(value: number, name: string) => ['₪' + Math.round(value).toLocaleString(undefined, { maximumFractionDigits: 2 }), name]} />
                     <Legend />
                     <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
                     <Line type="monotone" dataKey="revenue" name="הכנסות" stroke="#378ADD" strokeWidth={2} dot={{ r: 3 }} />

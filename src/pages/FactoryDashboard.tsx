@@ -30,7 +30,7 @@ interface KpiTargets {
 // ─── Constants ────────────────────────────────────────────────────────────────
 const DEPTS: Dept[] = ['creams', 'dough', 'packaging', 'cleaning']
 
-const fmtM = (n: number) => '₪' + Math.round(n).toLocaleString()
+const fmtM = (n: number) => '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 const pct  = (a: number, b: number) => b > 0 ? (a / b) * 100 : 0
 
 const DEFAULT_TARGETS: KpiTargets = { labor_pct: 25, waste_pct: 5, repairs_pct: 3, gross_profit_pct: 40, production_pct: 45, operating_profit_pct: 30 }
@@ -518,7 +518,7 @@ export default function FactoryDashboard({ onBack }: Props) {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                     <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => `₪${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(value: any, name: any) => [`₪${Math.round(Number(value)).toLocaleString()}`, String(name)]} />
+                    <Tooltip formatter={(value: any, name: any) => [`₪${Math.round(Number(value)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, String(name)]} />
                     <Legend />
                     <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
                     <Line type="monotone" dataKey="revenue" name="מכירות" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />

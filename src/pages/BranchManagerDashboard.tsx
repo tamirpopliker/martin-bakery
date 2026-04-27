@@ -54,7 +54,7 @@ interface BranchData {
   avgDailyTransactions: number
 }
 
-function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString() }
+function fmtM(n: number) { return '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 
 function DiffBadge({ current, previous, inverse }: { current: number; previous: number; inverse?: boolean }) {
   if (previous === 0 && current === 0) return null
@@ -343,9 +343,9 @@ export default function BranchManagerDashboard({ onBack }: Props) {
             const tiles = [
               {
                 label: 'סה"כ הכנסות',
-                value: `₪${Math.round(totalRev).toLocaleString()}`,
+                value: `₪${Math.round(totalRev).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
                 pct: avgRevTarget > 0 ? (totalRev / avgRevTarget) * 100 : null,
-                targetLabel: avgRevTarget > 0 ? `יעד: ₪${avgRevTarget.toLocaleString()}` : undefined,
+                targetLabel: avgRevTarget > 0 ? `יעד: ₪${avgRevTarget.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : undefined,
                 status: avgRevTarget <= 0 ? 'none' : totalRev >= avgRevTarget * 0.95 ? 'good' : totalRev >= avgRevTarget * 0.8 ? 'warn' : 'bad',
               },
               {

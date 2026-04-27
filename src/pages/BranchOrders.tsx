@@ -349,7 +349,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
                         {new Date(s.order_date + 'T12:00:00').toLocaleDateString('he-IL')}
                       </span>
                       <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginRight: 12 }}>
-                        ₪{Number(s.total_amount).toLocaleString()}
+                        ₪{Number(s.total_amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </span>
                       {s.status === 'modified' && (
                         <span style={{ fontSize: 11, fontWeight: 600, background: '#faf5ff', color: '#7c3aed', padding: '2px 8px', borderRadius: 6, marginRight: 8 }}>עודכן — ממתין למפעל</span>
@@ -404,9 +404,9 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
                         <span>{item.qty_edit}</span>
                       )}
                     </td>
-                    <td style={{ fontSize: 13, padding: '8px', borderBottom: '1px solid #f1f5f9' }}>₪{Number(item.unit_price).toLocaleString()}</td>
+                    <td style={{ fontSize: 13, padding: '8px', borderBottom: '1px solid #f1f5f9' }}>₪{Number(item.unit_price).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                     <td style={{ fontSize: 13, padding: '8px', borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>
-                      ₪{((editingInternal ? Number(item.qty_edit) : item.quantity_supplied) * Number(item.unit_price)).toLocaleString()}
+                      ₪{((editingInternal ? Number(item.qty_edit) : item.quantity_supplied) * Number(item.unit_price)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                 ))}
@@ -414,7 +414,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
               <tfoot><tr>
                 <td colSpan={4} style={{ padding: '10px 8px', fontWeight: 700, borderTop: '2px solid #e2e8f0', textAlign: 'left' }}>סה"כ</td>
                 <td style={{ padding: '10px 8px', fontWeight: 700, borderTop: '2px solid #e2e8f0', fontSize: 15 }}>
-                  ₪{editInternalItems.reduce((s: number, i: any) => s + (editingInternal ? Number(i.qty_edit) : i.quantity_supplied) * Number(i.unit_price), 0).toLocaleString()}
+                  ₪{editInternalItems.reduce((s: number, i: any) => s + (editingInternal ? Number(i.qty_edit) : i.quantity_supplied) * Number(i.unit_price), 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </td>
               </tr></tfoot>
             </table>
@@ -457,7 +457,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
                   {pendingCount} הזמנות ממתינות לאישור
                 </div>
                 <div style={{ fontSize: '13px', color: '#94a3b8' }}>
-                  סה"כ ₪{pendingTotal.toLocaleString()}
+                  סה"כ ₪{pendingTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </div>
               </div>
             </div>
@@ -577,7 +577,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
                   </div>
                 ) : (
                   <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>
-                    ₪{Number(order.amount).toLocaleString()}
+                    ₪{Number(order.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                   </span>
                 )}
 
@@ -633,7 +633,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
                 סה"כ — {filtered.length} הזמנות
               </span>
               <span style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>
-                ₪{total.toLocaleString()}
+                ₪{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </span>
             </div>
           )}

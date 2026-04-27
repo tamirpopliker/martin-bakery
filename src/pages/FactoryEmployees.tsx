@@ -43,7 +43,7 @@ const fadeIn = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } },
 }
 
-function fmtM(n: number) { return '₪' + Math.round(n || 0).toLocaleString() }
+function fmtM(n: number) { return '₪' + Math.round(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 
 // ─── סגנונות ─────────────────────────────────────────────────────────────────
 const S = {

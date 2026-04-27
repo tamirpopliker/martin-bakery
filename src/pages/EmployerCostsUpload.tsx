@@ -47,7 +47,7 @@ const S = {
   label: { fontSize: 12, color: '#64748b', display: 'block', marginBottom: 4 } as React.CSSProperties,
   tab: (a: boolean) => ({ padding: '10px 20px', fontSize: 14, fontWeight: 500, cursor: 'pointer', border: 'none', borderBottom: a ? '2px solid #6366f1' : '2px solid transparent', background: 'none', color: a ? '#6366f1' : '#94a3b8' } as React.CSSProperties),
 }
-const fmtM = (n: number) => '₪' + Math.round(n).toLocaleString()
+const fmtM = (n: number) => '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
 export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
   const { appUser } = useAppUser()

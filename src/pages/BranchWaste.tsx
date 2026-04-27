@@ -199,7 +199,7 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
                 transition: 'all 0.15s',
                 fontFamily: 'inherit',
               }}>
-              <div style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>₪{c.total.toLocaleString()}</div>
+              <div style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>₪{c.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
               <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '3px' }}>{c.label}</div>
             </button>
           ))}
@@ -208,7 +208,7 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
         {/* Top product insight */}
         {topProduct && (
           <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 16px', marginBottom: 14, fontSize: 13, color: '#92400e' }}>
-            הפחת הגבוה ביותר: <strong>{topProduct[0]}</strong> — ₪{Math.round(topProduct[1]).toLocaleString()}
+            הפחת הגבוה ביותר: <strong>{topProduct[0]}</strong> — ₪{Math.round(topProduct[1]).toLocaleString(undefined, { maximumFractionDigits: 2 })}
           </div>
         )}
 
@@ -318,7 +318,7 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
                       <span style={{ fontSize: '11px', background: '#f1f5f9', color: '#64748b', padding: '2px 8px', borderRadius: '20px', fontWeight: '600' }}>{cat?.label || entry.category}</span>
                       <span style={{ fontSize: '12px', color: '#6366f1', fontWeight: 500 }}>{entry.product_name || '—'}</span>
                       <span style={{ fontSize: '13px', color: '#374151' }}>{entry.notes || '—'}</span>
-                      <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>₪{Number(entry.amount).toLocaleString()}</span>
+                      <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>₪{Number(entry.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                       <button onClick={e => { e.stopPropagation(); setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
                       <button onClick={e => { e.stopPropagation(); deleteEntry(entry.id) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#94a3b8" /></button>
                     </>
@@ -331,7 +331,7 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
           {filtered.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', background: '#fafafa', borderTop: '1px solid #f1f5f9' }}>
               <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>סה"כ — {filtered.length} רשומות</span>
-              <span style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>₪{total.toLocaleString()}</span>
+              <span style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>₪{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
             </div>
           )}
           </div>
@@ -349,7 +349,7 @@ export default function BranchWaste({ branchId, branchName, branchColor, onBack 
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
                 <YAxis yAxisId="amount" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
                 <YAxis yAxisId="pct" orientation="left" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => v + '%'} />
-                <Tooltip formatter={(value: number, name: string) => name === '% מהכנסות' ? value + '%' : '₪' + Math.round(value).toLocaleString()} />
+                <Tooltip formatter={(value: number, name: string) => name === '% מהכנסות' ? value + '%' : '₪' + Math.round(value).toLocaleString(undefined, { maximumFractionDigits: 2 })} />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
                 <Line yAxisId="amount" type="monotone" dataKey="finished" name="מוצר מוגמר" stroke="#fb7185" strokeWidth={2} dot={{ r: 3 }} />
                 <Line yAxisId="amount" type="monotone" dataKey="raw" name="חומרי גלם" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />

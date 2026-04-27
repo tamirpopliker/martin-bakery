@@ -310,7 +310,7 @@ export default function DataExport() {
             <div>
               <div style={{ fontSize: '16px', fontWeight: '700', color: '#065f46' }}>הייצוא הושלם!</div>
               <div style={{ fontSize: '13px', color: '#34d399', fontWeight: '600' }}>
-                מייצא {EXPORT_TABLES.length} טבלאות · {totalRecords.toLocaleString()} רשומות סה"כ · {allTime ? 'כל הזמנים' : month}
+                מייצא {EXPORT_TABLES.length} טבלאות · {totalRecords.toLocaleString(undefined, { maximumFractionDigits: 2 })} רשומות סה"כ · {allTime ? 'כל הזמנים' : month}
               </div>
             </div>
           </div>

@@ -538,7 +538,7 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
                         {ALERT_CONDITIONS.find(c => c.value === rule.condition)?.label}
                       </span>
                       <span style={{ fontWeight: '700', color: '#374151' }}>
-                        {rule.threshold_type === 'percent' ? `${rule.threshold}%` : `₪${Number(rule.threshold).toLocaleString()}`}
+                        {rule.threshold_type === 'percent' ? `${rule.threshold}%` : `₪${Number(rule.threshold).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
                       </span>
                       <span>
                         <button onClick={() => toggleAlertActive(rule)}
@@ -583,8 +583,8 @@ export default function ReportsAlerts({ onBack }: { onBack: () => void }) {
                     <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '180px 1fr 120px 120px 80px', padding: '14px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px' }}>
                       <span style={{ color: '#64748b', fontSize: '12px' }}>{new Date(entry.triggered_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}</span>
                       <span style={{ fontWeight: '600', color: '#0f172a' }}>{entry.rule_name}</span>
-                      <span style={{ fontWeight: '700', color: '#ef4444' }}>₪{Number(entry.actual_value).toLocaleString()}</span>
-                      <span style={{ color: '#64748b' }}>₪{Number(entry.threshold_value).toLocaleString()}</span>
+                      <span style={{ fontWeight: '700', color: '#ef4444' }}>₪{Number(entry.actual_value).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                      <span style={{ color: '#64748b' }}>₪{Number(entry.threshold_value).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                       <span style={{ fontSize: '14px', color: entry.email_sent ? '#34d399' : '#fb7185' }}>{entry.email_sent ? '✓' : '✗'}</span>
                     </div>
                   ))}

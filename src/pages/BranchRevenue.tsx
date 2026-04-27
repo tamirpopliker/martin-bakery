@@ -391,7 +391,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
             { label: 'סה"כ',  val: totalRevenue, color: '#0f172a' },
           ].map(s => (
             <div key={s.label} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px', textAlign: 'center' as const }}>
-              <div style={{ fontSize: '24px', fontWeight: '700', color: s.color }}>₪{Math.round(s.val).toLocaleString()}</div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: s.color }}>₪{Math.round(s.val).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
               <div style={{ fontSize: '12px', color: '#94a3b8' }}>{s.label}</div>
             </div>
           ))}
@@ -438,15 +438,15 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
                 <div style={{ padding: 14, background: '#ecfdf5', borderRadius: 12, border: '1px solid #a7f3d0' }}>
                   <div style={{ fontSize: 12, color: '#047857', fontWeight: 700 }}>סה"כ מכירות מזומן</div>
-                  <div style={{ fontSize: 24, fontWeight: 900, color: '#065f46' }}>₪{Math.round(closingsCash).toLocaleString()}</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: '#065f46' }}>₪{Math.round(closingsCash).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                 </div>
                 <div style={{ padding: 14, background: '#eff6ff', borderRadius: 12, border: '1px solid #bfdbfe' }}>
                   <div style={{ fontSize: 12, color: '#1d4ed8', fontWeight: 700 }}>סה"כ מכירות אשראי</div>
-                  <div style={{ fontSize: 24, fontWeight: 900, color: '#1e3a8a' }}>₪{Math.round(closingsCredit).toLocaleString()}</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: '#1e3a8a' }}>₪{Math.round(closingsCredit).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                 </div>
                 <div style={{ padding: 14, background: '#f5f3ff', borderRadius: 12, border: '1px solid #ddd6fe' }}>
                   <div style={{ fontSize: 12, color: '#6d28d9', fontWeight: 700 }}>סה"כ עסקאות</div>
-                  <div style={{ fontSize: 24, fontWeight: 900, color: '#4c1d95' }}>{closingsTx.toLocaleString()}</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: '#4c1d95' }}>{closingsTx.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                 </div>
                 <div style={{ padding: 14, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: 12, color: '#475569', fontWeight: 700 }}>סל ממוצע</div>
@@ -484,8 +484,8 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                         <tr key={`${c.date}-${c.register_number}-${i}`} style={{ borderBottom: '1px solid #f8fafc' }}>
                           <td style={{ padding: '9px 14px', fontSize: 13, color: '#64748b' }}>{new Date(c.date + 'T12:00:00').toLocaleDateString('he-IL')}</td>
                           <td style={{ padding: '9px 14px', fontWeight: 700, color: '#0f172a' }}>{c.register_number}</td>
-                          <td style={{ padding: '9px 14px', color: '#10b981', fontWeight: 700 }}>₪{Number(c.cash_sales).toLocaleString()}</td>
-                          <td style={{ padding: '9px 14px', color: '#3b82f6', fontWeight: 700 }}>₪{Number(c.credit_sales).toLocaleString()}</td>
+                          <td style={{ padding: '9px 14px', color: '#10b981', fontWeight: 700 }}>₪{Number(c.cash_sales).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '9px 14px', color: '#3b82f6', fontWeight: 700 }}>₪{Number(c.credit_sales).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                           <td style={{ padding: '9px 14px', color: '#64748b' }}>{c.transaction_count || '—'}</td>
                         </tr>
                       ))}
@@ -494,7 +494,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #f1f5f9', background: '#f8fafc' }}>
                   <span style={{ fontWeight: 700, color: '#374151', fontSize: 13 }}>סה"כ — {closingsInPeriod.length} סגירות</span>
-                  <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 15 }}>₪{Math.round(closingsTotal).toLocaleString()}</span>
+                  <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 15 }}>₪{Math.round(closingsTotal).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                 </div>
               </div>
             )}
@@ -534,7 +534,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                           <span style={{ fontSize: 13, color: '#64748b' }}>{new Date(entry.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
                           <div><div style={{ fontWeight: 600, color: '#374151', fontSize: 14 }}>{entry.notes || '—'}</div></div>
                           <span style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center' }}>{entry.transaction_count || '—'}</span>
-                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>₪{Number(entry.amount).toLocaleString()}</span>
+                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>₪{Number(entry.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                           <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Pencil size={14} color="#94a3b8" /></button>
                           <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Trash2 size={14} color="#fb7185" /></button>
                         </>
@@ -544,7 +544,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #f1f5f9', background: '#f8fafc' }}>
                   <span style={{ fontWeight: 700, color: '#374151', fontSize: 13 }}>סה"כ היסטורי — {legacyCashierEntries.length} רשומות</span>
-                  <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 15 }}>₪{Math.round(legacyCashierTotal).toLocaleString()}</span>
+                  <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 15 }}>₪{Math.round(legacyCashierTotal).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                 </div>
               </div>
             )}
@@ -648,7 +648,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                   <span style={{ fontSize: '13px', color: '#64748b' }}>{new Date(entry.date + 'T12:00:00').toLocaleDateString('he-IL')}</span>
                   <div><div style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{tab === 'credit' ? (entry.customer || '—') : (entry.notes || '—')}</div></div>
                   <span style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'center' }}>{tab === 'credit' ? (entry.doc_number || '—') : (entry.transaction_count || '—')}</span>
-                  <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>₪{Number(entry.amount).toLocaleString()}</span>
+                  <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>₪{Number(entry.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                   <button onClick={() => { setEditId(entry.id); setEditData(entry) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Pencil size={14} color="#94a3b8" /></button>
                   <button onClick={() => deleteEntry(entry.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} color="#fb7185" /></button>
                 </>
@@ -659,7 +659,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
           {filtered.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid #f1f5f9' }}>
               <span style={{ fontWeight: '700', color: '#374151', fontSize: '14px' }}>סה"כ — {filtered.length} רשומות</span>
-              <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '18px' }}>₪{tabTotal.toLocaleString()}</span>
+              <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '18px' }}>₪{tabTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
             </div>
           )}
         </div>
@@ -683,19 +683,19 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                 onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
                 <span style={{ fontSize: '13px', color: '#374151', fontWeight: '600' }}>{new Date(day.date + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })}</span>
-                <span style={{ color: '#818cf8', fontWeight: '600', fontSize: '13px' }}>{day.cashier > 0 ? '₪' + day.cashier.toLocaleString() : '—'}</span>
-                <span style={{ color: '#c084fc', fontWeight: '600', fontSize: '13px' }}>{day.website > 0 ? '₪' + day.website.toLocaleString() : '—'}</span>
-                <span style={{ color: '#fbbf24', fontWeight: '600', fontSize: '13px' }}>{day.credit > 0 ? '₪' + day.credit.toLocaleString() : '—'}</span>
-                <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>₪{day.total.toLocaleString()}</span>
+                <span style={{ color: '#818cf8', fontWeight: '600', fontSize: '13px' }}>{day.cashier > 0 ? '₪' + day.cashier.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</span>
+                <span style={{ color: '#c084fc', fontWeight: '600', fontSize: '13px' }}>{day.website > 0 ? '₪' + day.website.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</span>
+                <span style={{ color: '#fbbf24', fontWeight: '600', fontSize: '13px' }}>{day.credit > 0 ? '₪' + day.credit.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</span>
+                <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '14px' }}>₪{day.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                 <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{day.transactions || '—'}</span>
               </div>
             ))}
             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr 110px 70px', padding: '12px 18px', borderTop: '1px solid #f1f5f9', fontWeight: '700' }}>
               <span style={{ color: '#374151', fontSize: '13px' }}>סה"כ</span>
-              <span style={{ color: '#818cf8' }}>₪{totalCashier.toLocaleString()}</span>
-              <span style={{ color: '#c084fc' }}>₪{totalWebsite.toLocaleString()}</span>
-              <span style={{ color: '#fbbf24' }}>₪{totalCredit.toLocaleString()}</span>
-              <span style={{ color: '#0f172a', fontSize: '15px' }}>₪{totalRevenue.toLocaleString()}</span>
+              <span style={{ color: '#818cf8' }}>₪{totalCashier.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              <span style={{ color: '#c084fc' }}>₪{totalWebsite.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              <span style={{ color: '#fbbf24' }}>₪{totalCredit.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              <span style={{ color: '#0f172a', fontSize: '15px' }}>₪{totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
               <span style={{ textAlign: 'center', color: '#64748b' }}>{totalTx || '—'}</span>
             </div>
           </div>
@@ -713,7 +713,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
-                  <Tooltip formatter={(value: number) => '₪' + Math.round(value).toLocaleString()} />
+                  <Tooltip formatter={(value: number) => '₪' + Math.round(value).toLocaleString(undefined, { maximumFractionDigits: 2 })} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
                   <Line type="monotone" dataKey="cashier" name="קופה" stroke="#818cf8" strokeWidth={2} dot={{ r: 3 }} />
                   <Line type="monotone" dataKey="website" name="אתר" stroke="#c084fc" strokeWidth={2} dot={{ r: 3 }} />
@@ -777,7 +777,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                           {new Date(row.date + 'T12:00:00').toLocaleDateString('he-IL')}
                           {row.exists && <AlertCircle size={12} color="#f59e0b" style={{ marginRight: '4px', verticalAlign: 'middle' }} />}
                         </span>
-                        <span style={{ fontSize: '13px', fontWeight: '700', color: '#818cf8' }}>₪{row.amount.toLocaleString()}</span>
+                        <span style={{ fontSize: '13px', fontWeight: '700', color: '#818cf8' }}>₪{row.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                         <span style={{ fontSize: '13px', color: '#64748b', textAlign: 'center' }}>{row.transactions}</span>
                       </div>
                     ))}

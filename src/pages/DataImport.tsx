@@ -1039,12 +1039,12 @@ export default function DataImport({ branchOnly }: Props) {
           <Card className="shadow-sm"><CardContent className="p-6" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
             <div>
               <div style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>
-                {done ? `יובאו ${totalInserted.toLocaleString()} שורות` : `${readyFiles.length} קבצים מוכנים לייבוא`}
+                {done ? `יובאו ${totalInserted.toLocaleString(undefined, { maximumFractionDigits: 2 })} שורות` : `${readyFiles.length} קבצים מוכנים לייבוא`}
               </div>
               <div style={{ fontSize: '13px', color: '#94a3b8', marginTop: '2px' }}>
                 {done
                   ? `${totalSkipped > 0 ? `דולגו ${totalSkipped} כפילויות · ` : ''}${files.filter(f => f.status === 'done').length} טבלאות`
-                  : `${totalReady.toLocaleString()} שורות סה"כ`}
+                  : `${totalReady.toLocaleString(undefined, { maximumFractionDigits: 2 })} שורות סה"כ`}
               </div>
               {detectedMonth && !done && (
                 <div style={{ fontSize: '13px', color: '#6366f1', fontWeight: '600', marginTop: '4px' }}>
@@ -1213,7 +1213,7 @@ export default function DataImport({ branchOnly }: Props) {
               <CheckCircle size={40} color="#34d399" style={{ marginBottom: '12px' }} />
               <div style={{ fontSize: '20px', fontWeight: '800', color: '#065f46', marginBottom: '8px' }}>הייבוא הושלם בהצלחה!</div>
               <div style={{ fontSize: '15px', color: '#34d399', fontWeight: '600' }}>
-                יובאו {totalInserted.toLocaleString()} שורות{totalSkipped > 0 && ` · דולגו ${totalSkipped} כפילויות`}
+                יובאו {totalInserted.toLocaleString(undefined, { maximumFractionDigits: 2 })} שורות{totalSkipped > 0 && ` · דולגו ${totalSkipped} כפילויות`}
               </div>
               </CardContent>
             </Card>
@@ -1243,7 +1243,7 @@ export default function DataImport({ branchOnly }: Props) {
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151', marginTop: '4px' }}>{info.label}</div>
                     {info.sum !== undefined && info.sum > 0 && (
                       <div style={{ fontSize: '10px', color: '#374151', fontWeight: '600', marginTop: '2px' }}>
-                        {info.sumLabel || 'סכום'}: ₪{Math.round(info.sum).toLocaleString()}
+                        {info.sumLabel || 'סכום'}: ₪{Math.round(info.sum).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </div>
                     )}
                     <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', direction: 'ltr' }}>{table}</div>

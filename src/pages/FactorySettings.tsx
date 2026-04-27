@@ -83,7 +83,7 @@ const KPI_FIELDS: { key: keyof KpiTarget; label: string; higher: boolean; hint: 
   { key: 'operating_profit_pct', label: 'רווח תפעולי %',   higher: true,  hint: 'גבוה יותר = טוב יותר' },
 ]
 
-function fmtM(n: number) { return '₪' + Math.round(n || 0).toLocaleString() }
+function fmtM(n: number) { return '₪' + Math.round(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 
 // ─── קומפוננטה ראשית ─────────────────────────────────────────────────────────
 export default function FactorySettings({ onBack }: Props) {

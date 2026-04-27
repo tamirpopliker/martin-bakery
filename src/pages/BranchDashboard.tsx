@@ -16,7 +16,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 
 /* ─── helpers ─── */
 
-function fmtN(n: number) { return '₪' + Math.round(n).toLocaleString() }
+function fmtN(n: number) { return '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 function fmtPct(n: number) { return n.toFixed(1) + '%' }
 
 const fadeIn = (delay = 0) => ({
@@ -51,7 +51,7 @@ function ChartTooltip({ active, payload, label }: any) {
             <div className="w-2 h-2 rounded-full" style={{ background: entry.color }} />
             <span className="text-[11px] text-slate-600">{entry.name}</span>
           </div>
-          <span className="text-[12px] font-bold text-slate-800">₪{Number(entry.value).toLocaleString()}</span>
+          <span className="text-[12px] font-bold text-slate-800">₪{Number(entry.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
         </div>
       ))}
     </div>

@@ -395,7 +395,7 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
                 {bySupplier.map(s => (
                   <div key={s.name} style={{ background: '#f1f5f9', borderRadius: 8, padding: '6px 12px', display: 'flex', gap: 6, alignItems: 'center' }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{s.name}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>₪{s.total.toLocaleString()}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>₪{s.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                     <span style={{ fontSize: 11, color: '#94a3b8' }}>({Math.round(s.total / totalInv * 100)}%)</span>
                   </div>
                 ))}
@@ -435,7 +435,7 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
                         </div>
                         <span style={{ fontSize: 11, background: '#f1f5f9', color: '#64748b', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>{inv.doc_type}</span>
                         <span style={{ fontSize: 13, color: '#94a3b8' }}>{inv.doc_number || '—'}</span>
-                        <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>₪{Number(inv.amount).toLocaleString()}</span>
+                        <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 14 }}>₪{Number(inv.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                         <button onClick={() => { setEditInvId(inv.id); setEditInvData(inv) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Pencil size={13} color="#94a3b8" /></button>
                         <button onClick={() => deleteInvoice(inv.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Trash2 size={13} color="#94a3b8" /></button>
                       </>
@@ -447,7 +447,7 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
                 {filteredInv.length > 0 && (
                   <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 110px 110px 120px 36px 36px', padding: '13px 20px', background: '#f8fafc', borderTop: '1px solid #f1f5f9' }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: '#374151', gridColumn: '1/5' }}>סה"כ — {filteredInv.length} חשבוניות</span>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>₪{totalInv.toLocaleString()}</span>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>₪{totalInv.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                     <span /><span />
                   </div>
                 )}
@@ -521,7 +521,7 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
                             <span style={{ fontWeight: 600, color: '#374141', fontSize: 13 }}>{sup.name}</span>
                           </div>
                           <span style={{ textAlign: 'center', fontWeight: 700, color: monthTotal > 0 ? '#0f172a' : '#cbd5e1', fontSize: 13 }}>
-                            {monthTotal > 0 ? '₪' + monthTotal.toLocaleString() : '—'}
+                            {monthTotal > 0 ? '₪' + monthTotal.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}
                           </span>
                           <button onClick={() => { setEditSuppId(sup.id); setEditSuppName(sup.name) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Pencil size={13} color="#94a3b8" /></button>
                           <button onClick={() => deleteSupplier(sup.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}><Trash2 size={13} color="#94a3b8" /></button>

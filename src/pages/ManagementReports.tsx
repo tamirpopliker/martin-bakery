@@ -24,7 +24,7 @@ const BRANCH_REGISTERS: Record<number, number[]> = {
 }
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
-const fmt = (n: number) => '₪' + Math.round(n).toLocaleString()
+const fmt = (n: number) => '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 const pct = (n: number) => (n >= 0 ? '+' : '') + n.toFixed(1) + '%'
 
 function monthDays(year: number, month: number): Date[] {

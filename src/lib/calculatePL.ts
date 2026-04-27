@@ -334,7 +334,7 @@ export async function calculateConsolidatedPL(
     consolidated,
     elimination,
     eliminationWarning: Math.abs(elimination) > 1
-      ? `⚠️ פער של ₪${Math.round(Math.abs(elimination)).toLocaleString()} בנתונים פנימיים`
+      ? `⚠️ פער של ₪${Math.round(Math.abs(elimination)).toLocaleString(undefined, { maximumFractionDigits: 2 })} בנתונים פנימיים`
       : null,
   }
 }

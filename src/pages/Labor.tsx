@@ -547,7 +547,7 @@ export default function Labor({ onBack }: Props) {
                         {row.found && row.employee && !shouldHideSalary(row.employee, row.employee.name) && (
                           <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
                             {row.employee.wage_type === 'global'
-                              ? `גלובלי: ₪${Math.round(row.employee.global_daily_rate).toLocaleString()}/חודש${row.employee.bonus ? ` + בונוס ₪${Math.round(row.employee.bonus).toLocaleString()}/חודש` : ''}`
+                              ? `גלובלי: ₪${Math.round(row.employee.global_daily_rate).toLocaleString(undefined, { maximumFractionDigits: 2 })}/חודש${row.employee.bonus ? ` + בונוס ₪${Math.round(row.employee.bonus).toLocaleString(undefined, { maximumFractionDigits: 2 })}/חודש` : ''}`
                               : `₪${row.employee.hourly_rate}/ש׳${row.employee.bonus ? ` + בונוס ₪${row.employee.bonus}/ש׳` : ''}`
                             }
                           </div>
@@ -675,7 +675,7 @@ export default function Labor({ onBack }: Props) {
                 <input type="month" value={historyMonth} onChange={e => setHistoryMonth(e.target.value)}
                   style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '8px 14px', fontSize: 14, fontFamily: 'inherit' }} />
                 <div style={{ marginRight: 'auto', display: 'flex', gap: 16, fontSize: 13, color: '#64748b' }}>
-                  <span>סה"כ: <strong style={{ color: '#0f172a' }}>₪{Math.round(totalCostAll).toLocaleString()}</strong></span>
+                  <span>סה"כ: <strong style={{ color: '#0f172a' }}>₪{Math.round(totalCostAll).toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></span>
                   <span>שעות: <strong>{totalHoursAll.toFixed(1)}</strong></span>
                   <span>ימים: <strong>{dates.length}</strong></span>
                   <span>רשומות: <strong>{historyData.length}</strong></span>
@@ -705,7 +705,7 @@ export default function Labor({ onBack }: Props) {
                             style={{ flex: 1, display: 'grid', gridTemplateColumns: '80px 1fr 100px 100px 30px', alignItems: 'center', padding: '13px 20px', background: 'white', border: 'none', cursor: 'pointer', fontSize: 13, textAlign: 'right' }}>
                             <span style={{ fontWeight: 700, color: '#0f172a' }}>{dayName} {dateStr}</span>
                             <span style={{ fontSize: 12, color: '#94a3b8' }}>{dayEmps} עובדים · {dayHours.toFixed(1)} ש׳</span>
-                            <span style={{ fontWeight: 700, color: '#0f172a' }}>₪{Math.round(dayCost).toLocaleString()}</span>
+                            <span style={{ fontWeight: 700, color: '#0f172a' }}>₪{Math.round(dayCost).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                             <span />
                             {isOpen ? <ChevronUp size={15} color="#94a3b8" /> : <ChevronDown size={15} color="#94a3b8" />}
                           </button>
@@ -747,7 +747,7 @@ export default function Labor({ onBack }: Props) {
                                     <span style={{ color: r.hours_125 > 0 ? '#f59e0b' : '#d1d5db', fontWeight: r.hours_125 > 0 ? 600 : 400 }}>{r.hours_125 || '—'}</span>
                                     <span style={{ color: r.hours_150 > 0 ? '#ef4444' : '#d1d5db', fontWeight: r.hours_150 > 0 ? 600 : 400 }}>{r.hours_150 || '—'}</span>
                                     <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 12 }}>
-                                      {shouldHideSalary(allEmployees.find(e => e.name === r.employee_name), r.employee_name) ? '—' : `₪${Math.round(r.employer_cost || 0).toLocaleString()}`}
+                                      {shouldHideSalary(allEmployees.find(e => e.name === r.employee_name), r.employee_name) ? '—' : `₪${Math.round(r.employer_cost || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
                                     </span>
                                     <div style={{ display: 'flex', gap: 2 }}>
                                       <button onClick={() => { setEditHistId(r.id); setEditHistData({ ...r }) }}
@@ -817,13 +817,13 @@ export default function Labor({ onBack }: Props) {
                             ? '—'
                             : emp.wage_type === 'hourly'
                               ? (emp.hourly_rate ? `₪${emp.hourly_rate}/ש׳` : '—')
-                              : (emp.global_daily_rate ? '₪' + Math.round(emp.global_daily_rate).toLocaleString() + '/חודש' : '—')}
+                              : (emp.global_daily_rate ? '₪' + Math.round(emp.global_daily_rate).toLocaleString(undefined, { maximumFractionDigits: 2 }) + '/חודש' : '—')}
                         </span>
                         <span style={{ fontSize: 12, color: emp.bonus ? '#64748b' : '#d1d5db', fontWeight: 600 }}>
                           {shouldHideSalary(emp, emp.name)
                             ? '—'
                             : emp.bonus
-                              ? (emp.wage_type === 'hourly' ? `₪${emp.bonus}/ש׳` : '₪' + Math.round(emp.bonus).toLocaleString() + '/חודש')
+                              ? (emp.wage_type === 'hourly' ? `₪${emp.bonus}/ש׳` : '₪' + Math.round(emp.bonus).toLocaleString(undefined, { maximumFractionDigits: 2 }) + '/חודש')
                               : '—'}
                         </span>
                         <button onClick={() => { setEditEmpId(emp.id); setEditEmpData(emp) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>

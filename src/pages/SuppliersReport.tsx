@@ -110,7 +110,7 @@ function similarity(a: string, b: string): number {
   return 1 - levenshtein(a, b) / maxLen
 }
 
-const fmtK = (n: number) => '₪' + Math.round(n).toLocaleString()
+const fmtK = (n: number) => '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
 // Compute the previous period (same length, ending just before `from`).
 function prevPeriod(from: string, to: string): { from: string; to: string } {

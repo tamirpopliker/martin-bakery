@@ -49,7 +49,7 @@ const S = {
   } as React.CSSProperties),
 }
 
-const fmtMoney = (n: number) => '₪' + Math.round(n).toLocaleString()
+const fmtMoney = (n: number) => '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
 export default function FactoryEquipment({ onBack }: Props) {
   const { period, setPeriod, from, to } = usePeriod()

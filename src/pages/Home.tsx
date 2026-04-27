@@ -78,7 +78,7 @@ const PANEL_MANAGE = [
   { label: 'ייבוא נתונים', subtitle: 'CSV מ-Base44 · העלאה',   Icon: Database, color: '#818cf8', page: 'data_import' },
 ]
 
-const fmtK = (n: number) => n === 0 ? '—' : '₪' + Math.round(n).toLocaleString()
+const fmtK = (n: number) => n === 0 ? '—' : '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
 interface BranchKpi { id: number; name: string; color: string; revenue: number; laborCost: number; laborPct: number }
 

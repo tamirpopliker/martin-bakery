@@ -53,7 +53,7 @@ function pct(part: number, total: number) {
   return total > 0 ? (part / total) * 100 : 0
 }
 function fmtPct(n: number) { return n.toFixed(1) + '%' }
-function fmtMoney(n: number) { return '₪' + Math.round(n).toLocaleString() }
+function fmtMoney(n: number) { return '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 

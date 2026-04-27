@@ -72,7 +72,7 @@ interface Closing {
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' as const } } }
 
 function todayISO() { return new Date().toISOString().split('T')[0] }
-function fmt(n: number) { return '₪' + Math.round(n).toLocaleString() }
+function fmt(n: number) { return '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 function fmtDec(n: number) { return '₪' + n.toFixed(2) }
 
 // ─── Image with graceful fallback ──────────────────────────────────────────

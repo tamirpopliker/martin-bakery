@@ -28,7 +28,7 @@ const S = {
   td: { fontSize: 13, color: '#1e293b', padding: '10px 8px', borderBottom: '1px solid #f1f5f9' },
   input: { border: '1px solid #e2e8f0', borderRadius: 10, padding: '9px 14px', fontSize: 13, width: '100%', boxSizing: 'border-box' as const, outline: 'none' } as React.CSSProperties,
 }
-const fmtM = (n: number) => '₪' + Math.round(n).toLocaleString()
+const fmtM = (n: number) => '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 const fmtDate = (d: string) => { if (!d) return '—'; const [y, m, dd] = d.split('-'); return `${dd}/${m}/${y}` }
 const getCurrentMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 
