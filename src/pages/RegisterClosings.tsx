@@ -1260,7 +1260,8 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
                           <>
                             <div style={{ fontSize: 13, color: '#065f46', fontWeight: 600, marginBottom: 8 }}>
                               מזומן: {fmtDec(Number(closing.cash_sales))}<br />
-                              פער: {fmtDec(Number(closing.variance))}
+                              פער: {fmtDec(Number(closing.variance))}<br />
+                              פתיחה מחר: {fmtDec(Number(closing.next_opening_balance))}
                             </div>
                             <div style={{ display: 'flex', gap: 6 }}>
                               <button onClick={() => setEditClosing(closing)}
