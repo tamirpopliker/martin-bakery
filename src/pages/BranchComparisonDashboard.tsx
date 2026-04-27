@@ -68,8 +68,10 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
       const results: BranchPL[] = []
 
       for (const br of branches.filter(b => selectedIds.includes(b.id))) {
-        const [revRes, labRes, expRes, wasteRes, fcRes] = await Promise.all([
+        const [revRes, closeRes, labRes, expRes, wasteRes, fcRes] = await Promise.all([
           supabase.from('branch_revenue').select('amount')
+            .eq('branch_id', br.id).gte('date', from).lt('date', to),
+          supabase.from('register_closings').select('cash_sales, credit_sales')
             .eq('branch_id', br.id).gte('date', from).lt('date', to),
           supabase.from('branch_labor').select('employer_cost')
             .eq('branch_id', br.id).gte('date', from).lt('date', to),
@@ -82,7 +84,9 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
             .eq('month', monthKey || from.slice(0, 7)),
         ])
 
-        const revenue = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+        const legacyRevenue = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+        const closingsRevenue = (closeRes.data || []).reduce((s, c) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0)
+        const revenue = legacyRevenue + closingsRevenue
 
         // Check employer_costs for actual payroll data
         const mk = monthKey || from.slice(0, 7)

@@ -194,24 +194,34 @@ export default function CEODashboard({ onBack }: Props) {
     setFactoryB2b(0) // b2b breakdown not needed separately
     setFactoryInternalSales(factoryPL.internalRevenue)
 
-    // Fetch revenue by channel for each branch (needed for UI breakdown)
+    // Fetch revenue by channel for each branch (needed for UI breakdown).
+    // register_closings.cash_sales → cashier bucket; credit_sales → credit bucket.
     let totalCashier = 0, totalCredit = 0, totalWebsite = 0
     const channelData = await Promise.all(
-      BRANCHES.map(br =>
+      BRANCHES.map(br => Promise.all([
         supabase.from('branch_revenue').select('source, amount')
-          .eq('branch_id', br.id).gte('date', from).lt('date', to)
-      )
+          .eq('branch_id', br.id).gte('date', from).lt('date', to),
+        supabase.from('register_closings').select('cash_sales, credit_sales')
+          .eq('branch_id', br.id).gte('date', from).lt('date', to),
+      ]))
     )
 
     const branchResults: BranchData[] = branchPLs.map((pl, i) => {
       const br = BRANCHES[i]
-      const revData = channelData[i].data || []
+      const [revRes, closeRes] = channelData[i]
+      const revData = revRes.data || []
       let brCashier = 0, brCredit = 0, brWebsite = 0
       for (const r of revData) {
         const amt = Number(r.amount)
         if (r.source === 'cashier') { totalCashier += amt; brCashier += amt }
         else if (r.source === 'credit') { totalCredit += amt; brCredit += amt }
         else if (r.source === 'website') { totalWebsite += amt; brWebsite += amt }
+      }
+      for (const c of (closeRes.data || [])) {
+        const cash = Number(c.cash_sales || 0)
+        const credit = Number(c.credit_sales || 0)
+        totalCashier += cash; brCashier += cash
+        totalCredit += credit; brCredit += credit
       }
       const expenses = pl.factoryPurchases + pl.externalSuppliers + pl.repairs + pl.deliveries + pl.infrastructure + pl.otherExpenses
       return {
@@ -254,12 +264,18 @@ export default function CEODashboard({ onBack }: Props) {
     // Branch revenue by source
     for (let bi = 0; bi < BRANCHES.length; bi++) {
       const br = BRANCHES[bi]
-      const chData = channelData[bi].data || []
+      const [chRevRes, chCloseRes] = channelData[bi]
+      const chData = chRevRes.data || []
       for (const r of chData) {
         const amt = Number(r.amount)
         if (r.source === 'cashier') { revBd[0].byBranch[br.id] = (revBd[0].byBranch[br.id] || 0) + amt }
         else if (r.source === 'website') { revBd[1].byBranch[br.id] = (revBd[1].byBranch[br.id] || 0) + amt }
         else if (r.source === 'credit' || r.source === 'credit_b2b') { revBd[2].byBranch[br.id] = (revBd[2].byBranch[br.id] || 0) + amt }
+      }
+      // register_closings = in-store POS sales (cash + credit-card) — bucket as cashier
+      for (const c of (chCloseRes.data || [])) {
+        const total = Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
+        revBd[0].byBranch[br.id] = (revBd[0].byBranch[br.id] || 0) + total
       }
     }
     // B2B invoices by branch
@@ -353,7 +369,7 @@ export default function CEODashboard({ onBack }: Props) {
       const brInsightInput: InsightsInput = {
         labor: {
           totalCost: br.labor,
-          targetPct: tMap[br.id]?.labor_pct || 28,
+          targetPct: branchTargets[br.id]?.labor_pct || 28,
           revenue: br.revenue,
         },
         revenue: {
@@ -362,7 +378,7 @@ export default function CEODashboard({ onBack }: Props) {
         },
         waste: {
           totalAmount: br.waste,
-          targetPct: tMap[br.id]?.waste_pct || 3,
+          targetPct: branchTargets[br.id]?.waste_pct || 3,
           revenue: br.revenue,
         },
         controllableProfit: {
