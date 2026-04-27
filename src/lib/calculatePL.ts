@@ -5,6 +5,102 @@
  */
 import { supabase, fetchGlobalEmployees, calcGlobalLaborForDept, getWorkingDays } from './supabase'
 
+const HQ_ESTIMATE_PCT_DEFAULT = 10
+
+export interface HQContext {
+  isActual: boolean              // true when employer_costs has is_headquarters=true rows for the month
+  hqCost: number                 // sum of those rows (₪)
+  totalExternalRevenue: number   // sum across all branches + factory
+  estimatePct: number            // % of revenue used when isActual=false
+  branchExternalRev: Record<number, number>
+  factoryExternalRev: number
+}
+
+/**
+ * Headquarters-cost allocation context for a period. Mirrors the labor pattern:
+ * estimate (revenue × pct) until employer_costs is uploaded with is_headquarters=true rows;
+ * actual once uploaded (each entity charged its share of external-revenue × actual HQ cost).
+ *
+ * Pre-fetch this once per period and pass into calculateBranchPL / calculateFactoryPL to avoid
+ * repeated cross-entity queries.
+ */
+export async function getHQAllocationContext(
+  periodStart: string,
+  periodEnd: string,
+  monthKey: string
+): Promise<HQContext> {
+  const [year, month] = monthKey.split('-').map(Number)
+
+  const { data: branchesData } = await supabase.from('branches').select('id').eq('active', true)
+  const branchIds: number[] = (branchesData || []).map((b: { id: number }) => b.id)
+
+  const [hqRes, settingRes, revRes, closeRes, factSalesExtRes, factB2BExtRes] = await Promise.all([
+    supabase.from('employer_costs').select('actual_employer_cost')
+      .eq('year', year).eq('month', month).eq('is_headquarters', true),
+    supabase.from('system_settings').select('value').eq('key', 'hq_estimate_pct').maybeSingle(),
+    branchIds.length
+      ? supabase.from('branch_revenue').select('branch_id, amount')
+          .in('branch_id', branchIds).gte('date', periodStart).lt('date', periodEnd).range(0, 99999)
+      : Promise.resolve({ data: [] }),
+    branchIds.length
+      ? supabase.from('register_closings').select('branch_id, cash_sales, credit_sales')
+          .in('branch_id', branchIds).gte('date', periodStart).lt('date', periodEnd).range(0, 99999)
+      : Promise.resolve({ data: [] }),
+    supabase.from('factory_sales').select('amount').eq('is_internal', false)
+      .gte('date', periodStart).lt('date', periodEnd),
+    supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false)
+      .gte('date', periodStart).lt('date', periodEnd),
+  ])
+
+  const hqRows = hqRes.data || []
+  const isActual = hqRows.length > 0
+  const hqCost = isActual ? hqRows.reduce((s, r) => s + Number(r.actual_employer_cost || 0), 0) : 0
+  const estimatePct = Number(settingRes.data?.value ?? HQ_ESTIMATE_PCT_DEFAULT)
+
+  const branchExternalRev: Record<number, number> = {}
+  for (const id of branchIds) branchExternalRev[id] = 0
+  for (const r of (revRes.data || []) as { branch_id: number; amount: number }[]) {
+    branchExternalRev[r.branch_id] = (branchExternalRev[r.branch_id] || 0) + Number(r.amount)
+  }
+  for (const c of (closeRes.data || []) as { branch_id: number; cash_sales: number; credit_sales: number }[]) {
+    branchExternalRev[c.branch_id] = (branchExternalRev[c.branch_id] || 0)
+      + Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
+  }
+
+  const factoryExternalRev =
+    (factSalesExtRes.data || []).reduce((s, r) => s + Number(r.amount || 0), 0) +
+    (factB2BExtRes.data || []).reduce((s, r) => s + Number(r.amount || 0), 0)
+
+  const totalExternalRevenue =
+    Object.values(branchExternalRev).reduce((s, v) => s + v, 0) + factoryExternalRev
+
+  return {
+    isActual, hqCost, totalExternalRevenue, estimatePct,
+    branchExternalRev, factoryExternalRev,
+  }
+}
+
+/**
+ * Allocate the period's HQ cost to a single entity by its external-revenue share.
+ * - actual (employer_costs HQ rows uploaded): hqCost × (entityRev / totalRev)
+ * - estimate: entityRev × estimatePct%
+ */
+export function computeHQAllocation(
+  entityExternalRev: number,
+  ctx: HQContext
+): { allocation: number; isActual: boolean } {
+  if (ctx.isActual && ctx.totalExternalRevenue > 0) {
+    return {
+      allocation: ctx.hqCost * (entityExternalRev / ctx.totalExternalRevenue),
+      isActual: true,
+    }
+  }
+  return {
+    allocation: entityExternalRev * (ctx.estimatePct / 100),
+    isActual: false,
+  }
+}
+
 export interface PLResult {
   // Revenue
   revenue: number
@@ -27,41 +123,34 @@ export interface PLResult {
 
   // Fixed costs
   fixedCosts: number            // fixed_costs (excluding mgmt)
-  overhead: number              // overhead allocation
+  overhead: number              // headquarters allocation (estimate × revenue, or actual share)
 
   // Operating profit
   operatingProfit: number
   operatingMargin: number       // % of revenue
 
   // Config
-  overheadPct: number           // actual overhead % used
+  overheadPct: number           // effective HQ allocation % applied
 
   // Meta
   branchId: number
   periodStart: string
   periodEnd: string
   laborIsActual: boolean
+  hqIsActual: boolean           // true when HQ allocation is from employer_costs (vs. estimate)
 }
 
 export async function calculateBranchPL(
   branchId: number,
   periodStart: string,
   periodEnd: string,
-  overheadPct?: number,
-  monthKey?: string
+  _legacyOverheadPct?: number,    // ignored — HQ allocation now drives overhead
+  monthKey?: string,
+  hqContext?: HQContext           // pre-fetched context (optional perf optimization)
 ): Promise<PLResult> {
+  void _legacyOverheadPct
   const mk = monthKey || periodStart.slice(0, 7)
-
-  // Fetch overhead_pct from DB if not provided
-  let pct = overheadPct
-  if (pct === undefined || pct === null) {
-    const { data: branchData } = await supabase
-      .from('branches')
-      .select('overhead_pct')
-      .eq('id', branchId)
-      .single()
-    pct = Number(branchData?.overhead_pct ?? 5.0)
-  }
+  const hq = hqContext || await getHQAllocationContext(periodStart, periodEnd, mk)
 
   const [revRes, expRes, labRes, wasteRes, fcRes, intSalesRes, closingsRes] = await Promise.all([
     supabase.from('branch_revenue').select('amount')
@@ -183,8 +272,10 @@ export async function calculateBranchPL(
 
   const controllableMargin = revenue > 0 ? (controllableProfit / revenue) * 100 : 0
 
-  // Overhead
-  const overhead = revenue * pct / 100
+  // Headquarters allocation (estimate or actual share of HQ cost)
+  const branchExtRev = hq.branchExternalRev[branchId] ?? revenue
+  const { allocation: overhead, isActual: hqIsActual } = computeHQAllocation(branchExtRev, hq)
+  const effectivePct = revenue > 0 ? (overhead / revenue) * 100 : 0
 
   // Operating profit
   const operatingProfit = controllableProfit - fixedCosts - overhead
@@ -195,8 +286,8 @@ export async function calculateBranchPL(
     waste, repairs, deliveries, infrastructure, otherExpenses,
     controllableProfit, controllableMargin,
     fixedCosts, overhead, operatingProfit, operatingMargin,
-    overheadPct: pct,
-    branchId, periodStart, periodEnd, laborIsActual,
+    overheadPct: effectivePct,
+    branchId, periodStart, periodEnd, laborIsActual, hqIsActual,
   }
 }
 
@@ -210,15 +301,20 @@ export interface FactoryPLResult {
   repairs: number
   controllableProfit: number
   fixedCosts: number
+  overhead: number           // headquarters allocation (factory's share)
+  overheadPct: number        // effective HQ % applied to factory external revenue
   operatingProfit: number
+  hqIsActual: boolean
 }
 
 export async function calculateFactoryPL(
   periodStart: string,
   periodEnd: string,
-  monthKey?: string
+  monthKey?: string,
+  hqContext?: HQContext
 ): Promise<FactoryPLResult> {
   const mk = monthKey || periodStart.slice(0, 7)
+  const hq = hqContext || await getHQAllocationContext(periodStart, periodEnd, mk)
 
   const [fSalesExt, fSalesInt, fB2bExt, fB2bInt, fLab, fSupp, fWaste, fRepairs, fFixed, intSalesRes] = await Promise.all([
     supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', periodStart).lt('date', periodEnd),
@@ -271,12 +367,17 @@ export async function calculateFactoryPL(
   const fixedCosts = sum(fFixed)
 
   const controllableProfit = revenue - suppliers - labor - waste - repairs
-  const operatingProfit = controllableProfit - fixedCosts
+
+  // Headquarters allocation — factory pays its share of HQ cost based on external revenue.
+  const { allocation: overhead, isActual: hqIsActual } = computeHQAllocation(hq.factoryExternalRev, hq)
+  const overheadPct = externalRevenue > 0 ? (overhead / externalRevenue) * 100 : 0
+
+  const operatingProfit = controllableProfit - fixedCosts - overhead
 
   return {
     revenue, internalRevenue, externalRevenue,
     suppliers, labor, waste, repairs,
-    controllableProfit, fixedCosts, operatingProfit,
+    controllableProfit, fixedCosts, overhead, overheadPct, operatingProfit, hqIsActual,
   }
 }
 
@@ -302,12 +403,16 @@ export async function calculateConsolidatedPL(
   branchIds: number[],
   periodStart: string,
   periodEnd: string,
-  overheadPct: number = 5,
+  _legacyOverheadPct: number = 5,    // ignored — HQ allocation is the source of truth
   monthKey?: string
 ): Promise<ConsolidatedResult> {
+  void _legacyOverheadPct
+  const mk = monthKey || periodStart.slice(0, 7)
+  const hq = await getHQAllocationContext(periodStart, periodEnd, mk)
+
   const [branches, factory] = await Promise.all([
-    Promise.all(branchIds.map(id => calculateBranchPL(id, periodStart, periodEnd, overheadPct, monthKey))),
-    calculateFactoryPL(periodStart, periodEnd, monthKey),
+    Promise.all(branchIds.map(id => calculateBranchPL(id, periodStart, periodEnd, undefined, mk, hq))),
+    calculateFactoryPL(periodStart, periodEnd, mk, hq),
   ])
 
   const totalBranchInternal = branches.reduce((s, b) => s + b.factoryPurchases, 0)
@@ -320,7 +425,7 @@ export async function calculateConsolidatedPL(
     waste: factory.waste + branches.reduce((s, b) => s + b.waste, 0),
     repairs: factory.repairs + branches.reduce((s, b) => s + b.repairs, 0),
     fixedCosts: factory.fixedCosts + branches.reduce((s, b) => s + b.fixedCosts, 0),
-    overhead: branches.reduce((s, b) => s + b.overhead, 0),
+    overhead: factory.overhead + branches.reduce((s, b) => s + b.overhead, 0),
     controllableProfit: 0,
     operatingProfit: 0,
   }

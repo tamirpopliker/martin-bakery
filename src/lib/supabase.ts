@@ -543,8 +543,17 @@ export interface ConsolidatedPLResult {
 
 /**
  * Fetch complete P&L for a branch.
+ *
+ * The `overheadPct` argument is retained for backwards compatibility but
+ * ignored — the headquarters allocation now drives the overhead line, mirroring
+ * the labor pattern (estimate from system_settings, replaced by actual
+ * employer_costs HQ rows once uploaded). See lib/calculatePL.ts for the canonical
+ * helper `getHQAllocationContext`.
  */
-export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: string, monthKey: string, overheadPct = 5): Promise<BranchPLResult> {
+export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: string, monthKey: string, _legacyOverheadPct = 5): Promise<BranchPLResult> {
+  void _legacyOverheadPct
+  const { getHQAllocationContext, computeHQAllocation } = await import('./calculatePL')
+  const hq = await getHQAllocationContext(dateFrom, dateTo, monthKey)
   const [revRes, expRes, labRes, wasteRes, fcRes, intSalesRes, closingsRes] = await Promise.all([
     supabase.from('branch_revenue').select('source, amount').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo).range(0, 99999),
     supabase.from('branch_expenses').select('expense_type, amount, from_factory').eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo).range(0, 99999),
@@ -653,8 +662,11 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
   const totalExpenses = expSuppliers + expRepairs + expInfra + expDelivery + expOther
   const controllableMargin = revenue - totalExpenses - laborEmployer - mgmtCosts - wasteTotal
 
-  // Operating profit = controllable - fixed costs - overhead
-  const overheadAmount = revenue * overheadPct / 100
+  // Headquarters allocation
+  const branchExtRev = hq.branchExternalRev[branchId] ?? revenue
+  const { allocation: overheadAmount, isActual: hqIsActual } = computeHQAllocation(branchExtRev, hq)
+  const effectivePct = revenue > 0 ? (overheadAmount / revenue) * 100 : 0
+
   const operatingProfit = controllableMargin - fixedCosts - overheadAmount
 
   const pct = (n: number) => revenue > 0 ? (n / revenue) * 100 : 0
@@ -669,7 +681,7 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     { label: 'תיקונים', amount: expRepairs, color: 'expense' },
     { label: 'רווח נשלט', amount: controllableMargin, pct: pct(controllableMargin), bold: true, separator: true, color: 'profit' },
     { label: 'עלויות קבועות', amount: fixedCosts, color: 'expense' },
-    { label: `העמסת מטה ${overheadPct}%`, amount: overheadAmount, color: 'expense' },
+    { label: hqIsActual ? `העמסת מטה ✓ ${effectivePct.toFixed(1)}%` : `העמסת מטה (משוער) ${effectivePct.toFixed(1)}%`, amount: overheadAmount, color: 'expense' },
     { label: 'רווח תפעולי', amount: operatingProfit, pct: pct(operatingProfit), bold: true, separator: true, color: 'profit' },
   ]
 
@@ -705,6 +717,9 @@ export async function fetchFactoryPL(dateFrom: string, dateTo: string, monthKey:
   const fixedCosts = pl.fixedCosts
   const controllableMargin = pl.controllableProfit
   const operatingProfit = pl.operatingProfit
+  const overhead = pl.overhead
+  const overheadPct = pl.overheadPct
+  const hqIsActual = pl.hqIsActual
 
   const pct = (n: number) => sales > 0 ? (n / sales) * 100 : 0
 
@@ -716,6 +731,7 @@ export async function fetchFactoryPL(dateFrom: string, dateTo: string, monthKey:
     { label: 'תיקונים', amount: repairs, color: 'expense' },
     { label: 'רווח נשלט', amount: controllableMargin, pct: pct(controllableMargin), bold: true, separator: true, color: 'profit' },
     { label: 'עלויות קבועות', amount: fixedCosts, color: 'expense' },
+    { label: hqIsActual ? `העמסת מטה ✓ ${overheadPct.toFixed(1)}%` : `העמסת מטה (משוער) ${overheadPct.toFixed(1)}%`, amount: overhead, color: 'expense' },
     { label: 'רווח תפעולי', amount: operatingProfit, pct: pct(operatingProfit), bold: true, separator: true, color: 'profit' },
   ]
 
