@@ -871,7 +871,6 @@ export default function Home() {
                 <motion.div variants={staggerContainer} initial="hidden" animate="visible"
                   className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
                   {[
-                    { label: 'לקוחות הקפה (B2B)', subtitle: 'חשבוניות · תשלומים · מעקב חובות', Icon: CreditCard, color: '#dc2626', page: 'b2b_customers' },
                     { label: 'דוח מעסיק', subtitle: 'עלות שכר אמיתית · חודשי', Icon: Briefcase, color: '#0ea5e9', page: 'employer_costs' },
                     { label: 'דוחות ניהול', subtitle: 'בקרת הכנסות · לייבור · קופות · שלמות נתונים', Icon: ClipboardList, color: '#6366f1', page: 'management_reports' },
                     { label: 'דוח ספקים מאוחד', subtitle: 'איחוד שמות ספקים · סיכום לפי סניף', Icon: Briefcase, color: '#6366f1', page: 'suppliers_report' },
