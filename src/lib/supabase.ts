@@ -573,7 +573,7 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
   // Factory purchases: prefer internal_sales (completed), fallback to branch_expenses from_factory
   const intSalesTotal = (intSalesRes.data || []).reduce((s, r) => s + Number(r.total_amount), 0)
   const expFromFactory = (expRes.data || []).filter(r => r.from_factory).reduce((s, r) => s + Number(r.amount), 0)
-  let expSuppliersInternal = intSalesTotal > 0 ? intSalesTotal : expFromFactory
+  const expSuppliersInternal = intSalesTotal > 0 ? intSalesTotal : expFromFactory
 
   let expSuppliersExternal = 0
   let expRepairs = 0, expInfra = 0, expDelivery = 0, expOther = 0
@@ -589,7 +589,7 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     else if (t === 'deliveries' || t === 'delivery') expDelivery += amt
     else expOther += amt
   }
-  let expSuppliers = expSuppliersInternal + expSuppliersExternal
+  const expSuppliers = expSuppliersInternal + expSuppliersExternal
 
   // Labor + Manager — check employer_costs first to prevent double-counting
   const [mYear, mMonth] = monthKey.split('-').map(Number)

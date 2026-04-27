@@ -184,7 +184,7 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
   }
 
   async function saveInvoice(id: number) {
-    let data: any = { ...editInvData }
+    const data: any = { ...editInvData }
     if (editInvData.supplier_id === undefined && (editInvData as any).supplier_name) {
       // supplier_invoices.supplier_id → suppliers (legacy)
       const sup = suppliersLegacy.find(s => s.name === (editInvData as any).supplier_name)

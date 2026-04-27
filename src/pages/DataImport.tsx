@@ -84,7 +84,7 @@ function parseNum(val: string | undefined): number | null {
 
 function parseDate(val: string | undefined): string | null {
   if (!val) return null
-  let v = val.replace(/[א-ת]+/g, '').replace(/\s+/g, ' ').trim().replace(/^[\s\-]+|[\s\-]+$/g, '').trim()
+  const v = val.replace(/[א-ת]+/g, '').replace(/\s+/g, ' ').trim().replace(/^[\s\-]+|[\s\-]+$/g, '').trim()
   const dmy = v.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/)
   if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`
   const ymd = v.match(/^(\d{4})[\s\-]+(\d{1,2})[\s\-]+(\d{1,2})$/)

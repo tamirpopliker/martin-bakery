@@ -324,7 +324,7 @@ export default function SuppliersReport({ onBack, hideHeader }: Props) {
       }
 
       // Merge suggestions for unassigned: find unified suppliers with >80% similarity
-      let mergeSuggestions: Array<{ existing: UnifiedSupplier; similarity: number }> = []
+      const mergeSuggestions: Array<{ existing: UnifiedSupplier; similarity: number }> = []
       if (b.unifiedId === null) {
         const candName = normalizeName(b.canonicalName)
         for (const u of unified) {

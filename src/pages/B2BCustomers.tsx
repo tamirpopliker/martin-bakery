@@ -265,7 +265,7 @@ export default function B2BCustomers({ onBack }: Props) {
 
   async function saveParsedInvoice(idx: number) {
     const inv = parsedPdfs[idx]
-    let customerId = inv.customer_id
+    const customerId = inv.customer_id
     if (!customerId) { if (inv.customer_name) { setNewCustConfirm({ idx, name: inv.customer_name }); return } else { alert('יש לבחור לקוח'); return } }
     let dateDb = inv.invoice_date_db
     if (inv.invoice_date && inv.invoice_date.includes('/')) { const p = inv.invoice_date.split('/'); if (p.length === 3) dateDb = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}` }

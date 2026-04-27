@@ -19,5 +19,15 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'warn',
+      'no-restricted-syntax': [
+        'warn',
+        {
+          selector: "CallExpression[callee.property.name='lte'] > Literal[value='month']",
+          message: "Use .lt('month', nextMonth) instead of .lte('month', endMonth) — month column stores the first of the month, so .lte includes the next month. See CLAUDE.md.",
+        },
+      ],
+    },
   },
 ])

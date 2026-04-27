@@ -42,7 +42,7 @@ export default function EmployeeMessages({ onBack }: Props) {
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
 
-    let msgs = (data || []).filter(m =>
+    const msgs = (data || []).filter(m =>
       !m.recipient_type || m.recipient_type === 'all' ||
       (m.recipient_type === 'specific' && m.recipient_id === employeeId)
       // TODO: filter by role when employee role field is available
