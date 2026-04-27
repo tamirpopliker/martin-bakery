@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, getOverheadPct } from '../lib/supabase'
-import { calculateBranchPL, type PLResult } from '../lib/calculatePL'
+import { calculateBranchPL, getHQAllocationContext, type PLResult } from '../lib/calculatePL'
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -139,9 +139,13 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       const mk = from.slice(0, 7)
       const prevMk = comparisonPeriod.from.slice(0, 7)
 
+      const [hqCtx, prevHqCtx] = await Promise.all([
+        getHQAllocationContext(from, to, mk),
+        getHQAllocationContext(comparisonPeriod.from, comparisonPeriod.to, prevMk),
+      ])
       const [currentPLs, previousPLs, transactionData] = await Promise.all([
-        Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, from, to, undefined, mk))),
-        Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, comparisonPeriod.from, comparisonPeriod.to, undefined, prevMk))),
+        Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, from, to, undefined, mk, hqCtx))),
+        Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, comparisonPeriod.from, comparisonPeriod.to, undefined, prevMk, prevHqCtx))),
         Promise.all(BRANCHES.map(br => fetchTransactionData(br.id, from, to))),
       ])
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, getOverheadPct } from '../lib/supabase'
-import { calculateBranchPL, calculateFactoryPL, type PLResult, type FactoryPLResult } from '../lib/calculatePL'
+import { calculateBranchPL, calculateFactoryPL, getHQAllocationContext, type PLResult, type FactoryPLResult } from '../lib/calculatePL'
 import { TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck, Building2, Layers } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon, TrophyIcon } from '@/components/icons'
@@ -178,10 +178,11 @@ export default function CEODashboard({ onBack }: Props) {
 
     const mk = monthKey || from.slice(0, 7)
 
-    // Use unified P&L calculations — overhead fetched from branches table per branch
+    // Use unified P&L calculations — pre-fetch HQ context once and share across all entities
+    const hqCtx = await getHQAllocationContext(from, to, mk)
     const [branchPLs, factoryPL] = await Promise.all([
-      Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, from, to, undefined, mk))),
-      calculateFactoryPL(from, to, mk),
+      Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, from, to, undefined, mk, hqCtx))),
+      calculateFactoryPL(from, to, mk, hqCtx),
     ])
 
     // Map factory PL to state variables
@@ -348,9 +349,10 @@ export default function CEODashboard({ onBack }: Props) {
     // Comparison period using unified P&L
     const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
     const pm = comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)
+    const prevHqCtx = await getHQAllocationContext(pFrom, pTo, pm)
     const [prevBranchPLs, prevFactoryPL] = await Promise.all([
-      Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, pFrom, pTo, undefined, pm))),
-      calculateFactoryPL(pFrom, pTo, pm),
+      Promise.all(BRANCHES.map(br => calculateBranchPL(br.id, pFrom, pTo, undefined, pm, prevHqCtx))),
+      calculateFactoryPL(pFrom, pTo, pm, prevHqCtx),
     ])
 
     const pRev = prevBranchPLs.reduce((s, pl) => s + pl.revenue, 0)
