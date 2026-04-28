@@ -512,7 +512,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                   <div style={{ textAlign: 'center', background: '#1d4ed8', borderRadius: 12, padding: '10px 6px' }}>
                     <div style={{ fontSize: 11, opacity: 0.9, fontWeight: 700, marginBottom: 4 }}>יעד</div>
                     <div style={{ fontSize: 20, fontWeight: 900, lineHeight: 1 }}>
-                      ₪{cash.toFixed(2)}
+                      ₪{expectedCash.toFixed(2)}
                     </div>
                   </div>
                 </div>
@@ -1110,6 +1110,8 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
   const totalCash = todayClosings.reduce((s, c) => s + Number(c.cash_sales), 0)
   const totalCredit = todayClosings.reduce((s, c) => s + Number(c.credit_sales), 0)
   const totalVariance = todayClosings.reduce((s, c) => s + Number(c.variance), 0)
+  // For the deposit calculator: physical cash to bank (gross = stored in deposit_amount).
+  const totalCashGross = todayClosings.reduce((s, c) => s + Number(c.deposit_amount), 0)
 
   type StatusKind = 'active-today' | 'yesterday' | 'two-days' | 'stale' | 'never' | 'inactive'
   function getRegisterStatus(regNum: number): { kind: StatusKind; label: string; color: string; bg: string; border: string; daysSince: number } {
@@ -1406,7 +1408,7 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
         <OverallCount totalExpectedCash={totalCash} onClose={() => setOverallOpen(false)} />
       )}
       {depositCalcOpen && (
-        <DepositCalculator totalCash={totalCash} onClose={() => setDepositCalcOpen(false)} />
+        <DepositCalculator totalCash={totalCashGross} onClose={() => setDepositCalcOpen(false)} />
       )}
       {activatingReg !== null && (
         <ActivateDialog branchId={branchId} registerNumber={activatingReg} fundBalance={fundBalance}
