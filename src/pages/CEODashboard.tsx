@@ -1023,7 +1023,7 @@ export default function CEODashboard({ onBack }: Props) {
                       if (prevTotalRev <= 0) return null
                       return (
                         <span style={{ fontSize: '11px', display: 'block', marginTop: 2, color: up ? '#dc2626' : '#16a34a', fontWeight: 600 }}>
-                          {up ? '\u25b2' : '\u25bc'} {Math.abs(delta).toFixed(1)}pp \u05de\u05d7\u05d5\u05d3\u05e9 \u05e7\u05d5\u05d3\u05dd
+                          {up ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}pp מחודש קודם
                         </span>
                       )
                     })()}
