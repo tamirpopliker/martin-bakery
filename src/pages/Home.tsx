@@ -83,7 +83,8 @@ const fmtK = (n: number) => n === 0 ? '—' : '₪' + Math.round(n).toLocaleStri
 interface BranchKpi {
   id: number; name: string; color: string;
   revenue: number; laborCost: number; laborPct: number;
-  managerSalary: number; waste: number; operatingProfit: number; hqAllocation: number
+  managerSalary: number; waste: number; operatingProfit: number; hqAllocation: number;
+  factoryPurchases: number   // intercompany cost (subtracted in br.operatingProfit; added back for the consolidated OP display)
 }
 
 // ─── Animation Variants ──────────────────────────────────────────────────────
@@ -256,7 +257,7 @@ export default function Home() {
         totalBranchLab += lab
         totalBranchOP += bp?.operatingProfit || 0
         bKpi.push({ id: br.id, name: br.name, color: br.color, revenue: rev, laborCost: lab, laborPct: labPct,
-          managerSalary: 0, waste: 0, operatingProfit: bp?.operatingProfit || 0, hqAllocation: 0 })
+          managerSalary: 0, waste: 0, operatingProfit: bp?.operatingProfit || 0, hqAllocation: 0, factoryPurchases: 0 })
       }
 
       setBranchKpi(bKpi)
@@ -282,9 +283,12 @@ export default function Home() {
       const branchManagers = cons.branches.reduce((s, b) => s + b.managerSalary, 0)
       setBranchLaborCost(cons.consolidated.labor + branchManagers + cons.consolidated.overhead)
       setBranchWaste(cons.consolidated.waste)
-      // Operating profit (consolidated): branches' OP + factory's external-only OP
+      // Operating profit (consolidated) — matches CEODashboard's "סה"כ" cell:
+      // factory's external-only OP, plus each branch's OP with waste and factoryPurchases
+      // added back (since they aren't shown as cost rows in the consolidated table).
       const factoryConsOp = cons.factory.operatingProfit - cons.factory.internalRevenue
-      const totalConsOp = factoryConsOp + cons.branches.reduce((s, b) => s + b.operatingProfit, 0)
+      const totalConsOp = factoryConsOp + cons.branches.reduce(
+        (s, b) => s + b.operatingProfit + b.waste + b.factoryPurchases, 0)
       setBranchOperatingProfit(totalConsOp)
       setFactoryOp(factoryConsOp)
       setFactoryWasteState(cons.factory.waste)
@@ -299,6 +303,7 @@ export default function Home() {
           waste: cb?.waste || 0,
           operatingProfit: cb?.operatingProfit ?? b.operatingProfit,
           hqAllocation: cb?.overhead || 0,
+          factoryPurchases: cb?.factoryPurchases || 0,
         }
       })
       setBranchKpi(enriched)
@@ -332,7 +337,8 @@ export default function Home() {
       setPrevBranchLaborCost(prevCons.consolidated.labor + prevBranchManagers + prevCons.consolidated.overhead)
       setPrevBranchWaste(prevCons.consolidated.waste)
       const prevFactoryConsOp = prevCons.factory.operatingProfit - prevCons.factory.internalRevenue
-      const prevTotalConsOp = prevFactoryConsOp + prevCons.branches.reduce((s, b) => s + b.operatingProfit, 0)
+      const prevTotalConsOp = prevFactoryConsOp + prevCons.branches.reduce(
+        (s, b) => s + b.operatingProfit + b.waste + b.factoryPurchases, 0)
       setPrevBranchOperatingProfit(prevTotalConsOp)
     }
     loadKpi()
@@ -1088,8 +1094,15 @@ export default function Home() {
               <SheetTitle className="text-base font-bold text-slate-900">פירוט רווח תפעולי — {period.label}</SheetTitle>
             </SheetHeader>
             {(() => {
+              // Per-entity OP for the consolidated view: branches add back waste + factoryPurchases
+              // (since neither is shown as a deduction at the company level — same logic as
+              // CEODashboard's "סה"כ" cell).
               const rows = [
-                ...branchKpi.map(b => ({ name: b.name, op: b.operatingProfit, rev: b.revenue })),
+                ...branchKpi.map(b => ({
+                  name: b.name,
+                  op: b.operatingProfit + b.waste + b.factoryPurchases,
+                  rev: b.revenue,
+                })),
                 { name: 'מפעל', op: factoryOp, rev: factoryExternalRevenue },
               ]
               const totalOp = rows.reduce((s, r) => s + r.op, 0)

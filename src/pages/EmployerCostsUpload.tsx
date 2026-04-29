@@ -99,10 +99,11 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
     if (!detailModal) { setDetailRows([]); return }
     setDetailLoading(true)
     supabase.from('employer_costs')
-      .select('employee_name, branch_id, department, is_manager, is_headquarters, gross_salary, hours, actual_employer_cost')
+      .select('employee_name, branch_id, department_name, is_manager, is_headquarters, actual_hours, actual_days, actual_employer_cost')
       .eq('year', detailModal.year).eq('month', detailModal.month)
       .order('actual_employer_cost', { ascending: false })
       .then(res => {
+        if (res.error) console.error('[detail modal] error:', res.error.message)
         setDetailRows(res.data || [])
         setDetailLoading(false)
       })
@@ -718,8 +719,8 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
                       <th style={S.th}>מסגרת</th>
                       <th style={S.th}>מחלקה</th>
                       <th style={S.th}>תפקיד</th>
-                      <th style={S.th}>שכר ברוטו</th>
                       <th style={S.th}>שעות</th>
+                      <th style={S.th}>ימים</th>
                       <th style={S.th}>עלות מעסיק</th>
                     </tr>
                   </thead>
@@ -731,10 +732,10 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
                         <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                           <td style={{ ...S.td, textAlign: 'right', fontWeight: 600 }}>{r.employee_name}</td>
                           <td style={{ ...S.td, fontSize: 12, color: '#64748b' }}>{branchName(r.branch_id)}</td>
-                          <td style={{ ...S.td, fontSize: 12, color: '#94a3b8' }}>{r.department || '—'}</td>
+                          <td style={{ ...S.td, fontSize: 12, color: '#94a3b8' }}>{r.department_name || '—'}</td>
                           <td style={{ ...S.td, fontSize: 12, fontWeight: 600, color: roleColor }}>{role}</td>
-                          <td style={{ ...S.td, fontSize: 12 }}>{r.gross_salary != null ? fmtM(Number(r.gross_salary)) : '—'}</td>
-                          <td style={{ ...S.td, fontSize: 12 }}>{r.hours != null ? Math.round(Number(r.hours)) : '—'}</td>
+                          <td style={{ ...S.td, fontSize: 12 }}>{r.actual_hours != null ? Math.round(Number(r.actual_hours)) : '—'}</td>
+                          <td style={{ ...S.td, fontSize: 12 }}>{r.actual_days != null ? Math.round(Number(r.actual_days)) : '—'}</td>
                           <td style={{ ...S.td, fontWeight: 600 }}>{fmtM(Number(r.actual_employer_cost || 0))}</td>
                         </tr>
                       )
