@@ -80,7 +80,11 @@ const PANEL_MANAGE = [
 
 const fmtK = (n: number) => n === 0 ? '—' : '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
-interface BranchKpi { id: number; name: string; color: string; revenue: number; laborCost: number; laborPct: number }
+interface BranchKpi {
+  id: number; name: string; color: string;
+  revenue: number; laborCost: number; laborPct: number;
+  managerSalary: number; waste: number; operatingProfit: number; hqAllocation: number
+}
 
 // ─── Animation Variants ──────────────────────────────────────────────────────
 const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }
@@ -198,8 +202,14 @@ export default function Home() {
     return () => { supabase.removeChannel(ch) }
   }, [])
   const [factoryLabor, setFactoryLabor] = useState(0)
+  const [factoryWasteState, setFactoryWasteState] = useState(0)
+  const [factoryOp, setFactoryOp] = useState(0)
+  const [hqAllocationTotal, setHqAllocationTotal] = useState(0)
+  const [hqIsActual, setHqIsActual] = useState(false)
   const [revenueSheetOpen, setRevenueSheetOpen] = useState(false)
   const [laborSheetOpen, setLaborSheetOpen] = useState(false)
+  const [opSheetOpen, setOpSheetOpen] = useState(false)
+  const [wasteSheetOpen, setWasteSheetOpen] = useState(false)
   const [branchLaborTargets, setBranchLaborTargets] = useState<Record<number, number>>({})
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
@@ -245,7 +255,8 @@ export default function Home() {
         totalBranchRev += rev
         totalBranchLab += lab
         totalBranchOP += bp?.operatingProfit || 0
-        bKpi.push({ id: br.id, name: br.name, color: br.color, revenue: rev, laborCost: lab, laborPct: labPct })
+        bKpi.push({ id: br.id, name: br.name, color: br.color, revenue: rev, laborCost: lab, laborPct: labPct,
+          managerSalary: 0, waste: 0, operatingProfit: bp?.operatingProfit || 0, hqAllocation: 0 })
       }
 
       setBranchKpi(bKpi)
@@ -275,6 +286,22 @@ export default function Home() {
       const factoryConsOp = cons.factory.operatingProfit - cons.factory.internalRevenue
       const totalConsOp = factoryConsOp + cons.branches.reduce((s, b) => s + b.operatingProfit, 0)
       setBranchOperatingProfit(totalConsOp)
+      setFactoryOp(factoryConsOp)
+      setFactoryWasteState(cons.factory.waste)
+      setHqAllocationTotal(cons.consolidated.overhead)
+      setHqIsActual(cons.factory.hqIsActual)
+      // Enrich bKpi with manager / waste / OP / HQ allocation per branch
+      const enriched: BranchKpi[] = bKpi.map(b => {
+        const cb = cons.branches.find(c => c.branchId === b.id)
+        return {
+          ...b,
+          managerSalary: cb?.managerSalary || 0,
+          waste: cb?.waste || 0,
+          operatingProfit: cb?.operatingProfit ?? b.operatingProfit,
+          hqAllocation: cb?.overhead || 0,
+        }
+      })
+      setBranchKpi(enriched)
 
       // Previous period (comparison) via shared functions
       const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
@@ -515,8 +542,8 @@ export default function Home() {
                     </div>
                   </button>
 
-                  {/* רווח תפעולי */}
-                  <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
+                  {/* רווח תפעולי — clickable (drill-down) */}
+                  <button onClick={() => setOpSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
                     <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#7C3AED15' }}>
                       <ProfitIcon size={16} color="#7C3AED" />
                     </div>
@@ -531,33 +558,39 @@ export default function Home() {
                         )}
                       </div>
                     </div>
-                  </div>
+                  </button>
 
-                  {/* לייבור % — clickable (drill-down) */}
+                  {/* לייבור — clickable (drill-down) — shows ₪ and % */}
                   <button onClick={() => setLaborSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
                     <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#3B82F615' }}>
                       <LaborIcon size={16} color="#3B82F6" />
                     </div>
                     <div>
-                      <div className="text-[11px] text-slate-400 font-semibold mb-0.5">לייבור %</div>
+                      <div className="text-[11px] text-slate-400 font-semibold mb-0.5">לייבור</div>
                       <div className="flex items-baseline gap-1.5">
-                        <span className="text-lg font-extrabold text-slate-900">{branchLaborPct.toFixed(1)}%</span>
+                        <span className="text-lg font-extrabold text-slate-900">{fmtK(branchLaborCost)}</span>
+                        {totalBranchRevenue > 0 && (
+                          <span className="text-xs font-bold" style={{ color: '#94a3b8' }}>{branchLaborPct.toFixed(1)}%</span>
+                        )}
                       </div>
                     </div>
                   </button>
 
-                  {/* פחת % */}
-                  <div className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 ps-4">
+                  {/* פחת — clickable (drill-down) */}
+                  <button onClick={() => setWasteSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 ps-4 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors">
                     <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#F59E0B15' }}>
                       <AlertTriangle size={16} color="#F59E0B" />
                     </div>
                     <div>
-                      <div className="text-[11px] text-slate-400 font-semibold mb-0.5">פחת %</div>
+                      <div className="text-[11px] text-slate-400 font-semibold mb-0.5">פחת</div>
                       <div className="flex items-baseline gap-1.5">
-                        <span className="text-lg font-extrabold text-slate-900">{branchWastePct.toFixed(1)}%</span>
+                        <span className="text-lg font-extrabold text-slate-900">{fmtK(branchWaste)}</span>
+                        {totalBranchRevenue > 0 && (
+                          <span className="text-xs font-bold" style={{ color: '#94a3b8' }}>{branchWastePct.toFixed(1)}%</span>
+                        )}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 </>
               })()}
             </div>
@@ -992,12 +1025,26 @@ export default function Home() {
               <SheetTitle className="text-base font-bold text-slate-900">פירוט לייבור — {period.label}</SheetTitle>
             </SheetHeader>
           {(() => {
-            const grandRevenue = factoryRevenue + totalBranchRevenue
-            const rows = [
-              ...branchKpi.map(br => ({ name: br.name, labor: br.laborCost, pct: br.laborPct })),
-              { name: 'מפעל', labor: factoryLabor, pct: factoryRevenue > 0 ? (factoryLabor / factoryRevenue) * 100 : 0 },
-            ]
-            const totalLaborPct = grandRevenue > 0 ? (totalLabor / grandRevenue) * 100 : 0
+            const grandRevenue = totalBranchRevenue   // already consolidated (branches + factory external)
+            // Per-entity rows: each branch shows labor + manager + its HQ allocation share
+            const rows = branchKpi.map(br => {
+              const entityCost = br.laborCost + br.managerSalary + br.hqAllocation
+              return {
+                name: br.name,
+                cost: entityCost,
+                pct: br.revenue > 0 ? (entityCost / br.revenue) * 100 : 0,
+              }
+            })
+            // Factory row — labor + factory's own HQ share
+            const factoryHq = Math.max(0, hqAllocationTotal - branchKpi.reduce((s, b) => s + b.hqAllocation, 0))
+            const factoryEntityCost = factoryLabor + factoryHq
+            rows.push({
+              name: 'מפעל',
+              cost: factoryEntityCost,
+              pct: factoryRevenue > 0 ? (factoryEntityCost / factoryRevenue) * 100 : 0,
+            })
+            const totalAll = rows.reduce((s, r) => s + r.cost, 0)
+            const totalPct = grandRevenue > 0 ? (totalAll / grandRevenue) * 100 : 0
             return (
               <Table>
                 <TableHeader>
@@ -1011,7 +1058,7 @@ export default function Home() {
                   {rows.map(r => (
                     <TableRow key={r.name}>
                       <TableCell className="font-medium text-right">{r.name}</TableCell>
-                      <TableCell className="text-center">{fmtK(r.labor)}</TableCell>
+                      <TableCell className="text-center">{fmtK(r.cost)}</TableCell>
                       <TableCell className="text-center">
                         {(() => { const t = branchLaborTargets[branchKpi.find(b => b.name === r.name)?.id ?? 0] || 0; return <span className={t > 0 ? (r.pct <= t ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-700'}>{r.pct.toFixed(1)}%</span> })()}
                       </TableCell>
@@ -1019,15 +1066,115 @@ export default function Home() {
                   ))}
                   <TableRow className="bg-slate-50 font-bold">
                     <TableCell className="font-bold text-right">סה"כ</TableCell>
-                    <TableCell className="text-center font-bold">{fmtK(totalLabor)}</TableCell>
+                    <TableCell className="text-center font-bold">{fmtK(totalAll)}</TableCell>
                     <TableCell className="text-center font-bold">
-                      {(() => { const avgT = Object.values(branchLaborTargets).length > 0 ? Object.values(branchLaborTargets).reduce((a, b) => a + b, 0) / Object.values(branchLaborTargets).length : 0; return <span className={avgT > 0 ? (totalLaborPct <= avgT ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-700'}>{totalLaborPct.toFixed(1)}%</span> })()}
+                      <span className="text-slate-700">{totalPct.toFixed(1)}%</span>
                     </TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
             )
           })()}
+          </SheetContent>
+        </SheetPortal>
+      </Sheet>
+
+      {/* ─── Operating Profit Drill-Down Sheet ─────────────────────────────── */}
+      <Sheet open={opSheetOpen} onOpenChange={setOpSheetOpen}>
+        <SheetPortal>
+          <SheetBackdrop />
+          <SheetContent>
+            <SheetHeader className="pb-3">
+              <SheetTitle className="text-base font-bold text-slate-900">פירוט רווח תפעולי — {period.label}</SheetTitle>
+            </SheetHeader>
+            {(() => {
+              const rows = [
+                ...branchKpi.map(b => ({ name: b.name, op: b.operatingProfit, rev: b.revenue })),
+                { name: 'מפעל', op: factoryOp, rev: factoryExternalRevenue },
+              ]
+              const totalOp = rows.reduce((s, r) => s + r.op, 0)
+              return (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">גוף</TableHead>
+                      <TableHead className="text-center">רווח תפעולי</TableHead>
+                      <TableHead className="text-center">% מהכנסותיו</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map(r => {
+                      const pct = r.rev > 0 ? (r.op / r.rev) * 100 : 0
+                      return (
+                        <TableRow key={r.name}>
+                          <TableCell className="font-medium text-right">{r.name}</TableCell>
+                          <TableCell className={`text-center ${r.op >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmtK(r.op)}</TableCell>
+                          <TableCell className={`text-center ${pct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{pct.toFixed(1)}%</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                    <TableRow className="bg-slate-50 font-bold">
+                      <TableCell className="font-bold text-right">סה"כ</TableCell>
+                      <TableCell className={`text-center font-bold ${totalOp >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{fmtK(totalOp)}</TableCell>
+                      <TableCell className="text-center font-bold">
+                        <span className={totalOp >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
+                          {totalBranchRevenue > 0 ? ((totalOp / totalBranchRevenue) * 100).toFixed(1) + '%' : '—'}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )
+            })()}
+          </SheetContent>
+        </SheetPortal>
+      </Sheet>
+
+      {/* ─── Waste Drill-Down Sheet ───────────────────────────────────────── */}
+      <Sheet open={wasteSheetOpen} onOpenChange={setWasteSheetOpen}>
+        <SheetPortal>
+          <SheetBackdrop />
+          <SheetContent>
+            <SheetHeader className="pb-3">
+              <SheetTitle className="text-base font-bold text-slate-900">פירוט פחת — {period.label}</SheetTitle>
+            </SheetHeader>
+            {(() => {
+              const rows = [
+                ...branchKpi.map(b => ({ name: b.name, waste: b.waste, rev: b.revenue })),
+                { name: 'מפעל', waste: factoryWasteState, rev: factoryRevenue },
+              ]
+              const totalWaste = rows.reduce((s, r) => s + r.waste, 0)
+              return (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">גוף</TableHead>
+                      <TableHead className="text-center">פחת</TableHead>
+                      <TableHead className="text-center">% מהכנסותיו</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map(r => {
+                      const pct = r.rev > 0 ? (r.waste / r.rev) * 100 : 0
+                      return (
+                        <TableRow key={r.name}>
+                          <TableCell className="font-medium text-right">{r.name}</TableCell>
+                          <TableCell className="text-center">{fmtK(r.waste)}</TableCell>
+                          <TableCell className={`text-center ${pct > 3 ? 'text-rose-500' : 'text-emerald-500'}`}>{pct.toFixed(1)}%</TableCell>
+                        </TableRow>
+                      )
+                    })}
+                    <TableRow className="bg-slate-50 font-bold">
+                      <TableCell className="font-bold text-right">סה"כ</TableCell>
+                      <TableCell className="text-center font-bold">{fmtK(totalWaste)}</TableCell>
+                      <TableCell className="text-center font-bold">
+                        {totalBranchRevenue > 0 ? ((totalWaste / totalBranchRevenue) * 100).toFixed(1) + '%' : '—'}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )
+            })()}
           </SheetContent>
         </SheetPortal>
       </Sheet>
