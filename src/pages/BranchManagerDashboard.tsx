@@ -591,16 +591,28 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                       visibleCostRows.forEach((row) => {
                         const isBold = !!row.bold
                         const totalVal = branches.reduce((s, b) => s + b[row.key], 0)
+                        // Suppress the % under the top-level revenue row (always 100%) \u2014 keep only on the indented sub-rows.
+                        const showPct = row.key !== 'totalRevenue'
+                        const fmtCell = (val: number, rev: number) => {
+                          if (val === 0) return '\u2014'
+                          const pct = rev > 0 ? (val / rev) * 100 : 0
+                          return showPct ? (
+                            <>
+                              <div>{fmtM(val)}</div>
+                              <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, marginTop: 1 }}>{pct.toFixed(1)}%</div>
+                            </>
+                          ) : fmtM(val)
+                        }
                         rows.push(
                           <tr key={row.key}>
                             <td style={{ ...cellStyle(isBold), textAlign: 'right', paddingRight: row.indent ? 28 : 14, color: row.indent ? '#64748b' : undefined, fontSize: row.indent ? 12 : 13 }}>{row.label}</td>
                             {branches.map(br => (
                               <td key={br.id} style={cellStyle(isBold, br[row.key] === 0 ? '#94a3b8' : row.color)}>
-                                {br[row.key] === 0 ? '\u2014' : fmtM(Number(br[row.key]))}
+                                {fmtCell(Number(br[row.key]), br.totalRevenue)}
                               </td>
                             ))}
                             <td style={cellStyle(isBold, '#0f172a')}>
-                              {totalVal === 0 ? '\u2014' : fmtM(totalVal)}
+                              {fmtCell(totalVal, totals.revenue)}
                             </td>
                           </tr>
                         )
