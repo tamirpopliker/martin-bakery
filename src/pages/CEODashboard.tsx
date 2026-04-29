@@ -130,6 +130,8 @@ export default function CEODashboard({ onBack }: Props) {
   const [factoryRepairs, setFactoryRepairs] = useState(0)
   const [factoryFixed, setFactoryFixed]     = useState(0)
   const [factoryOverhead, setFactoryOverhead] = useState(0)
+  const [factoryManagerSalary, setFactoryManagerSalary] = useState(0)
+  const [factoryManagerIsActual, setFactoryManagerIsActual] = useState(false)
 
   // Revenue breakdown
   const [revCashier, setRevCashier] = useState(0)
@@ -194,6 +196,8 @@ export default function CEODashboard({ onBack }: Props) {
     setFactoryRepairs(factoryPL.repairs)
     setFactoryFixed(factoryPL.fixedCosts)
     setFactoryOverhead(factoryPL.overhead || 0)
+    setFactoryManagerSalary(factoryPL.managerSalary || 0)
+    setFactoryManagerIsActual(factoryPL.managerIsActual || false)
     setFactoryB2b(0) // b2b breakdown not needed separately
     setFactoryInternalSales(factoryPL.internalRevenue)
 
@@ -986,7 +990,7 @@ export default function CEODashboard({ onBack }: Props) {
               // cost is already captured in raw materials / supplier purchases. Showing it as
               // a separate cost would double-count. Branches' grossProfit/operatingProfit
               // include waste deductions, so we add br.waste back to undo that.
-              const factoryGross = factoryRevForProfit - factorySuppliers - factoryLabor - factoryRepairs
+              const factoryGross = factoryRevForProfit - factorySuppliers - factoryLabor - factoryManagerSalary - factoryRepairs
               const factoryOp = factoryGross - factoryFixed - factoryOverhead
               const rows: PLRow[] = [
                 { label: 'הכנסות', factory: fRev, getBr: br => br.revenue, bold: false, color: '' },
@@ -995,8 +999,8 @@ export default function CEODashboard({ onBack }: Props) {
                 ] : []),
                 { label: isSegment ? 'ספקים חיצוניים' : 'חומרי גלם / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => br.expExternal, bold: false, color: '' },
                 { label: 'לייבור עובדים', factory: factoryLabor, getBr: br => br.labor, bold: false, color: '', kpiKey: 'labor' },
-                { label: 'שכר מנהלים' + (branches.every(b => b.managerIsActual) ? ' ✓' : ' ~'), factory: 0, getBr: (br: BranchData) => br.managerSalary, bold: false, color: '' as const },
-                { label: 'סה"כ לייבור', factory: factoryLabor, getBr: (br: BranchData) => br.labor + br.managerSalary, bold: true, color: '' as const },
+                { label: 'שכר מנהלים' + (branches.every(b => b.managerIsActual) && factoryManagerIsActual ? ' ✓' : ' ~'), factory: factoryManagerSalary, getBr: (br: BranchData) => br.managerSalary, bold: false, color: '' as const },
+                { label: 'סה"כ לייבור', factory: factoryLabor + factoryManagerSalary, getBr: (br: BranchData) => br.labor + br.managerSalary, bold: true, color: '' as const },
                 { label: 'תיקונים', factory: factoryRepairs, getBr: br => br.repairs, bold: false, color: '' },
                 { label: 'רווח נשלט', factory: factoryGross, getBr: br => br.grossProfit + br.waste, bold: true, color: 'profit' },
                 { label: 'עלויות קבועות', factory: factoryFixed, getBr: br => br.fixedCosts, bold: false, color: '' },

@@ -296,7 +296,10 @@ export interface FactoryPLResult {
   internalRevenue: number
   externalRevenue: number
   suppliers: number          // supplier_invoices
-  labor: number
+  labor: number              // factory employees only (is_manager=false, is_headquarters=false)
+  managerSalary: number      // factory managers (is_manager=true, is_headquarters=false). Already part of labor in earlier
+                             // versions; now broken out so the dashboard can show "שכר מנהלים" for the factory.
+  managerIsActual: boolean   // true when managerSalary comes from current-month employer_costs
   waste: number
   repairs: number
   controllableProfit: number
@@ -346,10 +349,15 @@ export async function calculateFactoryPL(
   //      are informational only and must not be double-counted.
   const [mYear, mMonth] = mk.split('-').map(Number)
   const { data: actualFactLab } = await supabase.from('employer_costs')
-    .select('actual_employer_cost').is('branch_id', null).eq('is_headquarters', false).eq('month', mMonth).eq('year', mYear)
+    .select('actual_employer_cost, is_manager').is('branch_id', null).eq('is_headquarters', false).eq('month', mMonth).eq('year', mYear)
   let labor: number
+  let managerSalary = 0
+  let managerIsActual = false
   if (actualFactLab && actualFactLab.length > 0) {
-    labor = actualFactLab.reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    // Split managers (is_manager=true) from regular employees (is_manager=false).
+    labor = actualFactLab.filter(r => !r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    managerSalary = actualFactLab.filter(r => r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    managerIsActual = true
   } else {
     const globalEmps = await fetchGlobalEmployees()
     const globalNames = new Set(globalEmps.map(e => e.name))
@@ -361,12 +369,24 @@ export async function calculateFactoryPL(
       .filter((r: any) => !globalNames.has(r.employee_name))
       .reduce((s: number, r: any) => s + Number(r.employer_cost || 0), 0)
     labor = globalLabor + hourlyLabor
+    // Estimate path: fall back to the most-recent month's manager amount if any.
+    const { data: prevMgr } = await supabase.from('employer_costs')
+      .select('actual_employer_cost, year, month')
+      .is('branch_id', null).eq('is_headquarters', false).eq('is_manager', true)
+      .or(`year.lt.${mYear},and(year.eq.${mYear},month.lt.${mMonth})`)
+      .order('year', { ascending: false }).order('month', { ascending: false })
+    if (prevMgr && prevMgr.length > 0) {
+      const { year: lY, month: lM } = prevMgr[0]
+      managerSalary = prevMgr
+        .filter(r => r.year === lY && r.month === lM)
+        .reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+    }
   }
   const waste = sum(fWaste)
   const repairs = sum(fRepairs)
   const fixedCosts = sum(fFixed)
 
-  const controllableProfit = revenue - suppliers - labor - waste - repairs
+  const controllableProfit = revenue - suppliers - labor - managerSalary - waste - repairs
 
   // Headquarters allocation — factory pays its share of HQ cost based on external revenue.
   const { allocation: overhead, isActual: hqIsActual } = computeHQAllocation(hq.factoryExternalRev, hq)
@@ -376,7 +396,7 @@ export async function calculateFactoryPL(
 
   return {
     revenue, internalRevenue, externalRevenue,
-    suppliers, labor, waste, repairs,
+    suppliers, labor, managerSalary, managerIsActual, waste, repairs,
     controllableProfit, fixedCosts, overhead, overheadPct, operatingProfit, hqIsActual,
   }
 }
