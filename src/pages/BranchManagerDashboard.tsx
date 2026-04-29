@@ -79,6 +79,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   const [prevBranches, setPrevBranches] = useState<BranchData[]>([])
   const [overheadPct, setOverheadPct] = useState(5)
   const [chartData, setChartData] = useState<any[]>([])
+  const [sourceChartData, setSourceChartData] = useState<{ month: string; קופות: number; אתר: number; הקפה: number }[]>([])
   const [kpiTargets, setKpiTargets] = useState<Record<number, { labor_pct: number; waste_pct: number; revenue_target: number; basket_target: number; transaction_target: number }>>({})
   const [insightsSummary, setInsightsSummary] = useState<InsightsSummary | null>(null)
 
@@ -116,16 +117,27 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   }
 
   async function fetchTransactionData(branchId: number, dateFrom: string, dateTo: string) {
-    const { data: revData } = await supabase.from('branch_revenue').select('source, amount, transaction_count, date')
-      .eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo)
-    const rows = revData || []
-    const revCashier = rows.filter(r => r.source === 'cashier').reduce((s, r) => s + Number(r.amount), 0)
+    // Cashier revenue spans two sources: the legacy branch_revenue.source='cashier'
+    // entries and the newer register_closings rows (cash + credit-card).
+    const [revRes, closeRes] = await Promise.all([
+      supabase.from('branch_revenue').select('source, amount, transaction_count, date')
+        .eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
+      supabase.from('register_closings').select('cash_sales, credit_sales, transaction_count')
+        .eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
+    ])
+    const rows = revRes.data || []
+    const closings = closeRes.data || []
+    const closingsCashier = closings.reduce((s, c) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0)
+    const closingsTx = closings.reduce((s, c) => s + (Number(c.transaction_count) || 0), 0)
+    const revCashier = rows.filter(r => r.source === 'cashier').reduce((s, r) => s + Number(r.amount), 0) + closingsCashier
     const revWebsite = rows.filter(r => r.source === 'website').reduce((s, r) => s + Number(r.amount), 0)
     const revCredit = rows.filter(r => r.source === 'credit').reduce((s, r) => s + Number(r.amount), 0)
     const laborGross = 0 // not needed from revenue query
-    const totalTransactions = rows.filter(r => r.source === 'cashier').reduce((s, r) => s + (Number(r.transaction_count) || 0), 0)
-    const uniqueDays = new Set(rows.filter(r => r.source === 'cashier' && Number(r.transaction_count) > 0).map(r => r.date)).size
-    const workingDays = uniqueDays || 1
+    const totalTransactions = rows.filter(r => r.source === 'cashier').reduce((s, r) => s + (Number(r.transaction_count) || 0), 0) + closingsTx
+    const uniqueDays = new Set([
+      ...rows.filter(r => r.source === 'cashier' && Number(r.transaction_count) > 0).map(r => r.date),
+    ]).size
+    const workingDays = Math.max(uniqueDays, closings.length, 1)
     const avgBasket = totalTransactions > 0 ? revCashier / totalTransactions : 0
     const avgDailyTransactions = totalTransactions / workingDays
     return { revCashier, revWebsite, revCredit, laborGross, totalTransactions, workingDays, avgBasket, avgDailyTransactions }
@@ -202,13 +214,17 @@ export default function BranchManagerDashboard({ onBack }: Props) {
         })
       }
 
+      // sourceChartData: revenue per month, aggregated across all branches,
+      // split by source (קופות / אתר / הקפה).
+      const branchIds = BRANCHES.map(b => b.id)
+      const sourceMonthly: typeof sourceChartData = []
+
       const chartRows = await Promise.all(
         months.map(async (m) => {
           const row: any = { month: m.label }
+          // Per-branch lines for the existing chart
           await Promise.all(
             BRANCHES.map(async (br) => {
-              // Branch revenue = legacy branch_revenue + register_closings (cash + credit).
-              // Matches calculatePL.ts so the chart agrees with the table totals.
               const [revRes, closeRes] = await Promise.all([
                 supabase.from('branch_revenue').select('amount')
                   .eq('branch_id', br.id).gte('date', m.from).lt('date', m.to),
@@ -220,10 +236,25 @@ export default function BranchManagerDashboard({ onBack }: Props) {
               row[br.name] = legacy + closings
             })
           )
+          // Aggregated by source for the new chart (one fetch covering all branches)
+          const [revAllRes, closeAllRes] = await Promise.all([
+            supabase.from('branch_revenue').select('source, amount')
+              .in('branch_id', branchIds).gte('date', m.from).lt('date', m.to).range(0, 99999),
+            supabase.from('register_closings').select('cash_sales, credit_sales')
+              .in('branch_id', branchIds).gte('date', m.from).lt('date', m.to).range(0, 99999),
+          ])
+          const revAll = revAllRes.data || []
+          const closeAll = closeAllRes.data || []
+          const cashier = revAll.filter(r => r.source === 'cashier').reduce((s, r) => s + Number(r.amount), 0)
+            + closeAll.reduce((s, c) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0)
+          const website = revAll.filter(r => r.source === 'website').reduce((s, r) => s + Number(r.amount), 0)
+          const credit  = revAll.filter(r => r.source === 'credit').reduce((s, r) => s + Number(r.amount), 0)
+          sourceMonthly.push({ month: m.label, 'קופות': cashier, 'אתר': website, 'הקפה': credit })
           return row
         })
       )
       setChartData(chartRows)
+      setSourceChartData(sourceMonthly)
       setLoading(false)
     }
     load()
@@ -253,8 +284,11 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   const maxRevenue = useMemo(() => Math.max(...branches.map(b => b.totalRevenue), 1), [branches])
   const maxLaborPct = useMemo(() => Math.max(...branches.map(b => b.laborPct), 1), [branches])
 
-  // Chart colors - indigo/gray palette
-  const CHART_COLORS = ['#6366f1', '#818cf8', '#a5b4fc', '#94a3b8', '#64748b', '#475569', '#c7d2fe', '#e2e8f0']
+  // Chart colors — distinct hues but muted enough to keep the design language
+  // (primary indigo + complementary emerald/amber/rose). Keeps lines legible
+  // when overlapping at similar values.
+  const CHART_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#0ea5e9', '#8b5cf6', '#84cc16', '#f43f5e']
+  const SOURCE_COLORS = { cashier: '#6366f1', website: '#10b981', credit: '#f59e0b' } as const
 
   // Table cell style helper
   const cellStyle = (bold?: boolean, color?: string): React.CSSProperties => ({
@@ -450,7 +484,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
             </div>
           </motion.div>
 
-          {/* Line Chart */}
+          {/* Line Chart — revenue by branch (6 months) */}
           <motion.div variants={fadeIn(0.3)} initial="hidden" animate="visible" style={{ marginBottom: 10 }}>
             <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>הכנסות לפי סניף - 6 חודשים אחרונים</div>
@@ -461,6 +495,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                   <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}K`} />
                   <Tooltip
                     formatter={(value: any) => [fmtM(Number(value)), '']}
+                    itemSorter={(item) => -Number(item.value ?? 0)}
                     contentStyle={{ direction: 'rtl', fontSize: 12 }}
                   />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -470,11 +505,34 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                       type="monotone"
                       dataKey={br.name}
                       stroke={CHART_COLORS[idx % CHART_COLORS.length]}
-                      strokeWidth={2}
+                      strokeWidth={2.5}
                       dot={{ r: 3 }}
                       activeDot={{ r: 5 }}
                     />
                   ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
+
+          {/* Line Chart — revenue by source (קופות / אתר / הקפה) — 6 months, all branches */}
+          <motion.div variants={fadeIn(0.35)} initial="hidden" animate="visible" style={{ marginBottom: 10 }}>
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>הכנסות לפי מקור - מצרפי 6 חודשים</div>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={sourceChartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                  <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}K`} />
+                  <Tooltip
+                    formatter={(value: any) => [fmtM(Number(value)), '']}
+                    itemSorter={(item) => -Number(item.value ?? 0)}
+                    contentStyle={{ direction: 'rtl', fontSize: 12 }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line type="monotone" dataKey="קופות" stroke={SOURCE_COLORS.cashier} strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="אתר"   stroke={SOURCE_COLORS.website} strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="הקפה"  stroke={SOURCE_COLORS.credit}  strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -516,8 +574,11 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                   <tbody>
                     {(() => {
                       const HIDDEN_IN_PRESENTATION = new Set(['laborEmployer', 'mgmtCosts', 'totalExpenses'])
-                      const costRows: { label: string; key: keyof BranchData; color: string }[] = [
-                        { label: 'הכנסות', key: 'totalRevenue', color: '#34d399' },
+                      const costRows: { label: string; key: keyof BranchData; color: string; bold?: boolean; indent?: boolean }[] = [
+                        { label: 'הכנסות', key: 'totalRevenue', color: '#0f172a', bold: true },
+                        { label: 'קופות',  key: 'revCashier',   color: SOURCE_COLORS.cashier, indent: true },
+                        { label: 'אתר',    key: 'revWebsite',   color: SOURCE_COLORS.website, indent: true },
+                        { label: 'הקפה',   key: 'revCredit',    color: SOURCE_COLORS.credit,  indent: true },
                         { label: 'רכישות מפעל', key: 'expSuppliersInternal', color: '#818cf8' },
                         { label: 'ספקים חיצוניים', key: 'expSuppliersExternal', color: '#ef4444' },
                         { label: 'לייבור', key: 'laborEmployer', color: '#f59e0b' },
@@ -528,17 +589,17 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                       const rows: JSX.Element[] = []
 
                       visibleCostRows.forEach((row) => {
-                        const isBold = row.key === 'totalRevenue'
+                        const isBold = !!row.bold
                         const totalVal = branches.reduce((s, b) => s + b[row.key], 0)
                         rows.push(
                           <tr key={row.key}>
-                            <td style={{ ...cellStyle(isBold), textAlign: 'right' }}>{row.label}</td>
+                            <td style={{ ...cellStyle(isBold), textAlign: 'right', paddingRight: row.indent ? 28 : 14, color: row.indent ? '#64748b' : undefined, fontSize: row.indent ? 12 : 13 }}>{row.label}</td>
                             {branches.map(br => (
                               <td key={br.id} style={cellStyle(isBold, br[row.key] === 0 ? '#94a3b8' : row.color)}>
                                 {br[row.key] === 0 ? '\u2014' : fmtM(Number(br[row.key]))}
                               </td>
                             ))}
-                            <td style={cellStyle(true, '#0f172a')}>
+                            <td style={cellStyle(isBold, '#0f172a')}>
                               {totalVal === 0 ? '\u2014' : fmtM(totalVal)}
                             </td>
                           </tr>
