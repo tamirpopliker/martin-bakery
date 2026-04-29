@@ -976,9 +976,13 @@ export default function CEODashboard({ onBack }: Props) {
               // Use values directly from calculateBranchPL — no recalculation
               // grossProfit = controllableProfit from PLResult
               // operatingProfit = operatingProfit from PLResult
-              // Factory's controllable profit, excluding HQ allocation (which is shown
-              // separately under "העמסת מטה" along with branches' shares).
-              const factoryGross = fRev - factorySuppliers - factoryLabor - factoryWaste - factoryRepairs
+              // Factory's controllable profit. In consolidated mode use the FULL revenue
+              // (including intercompany internal sales) so that summing factory+branches
+              // equals the consolidated total — branches already deduct factoryPurchases via
+              // br.grossProfit, and the elimination row visualises the cancellation.
+              // HQ allocation is shown under "העמסת מטה" with the rest, not double-deducted.
+              const factoryRevForProfit = isSegment ? fRev : factorySales
+              const factoryGross = factoryRevForProfit - factorySuppliers - factoryLabor - factoryWaste - factoryRepairs
               const factoryOp = factoryGross - factoryFixed - factoryOverhead
               const rows: PLRow[] = [
                 { label: 'הכנסות', factory: fRev, getBr: br => br.revenue, bold: false, color: '' },
@@ -1064,28 +1068,12 @@ export default function CEODashboard({ onBack }: Props) {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {(() => {
-                            // Pre-compute totals so profit rows can use proper consolidation
-                            // (revenue − cost rows) instead of summing per-column profits.
-                            const totalRev = fRev + branches.reduce((s, br) => s + br.revenue, 0)
-                            const totalsByLabel: Record<string, number> = {}
-                            for (const r of rows) {
-                              totalsByLabel[r.label] = r.factory + branches.reduce((s, br) => s + r.getBr(br), 0)
-                            }
-                            const elimTotal = totalsByLabel['↔ ביטול עסקאות פנימיות'] ?? 0
-                            const elimSmall = !isSegment && Math.abs(elimTotal) < 0.5 // accounting-clean: residual treated as 0
-                            const sumKeys = (keys: string[]) => keys.reduce((s, k) => s + (totalsByLabel[k] ?? 0), 0)
-                            const consolidatedGross = totalRev
-                              - sumKeys(['חומרי גלם / ספקים', 'לייבור עובדים', `שכר מנהלים${branches.every(b => b.managerIsActual) ? ' ✓' : ' ~'}`, 'פחת', 'תיקונים'])
-                              - (elimSmall ? 0 : 0) // intercompany nets out by definition
-                            const consolidatedOp = consolidatedGross
-                              - sumKeys(['עלויות קבועות', `העמסת מטה${hasEmployerReport ? ' ✓' : ' ~'}`])
-                            return rows.map(row => {
+                          {rows.map(row => {
                             const brVals = branches.map(br => row.getBr(br))
-                            let total = totalsByLabel[row.label]
+                            let total = row.factory + brVals.reduce((s, v) => s + v, 0)
+                            // Intercompany cancels out by definition; hide residual data noise.
                             if (!isSegment && row.label === '↔ ביטול עסקאות פנימיות') total = 0
-                            if (!isSegment && row.label === 'רווח נשלט') total = consolidatedGross
-                            if (!isSegment && row.label === 'רווח תפעולי') total = consolidatedOp
+                            const totalRev = fRev + branches.reduce((s, br) => s + br.revenue, 0)
                             const isRevRow = row.label === 'הכנסות'
                             return (
                               <>{/* dg fragment */}
@@ -1114,8 +1102,7 @@ export default function CEODashboard({ onBack }: Props) {
                               })}
                               </>
                             )
-                          })
-                          })()}
+                          })}
                         </TableBody>
                       </Table>
                       <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '12px', textAlign: 'center' }}>{footerNote}</p>
