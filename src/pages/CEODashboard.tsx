@@ -14,8 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
-import { generateInsights, type InsightsInput } from '../lib/generateInsights'
-import InsightsCard from '../components/InsightsCard'
+import InsightsPanel from '../components/InsightsPanel'
+import { buildInsightsSummary, type InsightsSummary, type EntityInput } from '../lib/branchInsights'
 
 interface Props { onBack: () => void }
 
@@ -144,7 +144,7 @@ export default function CEODashboard({ onBack }: Props) {
   const [factoryInternalSales, setFactoryInternalSales] = useState(0)
   const [branchInternalExpenses, setBranchInternalExpenses] = useState(0)
 
-  const [insights, setInsights] = useState<any[]>([])
+  const [insightsSummary, setInsightsSummary] = useState<InsightsSummary | null>(null)
   const [priceAlerts, setPriceAlerts] = useState<{ product_name: string; current_price: number; last_price: number; pct: number }[]>([])
   const [hqCost, setHqCost] = useState(0)
   const [hasEmployerReport, setHasEmployerReport] = useState(false)
@@ -365,42 +365,34 @@ export default function CEODashboard({ onBack }: Props) {
     setPrevTotalGross(pGross + pfGross)
     setPrevTotalOperating(pOperating + pfOperating)
 
-    // Generate per-branch insights with branch name prefix
-    const allInsights: any[] = []
-    for (const br of branchResults) {
-      const brInsightInput: InsightsInput = {
-        labor: {
-          totalCost: br.labor,
-          targetPct: branchTargets[br.id]?.labor_pct || 28,
-          revenue: br.revenue,
-        },
-        revenue: {
-          actual: br.revenue,
-          target: 0,
-        },
-        waste: {
-          totalAmount: br.waste,
-          targetPct: branchTargets[br.id]?.waste_pct || 3,
-          revenue: br.revenue,
-        },
-        controllableProfit: {
-          actual: br.grossProfit,
-          target: br.revenue * 0.30,
-          revenue: br.revenue,
-        },
-        factoryPurchases: {
-          amount: br.expInternal || 0,
-          avgMonthly: br.expInternal || 0,
-          isHolidayMonth: false,
-        },
-      }
-      const brInsights = generateInsights(brInsightInput)
-        .filter(i => i.priority <= 2)
-        .map(i => ({ ...i, title: `[${br.name}] ${i.title}` }))
-      allInsights.push(...brInsights)
-    }
-    allInsights.sort((a, b) => a.priority - b.priority)
-    setInsights(allInsights)
+    // Build the structured insights summary used by the redesigned panel.
+    const insightInputs: EntityInput[] = [
+      ...branchResults.map<EntityInput>(br => ({
+        id: br.id,
+        name: br.name,
+        revenue: br.revenue,
+        controllableProfit: br.grossProfit,
+        profitTarget: br.revenue * 0.30,
+        laborCost: br.labor,
+        laborPctTarget: branchTargets[br.id]?.labor_pct || 28,
+        waste: br.waste,
+        wastePctTarget: branchTargets[br.id]?.waste_pct || 3,
+        revenueTarget: 0,
+      })),
+      {
+        id: 'factory',
+        name: 'מפעל',
+        revenue: factoryPL.externalRevenue,
+        controllableProfit: factoryPL.controllableProfit,
+        profitTarget: factoryPL.externalRevenue * 0.30,
+        laborCost: factoryPL.labor,
+        laborPctTarget: factoryTargets.labor_pct || 28,
+        waste: factoryPL.waste,
+        wastePctTarget: factoryTargets.waste_pct || 3,
+        revenueTarget: 0,
+      },
+    ]
+    setInsightsSummary(buildInsightsSummary(insightInputs))
 
     // Price alerts — products with >10% price change
     const { data: prods } = await supabase.from('products').select('product_name, current_price, last_price')
@@ -834,7 +826,7 @@ export default function CEODashboard({ onBack }: Props) {
 
       <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
 
-        {insights.length > 0 && <InsightsCard insights={insights} />}
+        {insightsSummary && <InsightsPanel summary={insightsSummary} />}
 
         {/* Price Alerts */}
         {priceAlerts.length > 0 && (
