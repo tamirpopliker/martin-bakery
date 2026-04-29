@@ -25,7 +25,6 @@ interface BranchKpi {
   basket_target: number
   transaction_target: number
   controllable_margin_pct: number
-  factory_purchases_pct?: number
 }
 
 interface FixedCost {
@@ -111,7 +110,6 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
       branch_id: branchId, labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct,
       revenue_target: kpi.revenue_target, basket_target: kpi.basket_target, transaction_target: kpi.transaction_target,
       controllable_margin_pct: kpi.controllable_margin_pct,
-      factory_purchases_pct: kpi.factory_purchases_pct ?? 40,
     }
     const { data, error } = await supabase.from('branch_kpi_targets')
       .upsert(payload, { onConflict: 'branch_id' })
@@ -124,7 +122,6 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
           labor_pct: kpi.labor_pct, waste_pct: kpi.waste_pct, revenue_target: kpi.revenue_target,
           basket_target: kpi.basket_target, transaction_target: kpi.transaction_target,
           controllable_margin_pct: kpi.controllable_margin_pct,
-          factory_purchases_pct: kpi.factory_purchases_pct ?? 40,
         }).eq('id', kpi.id)
         if (updErr) {
           setErrorMsg(`שמירת יעדי KPI נכשלה: ${updErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
@@ -376,18 +373,6 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
                     <span style={{ color: '#94a3b8', fontSize: 13 }}>%</span>
                   </div>
                   <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>גבוה = טוב</p>
-                </div>
-
-                <div>
-                  <label style={S.label}>יעד % קניות מפעל מהכנסות</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input type="number" min={0} max={100} step={1}
-                      value={kpi.factory_purchases_pct ?? 40}
-                      onChange={e => setKpi(p => ({ ...p, factory_purchases_pct: Number(e.target.value) }))}
-                      style={{ ...S.input, width: 100, textAlign: 'center' as const }} />
-                    <span style={{ fontSize: 14, color: '#64748b' }}>%</span>
-                  </div>
-                  <span style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginTop: 4 }}>נמוך = טוב</span>
                 </div>
 
                 <div>
