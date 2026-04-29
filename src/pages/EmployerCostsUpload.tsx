@@ -66,6 +66,9 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
   const [parsedFileName, setParsedFileName] = useState('')
   const [newEmpModal, setNewEmpModal] = useState<{ idx: number; firstName: string; lastName: string } | null>(null)
   const [newEmpBranch, setNewEmpBranch] = useState<number>(-1)
+  const [detailModal, setDetailModal] = useState<{ year: number; month: number } | null>(null)
+  const [detailRows, setDetailRows] = useState<any[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
 
   // Load factory employees from labor table (distinct names)
   const loadFactoryEmps = useCallback(async () => {
@@ -90,6 +93,20 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
     setUploads(data || [])
   }, [])
   useEffect(() => { loadUploads() }, [loadUploads, step])
+
+  // Load detail rows when a history row is clicked
+  useEffect(() => {
+    if (!detailModal) { setDetailRows([]); return }
+    setDetailLoading(true)
+    supabase.from('employer_costs')
+      .select('employee_name, branch_id, department, is_manager, is_headquarters, gross_salary, hours, actual_employer_cost')
+      .eq('year', detailModal.year).eq('month', detailModal.month)
+      .order('actual_employer_cost', { ascending: false })
+      .then(res => {
+        setDetailRows(res.data || [])
+        setDetailLoading(false)
+      })
+  }, [detailModal])
 
   async function parseFile(file: File) {
     setError(''); setParsedFileName(file.name)
@@ -610,13 +627,15 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
                   <th style={{ ...S.th, width: 50 }}></th>
                 </tr></thead>
                 <tbody>{uploads.map((u, i) => (
-                  <tr key={u.id} style={{ background: i % 2 === 0 ? 'white' : '#fafbfc' }}>
-                    <td style={{ ...S.td, fontWeight: 600 }}>{MONTH_NAMES[u.month] || u.month} {u.year}</td>
+                  <tr key={u.id}
+                    style={{ background: i % 2 === 0 ? 'white' : '#fafbfc', cursor: 'pointer' }}
+                    onClick={() => setDetailModal({ year: u.year, month: u.month })}>
+                    <td style={{ ...S.td, fontWeight: 600, color: '#6366f1' }}>{MONTH_NAMES[u.month] || u.month} {u.year}</td>
                     <td style={{ ...S.td, fontSize: 12, color: '#64748b' }}>{u.filename || '—'}</td>
                     <td style={{ ...S.td, fontSize: 12 }}>{u.uploaded_by || '—'}</td>
                     <td style={{ ...S.td, fontSize: 12, color: '#94a3b8' }}>{new Date(u.uploaded_at).toLocaleDateString('he-IL')}</td>
                     <td style={S.td}>{u.unmatched_count > 0 ? <span style={{ color: '#f59e0b', fontWeight: 600 }}>{u.unmatched_count}</span> : <span style={{ color: '#16a34a' }}>0</span>}</td>
-                    <td style={S.td}>
+                    <td style={S.td} onClick={e => e.stopPropagation()}>
                       <button onClick={() => deleteUpload(u.id, u.month, u.year)} style={{ ...S.btn, padding: '3px 6px', fontSize: 11, background: '#fef2f2', color: '#ef4444' }}><Trash2 size={12} /></button>
                     </td>
                   </tr>
@@ -673,6 +692,64 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
           </div>
         </div>
       )}
+
+      {/* Report detail modal — clickable history rows */}
+      {detailModal && (() => {
+        const branchName = (id: number | null) => id == null ? 'מפעל' : (branches.find(b => b.id === id)?.name || `סניף ${id}`)
+        const total = detailRows.reduce((s, r) => s + Number(r.actual_employer_cost || 0), 0)
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setDetailModal(null)}>
+            <div style={{ background: 'white', borderRadius: 16, padding: 20, width: '100%', maxWidth: 900, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>
+                  פירוט דוח — {MONTH_NAMES[detailModal.month] || detailModal.month} {detailModal.year}
+                </h3>
+                <button onClick={() => setDetailModal(null)} style={{ background: 'none', border: 'none', fontSize: 22, color: '#94a3b8', cursor: 'pointer', lineHeight: 1 }}>×</button>
+              </div>
+              {detailLoading ? (
+                <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>טוען...</div>
+              ) : detailRows.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>אין שורות עבור חודש זה</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'white' }}>
+                    <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                      <th style={{ ...S.th, textAlign: 'right' }}>עובד</th>
+                      <th style={S.th}>מסגרת</th>
+                      <th style={S.th}>מחלקה</th>
+                      <th style={S.th}>תפקיד</th>
+                      <th style={S.th}>שכר ברוטו</th>
+                      <th style={S.th}>שעות</th>
+                      <th style={S.th}>עלות מעסיק</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailRows.map((r, idx) => {
+                      const role = r.is_headquarters ? 'מטה' : r.is_manager ? 'מנהל/ת' : 'עובד/ת'
+                      const roleColor = r.is_headquarters ? '#64748b' : r.is_manager ? '#7c3aed' : '#0f172a'
+                      return (
+                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ ...S.td, textAlign: 'right', fontWeight: 600 }}>{r.employee_name}</td>
+                          <td style={{ ...S.td, fontSize: 12, color: '#64748b' }}>{branchName(r.branch_id)}</td>
+                          <td style={{ ...S.td, fontSize: 12, color: '#94a3b8' }}>{r.department || '—'}</td>
+                          <td style={{ ...S.td, fontSize: 12, fontWeight: 600, color: roleColor }}>{role}</td>
+                          <td style={{ ...S.td, fontSize: 12 }}>{r.gross_salary != null ? fmtM(Number(r.gross_salary)) : '—'}</td>
+                          <td style={{ ...S.td, fontSize: 12 }}>{r.hours != null ? Math.round(Number(r.hours)) : '—'}</td>
+                          <td style={{ ...S.td, fontWeight: 600 }}>{fmtM(Number(r.actual_employer_cost || 0))}</td>
+                        </tr>
+                      )
+                    })}
+                    <tr style={{ background: '#fafbfc', fontWeight: 700 }}>
+                      <td colSpan={6} style={{ ...S.td, textAlign: 'right' }}>סה"כ ({detailRows.length} עובדים)</td>
+                      <td style={{ ...S.td, fontSize: 14 }}>{fmtM(total)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </motion.div>
   )
 }

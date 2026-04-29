@@ -985,12 +985,12 @@ export default function CEODashboard({ onBack }: Props) {
               // equals the consolidated total — branches already deduct factoryPurchases via
               // br.grossProfit, and the elimination row visualises the cancellation.
               // HQ allocation is shown under "העמסת מטה" with the rest, not double-deducted.
-              const factoryRevForProfit = isSegment ? fRev : factorySales
-              // Waste is excluded from the P&L here — it represents discarding goods whose
-              // cost is already captured in raw materials / supplier purchases. Showing it as
-              // a separate cost would double-count. Branches' grossProfit/operatingProfit
-              // include waste deductions, so we add br.waste back to undo that.
-              const factoryGross = factoryRevForProfit - factorySuppliers - factoryLabor - factoryManagerSalary - factoryRepairs
+              // Factory's per-column profit. Both views use fRev (= factorySales in segment mode,
+              // = external-only in consolidated). In consolidated mode the intercompany cancels
+              // naturally because branches' grossProfit deducts factoryPurchases and the matching
+              // factory.internalRevenue is excluded from fRev.
+              // Waste is excluded from the P&L here — already captured in raw materials.
+              const factoryGross = fRev - factorySuppliers - factoryLabor - factoryManagerSalary - factoryRepairs
               const factoryOp = factoryGross - factoryFixed - factoryOverhead
               const rows: PLRow[] = [
                 { label: 'הכנסות', factory: fRev, getBr: br => br.revenue, bold: false, color: '' },
@@ -1002,25 +1002,19 @@ export default function CEODashboard({ onBack }: Props) {
                 { label: 'שכר מנהלים' + (branches.every(b => b.managerIsActual) && factoryManagerIsActual ? ' ✓' : ' ~'), factory: factoryManagerSalary, getBr: (br: BranchData) => br.managerSalary, bold: false, color: '' as const },
                 { label: 'סה"כ לייבור', factory: factoryLabor + factoryManagerSalary, getBr: (br: BranchData) => br.labor + br.managerSalary, bold: true, color: '' as const },
                 { label: 'תיקונים', factory: factoryRepairs, getBr: br => br.repairs, bold: false, color: '' },
-                { label: 'רווח נשלט', factory: factoryGross, getBr: br => br.grossProfit + br.waste, bold: true, color: 'profit' },
+                // In consolidated view, branches' factoryPurchases isn't shown as a cost row
+                // (it's intercompany — eliminated). br.grossProfit subtracts it though, so we add
+                // it back here so per-column profit = revenue − VISIBLE costs only, and
+                // sum(branches) + factory == proper consolidated profit.
+                { label: 'רווח נשלט', factory: factoryGross,
+                  getBr: br => br.grossProfit + br.waste + (isSegment ? 0 : br.expSuppliersInternal),
+                  bold: true, color: 'profit' },
                 { label: 'עלויות קבועות', factory: factoryFixed, getBr: br => br.fixedCosts, bold: false, color: '' },
                 { label: 'העמסת מטה' + (hasEmployerReport ? ' ✓' : ' ~'), factory: factoryOverhead, getBr: br => br.overhead, bold: false, color: '' },
-                { label: 'רווח תפעולי', factory: factoryOp, getBr: br => br.operatingProfit + br.waste, bold: true, color: 'profit', kpiKey: 'operating' },
+                { label: 'רווח תפעולי', factory: factoryOp,
+                  getBr: br => br.operatingProfit + br.waste + (isSegment ? 0 : br.expSuppliersInternal),
+                  bold: true, color: 'profit', kpiKey: 'operating' },
               ]
-
-              // In consolidated view, add intercompany elimination row for transparency
-              // Factory: negative (internal revenue removed), Branches: positive (internal expense removed)
-              // Net should be ~0 (both sides cancel out)
-              if (!isSegment) {
-                const elimRow: PLRow = {
-                  label: '↔ ביטול עסקאות פנימיות',
-                  factory: -factoryInternalSales,
-                  getBr: (br: BranchData) => br.expInternal,
-                  bold: false, color: '' as const
-                }
-                // Insert after revenue row
-                rows.splice(1, 0, elimRow)
-              }
 
               // Helper: get KPI target for a branch row
               const getBrTarget = (brId: number, kpiKey?: 'labor' | 'waste' | 'operating'): number | null => {
@@ -1077,9 +1071,7 @@ export default function CEODashboard({ onBack }: Props) {
                         <TableBody>
                           {rows.map(row => {
                             const brVals = branches.map(br => row.getBr(br))
-                            let total = row.factory + brVals.reduce((s, v) => s + v, 0)
-                            // Intercompany cancels out by definition; hide residual data noise.
-                            if (!isSegment && row.label === '↔ ביטול עסקאות פנימיות') total = 0
+                            const total = row.factory + brVals.reduce((s, v) => s + v, 0)
                             const totalRev = fRev + branches.reduce((s, br) => s + br.revenue, 0)
                             const isRevRow = row.label === 'הכנסות'
                             return (
