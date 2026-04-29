@@ -113,6 +113,10 @@ export default function CEODashboard({ onBack }: Props) {
   const [prevTotalRev, setPrevTotalRev] = useState(0)
   const [prevTotalGross, setPrevTotalGross] = useState(0)
   const [prevTotalOperating, setPrevTotalOperating] = useState(0)
+  // KPI tiles vs previous period — same formula as current-period kpi*
+  const [prevKpiGross, setPrevKpiGross] = useState(0)
+  const [prevKpiOp, setPrevKpiOp] = useState(0)
+  const [prevKpiTotalLabor, setPrevKpiTotalLabor] = useState(0)
   const [dailyRevenue, setDailyRevenue] = useState<{ date: string; [key: string]: string | number }[]>([])
   const [expenseBreakdown, setExpenseBreakdown] = useState<{ name: string; value: number }[]>([])
   const [avgLaborTarget, setAvgLaborTarget] = useState(0)
@@ -370,6 +374,18 @@ export default function CEODashboard({ onBack }: Props) {
     setPrevTotalRev(pRev + prevFactoryPL.externalRevenue)
     setPrevTotalGross(pGross + pfGross)
     setPrevTotalOperating(pOperating + pfOperating)
+    // Mirror the current-period KPI formulas so the "vs חודש קודם" delta
+    // is apples-to-apples with what's displayed in the tiles.
+    const prevFactoryControllableKpi = prevFactoryPL.externalRevenue - prevFactoryPL.suppliers
+      - prevFactoryPL.labor - prevFactoryPL.managerSalary - prevFactoryPL.repairs
+    const prevBranchAddback = (b: typeof prevBranchPLs[number]) => b.waste + b.factoryPurchases
+    setPrevKpiGross(prevFactoryControllableKpi
+      + prevBranchPLs.reduce((s, pl) => s + pl.controllableProfit + prevBranchAddback(pl), 0))
+    setPrevKpiOp(prevFactoryControllableKpi - prevFactoryPL.fixedCosts - prevFactoryPL.overhead
+      + prevBranchPLs.reduce((s, pl) => s + pl.operatingProfit + prevBranchAddback(pl), 0))
+    const prevTotalHqAllocation = prevFactoryPL.overhead + prevBranchPLs.reduce((s, pl) => s + pl.overhead, 0)
+    setPrevKpiTotalLabor(prevFactoryPL.labor + prevFactoryPL.managerSalary + prevTotalHqAllocation
+      + prevBranchPLs.reduce((s, pl) => s + pl.labor + pl.managerSalary, 0))
 
     // Build the structured insights summary used by the redesigned panel.
     const insightInputs: EntityInput[] = [
@@ -952,7 +968,22 @@ export default function CEODashboard({ onBack }: Props) {
                     <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: kpiGross >= 0 ? '#639922' : '#E24B4A' }}>
                       <CountUp end={Math.round(kpiGross)} duration={1.5} separator="," prefix="₪" />
                     </div>
-                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>{kpiRev > 0 ? ((kpiGross / kpiRev) * 100).toFixed(1) : '0.0'}% מהכנסות</span>
+                    {(() => {
+                      const cur = kpiRev > 0 ? (kpiGross / kpiRev) * 100 : 0
+                      const prv = prevTotalRev > 0 ? (prevKpiGross / prevTotalRev) * 100 : 0
+                      const delta = cur - prv
+                      const up = delta > 0
+                      return (
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                          {cur.toFixed(1)}% מהכנסות
+                          {prevTotalRev > 0 && (
+                            <span style={{ marginInlineStart: 6, color: up ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                              ({up ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}pp)
+                            </span>
+                          )}
+                        </span>
+                      )
+                    })()}
                 </div>
               </motion.div>
               <motion.div variants={fadeUp}>
@@ -961,7 +992,22 @@ export default function CEODashboard({ onBack }: Props) {
                     <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: kpiOp >= 0 ? '#639922' : '#E24B4A' }}>
                       <CountUp end={Math.round(kpiOp)} duration={1.5} separator="," prefix="₪" />
                     </div>
-                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>{kpiRev > 0 ? ((kpiOp / kpiRev) * 100).toFixed(1) : '0.0'}% מהכנסות</span>
+                    {(() => {
+                      const cur = kpiRev > 0 ? (kpiOp / kpiRev) * 100 : 0
+                      const prv = prevTotalRev > 0 ? (prevKpiOp / prevTotalRev) * 100 : 0
+                      const delta = cur - prv
+                      const up = delta > 0
+                      return (
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                          {cur.toFixed(1)}% מהכנסות
+                          {prevTotalRev > 0 && (
+                            <span style={{ marginInlineStart: 6, color: up ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                              ({up ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}pp)
+                            </span>
+                          )}
+                        </span>
+                      )
+                    })()}
                 </div>
               </motion.div>
               <motion.div variants={fadeUp}>
@@ -970,7 +1016,17 @@ export default function CEODashboard({ onBack }: Props) {
                     <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: avgLaborTarget > 0 ? (kpiLaborPct <= avgLaborTarget ? '#639922' : '#E24B4A') : '#334155' }}>
                       <CountUp end={kpiLaborPct} duration={1.5} separator="," suffix="%" decimals={1} />
                     </div>
-                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>{avgLaborTarget > 0 ? `יעד ${avgLaborTarget.toFixed(0)}%` : '\u2014'}</span>
+                    {(() => {
+                      const prv = prevTotalRev > 0 ? (prevKpiTotalLabor / prevTotalRev) * 100 : 0
+                      const delta = kpiLaborPct - prv
+                      const up = delta > 0
+                      if (prevTotalRev <= 0) return null
+                      return (
+                        <span style={{ fontSize: '11px', display: 'block', marginTop: 2, color: up ? '#dc2626' : '#16a34a', fontWeight: 600 }}>
+                          {up ? '\u25b2' : '\u25bc'} {Math.abs(delta).toFixed(1)}pp \u05de\u05d7\u05d5\u05d3\u05e9 \u05e7\u05d5\u05d3\u05dd
+                        </span>
+                      )
+                    })()}
                 </div>
               </motion.div>
             </motion.div>
