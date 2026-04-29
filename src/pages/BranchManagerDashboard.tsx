@@ -237,13 +237,17 @@ export default function BranchManagerDashboard({ onBack }: Props) {
           const row: any = { month: m.label }
           await Promise.all(
             BRANCHES.map(async (br) => {
-              const { data } = await supabase
-                .from('branch_revenue')
-                .select('amount')
-                .eq('branch_id', br.id)
-                .gte('date', m.from)
-                .lt('date', m.to)
-              row[br.name] = (data || []).reduce((s, r) => s + Number(r.amount), 0)
+              // Branch revenue = legacy branch_revenue + register_closings (cash + credit).
+              // Matches calculatePL.ts so the chart agrees with the table totals.
+              const [revRes, closeRes] = await Promise.all([
+                supabase.from('branch_revenue').select('amount')
+                  .eq('branch_id', br.id).gte('date', m.from).lt('date', m.to),
+                supabase.from('register_closings').select('cash_sales, credit_sales')
+                  .eq('branch_id', br.id).gte('date', m.from).lt('date', m.to),
+              ])
+              const legacy = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+              const closings = (closeRes.data || []).reduce((s, c) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0)
+              row[br.name] = legacy + closings
             })
           )
           return row

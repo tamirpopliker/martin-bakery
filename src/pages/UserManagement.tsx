@@ -98,8 +98,9 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
   }
 
   async function loadSettings() {
-    const { data } = await supabase.from('system_settings').select('value').eq('key', 'overhead_pct').maybeSingle()
-    if (data) setOverheadPct(Number(data.value) || 5)
+    // Single source of truth — same key calculatePL uses for the HQ estimate.
+    const { data } = await supabase.from('system_settings').select('value').eq('key', 'hq_estimate_pct').maybeSingle()
+    if (data) setOverheadPct(Number(data.value) || 10)
   }
 
   async function loadBranchEmployees(branchId: number) {
@@ -122,7 +123,7 @@ export default function UserManagement({ onBack, initialTab }: { onBack: () => v
 
   async function saveSettings() {
     setSettingsSaving(true)
-    await supabase.from('system_settings').upsert({ key: 'overhead_pct', value: String(overheadPct), updated_at: new Date().toISOString() })
+    await supabase.from('system_settings').upsert({ key: 'hq_estimate_pct', value: String(overheadPct), updated_at: new Date().toISOString() })
     setSettingsSaving(false)
     setSettingsSaved(true)
     setTimeout(() => setSettingsSaved(false), 2000)

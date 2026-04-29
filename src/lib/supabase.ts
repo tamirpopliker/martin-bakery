@@ -9,10 +9,19 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 })
 
-/** Fetch overhead_pct from system_settings (defaults to 5 if not found) */
+/**
+ * Fetch the headquarters-allocation estimate percentage. Single source of truth
+ * for the % shown across all dashboards (and the same value calculatePL uses
+ * when no actual HQ employer_costs are uploaded for the period).
+ *
+ * Reads `hq_estimate_pct` from system_settings; falls back to the legacy
+ * `overhead_pct` key for backwards compatibility, then to 10 as the default.
+ */
 export async function getOverheadPct(): Promise<number> {
-  const { data } = await supabase.from('system_settings').select('value').eq('key', 'overhead_pct').maybeSingle()
-  return data ? Number(data.value) : 5
+  const { data: hq } = await supabase.from('system_settings').select('value').eq('key', 'hq_estimate_pct').maybeSingle()
+  if (hq) return Number(hq.value) || 10
+  const { data: legacy } = await supabase.from('system_settings').select('value').eq('key', 'overhead_pct').maybeSingle()
+  return legacy ? Number(legacy.value) : 10
 }
 
 /** Returns first day of next month — use with .lt('date', monthEnd(m)) instead of .lte('date', m+'-31') */
