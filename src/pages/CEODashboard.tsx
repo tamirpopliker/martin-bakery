@@ -129,6 +129,7 @@ export default function CEODashboard({ onBack }: Props) {
   const [factoryWaste, setFactoryWaste]     = useState(0)
   const [factoryRepairs, setFactoryRepairs] = useState(0)
   const [factoryFixed, setFactoryFixed]     = useState(0)
+  const [factoryOverhead, setFactoryOverhead] = useState(0)
 
   // Revenue breakdown
   const [revCashier, setRevCashier] = useState(0)
@@ -192,6 +193,7 @@ export default function CEODashboard({ onBack }: Props) {
     setFactoryWaste(factoryPL.waste)
     setFactoryRepairs(factoryPL.repairs)
     setFactoryFixed(factoryPL.fixedCosts)
+    setFactoryOverhead(factoryPL.overhead || 0)
     setFactoryB2b(0) // b2b breakdown not needed separately
     setFactoryInternalSales(factoryPL.internalRevenue)
 
@@ -962,7 +964,6 @@ export default function CEODashboard({ onBack }: Props) {
             {(() => {
               const isSegment = viewMode === 'segment'
               const fRev = isSegment ? factorySales : factorySales - factoryInternalSales
-              const fOp = fRev - factorySuppliers - factoryLabor - factoryFixed - factoryWaste - factoryRepairs
               const tableTitle = isSegment ? 'טבלת רווח והפסד — לפי מרכז רווח' : 'טבלת רווח והפסד — מאוחדת'
               const footerNote = isSegment
                 ? 'תצוגה זו כוללת עסקאות פנימיות בין המפעל לסניפים. לתמונה האמיתית של העסק עבור לתצוגה המאוחדת.'
@@ -975,6 +976,10 @@ export default function CEODashboard({ onBack }: Props) {
               // Use values directly from calculateBranchPL — no recalculation
               // grossProfit = controllableProfit from PLResult
               // operatingProfit = operatingProfit from PLResult
+              // Factory's controllable profit, excluding HQ allocation (which is shown
+              // separately under "העמסת מטה" along with branches' shares).
+              const factoryGross = fRev - factorySuppliers - factoryLabor - factoryWaste - factoryRepairs
+              const factoryOp = factoryGross - factoryFixed - factoryOverhead
               const rows: PLRow[] = [
                 { label: 'הכנסות', factory: fRev, getBr: br => br.revenue, bold: false, color: '' },
                 ...(isSegment ? [
@@ -983,14 +988,13 @@ export default function CEODashboard({ onBack }: Props) {
                 { label: isSegment ? 'ספקים חיצוניים' : 'חומרי גלם / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => br.expExternal, bold: false, color: '' },
                 { label: 'לייבור עובדים', factory: factoryLabor, getBr: br => br.labor, bold: false, color: '', kpiKey: 'labor' },
                 { label: 'שכר מנהלים' + (branches.every(b => b.managerIsActual) ? ' ✓' : ' ~'), factory: 0, getBr: (br: BranchData) => br.managerSalary, bold: false, color: '' as const },
-                ...(hqCost > 0 ? [{ label: 'עלות מטה' + (hasEmployerReport ? ' ✓' : ' ~'), factory: hqCost, getBr: () => 0, bold: false, color: '' as const }] : []),
-                { label: 'סה"כ לייבור', factory: factoryLabor + hqCost, getBr: (br: BranchData) => br.labor + br.managerSalary, bold: true, color: '' as const },
+                { label: 'סה"כ לייבור', factory: factoryLabor, getBr: (br: BranchData) => br.labor + br.managerSalary, bold: true, color: '' as const },
                 { label: 'פחת', factory: factoryWaste, getBr: br => br.waste, bold: false, color: '', kpiKey: 'waste' },
                 { label: 'תיקונים', factory: factoryRepairs, getBr: br => br.repairs, bold: false, color: '' },
-                { label: 'רווח נשלט', factory: fRev - factorySuppliers - factoryLabor - factoryWaste - factoryRepairs, getBr: br => br.grossProfit, bold: true, color: 'profit' },
+                { label: 'רווח נשלט', factory: factoryGross, getBr: br => br.grossProfit, bold: true, color: 'profit' },
                 { label: 'עלויות קבועות', factory: factoryFixed, getBr: br => br.fixedCosts, bold: false, color: '' },
-                { label: 'העמסת מטה', factory: 0, getBr: br => br.overhead, bold: false, color: '' },
-                { label: 'רווח תפעולי', factory: fOp, getBr: br => br.operatingProfit, bold: true, color: 'profit', kpiKey: 'operating' },
+                { label: 'העמסת מטה' + (hasEmployerReport ? ' ✓' : ' ~'), factory: factoryOverhead, getBr: br => br.overhead, bold: false, color: '' },
+                { label: 'רווח תפעולי', factory: factoryOp, getBr: br => br.operatingProfit, bold: true, color: 'profit', kpiKey: 'operating' },
               ]
 
               // In consolidated view, add intercompany elimination row for transparency
@@ -1060,10 +1064,28 @@ export default function CEODashboard({ onBack }: Props) {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {rows.map(row => {
-                            const brVals = branches.map(br => row.getBr(br))
-                            const total = row.factory + brVals.reduce((s, v) => s + v, 0)
+                          {(() => {
+                            // Pre-compute totals so profit rows can use proper consolidation
+                            // (revenue − cost rows) instead of summing per-column profits.
                             const totalRev = fRev + branches.reduce((s, br) => s + br.revenue, 0)
+                            const totalsByLabel: Record<string, number> = {}
+                            for (const r of rows) {
+                              totalsByLabel[r.label] = r.factory + branches.reduce((s, br) => s + r.getBr(br), 0)
+                            }
+                            const elimTotal = totalsByLabel['↔ ביטול עסקאות פנימיות'] ?? 0
+                            const elimSmall = !isSegment && Math.abs(elimTotal) < 0.5 // accounting-clean: residual treated as 0
+                            const sumKeys = (keys: string[]) => keys.reduce((s, k) => s + (totalsByLabel[k] ?? 0), 0)
+                            const consolidatedGross = totalRev
+                              - sumKeys(['חומרי גלם / ספקים', 'לייבור עובדים', `שכר מנהלים${branches.every(b => b.managerIsActual) ? ' ✓' : ' ~'}`, 'פחת', 'תיקונים'])
+                              - (elimSmall ? 0 : 0) // intercompany nets out by definition
+                            const consolidatedOp = consolidatedGross
+                              - sumKeys(['עלויות קבועות', `העמסת מטה${hasEmployerReport ? ' ✓' : ' ~'}`])
+                            return rows.map(row => {
+                            const brVals = branches.map(br => row.getBr(br))
+                            let total = totalsByLabel[row.label]
+                            if (!isSegment && row.label === '↔ ביטול עסקאות פנימיות') total = 0
+                            if (!isSegment && row.label === 'רווח נשלט') total = consolidatedGross
+                            if (!isSegment && row.label === 'רווח תפעולי') total = consolidatedOp
                             const isRevRow = row.label === 'הכנסות'
                             return (
                               <>{/* dg fragment */}
@@ -1092,7 +1114,8 @@ export default function CEODashboard({ onBack }: Props) {
                               })}
                               </>
                             )
-                          })}
+                          })
+                          })()}
                         </TableBody>
                       </Table>
                       <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '12px', textAlign: 'center' }}>{footerNote}</p>
