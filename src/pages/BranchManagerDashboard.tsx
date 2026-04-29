@@ -9,8 +9,8 @@ import PeriodPicker from '../components/PeriodPicker'
 import { TrendingUp, TrendingDown, Presentation, EyeOff } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { generateInsights, type InsightsInput } from '../lib/generateInsights'
-import InsightsCard from '../components/InsightsCard'
+import InsightsPanel from '../components/InsightsPanel'
+import { buildInsightsSummary, type InsightsSummary, type EntityInput } from '../lib/branchInsights'
 
 const fadeIn = (delay = 0) => ({
   hidden: { opacity: 0, y: 10 },
@@ -80,7 +80,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   const [overheadPct, setOverheadPct] = useState(5)
   const [chartData, setChartData] = useState<any[]>([])
   const [kpiTargets, setKpiTargets] = useState<Record<number, { labor_pct: number; waste_pct: number; revenue_target: number; basket_target: number; transaction_target: number }>>({})
-  const [insights, setInsights] = useState<any[]>([])
+  const [insightsSummary, setInsightsSummary] = useState<InsightsSummary | null>(null)
 
   const brOH = (br: BranchData) => br.totalRevenue * overheadPct / 100
   const brGross = (br: BranchData) => br.grossProfit
@@ -172,50 +172,20 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       ;(kpiData || []).forEach((k: any) => { kpiMap[k.branch_id] = k })
       setKpiTargets(kpiMap)
 
-      // Generate insights from aggregated branch data
-      const totalRev = current.reduce((s, br) => s + br.totalRevenue, 0)
-      const totalLabor = current.reduce((s, br) => s + br.laborEmployer, 0)
-      const totalWaste = current.reduce((s, br) => s + br.wasteTotal, 0)
-      const totalGross = current.reduce((s, br) => s + br.grossProfit, 0)
-      const totalFactoryPurchases = current.reduce((s, br) => s + (br.expSuppliersInternal || 0), 0)
-
-      // Average targets
-      const targetValues = Object.values(kpiMap)
-      const avgLaborTarget = targetValues.length > 0 ? targetValues.reduce((s: number, t: any) => s + (t?.labor_pct || 0), 0) / targetValues.length : 28
-      const avgWasteTarget = targetValues.length > 0 ? targetValues.reduce((s: number, t: any) => s + (t?.waste_pct || 0), 0) / targetValues.length : 3
-      const avgRevTarget = targetValues.reduce((s: number, t: any) => s + (t?.revenue_target || 0), 0)
-
-      const insightInput: InsightsInput = {
-        labor: {
-          totalCost: totalLabor,
-          targetPct: avgLaborTarget,
-          revenue: totalRev,
-        },
-        revenue: {
-          actual: totalRev,
-          target: avgRevTarget,
-        },
-        waste: {
-          totalAmount: totalWaste,
-          targetPct: avgWasteTarget,
-          revenue: totalRev,
-        },
-        controllableProfit: {
-          actual: totalGross,
-          target: totalRev * 0.30,
-          revenue: totalRev,
-        },
-        factoryPurchases: {
-          amount: totalFactoryPurchases,
-          avgMonthly: totalFactoryPurchases, // simplified — no historical avg
-          isHolidayMonth: false,
-        },
-      }
-
-      const generated = generateInsights(insightInput)
-      console.log('[BranchManager] insightInput:', JSON.stringify(insightInput))
-      console.log('[BranchManager] generated insights:', generated.length, generated.map(i => i.id))
-      setInsights(generated)
+      // Build the structured insights summary used by the InsightsPanel.
+      const insightInputs: EntityInput[] = current.map<EntityInput>(br => ({
+        id: br.id,
+        name: br.name,
+        revenue: br.totalRevenue,
+        controllableProfit: br.grossProfit,
+        profitTarget: br.totalRevenue * 0.30,
+        laborCost: br.laborEmployer,
+        laborPctTarget: kpiMap[br.id]?.labor_pct || 28,
+        waste: br.wasteTotal,
+        wastePctTarget: kpiMap[br.id]?.waste_pct || 3,
+        revenueTarget: kpiMap[br.id]?.revenue_target || 0,
+      }))
+      setInsightsSummary(buildInsightsSummary(insightInputs))
 
       const now = new Date(from)
       const months: { key: string; label: string; from: string; to: string }[] = []
@@ -330,7 +300,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       {!loading && (
         <div style={{ padding: '20px', maxWidth: 1200, margin: '0 auto' }}>
 
-          <InsightsCard insights={insights} />
+          {insightsSummary && <InsightsPanel summary={insightsSummary} />}
 
           {/* Hero KPI Card */}
           {branches.length > 0 && (() => {
@@ -348,6 +318,8 @@ export default function BranchManagerDashboard({ onBack }: Props) {
             const avgWasteTarget = targetKeys.length > 0 ? targetKeys.reduce((s, k) => s + (kpiTargets[Number(k)]?.waste_pct || 0), 0) / targetKeys.length : 0
             const avgRevTarget = targetKeys.length > 0 ? targetKeys.reduce((s, k) => s + (kpiTargets[Number(k)]?.revenue_target || 0), 0) : 0
 
+            const totalOp = totals.operatingProfit
+            const opPct = totalRev > 0 ? (totalOp / totalRev) * 100 : 0
             const tiles = [
               {
                 label: 'סה"כ הכנסות',
@@ -357,21 +329,21 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                 status: avgRevTarget <= 0 ? 'none' : totalRev >= avgRevTarget * 0.95 ? 'good' : totalRev >= avgRevTarget * 0.8 ? 'warn' : 'bad',
               },
               {
-                label: 'רווח נשלט %',
-                value: `${avgControllable.toFixed(1)}%`,
+                label: 'רווח תפעולי',
+                value: `₪${Math.round(totalOp).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
                 pct: null,
-                targetLabel: undefined,
-                status: avgControllable >= 30 ? 'good' : avgControllable >= 20 ? 'warn' : 'bad',
+                targetLabel: `${opPct.toFixed(1)}% מהכנסות`,
+                status: totalOp >= 0 ? (opPct >= 10 ? 'good' : 'warn') : 'bad',
               },
               {
-                label: '% לייבור ממוצע',
+                label: '% לייבור',
                 value: `${avgLabor.toFixed(1)}%`,
                 pct: avgLaborTarget > 0 ? Math.max(0, (1 - (avgLabor - avgLaborTarget) / avgLaborTarget)) * 100 : null,
                 targetLabel: avgLaborTarget > 0 ? `יעד: ${avgLaborTarget.toFixed(0)}%` : undefined,
                 status: avgLaborTarget <= 0 ? 'none' : avgLabor <= avgLaborTarget ? 'good' : avgLabor <= avgLaborTarget + 2 ? 'warn' : 'bad',
               },
               {
-                label: '% פחת ממוצע',
+                label: '% פחת',
                 value: `${avgWaste.toFixed(1)}%`,
                 pct: avgWasteTarget > 0 ? Math.max(0, (1 - (avgWaste - avgWasteTarget) / avgWasteTarget)) * 100 : null,
                 targetLabel: avgWasteTarget > 0 ? `יעד: ${avgWasteTarget.toFixed(0)}%` : undefined,
@@ -419,41 +391,6 @@ export default function BranchManagerDashboard({ onBack }: Props) {
               </div>
             )
           })()}
-
-          {/* KPI Cards */}
-          <motion.div variants={fadeIn(0)} initial="hidden" animate="visible" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
-            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>סה"כ הכנסות</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#6366f1' }}>
-                <CountUp end={Math.round(totals.revenue)} duration={1.5} separator="," prefix="₪" />
-              </div>
-              <DiffBadge current={totals.revenue} previous={prevTotals.revenue} />
-            </div>
-
-            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4, cursor: 'help' }} title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">סה"כ רווח נשלט</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: totals.grossProfit >= 0 ? '#34d399' : '#ef4444' }}>
-                <CountUp end={Math.round(totals.grossProfit)} duration={1.5} separator="," prefix="₪" />
-              </div>
-              <DiffBadge current={totals.grossProfit} previous={prevTotals.grossProfit} />
-            </div>
-
-            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>סה"כ רווח תפעולי</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: totals.operatingProfit >= 0 ? '#34d399' : '#ef4444' }}>
-                <CountUp end={Math.round(totals.operatingProfit)} duration={1.5} separator="," prefix="₪" />
-              </div>
-              <DiffBadge current={totals.operatingProfit} previous={prevTotals.operatingProfit} />
-            </div>
-
-            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4 }}>% לייבור ממוצע</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#6366f1' }}>
-                <CountUp end={totalLaborPct} duration={1.5} suffix="%" decimals={1} />
-              </div>
-              {(() => { const avgTarget = branches.length > 0 ? branches.reduce((s, b) => s + getTarget(b.id, 'labor_pct'), 0) / branches.length : 0; return avgTarget > 0 ? <span style={{ fontSize: 11, color: '#94a3b8' }}>יעד {avgTarget.toFixed(0)}%</span> : <span style={{ fontSize: 11, color: '#94a3b8' }}>{'\u2014'}</span> })()}
-            </div>
-          </motion.div>
 
           {/* Detail Cards Row */}
           <motion.div variants={fadeIn(0.1)} initial="hidden" animate="visible" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
@@ -510,64 +447,6 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                   )
                 })}
               </div>
-            </div>
-          </motion.div>
-
-          {/* KPI Targets per Branch */}
-          <motion.div variants={fadeIn(0.2)} initial="hidden" animate="visible" style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>יעדים לפי סניף</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-              {branches.map(br => {
-                const laborTarget = getTarget(br.id, 'labor_pct')
-                const wasteTarget = getTarget(br.id, 'waste_pct')
-                const opPct = br.totalRevenue > 0 ? (brOP(br) / br.totalRevenue * 100) : 0
-
-                const kpiColor = (actual: number, target: number, inverse: boolean) => {
-                  const diff = inverse ? (actual - target) / target : (target - actual) / target
-                  if (diff <= 0) return '#34d399'
-                  if (diff <= 0.2) return '#f59e0b'
-                  return '#ef4444'
-                }
-
-                const laborColor = kpiColor(br.laborPct, laborTarget, true)
-                const wasteColor = kpiColor(br.wastePct, wasteTarget, true)
-                const opColor = opPct >= 0 ? '#34d399' : opPct >= -5 ? '#f59e0b' : '#ef4444'
-
-                return (
-                  <div key={br.id} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', padding: 16 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>{br.name}</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>% לייבור</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: laborColor }}>{br.laborPct.toFixed(1)}% / {laborTarget}%</span>
-                        </div>
-                        <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.5s', width: `${Math.min((br.laborPct / Math.max(laborTarget * 1.5, 1)) * 100, 100)}%`, backgroundColor: laborColor }} />
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>% פחת</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: wasteColor }}>{br.wastePct.toFixed(1)}% / {wasteTarget}%</span>
-                        </div>
-                        <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.5s', width: `${Math.min((br.wastePct / Math.max(wasteTarget * 1.5, 1)) * 100, 100)}%`, backgroundColor: wasteColor }} />
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>% רווח תפעולי</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: opColor }}>{opPct.toFixed(1)}%</span>
-                        </div>
-                        <div style={{ height: 6, borderRadius: 3, background: '#f1f5f9', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', borderRadius: 3, transition: 'width 0.5s', width: `${Math.min(Math.max(opPct, 0), 100)}%`, backgroundColor: opColor }} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
             </div>
           </motion.div>
 
