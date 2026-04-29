@@ -982,7 +982,11 @@ export default function CEODashboard({ onBack }: Props) {
               // br.grossProfit, and the elimination row visualises the cancellation.
               // HQ allocation is shown under "העמסת מטה" with the rest, not double-deducted.
               const factoryRevForProfit = isSegment ? fRev : factorySales
-              const factoryGross = factoryRevForProfit - factorySuppliers - factoryLabor - factoryWaste - factoryRepairs
+              // Waste is excluded from the P&L here — it represents discarding goods whose
+              // cost is already captured in raw materials / supplier purchases. Showing it as
+              // a separate cost would double-count. Branches' grossProfit/operatingProfit
+              // include waste deductions, so we add br.waste back to undo that.
+              const factoryGross = factoryRevForProfit - factorySuppliers - factoryLabor - factoryRepairs
               const factoryOp = factoryGross - factoryFixed - factoryOverhead
               const rows: PLRow[] = [
                 { label: 'הכנסות', factory: fRev, getBr: br => br.revenue, bold: false, color: '' },
@@ -993,12 +997,11 @@ export default function CEODashboard({ onBack }: Props) {
                 { label: 'לייבור עובדים', factory: factoryLabor, getBr: br => br.labor, bold: false, color: '', kpiKey: 'labor' },
                 { label: 'שכר מנהלים' + (branches.every(b => b.managerIsActual) ? ' ✓' : ' ~'), factory: 0, getBr: (br: BranchData) => br.managerSalary, bold: false, color: '' as const },
                 { label: 'סה"כ לייבור', factory: factoryLabor, getBr: (br: BranchData) => br.labor + br.managerSalary, bold: true, color: '' as const },
-                { label: 'פחת', factory: factoryWaste, getBr: br => br.waste, bold: false, color: '', kpiKey: 'waste' },
                 { label: 'תיקונים', factory: factoryRepairs, getBr: br => br.repairs, bold: false, color: '' },
-                { label: 'רווח נשלט', factory: factoryGross, getBr: br => br.grossProfit, bold: true, color: 'profit' },
+                { label: 'רווח נשלט', factory: factoryGross, getBr: br => br.grossProfit + br.waste, bold: true, color: 'profit' },
                 { label: 'עלויות קבועות', factory: factoryFixed, getBr: br => br.fixedCosts, bold: false, color: '' },
                 { label: 'העמסת מטה' + (hasEmployerReport ? ' ✓' : ' ~'), factory: factoryOverhead, getBr: br => br.overhead, bold: false, color: '' },
-                { label: 'רווח תפעולי', factory: factoryOp, getBr: br => br.operatingProfit, bold: true, color: 'profit', kpiKey: 'operating' },
+                { label: 'רווח תפעולי', factory: factoryOp, getBr: br => br.operatingProfit + br.waste, bold: true, color: 'profit', kpiKey: 'operating' },
               ]
 
               // In consolidated view, add intercompany elimination row for transparency
