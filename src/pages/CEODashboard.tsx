@@ -916,12 +916,24 @@ export default function CEODashboard({ onBack }: Props) {
             {(() => {
               const isSegment = viewMode === 'segment'
               const fRevKpi = isSegment ? factorySales : factorySales - factoryInternalSales
-              const factoryControllableKpi = fRevKpi - factorySuppliers - factoryLabor - factoryWaste - factoryRepairs
-              const factoryOpKpi = factoryControllableKpi - factoryFixed
+              // Match the table's row formulas:
+              //   - subtract factoryManagerSalary (now split out of factoryLabor)
+              //   - waste excluded (removed by user request)
+              //   - factoryOverhead is the factory's share of HQ; subtract from OP
+              const factoryControllableKpi = fRevKpi - factorySuppliers - factoryLabor - factoryManagerSalary - factoryRepairs
+              const factoryOpKpi = factoryControllableKpi - factoryFixed - factoryOverhead
               const kpiRev = fRevKpi + branches.reduce((s, b) => s + b.revenue, 0)
-              const kpiGross = factoryControllableKpi + branches.reduce((s, b) => s + b.grossProfit, 0)
-              const kpiOp = factoryOpKpi + branches.reduce((s, b) => s + b.operatingProfit, 0)
-              const kpiTotalLabor = factoryLabor + hqCost + branches.reduce((s, b) => s + b.labor + b.managerSalary, 0)
+              // In consolidated view, branches don't show factoryPurchases as a cost row, so add
+              // it back (along with waste) to align with the table's "סה"כ" cells.
+              const branchAddback = (b: BranchData) => b.waste + (isSegment ? 0 : b.expInternal)
+              const kpiGross = factoryControllableKpi + branches.reduce((s, b) => s + b.grossProfit + branchAddback(b), 0)
+              const kpiOp = factoryOpKpi + branches.reduce((s, b) => s + b.operatingProfit + branchAddback(b), 0)
+              // Total labor = factory employees + factory managers + branch employees + branch managers
+              // + total HQ allocation (factory share + branches' shares = the gross HQ cost when actual,
+              // or 10% × revenue when estimate). Matches BranchManagerDashboard / Home tile.
+              const totalHqAllocation = factoryOverhead + branches.reduce((s, b) => s + b.overhead, 0)
+              const kpiTotalLabor = factoryLabor + factoryManagerSalary + totalHqAllocation
+                + branches.reduce((s, b) => s + b.labor + b.managerSalary, 0)
               const kpiLaborPct = kpiRev > 0 ? (kpiTotalLabor / kpiRev) * 100 : 0
               return (
             <motion.div className="grid grid-cols-4 gap-3 mb-3" variants={staggerContainer} initial="hidden" animate="visible">
