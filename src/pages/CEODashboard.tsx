@@ -1007,12 +1007,12 @@ export default function CEODashboard({ onBack }: Props) {
                 // it back here so per-column profit = revenue − VISIBLE costs only, and
                 // sum(branches) + factory == proper consolidated profit.
                 { label: 'רווח נשלט', factory: factoryGross,
-                  getBr: br => br.grossProfit + br.waste + (isSegment ? 0 : br.expSuppliersInternal),
+                  getBr: br => br.grossProfit + br.waste + (isSegment ? 0 : br.expInternal),
                   bold: true, color: 'profit' },
                 { label: 'עלויות קבועות', factory: factoryFixed, getBr: br => br.fixedCosts, bold: false, color: '' },
                 { label: 'העמסת מטה' + (hasEmployerReport ? ' ✓' : ' ~'), factory: factoryOverhead, getBr: br => br.overhead, bold: false, color: '' },
                 { label: 'רווח תפעולי', factory: factoryOp,
-                  getBr: br => br.operatingProfit + br.waste + (isSegment ? 0 : br.expSuppliersInternal),
+                  getBr: br => br.operatingProfit + br.waste + (isSegment ? 0 : br.expInternal),
                   bold: true, color: 'profit', kpiKey: 'operating' },
               ]
 
