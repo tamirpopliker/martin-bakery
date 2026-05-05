@@ -818,6 +818,7 @@ function PrintDialog({ orders, branches, onClose }: {
                     <th style={printThStyle}>מס׳</th>
                     <th style={printThStyle}>לקוח</th>
                     <th style={printThStyle}>שעה</th>
+                    <th style={printThStyle}>סטטוס</th>
                     <th style={printThStyle}>פרטי עוגה</th>
                     <th style={printThStyle}>פתק לקונדיטור</th>
                     <th style={printThStyle}>הערות סניף</th>
@@ -831,6 +832,14 @@ function PrintDialog({ orders, branches, onClose }: {
                         <div style={{ fontWeight: 'bold' }}>{o.customer_name}</div>
                       </td>
                       <td style={printTdStyle}>{o.pickup_time || '—'}</td>
+                      <td style={printTdStyle}>
+                        {(() => {
+                          const st = STATUS_LABELS[o.status]
+                          return st
+                            ? <span style={{ display: 'inline-block', padding: '2px 6px', border: `1px solid ${st.border}`, background: st.bg, color: st.color, borderRadius: 4, fontWeight: 'bold', fontSize: 10 }}>{st.label}</span>
+                            : <span>{o.status}</span>
+                        })()}
+                      </td>
                       <td style={printTdStyle}>
                         <div><strong>סוג:</strong> {o.type}</div>
                         <div><strong>גודל:</strong> {o.base_size}</div>
