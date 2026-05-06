@@ -37,6 +37,12 @@ interface EmployeeRoleAssignment {
   role_id: number
 }
 
+interface StaffingRequirement {
+  shift_id: number
+  role_id: number
+  required_count: number
+}
+
 const AVAIL_CONFIG: Record<Availability, { label: string; icon: string; color: string; border: string }> = {
   available:    { label: 'פנוי',         icon: '✓', color: '#10b981', border: '#a7f3d0' },
   prefer_not:   { label: 'מעדיף שלא',   icon: '~', color: '#f59e0b', border: '#fde68a' },
@@ -86,6 +92,8 @@ export default function EmployeeConstraints({ onBack }: Props) {
 
   const [activeTab, setActiveTab] = useState<TabKey>('availability')
   const [shifts, setShifts] = useState<BranchShift[]>([])
+  const [staffingReqs, setStaffingReqs] = useState<StaffingRequirement[]>([])
+  const [myRoleIds, setMyRoleIds] = useState<number[]>([])
   const [loading, setLoading] = useState(true)
   const [resolvedEmpId, setResolvedEmpId] = useState<number | null>(null)
   const [noEmployee, setNoEmployee] = useState(false)
@@ -154,7 +162,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
     setLoading(true)
     const dateList = weekDays
 
-    const [shiftsRes, constraintsRes] = await Promise.all([
+    const [shiftsRes, constraintsRes, staffingRes, myRolesRes] = await Promise.all([
       supabase
         .from('branch_shifts')
         .select('id, name, start_time, end_time, days_of_week')
@@ -165,10 +173,19 @@ export default function EmployeeConstraints({ onBack }: Props) {
         .select('date, availability, shift_id')
         .eq('employee_id', resolvedEmpId!)
         .in('date', dateList),
+      supabase
+        .from('shift_staffing_requirements')
+        .select('shift_id, role_id, required_count'),
+      supabase
+        .from('employee_role_assignments')
+        .select('role_id')
+        .eq('employee_id', resolvedEmpId!),
     ])
 
     const loadedShifts: BranchShift[] = (shiftsRes.data || []) as BranchShift[]
     setShifts(loadedShifts)
+    setStaffingReqs((staffingRes.data || []) as StaffingRequirement[])
+    setMyRoleIds(((myRolesRes.data || []) as { role_id: number }[]).map(r => r.role_id))
 
     const map = new Map<string, Availability>()
     if (constraintsRes.data) {
@@ -179,6 +196,18 @@ export default function EmployeeConstraints({ onBack }: Props) {
     }
     setConstraintMap(map)
     setLoading(false)
+  }
+
+  // Filter shifts to those that match the employee's assigned roles.
+  // If no role assignments exist yet, or no requirements are defined for any of
+  // the branch's shifts, fall back to showing all shifts (don't break setup).
+  function isShiftForMe(shiftId: number): boolean {
+    if (myRoleIds.length === 0) return true
+    const reqRoleIdsForShift = staffingReqs
+      .filter(r => r.shift_id === shiftId && r.required_count > 0)
+      .map(r => r.role_id)
+    if (reqRoleIdsForShift.length === 0) return true
+    return reqRoleIdsForShift.some(rid => myRoleIds.includes(rid))
   }
 
   // ─── Load roles & assignments ──────────────────────────
@@ -215,14 +244,20 @@ export default function EmployeeConstraints({ onBack }: Props) {
     })
 
     // Persist
-    await supabase
+    const { error: delErr } = await supabase
       .from('schedule_constraints')
       .delete()
       .eq('employee_id', resolvedEmpId)
       .eq('date', dateStr)
       .eq('shift_id', shiftId)
 
-    await supabase
+    if (delErr) {
+      console.error('[EmployeeConstraints setAvailability delete] error:', delErr)
+      alert(`שמירת הזמינות נכשלה: ${delErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
+
+    const { error: insErr } = await supabase
       .from('schedule_constraints')
       .insert({
         branch_id: appUser?.branch_id,
@@ -232,6 +267,12 @@ export default function EmployeeConstraints({ onBack }: Props) {
         availability,
         updated_at: new Date().toISOString(),
       })
+
+    if (insErr) {
+      console.error('[EmployeeConstraints setAvailability insert] error:', insErr)
+      alert(`שמירת הזמינות נכשלה: ${insErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+      return
+    }
 
     // Brief checkmark
     setSavedKeys(prev => new Set(prev).add(key))
@@ -296,7 +337,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
   function getWeekShifts(): BranchShift[] {
     const daysInWeek = weekDays.map(d => new Date(d + 'T12:00:00').getDay())
     return shifts.filter(s =>
-      s.days_of_week && s.days_of_week.some(dow => daysInWeek.includes(dow))
+      s.days_of_week && s.days_of_week.some(dow => daysInWeek.includes(dow)) && isShiftForMe(s.id)
     )
   }
 
@@ -404,7 +445,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
                   const DAY_NAMES_FULL = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי']
                   const mDate = weekDays[currentDayIndex]
                   const mDow = new Date(mDate + 'T12:00:00').getDay()
-                  const mShifts = shifts.filter(s => s.days_of_week && s.days_of_week.includes(mDow))
+                  const mShifts = shifts.filter(s => s.days_of_week && s.days_of_week.includes(mDow) && isShiftForMe(s.id))
 
                   return (
                     <>

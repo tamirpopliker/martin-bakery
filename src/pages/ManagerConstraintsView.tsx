@@ -27,7 +27,11 @@ function getWeekDays(weekOffset: number): string[] {
   for (let i = 0; i < 7; i++) {
     const d = new Date(sunday)
     d.setDate(sunday.getDate() + i)
-    days.push(d.toISOString().split('T')[0])
+    // Local date — toISOString() converts to UTC, shifting the date back in IL timezone
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    days.push(`${yyyy}-${mm}-${dd}`)
   }
   return days
 }
@@ -50,9 +54,13 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
   const [constraints, setConstraints] = useState<Constraint[]>([])
   const [shifts, setShifts] = useState<BranchShift[]>([])
   const [staffingReqs, setStaffingReqs] = useState<StaffingRequirement[]>([])
-  const [weekOffset, setWeekOffset] = useState(0)
+  // Default to NEXT week — that's the week the manager is scheduling for.
+  // Employees fill availability ahead of time, so current-week is usually empty.
+  const [weekOffset, setWeekOffset] = useState(1)
   const [loading, setLoading] = useState(true)
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
+  const [includeInactive, setIncludeInactive] = useState(false)
+  const [otherWeeks, setOtherWeeks] = useState<{ count: number; nearest: number | null }>({ count: 0, nearest: null })
   const [manualDialog, setManualDialog] = useState<{ empId: number; empName: string } | null>(null)
   const [manualAvails, setManualAvails] = useState<Map<string, string>>(new Map())
   const [saving, setSaving] = useState(false)
@@ -60,12 +68,19 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
   const weekDays = getWeekDays(weekOffset)
   const weekLabel = `${formatShortDate(weekDays[0])} — ${formatShortDate(weekDays[6])}`
 
-  useEffect(() => { loadData() }, [branchId, weekOffset])
+  useEffect(() => { loadData() }, [branchId, weekOffset, includeInactive])
 
   async function loadData() {
     setLoading(true)
+    let empsQuery = supabase.from('branch_employees')
+      .select('id, name, training_status, is_manager, active')
+      .eq('branch_id', branchId)
+      .eq('is_manager', false)
+      .order('name')
+    if (!includeInactive) empsQuery = empsQuery.eq('active', true)
+
     const [empsRes, consRes, shiftsRes, staffingRes] = await Promise.all([
-      supabase.from('branch_employees').select('id, name, training_status, is_manager').eq('branch_id', branchId).eq('active', true).eq('is_manager', false).order('name'),
+      empsQuery,
       supabase.from('schedule_constraints').select('employee_id, date, availability, shift_id, submitted_by_name')
         .eq('branch_id', branchId)
         .gte('date', weekDays[0])
@@ -80,6 +95,43 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
     if (shiftsRes.data) setShifts(shiftsRes.data as BranchShift[])
     if (staffingRes.data) setStaffingReqs(staffingRes.data as StaffingRequirement[])
     setLoading(false)
+
+    // If the current week has no employee submissions, look ahead/behind a few
+    // weeks to surface a hint — managers often look at the wrong week.
+    const empSubmissions = (consRes.data || []).filter(c => c.submitted_by_name === null).length
+    if (empSubmissions === 0) {
+      const today = new Date()
+      const todaySunday = new Date(today)
+      todaySunday.setDate(today.getDate() - today.getDay())
+      const probeStart = new Date(todaySunday); probeStart.setDate(probeStart.getDate() - 14)
+      const probeEnd = new Date(todaySunday); probeEnd.setDate(probeEnd.getDate() + 28)
+      const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      const { data: probe } = await supabase.from('schedule_constraints')
+        .select('date')
+        .eq('branch_id', branchId)
+        .is('submitted_by_name', null)
+        .gte('date', fmt(probeStart))
+        .lte('date', fmt(probeEnd))
+      if (probe && probe.length > 0) {
+        // Find nearest week-offset (relative to currently displayed week) with submissions
+        const currentSunday = new Date(weekDays[0] + 'T12:00:00')
+        let nearest: number | null = null
+        let nearestAbs = Infinity
+        for (const r of probe) {
+          const d = new Date(r.date + 'T12:00:00')
+          const dSunday = new Date(d); dSunday.setDate(d.getDate() - d.getDay())
+          const diffDays = Math.round((dSunday.getTime() - currentSunday.getTime()) / 86400000)
+          const offset = Math.round(diffDays / 7)
+          if (offset === 0) continue
+          if (Math.abs(offset) < nearestAbs) { nearestAbs = Math.abs(offset); nearest = offset }
+        }
+        setOtherWeeks({ count: probe.length, nearest })
+      } else {
+        setOtherWeeks({ count: 0, nearest: null })
+      }
+    } else {
+      setOtherWeeks({ count: 0, nearest: null })
+    }
   }
 
   function getAvail(empId: number, date: string, shiftId?: number): Availability | null {
@@ -250,7 +302,7 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
       </motion.div>
 
       {/* Filter toggle */}
-      <motion.div variants={fadeIn} initial="hidden" animate="visible" className="flex items-center justify-center gap-2 mb-5">
+      <motion.div variants={fadeIn} initial="hidden" animate="visible" className="flex items-center justify-center gap-2 mb-3">
         <div className="bg-slate-100 rounded-xl p-1 flex gap-1">
           <button
             onClick={() => setViewFilter('all')}
@@ -273,7 +325,26 @@ export default function ManagerConstraintsView({ branchId, branchName, branchCol
             הצג בעייתיים בלבד
           </button>
         </div>
+        <label className="flex items-center gap-2 text-xs text-slate-600 select-none cursor-pointer mr-2">
+          <input type="checkbox" checked={includeInactive} onChange={e => setIncludeInactive(e.target.checked)} />
+          כלול לא‑פעילים
+        </label>
       </motion.div>
+
+      {/* Hint when there are submissions in other weeks */}
+      {otherWeeks.count > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+          <div style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e', borderRadius: 10, padding: '8px 14px', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span>בשבוע זה אין הגשות מהעובדים. נמצאו {otherWeeks.count} הגשות בשבועות אחרים.</span>
+            {otherWeeks.nearest !== null && (
+              <button onClick={() => setWeekOffset(w => w + otherWeeks.nearest!)}
+                style={{ background: '#92400e', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                עבור לשבוע הזה
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Legend */}
       <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 12, fontSize: 11, color: '#64748b', flexWrap: 'wrap' }}>
