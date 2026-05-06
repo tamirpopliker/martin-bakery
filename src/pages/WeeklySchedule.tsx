@@ -112,7 +112,11 @@ function getSundayOfCurrentWeek(): Date {
 }
 
 function formatDate(d: Date): string {
-  return d.toISOString().split('T')[0]
+  // Local date — toISOString() converts to UTC, shifting the date back in IL timezone
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
 }
 
 function addDays(d: Date, n: number): Date {
@@ -434,63 +438,91 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     const empWeeklyHours: Record<number, number> = {}
     employees.forEach(e => { empWeeklyHours[e.id] = 0 })
     const empDayAssigned: Record<string, boolean> = {}
+    const compromiseSlots: { shift_id: number; role_id: number; date: string; employee_id: number }[] = []
+    // Track per-employee how often we used a 'prefer_not' slot to avoid concentrating compromises on one person
+    const empPreferNotUsed: Record<number, number> = {}
+
+    // Two-pass scheduler:
+    //   Pass 1: only employees who marked 'available'
+    //   Pass 2: fill remaining slots from 'prefer_not' (compromise — flagged visually)
+    function pickForSlot(opts: {
+      shiftId: number; roleId: number; date: string; allowPreferNot: boolean
+    }): number | null {
+      const { shiftId, roleId, date, allowPreferNot } = opts
+      const eligible = employees.filter(emp => {
+        if (!roleAssignments.some(ra => ra.employee_id === emp.id && ra.role_id === roleId)) return false
+        const avail = getEmployeeAvailability(emp.id, date, shiftId)
+        if (allowPreferNot) {
+          if (avail !== 'prefer_not') return false  // pass 2 picks ONLY prefer_not
+        } else {
+          if (avail !== 'available') return false  // pass 1 picks ONLY available
+        }
+        const alreadyInShift = newAssignments.some(a =>
+          a.employee_id === emp.id && a.shift_id === shiftId && a.date === date)
+        if (alreadyInShift) return false
+        if (empDayAssigned[`${emp.id}_${date}`]) return false
+        return true
+      })
+
+      eligible.sort((a, b) => {
+        // In compromise pass, spread the load: fewer prior compromises first
+        if (allowPreferNot) {
+          const aComp = empPreferNotUsed[a.id] || 0
+          const bComp = empPreferNotUsed[b.id] || 0
+          if (aComp !== bComp) return aComp - bComp
+        }
+        const aPriority = a.priority || 2
+        const bPriority = b.priority || 2
+        if (aPriority !== bPriority) return aPriority - bPriority
+        return (empWeeklyHours[a.id] || 0) - (empWeeklyHours[b.id] || 0)
+      })
+
+      // Trainee needs a mentor already in the shift
+      const filtered = eligible.filter(emp => {
+        if (emp.training_status !== 'trainee') return true
+        return newAssignments.some(a =>
+          a.shift_id === shiftId && a.date === date &&
+          employees.find(e => e.id === a.employee_id)?.training_status === 'mentor'
+        )
+      })
+
+      return filtered.length > 0 ? filtered[0].id : null
+    }
+
+    // PASS 1 — try to fill all slots with 'available' employees
+    type OpenSlot = { shift_id: number; role_id: number; date: string; shiftHours: number }
+    const openSlots: OpenSlot[] = []
 
     for (let dayIdx = 0; dayIdx < 6; dayIdx++) {
       const date = weekDates[dayIdx]
       const dayShifts = getEffectiveShiftsForDay(dayIdx, date)
-
       for (const shift of dayShifts) {
         const adjustedReqs = getAdjustedRequired(shift.id, date)
         const shiftHours = getShiftHours(shift.id)
-
         for (const req of adjustedReqs) {
           for (let slot = 0; slot < req.count; slot++) {
-            const eligible = employees.filter(emp => {
-              // Must have the required role
-              if (!roleAssignments.some(ra => ra.employee_id === emp.id && ra.role_id === req.roleId)) return false
-              // Only explicit 'available' is eligible. No submission (null) / 'prefer_not' / 'unavailable' = skip.
-              const avail = getEmployeeAvailability(emp.id, date, shift.id)
-              if (avail !== 'available') return false
-              // Not already in this shift
-              const alreadyInShift = newAssignments.some(a =>
-                a.employee_id === emp.id && a.shift_id === shift.id && a.date === date)
-              if (alreadyInShift) return false
-              // Not already assigned on this day (max 1 shift per day)
-              if (empDayAssigned[`${emp.id}_${date}`]) return false
-              return true
-            })
-
-            // Sort: higher priority first (lower number), then fewer weekly hours
-            eligible.sort((a, b) => {
-              const aPriority = a.priority || 2
-              const bPriority = b.priority || 2
-              if (aPriority !== bPriority) return aPriority - bPriority
-              return (empWeeklyHours[a.id] || 0) - (empWeeklyHours[b.id] || 0)
-            })
-
-            // Rule: trainee needs a mentor in the same shift
-            const filteredEligible = eligible.filter(emp => {
-              if (emp.training_status !== 'trainee') return true
-              return newAssignments.some(a =>
-                a.shift_id === shift.id && a.date === date &&
-                employees.find(e => e.id === a.employee_id)?.training_status === 'mentor'
-              )
-            })
-
-            if (filteredEligible.length > 0) {
-              const chosen = filteredEligible[0]
-              newAssignments.push({
-                branch_id: branchId,
-                shift_id: shift.id,
-                employee_id: chosen.id,
-                role_id: req.roleId,
-                date,
-              })
-              empWeeklyHours[chosen.id] = (empWeeklyHours[chosen.id] || 0) + shiftHours
-              empDayAssigned[`${chosen.id}_${date}`] = true
+            const empId = pickForSlot({ shiftId: shift.id, roleId: req.roleId, date, allowPreferNot: false })
+            if (empId !== null) {
+              newAssignments.push({ branch_id: branchId, shift_id: shift.id, employee_id: empId, role_id: req.roleId, date })
+              empWeeklyHours[empId] = (empWeeklyHours[empId] || 0) + shiftHours
+              empDayAssigned[`${empId}_${date}`] = true
+            } else {
+              openSlots.push({ shift_id: shift.id, role_id: req.roleId, date, shiftHours })
             }
           }
         }
+      }
+    }
+
+    // PASS 2 — fill remaining slots from 'prefer_not' (compromise)
+    for (const s of openSlots) {
+      const empId = pickForSlot({ shiftId: s.shift_id, roleId: s.role_id, date: s.date, allowPreferNot: true })
+      if (empId !== null) {
+        newAssignments.push({ branch_id: branchId, shift_id: s.shift_id, employee_id: empId, role_id: s.role_id, date: s.date })
+        empWeeklyHours[empId] = (empWeeklyHours[empId] || 0) + s.shiftHours
+        empDayAssigned[`${empId}_${s.date}`] = true
+        empPreferNotUsed[empId] = (empPreferNotUsed[empId] || 0) + 1
+        compromiseSlots.push({ shift_id: s.shift_id, role_id: s.role_id, date: s.date, employee_id: empId })
       }
     }
 
@@ -517,10 +549,13 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
       }
     }
 
+    const compromiseLine = compromiseSlots.length > 0
+      ? `\n\n\u05DE\u05EA\u05D5\u05DB\u05DD ${compromiseSlots.length} \u05E9\u05D9\u05D1\u05D5\u05E6\u05D9\u05DD \u05DE"\u05DE\u05E2\u05D3\u05D9\u05E3 \u05E9\u05DC\u05D0" (\u05E4\u05E9\u05E8\u05D4 \u2014 \u05DE\u05E1\u05D5\u05DE\u05E0\u05D9\u05DD \u05D1\u05E6\u05D4\u05D5\u05D1).`
+      : ''
     if (unfilled > 0) {
-      alert(`\u26A0\uFE0F \u05DC\u05D0 \u05DE\u05E1\u05E4\u05D9\u05E7 \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05D6\u05DE\u05D9\u05E0\u05D9\u05DD\n\n\u05E9\u05D5\u05D1\u05E6\u05D5 ${newAssignments.length} \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u2192 \u05E0\u05D5\u05EA\u05E8\u05D5 ${unfilled} \u05EA\u05E4\u05E7\u05D9\u05D3\u05D9\u05DD \u05DC\u05DC\u05D0 \u05DB\u05D9\u05E1\u05D5\u05D9.\n\n\u05E8\u05E7 \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05E9\u05D4\u05D2\u05D9\u05E9\u05D5 \u05D1\u05DE\u05E4\u05D5\u05E8\u05E9 \"\u05D6\u05DE\u05D9\u05DF\" \u05DE\u05E9\u05D5\u05D1\u05E6\u05D9\u05DD. \u05D1\u05E7\u05E9 \u05DE\u05D4\u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05D4\u05D7\u05E1\u05E8\u05D9\u05DD \u05DC\u05D4\u05D2\u05D9\u05E9 \u05D6\u05DE\u05D9\u05E0\u05D5\u05EA.`)
+      alert(`\u26A0\uFE0F \u05DC\u05D0 \u05DE\u05E1\u05E4\u05D9\u05E7 \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05D6\u05DE\u05D9\u05E0\u05D9\u05DD\n\n\u05E9\u05D5\u05D1\u05E6\u05D5 ${newAssignments.length} \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u2192 \u05E0\u05D5\u05EA\u05E8\u05D5 ${unfilled} \u05EA\u05E4\u05E7\u05D9\u05D3\u05D9\u05DD \u05DC\u05DC\u05D0 \u05DB\u05D9\u05E1\u05D5\u05D9.${compromiseLine}\n\n\u05E8\u05E7 \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05E9\u05D4\u05D2\u05D9\u05E9\u05D5 \u05D1\u05DE\u05E4\u05D5\u05E8\u05E9 "\u05D6\u05DE\u05D9\u05DF" \u05D0\u05D5 "\u05DE\u05E2\u05D3\u05D9\u05E3 \u05E9\u05DC\u05D0" \u05DE\u05E9\u05D5\u05D1\u05E6\u05D9\u05DD.`)
     } else {
-      alert(`\u2705 \u05E9\u05D5\u05D1\u05E6\u05D5 ${newAssignments.length} \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u2014 \u05DB\u05DC \u05D4\u05DE\u05E9\u05DE\u05E8\u05D5\u05EA \u05DE\u05DC\u05D0\u05D5\u05EA`)
+      alert(`\u2705 \u05E9\u05D5\u05D1\u05E6\u05D5 ${newAssignments.length} \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u2014 \u05DB\u05DC \u05D4\u05DE\u05E9\u05DE\u05E8\u05D5\u05EA \u05DE\u05DC\u05D0\u05D5\u05EA${compromiseLine}`)
     }
   }
 
@@ -901,13 +936,23 @@ ${shiftRows}
                                       cursor: 'pointer', textAlign: 'right', fontFamily: 'inherit',
                                       transition: 'all 0.15s',
                                     }}>
-                                    {cellAssigns.map(({ a, emp }) => (
-                                      <span key={a.id} style={{ background: '#dcfce7', color: '#166534', borderRadius: 6, padding: '2px 6px', fontSize: 11, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {emp?.training_status === 'mentor' && '⭐ '}
-                                        {emp?.training_status === 'trainee' && '📚 '}
-                                        {emp?.name || '?'}
-                                      </span>
-                                    ))}
+                                    {cellAssigns.map(({ a, emp }) => {
+                                      // Compromise badge: employee was scheduled despite marking 'prefer_not'
+                                      const empAvail = getEmployeeAvailability(a.employee_id, date, shift.id)
+                                      const isCompromise = empAvail === 'prefer_not'
+                                      const bg = isCompromise ? '#fef9c3' : '#dcfce7'
+                                      const fg = isCompromise ? '#854d0e' : '#166534'
+                                      return (
+                                        <span key={a.id}
+                                          title={isCompromise ? 'שיבוץ פשרה — העובד סימן "מעדיף שלא"' : undefined}
+                                          style={{ background: bg, color: fg, borderRadius: 6, padding: '2px 6px', fontSize: 11, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {isCompromise && '⚠ '}
+                                          {emp?.training_status === 'mentor' && '⭐ '}
+                                          {emp?.training_status === 'trainee' && '📚 '}
+                                          {emp?.name || '?'}
+                                        </span>
+                                      )
+                                    })}
                                     {summary.total === 0 ? (
                                       <span style={{ fontSize: 11, color: '#cbd5e1', textAlign: 'center' }}>—</span>
                                     ) : hasShortage ? (
