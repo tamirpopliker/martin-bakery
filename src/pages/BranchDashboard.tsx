@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, fetchBranchPL, getOverheadPct, type BranchPLResult } from '../lib/supabase'
+import { calculateBranchPL } from '../lib/calculatePL'
 import { fetchBranchProfit } from '../lib/profitCalc'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -146,6 +147,11 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
   }, [branchId, from, to, monthKey])
 
   async function fetchTrend() {
+    // Bug E fix: previously this function reimplemented P&L inline with a
+    // simplified formula (no manager salary, no employer_costs fallback,
+    // no internal/external supplier split). The graph numbers diverged from
+    // the P&L card on the same page. Now delegates to calculateBranchPL —
+    // the canonical source — so every cell on the dashboard agrees.
     const months: string[] = []
     const now = new Date(from)
     for (let i = 5; i >= 0; i--) {
@@ -156,25 +162,14 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
     const data = await Promise.all(months.map(async (m) => {
       const mFrom = m + '-01'
       const mTo = new Date(new Date(mFrom).getFullYear(), new Date(mFrom).getMonth() + 1, 1).toISOString().slice(0, 10)
-      const [rev, lab, exp, wst, fc, closings] = await Promise.all([
-        supabase.from('branch_revenue').select('amount').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo).range(0, 99999),
-        supabase.from('branch_labor').select('employer_cost').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo).range(0, 99999),
-        supabase.from('branch_expenses').select('amount').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo).range(0, 99999),
-        supabase.from('branch_waste').select('amount').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo).range(0, 99999),
-        supabase.from('fixed_costs').select('amount').eq('entity_type', 'branch_' + branchId).eq('month', m),
-        supabase.from('register_closings').select('cash_sales, credit_sales').eq('branch_id', branchId).gte('date', mFrom).lt('date', mTo).range(0, 99999),
-      ])
-      const legacyRevenue = (rev.data || []).reduce((s, r) => s + Number(r.amount), 0)
-      const closingsRevenue = (closings.data || []).reduce((s, c) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0)
-      const revenue = legacyRevenue + closingsRevenue
-      const labor = (lab.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
-      const expenses = (exp.data || []).reduce((s, r) => s + Number(r.amount), 0)
-      const waste = (wst.data || []).reduce((s, r) => s + Number(r.amount), 0)
-      const fixed = (fc.data || []).reduce((s, r) => s + Number(r.amount), 0)
-      const gross = revenue - labor - expenses
-      const operating = gross - fixed - waste
+      const pl = await calculateBranchPL(branchId, mFrom, mTo, undefined, m)
       const label = new Date(mFrom + 'T12:00:00').toLocaleDateString('he-IL', { month: 'short', year: '2-digit' })
-      return { month: label, 'הכנסות': Math.round(revenue), 'רווח נשלט': Math.round(gross), 'רווח תפעולי': Math.round(operating) }
+      return {
+        month: label,
+        'הכנסות': Math.round(pl.revenue),
+        'רווח נשלט': Math.round(pl.controllableProfit),
+        'רווח תפעולי': Math.round(pl.operatingProfit),
+      }
     }))
 
     return data

@@ -1,4 +1,9 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  getBranchRevenueWithClosings,
+  getBranchLaborWithFallback,
+  getFactoryLaborWithFallback,
+} from '../../_shared/laborQueries.ts'
 
 // Edge Functions get these automatically
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -79,24 +84,21 @@ export async function getWorkingDaysCount(monthKey: string): Promise<number> {
   return data?.amount || 26
 }
 
+/**
+ * Branch revenue. Includes register_closings cash+credit on top of the legacy
+ * branch_revenue rows so email reports match the in-app dashboards. Bug A fix.
+ */
 export async function getBranchRevenue(branchId: number, from: string, to: string) {
-  const { data } = await db
-    .from('branch_revenue')
-    .select('date, source, amount, transaction_count')
-    .eq('branch_id', branchId)
-    .gte('date', from)
-    .lt('date', to)
-  return data || []
+  return await getBranchRevenueWithClosings(db, branchId, from, to)
 }
 
+/**
+ * Branch labor. For full-month ranges, returns the synthesized total from
+ * employer_costs (excluding is_manager) when uploaded; otherwise falls back to
+ * branch_labor (per-day estimate). Bug B fix.
+ */
 export async function getBranchLabor(branchId: number, from: string, to: string) {
-  const { data } = await db
-    .from('branch_labor')
-    .select('date, employer_cost, gross_salary')
-    .eq('branch_id', branchId)
-    .gte('date', from)
-    .lt('date', to)
-  return data || []
+  return await getBranchLaborWithFallback(db, branchId, from, to)
 }
 
 export async function getBranchWaste(branchId: number, from: string, to: string) {
@@ -149,15 +151,13 @@ export async function getFactoryWaste(department: string, from: string, to: stri
   return data || []
 }
 
+/**
+ * Factory labor for a single department. Same priority chain as
+ * getBranchLabor: full-month range + employer_costs uploaded → synthesized
+ * total; else legacy `labor` table (per-day estimate). Bug C fix.
+ */
 export async function getFactoryLabor(department: string, from: string, to: string) {
-  const { data } = await db
-    .from('labor')
-    .select('date, employer_cost, hours_100, hours_125, hours_150')
-    .eq('entity_type', 'factory')
-    .eq('entity_id', department)
-    .gte('date', from)
-    .lt('date', to)
-  return data || []
+  return await getFactoryLaborWithFallback(db, department, from, to)
 }
 
 export async function getFactoryKpiTargets(department: string) {

@@ -69,6 +69,7 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
   const [detailModal, setDetailModal] = useState<{ year: number; month: number } | null>(null)
   const [detailRows, setDetailRows] = useState<any[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
+  const [payrollUpdateFailures, setPayrollUpdateFailures] = useState(0)
 
   // Load factory employees from labor table (distinct names)
   const loadFactoryEmps = useCallback(async () => {
@@ -148,17 +149,32 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
         }
         if (parsed.length === 0) { setError('לא נמצאו עובדים בקובץ'); return }
 
-        // Match branch employees
-        const { data: branchEmps } = await supabase.from('branch_employees').select('id, name, branch_id, payroll_number').eq('active', true)
+        // Match branch employees. Include INACTIVE employees so a name like
+        // "מוריה בן טולילה" still matches an existing inactive row instead of
+        // creating a duplicate. We tag them with an `_inactive` flag and the
+        // save step re-activates them.
+        const normSpaces = (s: string) => (s || '').replace(/\s+/g, '').trim()
+        const { data: branchEmps } = await supabase
+          .from('branch_employees')
+          .select('id, name, branch_id, payroll_number, active')
         if (branchEmps) {
           for (const emp of parsed) {
             if ([5, 6, 7, 8].includes(emp.department_number)) continue // factory rows skip branch matching
             const byPayroll = branchEmps.find((be: any) => be.payroll_number === emp.employee_number)
             if (byPayroll) { emp.matched = true; emp.matched_employee_id = byPayroll.id; continue }
-            const byName = branchEmps.find((be: any) => emp.employee_name.includes(be.name) || be.name.includes(emp.employee_name))
+            // Fuzzy name match — strip whitespace differences ("בן טולילה" vs "בנטולילה")
+            const empNorm = normSpaces(emp.employee_name)
+            const byName = branchEmps.find((be: any) => {
+              const beNorm = normSpaces(be.name)
+              return empNorm.includes(beNorm) || beNorm.includes(empNorm)
+            })
             if (byName) { emp.matched = true; emp.matched_employee_id = byName.id }
           }
-          setUnmatchedBranchEmps(branchEmps.filter((be: any) => !be.payroll_number && !parsed.some(p => p.matched_employee_id === be.id)).map((be: any) => ({ id: be.id, name: be.name, branch_id: be.branch_id })))
+          setUnmatchedBranchEmps(
+            branchEmps
+              .filter((be: any) => be.active && !be.payroll_number && !parsed.some(p => p.matched_employee_id === be.id))
+              .map((be: any) => ({ id: be.id, name: be.name, branch_id: be.branch_id }))
+          )
         }
 
         // Auto-match factory rows by name against already-loaded factoryLaborEmps
@@ -166,7 +182,11 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
         for (const emp of parsed) {
           if (![5, 6, 7, 8].includes(emp.department_number)) continue
           if (emp.matched) continue
-          const byName = factoryNames.find(name => emp.employee_name.includes(name) || name.includes(emp.employee_name))
+          const empNorm = normSpaces(emp.employee_name)
+          const byName = factoryNames.find(name => {
+            const nNorm = normSpaces(name)
+            return empNorm.includes(nNorm) || nNorm.includes(empNorm)
+          })
           if (byName) { emp.matched = true; emp.matched_employee_id = null }
         }
 
@@ -249,18 +269,25 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
       return
     }
 
-    // Step C: best-effort link payroll_number on branch_employees. Not fatal
-    // if this fails — the P&L calculations do not depend on the link.
+    // Step C: link payroll_number on branch_employees AND re-activate any
+    // inactive employees that were matched (so future uploads find them via
+    // the active-friendly fast path). Not fatal if individual updates fail —
+    // we surface a count to the user at the end.
     const branchUpdates = employees.filter(e => e.matched_employee_id && ![2, 5, 6, 7, 8].includes(e.department_number))
     const updateResults = await Promise.all(
       branchUpdates.map(emp => safeDbOperation(
-        () => supabase.from('branch_employees').update({ payroll_number: emp.employee_number }).eq('id', emp.matched_employee_id!),
+        () => supabase.from('branch_employees')
+          .update({ payroll_number: emp.employee_number, active: true })
+          .eq('id', emp.matched_employee_id!),
         `עדכון מספר שכר לעובד ${emp.employee_name}`,
       ))
     )
     const failedUpdates = updateResults.filter(r => !r.ok).length
     if (failedUpdates > 0) {
       console.warn(`[EmployerCostsUpload] ${failedUpdates}/${branchUpdates.length} payroll_number updates failed`)
+      setPayrollUpdateFailures(failedUpdates)
+    } else {
+      setPayrollUpdateFailures(0)
     }
 
     // Step D: record a completed upload only after the INSERT succeeded.
@@ -609,6 +636,15 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
             <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 24px' }}>
               {employees.length} עובדים · {MONTH_NAMES[reportMonth]} {reportYear} · {fmtM(totalCost)}
             </p>
+            {payrollUpdateFailures > 0 && (
+              <div style={{
+                background: '#fefce8', border: '1px solid #fde68a', borderRadius: 10,
+                padding: '10px 14px', margin: '0 auto 18px', maxWidth: 500, fontSize: 13, color: '#a16207',
+              }}>
+                ⚠ {payrollUpdateFailures} עובדים לא קושרו עם מספר שכר במאגר. הם יופיעו כ"לא מזוהים" בהעלאה הבאה.
+                כדאי לוודא שהם פעילים ב"ניהול עובדים".
+              </div>
+            )}
             <button onClick={() => setStep('upload')} style={{ ...S.btn, background: '#6366f1', color: 'white' }}>העלאת דוח נוסף</button>
           </div>
         )}

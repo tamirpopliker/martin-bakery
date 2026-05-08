@@ -1,4 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  getBranchRevenueWithClosings,
+  getBranchLaborWithFallback,
+  getFactoryLaborWithFallback,
+} from '../_shared/laborQueries.ts'
 
 // ─── Setup ──────────────────────────────────────────────────────────────────
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -56,11 +61,10 @@ async function getActualValue(rule: AlertRule, date: string): Promise<number | n
   const to = nextDay.toISOString().slice(0, 10)
 
   if (rule.metric === 'revenue' && rule.entity_type === 'branch') {
-    const { data } = await db.from('branch_revenue')
-      .select('amount')
-      .eq('branch_id', Number(rule.entity_id))
-      .gte('date', date).lt('date', to)
-    return data ? data.reduce((s: number, r: any) => s + Number(r.amount), 0) : null
+    // Bug A fix: include register_closings (cash + credit) so alerts match
+    // the dashboards. Without this, alerts trigger 30-40% too low.
+    const rows = await getBranchRevenueWithClosings(db, Number(rule.entity_id), date, to)
+    return rows.reduce((s, r) => s + Number(r.amount), 0)
   }
 
   if (rule.metric === 'waste' && rule.entity_type === 'branch') {
@@ -80,20 +84,16 @@ async function getActualValue(rule: AlertRule, date: string): Promise<number | n
   }
 
   if (rule.metric === 'labor_cost' && rule.entity_type === 'factory') {
-    const { data } = await db.from('labor')
-      .select('employer_cost')
-      .eq('entity_type', 'factory')
-      .eq('entity_id', rule.entity_id)
-      .gte('date', date).lt('date', to)
-    return data ? data.reduce((s: number, r: any) => s + Number(r.employer_cost), 0) : null
+    // Bug D fix: shared helper falls back to employer_costs on full-month
+    // ranges; for daily alerts (the common case) it preserves the legacy
+    // labor table behavior since employer_costs has no daily granularity.
+    const rows = await getFactoryLaborWithFallback(db, rule.entity_id, date, to)
+    return rows.reduce((s, r) => s + Number(r.employer_cost || 0), 0)
   }
 
   if (rule.metric === 'labor_cost' && rule.entity_type === 'branch') {
-    const { data } = await db.from('branch_labor')
-      .select('employer_cost')
-      .eq('branch_id', Number(rule.entity_id))
-      .gte('date', date).lt('date', to)
-    return data ? data.reduce((s: number, r: any) => s + Number(r.employer_cost), 0) : null
+    const rows = await getBranchLaborWithFallback(db, Number(rule.entity_id), date, to)
+    return rows.reduce((s, r) => s + Number(r.employer_cost || 0), 0)
   }
 
   if (rule.metric === 'production' && rule.entity_type === 'factory') {

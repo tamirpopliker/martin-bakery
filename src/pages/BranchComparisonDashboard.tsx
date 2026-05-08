@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, getOverheadPct } from '../lib/supabase'
+import { calculateBranchPL } from '../lib/calculatePL'
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
 import { ArrowRight, BarChart3 } from 'lucide-react'
@@ -64,72 +64,37 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
 
     async function load() {
       setLoading(true)
-      const overheadPct = await getOverheadPct()
-      const results: BranchPL[] = []
-
-      for (const br of branches.filter(b => selectedIds.includes(b.id))) {
-        const [revRes, closeRes, labRes, expRes, wasteRes, fcRes] = await Promise.all([
-          supabase.from('branch_revenue').select('amount')
-            .eq('branch_id', br.id).gte('date', from).lt('date', to),
-          supabase.from('register_closings').select('cash_sales, credit_sales')
-            .eq('branch_id', br.id).gte('date', from).lt('date', to),
-          supabase.from('branch_labor').select('employer_cost')
-            .eq('branch_id', br.id).gte('date', from).lt('date', to),
-          supabase.from('branch_expenses').select('amount, expense_type')
-            .eq('branch_id', br.id).gte('date', from).lt('date', to),
-          supabase.from('branch_waste').select('amount')
-            .eq('branch_id', br.id).gte('date', from).lt('date', to),
-          supabase.from('fixed_costs').select('amount, entity_id')
-            .eq('entity_type', `branch_${br.id}`)
-            .eq('month', monthKey || from.slice(0, 7)),
-        ])
-
-        const legacyRevenue = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
-        const closingsRevenue = (closeRes.data || []).reduce((s, c) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0)
-        const revenue = legacyRevenue + closingsRevenue
-
-        // Check employer_costs for actual payroll data
-        const mk = monthKey || from.slice(0, 7)
-        const [mYear, mMonth] = mk.split('-').map(Number)
-        const { data: actualLabAll } = await supabase.from('employer_costs')
-          .select('actual_employer_cost, is_manager').eq('branch_id', br.id).eq('month', mMonth).eq('year', mYear)
-        const laborIsActual = (actualLabAll && actualLabAll.length > 0)
-
-        let labor: number, admin: number
-        if (laborIsActual) {
-          labor = actualLabAll!.filter(r => !r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
-          admin = actualLabAll!.filter(r => r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
-        } else {
-          labor = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
-          admin = 0 // will be set from fixed_costs below
-        }
-
-        const expenses = expRes.data || []
-        const suppliers = expenses.filter(r => r.expense_type === 'suppliers').reduce((s, r) => s + Number(r.amount), 0)
-        const repairs = expenses.filter(r => r.expense_type === 'repairs').reduce((s, r) => s + Number(r.amount), 0)
-        const deliveries = expenses.filter(r => r.expense_type === 'deliveries').reduce((s, r) => s + Number(r.amount), 0)
-
-        const fcData = fcRes.data || []
-        const fixedCosts = fcData.filter(r => r.entity_id !== 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
-        if (!laborIsActual) {
-          admin += fcData.filter(r => r.entity_id === 'mgmt').reduce((s, r) => s + Number(r.amount), 0)
-        }
-        const waste = (wasteRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
-        const overhead = revenue * overheadPct / 100
-
-        const operatingProfit = revenue - labor - suppliers - repairs - deliveries - fixedCosts - admin - waste - overhead
-
-        results.push({
+      // Bug F fix: previously this function reimplemented manager-salary logic
+      // and didn't fall back to a previous month when employer_costs had no
+      // is_manager rows for the current month — branches showed admin=0 when
+      // it should have been ~20K. Now delegates to calculateBranchPL which
+      // owns the canonical fallback chain (current month → prev month
+      // employer_costs → fixed_costs mgmt → prev month fixed_costs).
+      const mk = monthKey || from.slice(0, 7)
+      const selectedBranches = branches.filter(b => selectedIds.includes(b.id))
+      const results = await Promise.all(selectedBranches.map(async (br) => {
+        const pl = await calculateBranchPL(br.id, from, to, undefined, mk)
+        return {
           id: br.id, name: br.name, color: br.color,
-          revenue, labor, suppliers, repairs, deliveries, fixedCosts, admin, waste, overhead, operatingProfit,
-        })
-      }
-
+          revenue: pl.revenue,
+          labor: pl.labor,
+          // suppliers row aggregates internal (factory) + external suppliers,
+          // mirroring the existing comparison table column.
+          suppliers: pl.factoryPurchases + pl.externalSuppliers,
+          repairs: pl.repairs,
+          deliveries: pl.deliveries,
+          fixedCosts: pl.fixedCosts,
+          admin: pl.managerSalary,
+          waste: pl.waste,
+          overhead: pl.overhead,
+          operatingProfit: pl.operatingProfit,
+        }
+      }))
       setData(results)
       setLoading(false)
     }
     load()
-  }, [selectedIds, from, to])
+  }, [selectedIds, from, to, monthKey, branches])
 
   // Toggle branch selection
   function toggleBranch(id: number) {

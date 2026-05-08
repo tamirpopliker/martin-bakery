@@ -498,10 +498,21 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
   }
 
   async function fetchRevenue() {
-    const { data } = await supabase.from('branch_revenue').select('amount')
-      .eq('branch_id', branchId)
-      .gte('date', from).lt('date', to)
-    if (data) setMonthRevenue(data.reduce((s: number, r: any) => s + Number(r.amount), 0))
+    // Bug G fix: include register_closings (cash + credit) so labor% on this
+    // page uses the same revenue denominator as the dashboards. Without
+    // closings the denominator is 30-40% too low and the displayed labor%
+    // is much higher than reality.
+    const [revRes, closeRes] = await Promise.all([
+      supabase.from('branch_revenue').select('amount')
+        .eq('branch_id', branchId).gte('date', from).lt('date', to).range(0, 99999),
+      supabase.from('register_closings').select('cash_sales, credit_sales')
+        .eq('branch_id', branchId).gte('date', from).lt('date', to).range(0, 99999),
+    ])
+    const legacy = (revRes.data || []).reduce((s: number, r: any) => s + Number(r.amount), 0)
+    const closings = (closeRes.data || []).reduce(
+      (s: number, c: any) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0,
+    )
+    setMonthRevenue(legacy + closings)
   }
 
   async function fetchLaborTarget() {
