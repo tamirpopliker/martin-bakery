@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
+import JSZip from 'jszip'
 import { supabase } from '../lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
-  ArrowRight, ChevronLeft, ChevronRight, Download, Printer,
+  ArrowRight, ChevronLeft, ChevronRight, Download, Printer, Archive,
   UserPlus, UserMinus, TrendingUp, Landmark, Briefcase, FileText, Edit3,
 } from 'lucide-react'
 
@@ -63,6 +64,8 @@ export default function MonthlyChangesReport({ onBack }: Props) {
   const [entries, setEntries] = useState<AuditEntry[]>([])
   const [employeeMap, setEmployeeMap] = useState<Map<string, UnifiedEmployee>>(new Map())
   const [loading, setLoading] = useState(true)
+  const [exportingZip, setExportingZip] = useState(false)
+  const [zipProgress, setZipProgress] = useState<string | null>(null)
 
   useEffect(() => { load() }, [year, month])
 
@@ -182,7 +185,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     return parts.join(' · ')
   }
 
-  function exportCsv() {
+  function buildSummaryCsv(): string {
     const headers = ['קטגוריה', 'עובד', 'תיאור שינוי', 'מבצע', 'תאריך']
     const rows: string[][] = []
     const push = (cat: string, e: AuditEntry, desc: string) =>
@@ -201,9 +204,13 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     }
     for (const e of otherChanges)  push('שינויים אחרים', e, describeOtherDiff(e))
 
-    const csv = [headers, ...rows]
+    return [headers, ...rows]
       .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
       .join('\n')
+  }
+
+  function exportCsv() {
+    const csv = buildSummaryCsv()
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -211,6 +218,99 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     a.download = `monthly_changes_${year}_${String(month).padStart(2, '0')}.csv`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  // Accounting-friendly export: ZIP containing the summary CSV + every relevant
+  // document for the month (uploaded this month + full doc set for hires/leavers).
+  async function exportAccountingZip() {
+    setExportingZip(true)
+    setZipProgress('אוסף נתונים...')
+    try {
+      const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
+      const nextMonthDate = new Date(year, month, 1)
+      const nextMonth = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`
+
+      const zip = new JSZip()
+
+      // 1. Summary CSV
+      const csv = buildSummaryCsv()
+      zip.file(`סיכום שינויים ${HEBREW_MONTHS[month - 1]} ${year}.csv`, '﻿' + csv)
+
+      // 2. Collect employee keys to grab full doc set for: hires + leavers
+      const fullDocEmpKeys = new Set<string>()
+      for (const e of hires) {
+        if (e.employee_kind && e.employee_id) fullDocEmpKeys.add(`${e.employee_kind}-${e.employee_id}`)
+      }
+      for (const e of departures) {
+        if (e.employee_kind && e.employee_id) fullDocEmpKeys.add(`${e.employee_kind}-${e.employee_id}`)
+      }
+
+      // 3. Query: docs uploaded this month
+      const { data: monthDocs } = await supabase
+        .from('employee_documents')
+        .select('*')
+        .gte('uploaded_at', monthStart)
+        .lt('uploaded_at', nextMonth)
+
+      // 4. Query: full doc set for hires + leavers (regardless of upload date)
+      const fullDocs: Array<Record<string, unknown>> = []
+      for (const key of fullDocEmpKeys) {
+        const [kindStr, idStr] = key.split('-')
+        const { data } = await supabase
+          .from('employee_documents')
+          .select('*')
+          .eq('employee_kind', kindStr)
+          .eq('employee_id', Number(idStr))
+        if (data) fullDocs.push(...data)
+      }
+
+      // 5. Merge by id (avoid duplicates)
+      const allDocs = new Map<number, Record<string, unknown>>()
+      for (const d of (monthDocs || [])) allDocs.set(d.id as number, d)
+      for (const d of fullDocs) allDocs.set(d.id as number, d)
+
+      const total = allDocs.size
+      let i = 0
+      if (total > 0) {
+        const docsFolder = zip.folder('מסמכים')!
+        for (const doc of allDocs.values()) {
+          i++
+          setZipProgress(`מוריד מסמכים... ${i}/${total}`)
+          const empKey = `${doc.employee_kind}-${doc.employee_id}`
+          const emp = employeeMap.get(empKey)
+          const empName = emp?.name || `(${doc.employee_kind} #${doc.employee_id})`
+          const empLoc = emp?.location_name || emp?.department || ''
+          const folderName = sanitizePath(`${empName}${empLoc ? ' - ' + empLoc : ''}`)
+          const dtype = sanitizePath(String(doc.document_type_label))
+          const fileName = sanitizePath(String(doc.file_name))
+          const fileUrl = String(doc.file_url)
+
+          const dl = await supabase.storage.from('hr-documents').download(fileUrl)
+          if (dl.error || !dl.data) continue
+          const arrayBuffer = await dl.data.arrayBuffer()
+          docsFolder.file(`${folderName}/${dtype}/${fileName}`, arrayBuffer)
+        }
+      }
+
+      setZipProgress('יוצר ZIP...')
+      const blob = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `דוח להנהלת חשבונות ${HEBREW_MONTHS[month - 1]} ${year}.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+      setZipProgress(null)
+    } catch (e: any) {
+      setZipProgress(`שגיאה: ${e?.message || 'לא ידוע'}`)
+      setTimeout(() => setZipProgress(null), 4000)
+    } finally {
+      setExportingZip(false)
+    }
+  }
+
+  function sanitizePath(s: string): string {
+    return s.replace(/[\\/:*?"<>|]/g, '_').slice(0, 100)
   }
 
   const totalChanges = hires.length + departures.length + salaryChanges.length +
@@ -247,6 +347,10 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         <Button variant="outline" onClick={exportCsv}>
           <Download className="size-4 ml-2" />
           ייצוא CSV
+        </Button>
+        <Button onClick={exportAccountingZip} disabled={exportingZip}>
+          <Archive className="size-4 ml-2" />
+          {exportingZip ? (zipProgress || 'מכין...') : 'ייצוא להנה"ח'}
         </Button>
       </div>
 
