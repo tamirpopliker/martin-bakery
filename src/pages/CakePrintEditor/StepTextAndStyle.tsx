@@ -1,8 +1,9 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react'
-import { Sparkles, Trash2, Plus } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '../../lib/supabase'
 import { FONTS, STYLES, SIZE_LABELS, FONT_KEYS, STYLE_KEYS, getCropBox, SIZE_PRESETS, TEXT_SIZE_PX } from './presets'
+import OrientationToggle from './OrientationToggle'
 import type { WizardState, WizardAction, FontKey, StyleKey, SizeKey, Position } from './types'
 
 const EditorCanvas = lazy(() => import('./EditorCanvas'))
@@ -30,13 +31,7 @@ export default function StepTextAndStyle({ state, dispatch }: Props) {
     return () => window.removeEventListener('resize', recompute)
   }, [])
 
-  // Ensure there's at least one text layer when entering this step
-  useEffect(() => {
-    if (state.textLayers.length === 0) {
-      dispatch({ type: 'add_text_layer' })
-    }
-  }, [state.textLayers.length, dispatch])
-
+  // The wizard initializes with exactly one text layer; we always edit that one.
   const selected = state.textLayers.find(l => l.id === state.selectedTextId) || state.textLayers[0]
 
   function patchSelected(patch: Partial<typeof selected>) {
@@ -62,20 +57,21 @@ export default function StepTextAndStyle({ state, dispatch }: Props) {
       const suggestion = data as {
         font: FontKey; style: StyleKey; sizeKey: SizeKey; position: Position; reasoning: string
       }
-      // Compute coords from position
+      // Compute coords from position. The Konva Text uses width=cropBox.w with
+      // align='center', so x is always cropBox.x — only the vertical position
+      // varies. The "left/right" part of the AI position is ignored (text is
+      // always centered horizontally to keep multi-line layouts symmetric).
       const preset = SIZE_PRESETS[state.preset]
       const cropBox = getCropBox(preset)
       const fontSize = TEXT_SIZE_PX[suggestion.sizeKey]
-      const estTextWidth = selected.text.length * fontSize * 0.5
-      const padX = cropBox.w * 0.08
+      const lines = Math.max(1, selected.text.split('\n').length)
+      const blockH = lines * fontSize * 1.15
       const padY = cropBox.h * 0.08
-      const [vert, horz] = suggestion.position.split('-')
-      let x = cropBox.x + (cropBox.w - estTextWidth) / 2
-      let y = cropBox.y + (cropBox.h - fontSize) / 2
+      const [vert] = suggestion.position.split('-')
+      const x = cropBox.x
+      let y = cropBox.y + (cropBox.h - blockH) / 2
       if (vert === 'top') y = cropBox.y + padY
-      if (vert === 'bottom') y = cropBox.y + cropBox.h - fontSize - padY
-      if (horz === 'right') x = cropBox.x + cropBox.w - estTextWidth - padX
-      if (horz === 'left') x = cropBox.x + padX
+      if (vert === 'bottom') y = cropBox.y + cropBox.h - blockH - padY
 
       dispatch({
         type: 'apply_ai_suggestion',
@@ -106,24 +102,30 @@ export default function StepTextAndStyle({ state, dispatch }: Props) {
         </p>
       </div>
 
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+        <OrientationToggle orientation={state.orientation} dispatch={dispatch} size="sm" />
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) minmax(280px, 1fr)', gap: 18 }}>
         {/* Controls */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Text input */}
           <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 14 }}>
             <label style={{ display: 'block', fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 8 }}>
-              הקלד/י טקסט:
+              הקלד/י טקסט (ENTER = שורה חדשה · עברית או אנגלית):
             </label>
-            <input
-              type="text"
+            <textarea
               value={selected.text}
               onChange={e => patchSelected({ text: e.target.value })}
-              placeholder="לדוגמה: מזל טוב 30"
+              placeholder="לדוגמה: מזל טוב 30 / Happy Birthday Sarah"
+              dir="auto"
+              rows={3}
               style={{
                 width: '100%', padding: '10px 12px',
                 border: '1px solid #e2e8f0', borderRadius: 8,
                 fontSize: 16, fontWeight: 600, color: '#0f172a',
-                direction: 'rtl', textAlign: 'right', boxSizing: 'border-box',
+                resize: 'vertical', minHeight: 70,
+                fontFamily: 'inherit', boxSizing: 'border-box',
               }}
               autoFocus
             />
@@ -267,29 +269,6 @@ export default function StepTextAndStyle({ state, dispatch }: Props) {
             </div>
           </div>
 
-          {/* Multi-layer controls */}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
-            <button
-              type="button"
-              onClick={() => dispatch({ type: 'add_text_layer' })}
-              style={{
-                background: 'white', border: '1px solid #e2e8f0', borderRadius: 8,
-                padding: '8px 12px', fontSize: 12, fontWeight: 700, color: '#475569',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-              }}
-            ><Plus size={14} /> שכבה נוספת</button>
-            {state.textLayers.length > 1 && (
-              <button
-                type="button"
-                onClick={() => dispatch({ type: 'remove_text_layer', id: selected.id })}
-                style={{
-                  background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
-                  padding: '8px 12px', fontSize: 12, fontWeight: 700, color: '#dc2626',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                }}
-              ><Trash2 size={14} /> מחק שכבה</button>
-            )}
-          </div>
         </div>
 
         {/* Preview */}
@@ -297,7 +276,7 @@ export default function StepTextAndStyle({ state, dispatch }: Props) {
           <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 8 }}>
             תצוגה מקדימה (ניתן לגרור את הטקסט)
           </div>
-          <Suspense fallback={<CanvasFallback width={displayWidth} />}>
+          <Suspense fallback={<CanvasFallback width={displayWidth} landscape={state.orientation === 'landscape'} />}>
             <EditorCanvas state={state} dispatch={dispatch} mode="text" displayWidth={displayWidth} />
           </Suspense>
         </div>
@@ -315,8 +294,8 @@ export default function StepTextAndStyle({ state, dispatch }: Props) {
   )
 }
 
-function CanvasFallback({ width }: { width: number }) {
-  const h = (width / 2480) * 3508
+function CanvasFallback({ width, landscape }: { width: number; landscape?: boolean }) {
+  const h = landscape ? (width / 3508) * 2480 : (width / 2480) * 3508
   return (
     <div style={{ width, height: h, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13 }}>
       טוען עורך...

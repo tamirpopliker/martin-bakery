@@ -1,9 +1,23 @@
-import type { SizePresetKey, FontKey, StyleKey, SizeKey, Position } from './types'
+import type { SizePresetKey, FontKey, StyleKey, SizeKey, Position, Orientation } from './types'
 
-export const A4_PX = { w: 2480, h: 3508 } as const   // 300 DPI
+// Portrait dimensions; landscape swaps w/h.
+export const A4_PX = { w: 2480, h: 3508 } as const   // 300 DPI portrait
 export const A4_MM = { w: 210, h: 297 } as const
 export const SAFE_MARGIN_PX = 60                      // ~5 mm
 const cmToPx = (cm: number) => Math.round(cm * 118.1102)
+
+/** A4 dimensions in 300 DPI px for the requested orientation. */
+export function getA4Px(orientation: Orientation): { w: number; h: number } {
+  return orientation === 'landscape'
+    ? { w: A4_PX.h, h: A4_PX.w }
+    : { w: A4_PX.w, h: A4_PX.h }
+}
+
+export function getA4Mm(orientation: Orientation): { w: number; h: number } {
+  return orientation === 'landscape'
+    ? { w: A4_MM.h, h: A4_MM.w }
+    : { w: A4_MM.w, h: A4_MM.h }
+}
 
 export interface SizePreset {
   key: SizePresetKey
@@ -19,27 +33,38 @@ export const SIZE_PRESETS: Record<SizePresetKey, SizePreset> = {
   round_medium: { key: 'round_medium', label: 'עיגול 15 ס"מ',  shape: 'circle', diameterPx: cmToPx(15) },
   round_large:  { key: 'round_large',  label: 'עיגול 18 ס"מ',  shape: 'circle', diameterPx: cmToPx(18) },
   square_20:    { key: 'square_20',    label: 'ריבוע 20×20',   shape: 'rect',   widthPx: cmToPx(20), heightPx: cmToPx(20) },
+  // rect_full is computed lazily — its dims depend on orientation.
   rect_full:    { key: 'rect_full',    label: 'A4 מלא',         shape: 'rect',
                   widthPx:  A4_PX.w - 2 * SAFE_MARGIN_PX,
                   heightPx: A4_PX.h - 2 * SAFE_MARGIN_PX },
 }
 
-/** Returns the bounding box of the cut shape, centered on the A4 sheet. */
-export function getCropBox(preset: SizePreset) {
+/**
+ * Returns the bounding box of the cut shape, centered on the A4 sheet for the
+ * given orientation. For rect_full, dimensions follow the sheet so the cut
+ * occupies the full printable area (with safe margins).
+ */
+export function getCropBox(preset: SizePreset, orientation: Orientation = 'portrait') {
+  const a4 = getA4Px(orientation)
   if (preset.shape === 'circle') {
     const d = preset.diameterPx!
     return {
-      x: (A4_PX.w - d) / 2,
-      y: (A4_PX.h - d) / 2,
+      x: (a4.w - d) / 2,
+      y: (a4.h - d) / 2,
       w: d,
       h: d,
     }
   }
-  const w = preset.widthPx!
-  const h = preset.heightPx!
+  // For rect_full, recompute width/height from the orientation-aware A4.
+  let w = preset.widthPx!
+  let h = preset.heightPx!
+  if (preset.key === 'rect_full') {
+    w = a4.w - 2 * SAFE_MARGIN_PX
+    h = a4.h - 2 * SAFE_MARGIN_PX
+  }
   return {
-    x: (A4_PX.w - w) / 2,
-    y: (A4_PX.h - h) / 2,
+    x: (a4.w - w) / 2,
+    y: (a4.h - h) / 2,
     w, h,
   }
 }

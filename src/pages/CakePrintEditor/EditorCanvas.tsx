@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import { Stage, Layer, Image as KImage, Text, Group, Rect, Circle } from 'react-konva'
 import type Konva from 'konva'
-import { A4_PX, SAFE_MARGIN_PX, SIZE_PRESETS, FONTS, STYLES, TEXT_SIZE_PX, getCropBox } from './presets'
+import { SAFE_MARGIN_PX, SIZE_PRESETS, FONTS, STYLES, TEXT_SIZE_PX, getCropBox, getA4Px } from './presets'
 import type { SizePreset } from './presets'
 import type { WizardState, WizardAction, TextLayer } from './types'
 
@@ -66,11 +66,12 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, Props>(function EditorCanvas
   const fontsReady = useFontsReady()
   const image = useImage(state.imageSrc)
 
-  const displayScale = displayWidth / A4_PX.w
-  const stageH = A4_PX.h * displayScale
+  const a4 = getA4Px(state.orientation)
+  const displayScale = displayWidth / a4.w
+  const stageH = a4.h * displayScale
 
   const preset = state.preset ? SIZE_PRESETS[state.preset] : null
-  const cropBox = preset ? getCropBox(preset) : null
+  const cropBox = preset ? getCropBox(preset, state.orientation) : null
 
   useImperativeHandle(ref, () => ({
     exportPng: () => {
@@ -157,7 +158,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, Props>(function EditorCanvas
       {/* All content uses logical 300 DPI coords; the Layer scale converts to display px. */}
       <Layer scaleX={displayScale} scaleY={displayScale}>
         {/* A4 white background */}
-        <Rect x={0} y={0} width={A4_PX.w} height={A4_PX.h} fill="#FFFFFF" />
+        <Rect x={0} y={0} width={a4.w} height={a4.h} fill="#FFFFFF" />
 
         {/* Cropped image — only visible inside the cut shape */}
         {cropBox && imageNode && (
@@ -209,11 +210,13 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, Props>(function EditorCanvas
 
         {/* Outside-of-crop dim overlay — shows the user what won't be on the cake */}
         {cropBox && preset && mode !== 'preview' && (
-          <DimOverlay preset={preset} cropBox={cropBox} />
+          <DimOverlay preset={preset} cropBox={cropBox} a4={a4} />
         )}
 
-        {/* Text layers — rendered above the dim overlay so they're never dimmed */}
-        {state.textLayers.map(layer => {
+        {/* Text layers — rendered above the dim overlay so they're never dimmed.
+            Width = crop box width so multi-line text wraps and centers within
+            the cake shape. align="center" works for Hebrew, English, mixed. */}
+        {cropBox && state.textLayers.map(layer => {
           const font = FONTS[layer.fontKey]
           const style = STYLES[layer.styleKey]
           const fontSize = TEXT_SIZE_PX[layer.sizeKey]
@@ -227,6 +230,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, Props>(function EditorCanvas
               fontSize={fontSize}
               x={layer.x}
               y={layer.y}
+              width={cropBox.w}
               fill={style.fill}
               stroke={style.stroke}
               strokeWidth={strokeWidth}
@@ -236,7 +240,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, Props>(function EditorCanvas
               shadowOffsetY={style.shadow?.offsetY}
               shadowOpacity={style.shadow ? 1 : 0}
               padding={Math.ceil(strokeWidth) + 2}
-              align="right"
+              align="center"
+              lineHeight={1.15}
               fillAfterStrokeEnabled={true}
               draggable={mode === 'text' || mode === 'fit'}
               onClick={() => onTextClick(layer)}
@@ -248,7 +253,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, Props>(function EditorCanvas
         })}
 
         {/* Crop marks at A4 corners (subtle, for cutting alignment) */}
-        {mode !== 'preview' && <CropMarks />}
+        {mode !== 'preview' && <CropMarks a4={a4} />}
       </Layer>
     </Stage>
   )
@@ -256,7 +261,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, Props>(function EditorCanvas
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function CropMarks() {
+function CropMarks({ a4 }: { a4: { w: number; h: number } }) {
   const len = 50
   const margin = SAFE_MARGIN_PX
   const stroke = '#cbd5e1'
@@ -267,19 +272,19 @@ function CropMarks() {
       <Rect x={margin} y={margin} width={len} height={strokeW} fill={stroke} listening={false} />
       <Rect x={margin} y={margin} width={strokeW} height={len} fill={stroke} listening={false} />
       {/* top-right */}
-      <Rect x={A4_PX.w - margin - len} y={margin} width={len} height={strokeW} fill={stroke} listening={false} />
-      <Rect x={A4_PX.w - margin - strokeW} y={margin} width={strokeW} height={len} fill={stroke} listening={false} />
+      <Rect x={a4.w - margin - len} y={margin} width={len} height={strokeW} fill={stroke} listening={false} />
+      <Rect x={a4.w - margin - strokeW} y={margin} width={strokeW} height={len} fill={stroke} listening={false} />
       {/* bottom-left */}
-      <Rect x={margin} y={A4_PX.h - margin - strokeW} width={len} height={strokeW} fill={stroke} listening={false} />
-      <Rect x={margin} y={A4_PX.h - margin - len} width={strokeW} height={len} fill={stroke} listening={false} />
+      <Rect x={margin} y={a4.h - margin - strokeW} width={len} height={strokeW} fill={stroke} listening={false} />
+      <Rect x={margin} y={a4.h - margin - len} width={strokeW} height={len} fill={stroke} listening={false} />
       {/* bottom-right */}
-      <Rect x={A4_PX.w - margin - len} y={A4_PX.h - margin - strokeW} width={len} height={strokeW} fill={stroke} listening={false} />
-      <Rect x={A4_PX.w - margin - strokeW} y={A4_PX.h - margin - len} width={strokeW} height={len} fill={stroke} listening={false} />
+      <Rect x={a4.w - margin - len} y={a4.h - margin - strokeW} width={len} height={strokeW} fill={stroke} listening={false} />
+      <Rect x={a4.w - margin - strokeW} y={a4.h - margin - len} width={strokeW} height={len} fill={stroke} listening={false} />
     </>
   )
 }
 
-function DimOverlay({ preset, cropBox }: { preset: SizePreset; cropBox: { x: number; y: number; w: number; h: number } }) {
+function DimOverlay({ preset, cropBox, a4 }: { preset: SizePreset; cropBox: { x: number; y: number; w: number; h: number }; a4: { w: number; h: number } }) {
   // Cover the whole A4 with a translucent rect, then "cut out" the crop shape.
   // We do this with two passes: a Group with a destination-out compositing trick
   // would also work, but four rectangles around the crop are simpler and enough
@@ -292,10 +297,10 @@ function DimOverlay({ preset, cropBox }: { preset: SizePreset; cropBox: { x: num
   if (preset.shape === 'rect') {
     return (
       <>
-        <Rect x={0} y={0} width={A4_PX.w} height={cropBox.y} fill={dim} listening={false} />
-        <Rect x={0} y={cropBox.y + cropBox.h} width={A4_PX.w} height={A4_PX.h - cropBox.y - cropBox.h} fill={dim} listening={false} />
+        <Rect x={0} y={0} width={a4.w} height={cropBox.y} fill={dim} listening={false} />
+        <Rect x={0} y={cropBox.y + cropBox.h} width={a4.w} height={a4.h - cropBox.y - cropBox.h} fill={dim} listening={false} />
         <Rect x={0} y={cropBox.y} width={cropBox.x} height={cropBox.h} fill={dim} listening={false} />
-        <Rect x={cropBox.x + cropBox.w} y={cropBox.y} width={A4_PX.w - cropBox.x - cropBox.w} height={cropBox.h} fill={dim} listening={false} />
+        <Rect x={cropBox.x + cropBox.w} y={cropBox.y} width={a4.w - cropBox.x - cropBox.w} height={cropBox.h} fill={dim} listening={false} />
       </>
     )
   }
@@ -306,10 +311,10 @@ function DimOverlay({ preset, cropBox }: { preset: SizePreset; cropBox: { x: num
   // boundary obvious.
   return (
     <>
-      <Rect x={0} y={0} width={A4_PX.w} height={cropBox.y} fill={dim} listening={false} />
-      <Rect x={0} y={cropBox.y + cropBox.h} width={A4_PX.w} height={A4_PX.h - cropBox.y - cropBox.h} fill={dim} listening={false} />
+      <Rect x={0} y={0} width={a4.w} height={cropBox.y} fill={dim} listening={false} />
+      <Rect x={0} y={cropBox.y + cropBox.h} width={a4.w} height={a4.h - cropBox.y - cropBox.h} fill={dim} listening={false} />
       <Rect x={0} y={cropBox.y} width={cropBox.x} height={cropBox.h} fill={dim} listening={false} />
-      <Rect x={cropBox.x + cropBox.w} y={cropBox.y} width={A4_PX.w - cropBox.x - cropBox.w} height={cropBox.h} fill={dim} listening={false} />
+      <Rect x={cropBox.x + cropBox.w} y={cropBox.y} width={a4.w - cropBox.x - cropBox.w} height={cropBox.h} fill={dim} listening={false} />
     </>
   )
 }

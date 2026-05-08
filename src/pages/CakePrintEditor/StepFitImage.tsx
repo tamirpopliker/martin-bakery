@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { RotateCw, RotateCcw, Maximize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import OrientationToggle from './OrientationToggle'
 import type { WizardState, WizardAction } from './types'
 
 const EditorCanvas = lazy(() => import('./EditorCanvas'))
@@ -45,8 +46,12 @@ export default function StepFitImage({ state, dispatch }: Props) {
         </p>
       </div>
 
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+        <OrientationToggle orientation={state.orientation} dispatch={dispatch} size="sm" />
+      </div>
+
       <div ref={wrapRef} style={{ marginBottom: 18 }}>
-        <Suspense fallback={<CanvasFallback width={displayWidth} />}>
+        <Suspense fallback={<CanvasFallback width={displayWidth} landscape={state.orientation === 'landscape'} />}>
           <EditorCanvas state={state} dispatch={dispatch} mode="fit" displayWidth={displayWidth} />
         </Suspense>
       </div>
@@ -111,8 +116,8 @@ const iconBtn: React.CSSProperties = {
   color: '#475569',
 }
 
-function CanvasFallback({ width }: { width: number }) {
-  const h = (width / 2480) * 3508
+function CanvasFallback({ width, landscape }: { width: number; landscape?: boolean }) {
+  const h = landscape ? (width / 3508) * 2480 : (width / 2480) * 3508
   return (
     <div style={{ width, height: h, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13 }}>
       טוען עורך...

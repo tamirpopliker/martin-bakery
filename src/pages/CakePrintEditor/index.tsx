@@ -16,38 +16,44 @@ interface Props {
   onBack: () => void
 }
 
-const INITIAL_STATE: WizardState = {
-  step: 1,
-  imageSrc: null,
-  imagePath: null,
-  imageNaturalSize: null,
-  preset: null,
-  imageTransform: { x: 0, y: 0, scale: 1, rotation: 0 },
-  textLayers: [],
-  selectedTextId: null,
-  aiBusy: false,
-}
-
-function makeNewTextLayer(state: WizardState): TextLayer {
-  const id = crypto.randomUUID()
-  // Default position: bottom-center of the cut area, accounting for typical text width.
-  let x = 800
-  let y = 1700
-  if (state.preset) {
-    const preset = SIZE_PRESETS[state.preset]
-    const box = getCropBox(preset)
+// Single text layer always exists. Its position depends on preset + orientation;
+// recomputed whenever either changes so the text stays inside the new crop box.
+function defaultTextLayer(
+  presetKey: WizardState['preset'] = null,
+  orientation: WizardState['orientation'] = 'portrait',
+): TextLayer {
+  let x = 60
+  let y = 2400
+  if (presetKey) {
+    const preset = SIZE_PRESETS[presetKey]
+    const box = getCropBox(preset, orientation)
     const fontSize = TEXT_SIZE_PX.medium
-    x = box.x + box.w * 0.15
+    x = box.x
     y = box.y + box.h - fontSize - box.h * 0.12
   }
   return {
-    id,
+    id: crypto.randomUUID(),
     text: '',
     fontKey: 'heebo',
     styleKey: 'classic',
     sizeKey: 'medium',
     x, y,
   }
+}
+
+const INITIAL_TEXT_LAYER = defaultTextLayer()
+
+const INITIAL_STATE: WizardState = {
+  step: 1,
+  imageSrc: null,
+  imagePath: null,
+  imageNaturalSize: null,
+  preset: null,
+  orientation: 'portrait',
+  imageTransform: { x: 0, y: 0, scale: 1, rotation: 0 },
+  textLayers: [INITIAL_TEXT_LAYER],
+  selectedTextId: INITIAL_TEXT_LAYER.id,
+  aiBusy: false,
 }
 
 function reducer(state: WizardState, action: WizardAction): WizardState {
@@ -68,33 +74,46 @@ function reducer(state: WizardState, action: WizardAction): WizardState {
       }
     case 'clear_image':
       return { ...state, imageSrc: null, imagePath: null, imageNaturalSize: null }
-    case 'set_preset':
-      return { ...state, preset: action.preset, imageTransform: { x: 0, y: 0, scale: 1, rotation: 0 } }
+    case 'set_preset': {
+      // Reposition the (single) text layer for the new crop box, preserving its content/style.
+      const fresh = defaultTextLayer(action.preset, state.orientation)
+      const existing = state.textLayers[0]
+      const repositioned: TextLayer = existing
+        ? { ...existing, x: fresh.x, y: fresh.y }
+        : fresh
+      return {
+        ...state,
+        preset: action.preset,
+        imageTransform: { x: 0, y: 0, scale: 1, rotation: 0 },
+        textLayers: [repositioned],
+        selectedTextId: repositioned.id,
+      }
+    }
+    case 'set_orientation': {
+      // Reposition the text layer for the new sheet orientation; reset image
+      // transform so the cover-fit recomputes for the new crop box.
+      const fresh = defaultTextLayer(state.preset, action.orientation)
+      const existing = state.textLayers[0]
+      const repositioned: TextLayer = existing
+        ? { ...existing, x: fresh.x, y: fresh.y }
+        : fresh
+      return {
+        ...state,
+        orientation: action.orientation,
+        imageTransform: { x: 0, y: 0, scale: 1, rotation: 0 },
+        textLayers: [repositioned],
+        selectedTextId: repositioned.id,
+      }
+    }
     case 'update_image_transform':
       return { ...state, imageTransform: { ...state.imageTransform, ...action.patch } }
     case 'reset_image_transform':
       return { ...state, imageTransform: { x: 0, y: 0, scale: 1, rotation: 0 } }
-    case 'add_text_layer': {
-      const layer = makeNewTextLayer(state)
-      return {
-        ...state,
-        textLayers: [...state.textLayers, layer],
-        selectedTextId: layer.id,
-      }
-    }
     case 'update_text_layer':
       return {
         ...state,
         textLayers: state.textLayers.map(l => l.id === action.id ? { ...l, ...action.patch } : l),
       }
-    case 'remove_text_layer': {
-      const filtered = state.textLayers.filter(l => l.id !== action.id)
-      return {
-        ...state,
-        textLayers: filtered,
-        selectedTextId: state.selectedTextId === action.id ? (filtered[0]?.id ?? null) : state.selectedTextId,
-      }
-    }
     case 'select_text_layer':
       return { ...state, selectedTextId: action.id }
     case 'apply_ai_suggestion':
@@ -127,7 +146,7 @@ export default function CakePrintEditor({ branchId, branchName, onBack }: Props)
       <PageHeader title={`הדפסת תמונה לעוגה — ${branchName}`} subtitle={subtitle} onBack={onBack} />
 
       {state.step === 1 && <StepUpload branchId={branchId} dispatch={dispatch} />}
-      {state.step === 2 && <StepSize dispatch={dispatch} />}
+      {state.step === 2 && <StepSize orientation={state.orientation} dispatch={dispatch} />}
       {state.step === 3 && <StepFitImage state={state} dispatch={dispatch} />}
       {state.step === 4 && <StepTextAndStyle state={state} dispatch={dispatch} />}
       {state.step === 5 && <StepReview state={state} dispatch={dispatch} />}

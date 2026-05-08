@@ -1,4 +1,5 @@
 export type SizePresetKey = 'round_medium' | 'round_large' | 'square_20' | 'rect_full'
+export type Orientation = 'portrait' | 'landscape'
 export type FontKey = 'heebo' | 'rubik' | 'frank' | 'suez' | 'karantina' | 'assistant'
 export type StyleKey = 'classic' | 'gold' | 'pink' | 'neon' | 'navy' | 'green' | 'burgundy' | 'shadow'
 export type SizeKey = 'small' | 'medium' | 'large' | 'huge'
@@ -32,6 +33,7 @@ export interface WizardState {
   imagePath: string | null        // storage path
   imageNaturalSize: { w: number; h: number } | null
   preset: SizePresetKey | null
+  orientation: Orientation        // A4 sheet orientation
   imageTransform: ImageTransform
   textLayers: TextLayer[]
   selectedTextId: string | null
@@ -45,11 +47,10 @@ export type WizardAction =
   | { type: 'set_image'; src: string; path: string; naturalW: number; naturalH: number }
   | { type: 'clear_image' }
   | { type: 'set_preset'; preset: SizePresetKey }
+  | { type: 'set_orientation'; orientation: Orientation }
   | { type: 'update_image_transform'; patch: Partial<ImageTransform> }
   | { type: 'reset_image_transform' }
-  | { type: 'add_text_layer' }
   | { type: 'update_text_layer'; id: string; patch: Partial<TextLayer> }
-  | { type: 'remove_text_layer'; id: string }
   | { type: 'select_text_layer'; id: string | null }
   | { type: 'apply_ai_suggestion'; id: string; fontKey: FontKey; styleKey: StyleKey; sizeKey: SizeKey; x: number; y: number; reasoning: string }
   | { type: 'set_ai_busy'; busy: boolean }

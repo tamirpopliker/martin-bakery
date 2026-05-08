@@ -3,7 +3,7 @@ import { Download, Printer, Edit3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EditorCanvasHandle } from './EditorCanvas'
 import { buildExportFilename, downloadDataUrl } from './exportToPng'
-import { PRINT_STYLES } from './printStyles'
+import { buildPrintStyles } from './printStyles'
 import type { WizardState, WizardAction } from './types'
 
 const EditorCanvas = lazy(() => import('./EditorCanvas'))
@@ -48,21 +48,25 @@ export default function StepReview({ state, dispatch }: Props) {
     })
   }
 
+  const isLandscape = state.orientation === 'landscape'
+  const pageW = isLandscape ? '297mm' : '210mm'
+  const pageH = isLandscape ? '210mm' : '297mm'
+
   return (
     <div dir="rtl" style={{ maxWidth: 720, margin: '0 auto', padding: '20px 24px' }}>
-      <style>{PRINT_STYLES}</style>
+      <style>{buildPrintStyles(state.orientation)}</style>
 
       <div style={{ textAlign: 'center', marginBottom: 14 }}>
         <h2 style={{ fontSize: 19, fontWeight: 800, color: '#0f172a', margin: '0 0 4px' }}>
           סקירה אחרונה
         </h2>
         <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
-          A4 · 210×297 מ"מ · 300 DPI
+          A4 {isLandscape ? 'אופקי' : 'אנכי'} · {isLandscape ? '297×210' : '210×297'} מ"מ · 300 DPI
         </p>
       </div>
 
       <div ref={wrapRef} style={{ marginBottom: 18 }}>
-        <Suspense fallback={<CanvasFallback width={displayWidth} />}>
+        <Suspense fallback={<CanvasFallback width={displayWidth} landscape={state.orientation === 'landscape'} />}>
           <EditorCanvas
             ref={canvasRef}
             state={state}
@@ -101,15 +105,15 @@ export default function StepReview({ state, dispatch }: Props) {
       {/* Print target — populated only when "הדפס" is clicked */}
       {printDataUrl && (
         <div id="cake-print-target" style={{ display: 'none' }}>
-          <img src={printDataUrl} style={{ width: '210mm', height: '297mm', display: 'block' }} alt="" />
+          <img src={printDataUrl} style={{ width: pageW, height: pageH, display: 'block' }} alt="" />
         </div>
       )}
     </div>
   )
 }
 
-function CanvasFallback({ width }: { width: number }) {
-  const h = (width / 2480) * 3508
+function CanvasFallback({ width, landscape }: { width: number; landscape?: boolean }) {
+  const h = landscape ? (width / 3508) * 2480 : (width / 2480) * 3508
   return (
     <div style={{ width, height: h, borderRadius: 8, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13 }}>
       טוען עורך...

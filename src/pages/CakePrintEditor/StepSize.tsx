@@ -1,7 +1,9 @@
 import { SIZE_PRESETS } from './presets'
-import type { WizardAction, SizePresetKey } from './types'
+import OrientationToggle from './OrientationToggle'
+import type { WizardAction, SizePresetKey, Orientation } from './types'
 
 interface Props {
+  orientation: Orientation
   dispatch: React.Dispatch<WizardAction>
 }
 
@@ -19,7 +21,7 @@ const SUBTITLES: Record<SizePresetKey, string> = {
   rect_full:    'גיליון שלם',
 }
 
-export default function StepSize({ dispatch }: Props) {
+export default function StepSize({ orientation, dispatch }: Props) {
   function pick(key: SizePresetKey) {
     dispatch({ type: 'set_preset', preset: key })
     dispatch({ type: 'next_step' })
@@ -27,13 +29,18 @@ export default function StepSize({ dispatch }: Props) {
 
   return (
     <div dir="rtl" style={{ maxWidth: 560, margin: '0 auto', padding: '32px 24px' }}>
-      <div style={{ textAlign: 'center', marginBottom: 28 }}>
+      <div style={{ textAlign: 'center', marginBottom: 22 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: '0 0 6px' }}>
           באיזה גודל העוגה?
         </h2>
         <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>
           התמונה תיחתך אוטומטית לגודל שתבחר/י
         </p>
+      </div>
+
+      {/* Orientation toggle */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}>
+        <OrientationToggle orientation={orientation} dispatch={dispatch} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>

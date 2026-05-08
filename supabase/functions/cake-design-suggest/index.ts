@@ -122,33 +122,57 @@ serve(async (req) => {
 
     const presetLabel = PRESET_LABELS[preset] || preset
 
-    const prompt = `You are a design advisor for an Israeli bakery's edible cake-topper editor. The bakery prints A4 edible-paper sheets and cuts the topper to the chosen shape.
+    const prompt = `You are a design advisor for an Israeli bakery printing edible cake toppers on A4 paper. The result is placed on top of a real cake at events: birthdays (kids and adults), weddings, anniversaries, baby showers, brit/bat-mitzvah, retirement, achievements.
 
-Look at the user's photo and pick the best text overlay design for the Hebrew text below.
+ANALYZE THE PHOTO and pick a design for the Hebrew text. Look at:
+- Subject: person/people, cake, object, landscape, abstract
+- Mood: formal/elegant, festive/playful, sweet/romantic, simple/minimal
+- Dominant tones (for contrast against text)
+- Where the focal point is (for placement)
+- Busy vs clean areas (text must land on a clean area)
 
-Photo size: ${presetLabel}
-Hebrew text to overlay: "${text}"
+INPUT
+Cake size: ${presetLabel}
+Hebrew text: "${text}"
+Text length: ${text.length} characters
 
-Return strictly JSON, no prose, with these exact fields:
+FONTS (pick ONE; family must match the OCCASION + photo MOOD):
+${fontList}
+
+STYLES (pick ONE; must CONTRAST with photo's dominant tones for legibility):
+${styleList}
+
+DECISION RULES (apply in order):
+1. SIZE — default to "large" for short texts (≤15 chars) and "huge" only for ≤6 chars. Use "medium" for 16-30 chars. "small" only for very long texts (31+). Cake toppers must read from 1m away.
+2. POSITION — read the photo:
+   - Person's face visible → text below face (bottom-center) or above (top-center). NEVER over face.
+   - Close-up of a cake → text top-center or top-right.
+   - Centered subject (object/cake) → top-center or bottom-center, away from subject.
+   - Busy/textured background → place on the cleanest visible area.
+   - When in doubt → bottom-center (works on most cake topper layouts).
+3. FONT by occasion + photo mood:
+   - Kids / birthday with bright colors → rubik (rounded, friendly).
+   - Wedding / engagement / formal portrait → frank (luxury serif) or assistant.
+   - General מזל טוב / casual → heebo (clean default).
+   - Playful party / colorful → karantina or rubik.
+   - Distinctive / stylish event → suez.
+4. STYLE by photo tones:
+   - Photo dominantly LIGHT/PASTEL → classic (black on white outline) or navy or burgundy.
+   - Photo dominantly DARK → gold or pink (high contrast on dark).
+   - Photo BUSY/MULTI-COLORED → classic (always readable).
+   - Romantic / elegant photo → gold (weddings) or pink (baby/sweet).
+   - Modern / minimal photo → shadow (subtle drop shadow).
+   - Vibrant / party photo → neon.
+5. REASONING — one Hebrew sentence ≤90 chars. Briefly say WHAT you saw in the photo + WHY this design fits.
+
+Return ONLY valid JSON, no prose around it:
 {
   "font":     one of [${fontKeys.map((f) => `"${f}"`).join(', ')}],
   "style":    one of [${styleKeys.map((s) => `"${s}"`).join(', ')}],
   "sizeKey":  one of ["small", "medium", "large", "huge"],
   "position": one of ["top-left","top-center","top-right","middle-left","middle-center","middle-right","bottom-left","bottom-center","bottom-right"],
-  "reasoning": one short Hebrew sentence (max 90 characters) explaining the choice
-}
-
-Font catalog (pick ONE matching the photo's mood):
-${fontList}
-
-Style catalog (pick ONE that contrasts with the photo's dominant tones):
-${styleList}
-
-Rules:
-- Use larger sizes for short texts and round shapes; smaller for long texts.
-- Position the text where it does NOT cover the main subject of the photo.
-- Avoid placing text over very busy or high-detail areas.
-- Reasoning MUST be in Hebrew, single sentence, no quotes.`
+  "reasoning": "<short Hebrew sentence>"
+}`
 
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -158,8 +182,8 @@ Rules:
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 400,
+        model: 'claude-sonnet-4-6',
+        max_tokens: 600,
         messages: [
           {
             role: 'user',
