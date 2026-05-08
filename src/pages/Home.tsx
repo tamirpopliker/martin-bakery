@@ -914,6 +914,7 @@ export default function Home() {
                 <motion.div variants={staggerContainer} initial="hidden" animate="visible"
                   className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
                   {[
+                    { label: 'מחלקת HR', subtitle: 'עובדים · מסמכים · קליטה · יומן שינויים', Icon: IdCard, color: '#0d9488', page: 'hr_dashboard' },
                     { label: 'דוח מעסיק', subtitle: 'עלות שכר אמיתית · חודשי', Icon: Briefcase, color: '#0ea5e9', page: 'employer_costs' },
                     { label: 'דוחות ניהול', subtitle: 'בקרת הכנסות · לייבור · קופות · שלמות נתונים', Icon: ClipboardList, color: '#6366f1', page: 'management_reports' },
                     { label: 'דוח ספקים מאוחד', subtitle: 'איחוד שמות ספקים · סיכום לפי סניף', Icon: Briefcase, color: '#6366f1', page: 'suppliers_report' },
