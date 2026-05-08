@@ -43,13 +43,14 @@ import FactorySpecialOrders from './FactorySpecialOrders'
 import SuppliersReport from './SuppliersReport'
 import ManagementReports from './ManagementReports'
 import HRDashboard from './HRDashboard'
+import MonthlyChangesReport from './MonthlyChangesReport'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
   AlertTriangle, ClipboardList, Truck, UserCog, Activity,
   Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
   LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft, ShoppingCart, Wrench, Building2, CreditCard, Briefcase, Cake,
-  IdCard,
+  IdCard, FileSignature,
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
@@ -404,6 +405,7 @@ export default function Home() {
     if (page === 'reports_alerts')       return <ReportsAlerts onBack={() => setPage(null)} />
 
     if (page === 'hr_dashboard') return <HRDashboard onBack={() => setPage(null)} />
+    if (page === 'changes_report') return <MonthlyChangesReport onBack={() => setPage(null)} />
     if (page === 'b2b_customers') return <B2BCustomers onBack={() => setPage(null)} />
     if (page === 'suppliers_report') return <SuppliersReport onBack={() => setPage(null)} />
     if (page === 'management_reports') return <ManagementReports onBack={() => setPage(null)} />
@@ -915,6 +917,7 @@ export default function Home() {
                   className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
                   {[
                     { label: 'מחלקת HR', subtitle: 'עובדים · מסמכים · קליטה · יומן שינויים', Icon: IdCard, color: '#0d9488', page: 'hr_dashboard' },
+                    { label: 'דוח שינויים חודשי', subtitle: 'קליטות · עזיבות · שכר · בנק', Icon: FileSignature, color: '#7c3aed', page: 'changes_report' },
                     { label: 'דוח מעסיק', subtitle: 'עלות שכר אמיתית · חודשי', Icon: Briefcase, color: '#0ea5e9', page: 'employer_costs' },
                     { label: 'דוחות ניהול', subtitle: 'בקרת הכנסות · לייבור · קופות · שלמות נתונים', Icon: ClipboardList, color: '#6366f1', page: 'management_reports' },
                     { label: 'דוח ספקים מאוחד', subtitle: 'איחוד שמות ספקים · סיכום לפי סניף', Icon: Briefcase, color: '#6366f1', page: 'suppliers_report' },

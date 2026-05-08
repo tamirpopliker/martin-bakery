@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound, ImagePlus } from 'lucide-react'
+import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound, ImagePlus, IdCard, FileSignature } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PageHeader from '../components/PageHeader'
 import { useAppUser, isRestrictedBranchUser } from '../lib/UserContext'
@@ -30,6 +30,8 @@ import ChangeFund from './ChangeFund'
 import BranchSpecialOrders from './BranchSpecialOrders'
 import CakePrintEditor from './CakePrintEditor'
 import ChangePassword from './ChangePassword'
+import HRDashboard from './HRDashboard'
+import MonthlyChangesReport from './MonthlyChangesReport'
 // calculateBranchPL moved to BranchManagerDashboard
 
 // ─── אנימציות ─────────────────────────────────────────────────────────────────
@@ -74,6 +76,8 @@ type BranchPage =
   | 'special_orders'
   | 'cake_print_editor'
   | 'change_password'
+  | 'hr_dashboard'
+  | 'changes_report'
 
 interface MenuItem {
   page: BranchPage
@@ -101,6 +105,8 @@ const MENU_ITEMS: MenuItem[] = [
   { page: 'special_orders', label: 'הזמנות עוגות מיוחדות', subtitle: 'עוגות מעוצבות · לפי הזמנה', Icon: Cake,     ready: true },
   { page: 'cake_print_editor', label: 'הדפסת תמונה לעוגה', subtitle: 'תמונה אכילה · A4 להדפסה', Icon: ImagePlus, ready: true },
   // BranchPL removed — P&L now integrated in BranchDashboard
+  { page: 'hr_dashboard', label: 'מחלקת HR',       subtitle: 'עובדים · מסמכים · קליטה',     Icon: IdCard,      ready: true },
+  { page: 'changes_report', label: 'דוח שינויים',    subtitle: 'קליטות · עזיבות · שכר · בנק', Icon: FileSignature, ready: true },
   { page: 'settings',     label: 'הגדרות סניף',    subtitle: 'KPI · עלויות קבועות · עובדים', Icon: Settings,    ready: true },
   { page: 'data_import',  label: 'ייבוא נתונים',   subtitle: 'CSV מ-Base44 · העלאה',         Icon: Upload,      ready: true },
   { page: 'change_password', label: 'שינוי סיסמה',  subtitle: 'עדכון סיסמת הכניסה',          Icon: KeyRound,    ready: true },
@@ -211,6 +217,8 @@ export default function BranchHome({ branch, onBack }: Props) {
   if (page === 'cake_print_editor') return (
     <CakePrintEditor branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
+  if (page === 'hr_dashboard') return <HRDashboard onBack={() => setPage(null)} />
+  if (page === 'changes_report') return <MonthlyChangesReport onBack={() => setPage(null)} />
   if (page === 'change_password') return (
     <ChangePassword onBack={() => setPage(null)} />
   )
