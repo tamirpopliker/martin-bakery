@@ -1,10 +1,9 @@
-import { Suspense, lazy, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { RotateCw, RotateCcw, Maximize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import OrientationToggle from './OrientationToggle'
+import EditorCanvas from './lazyEditorCanvas'
 import type { WizardState, WizardAction } from './types'
-
-const EditorCanvas = lazy(() => import('./EditorCanvas'))
 
 interface Props {
   state: WizardState

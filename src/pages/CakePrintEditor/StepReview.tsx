@@ -1,12 +1,11 @@
-import { Suspense, lazy, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { Download, Printer, Edit3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EditorCanvasHandle } from './EditorCanvas'
+import EditorCanvas from './lazyEditorCanvas'
 import { buildExportFilename, downloadDataUrl } from './exportToPng'
 import { buildPrintStyles } from './printStyles'
 import type { WizardState, WizardAction } from './types'
-
-const EditorCanvas = lazy(() => import('./EditorCanvas'))
 
 interface Props {
   state: WizardState

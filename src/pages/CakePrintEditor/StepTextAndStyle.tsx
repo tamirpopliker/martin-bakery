@@ -1,12 +1,11 @@
-import { Suspense, lazy, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '../../lib/supabase'
 import { FONTS, STYLES, SIZE_LABELS, FONT_KEYS, STYLE_KEYS, getCropBox, SIZE_PRESETS, TEXT_SIZE_PX } from './presets'
 import OrientationToggle from './OrientationToggle'
+import EditorCanvas from './lazyEditorCanvas'
 import type { WizardState, WizardAction, FontKey, StyleKey, SizeKey, Position } from './types'
-
-const EditorCanvas = lazy(() => import('./EditorCanvas'))
 
 interface Props {
   state: WizardState
