@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound } from 'lucide-react'
+import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound, ImagePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PageHeader from '../components/PageHeader'
 import { useAppUser, isRestrictedBranchUser } from '../lib/UserContext'
@@ -28,6 +28,7 @@ import BranchCommunication from './BranchCommunication'
 import RegisterClosings from './RegisterClosings'
 import ChangeFund from './ChangeFund'
 import BranchSpecialOrders from './BranchSpecialOrders'
+import CakePrintEditor from './CakePrintEditor'
 import ChangePassword from './ChangePassword'
 // calculateBranchPL moved to BranchManagerDashboard
 
@@ -71,6 +72,7 @@ type BranchPage =
   | 'register_closings'
   | 'change_fund'
   | 'special_orders'
+  | 'cake_print_editor'
   | 'change_password'
 
 interface MenuItem {
@@ -97,6 +99,7 @@ const MENU_ITEMS: MenuItem[] = [
   { page: 'communication', label: 'מרכז תקשורת', subtitle: 'הודעות · משימות · עדכונים', Icon: MessageSquare, ready: true },
   { page: 'orders',    label: 'הזמנות מהמפעל',  subtitle: 'אישור · עריכה · חומרי גלם', Icon: Package,     ready: true },
   { page: 'special_orders', label: 'הזמנות עוגות מיוחדות', subtitle: 'עוגות מעוצבות · לפי הזמנה', Icon: Cake,     ready: true },
+  { page: 'cake_print_editor', label: 'הדפסת תמונה לעוגה', subtitle: 'תמונה אכילה · A4 להדפסה', Icon: ImagePlus, ready: true },
   // BranchPL removed — P&L now integrated in BranchDashboard
   { page: 'settings',     label: 'הגדרות סניף',    subtitle: 'KPI · עלויות קבועות · עובדים', Icon: Settings,    ready: true },
   { page: 'data_import',  label: 'ייבוא נתונים',   subtitle: 'CSV מ-Base44 · העלאה',         Icon: Upload,      ready: true },
@@ -205,6 +208,9 @@ export default function BranchHome({ branch, onBack }: Props) {
   if (page === 'special_orders') return (
     <BranchSpecialOrders branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
+  if (page === 'cake_print_editor') return (
+    <CakePrintEditor branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
+  )
   if (page === 'change_password') return (
     <ChangePassword onBack={() => setPage(null)} />
   )
@@ -292,9 +298,9 @@ export default function BranchHome({ branch, onBack }: Props) {
           animate="visible"
         >
           {MENU_ITEMS.filter(item => {
-            // Username-auth branch users: restricted to scheduling + special orders + password change
+            // Username-auth branch users: restricted to scheduling + special orders + cake editor + password change
             if (appUser && isRestrictedBranchUser(appUser)) {
-              return ['branch-team', 'special_orders', 'change_password'].includes(item.page)
+              return ['branch-team', 'special_orders', 'cake_print_editor', 'change_password'].includes(item.page)
             }
             // Hide settings and data_import for non-admin users
             if (!isAdmin && (item.page === 'settings' || item.page === 'data_import')) return false

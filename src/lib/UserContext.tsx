@@ -92,7 +92,7 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
       const allowed = [
         'branch-team', 'weekly-schedule', 'schedule-history',
         'manager-constraints', 'shift-settings',
-        'special_orders', 'change_password',
+        'special_orders', 'cake_print_editor', 'change_password',
       ]
       if (allowed.includes(pageKey)) return true
       // Allow routing to their own branch home
@@ -168,6 +168,11 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
     // ─── Cash register management (branch scope) ───
     if (pageKey === 'register_closings' || pageKey === 'change_fund') {
       return user.role === 'branch' // admin handled above
+    }
+
+    // ─── Cake topper print editor (branch + admin only; restricted users blocked above) ───
+    if (pageKey === 'cake_print_editor') {
+      return user.role === 'branch'
     }
 
     // ─── Management pages ───
