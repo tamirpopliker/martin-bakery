@@ -122,56 +122,101 @@ serve(async (req) => {
 
     const presetLabel = PRESET_LABELS[preset] || preset
 
-    const prompt = `You are a design advisor for an Israeli bakery printing edible cake toppers on A4 paper. The result is placed on top of a real cake at events: birthdays (kids and adults), weddings, anniversaries, baby showers, brit/bat-mitzvah, retirement, achievements.
+    const prompt = `You design edible cake-topper overlays for an Israeli bakery. Your single most important job is choosing a TEXT POSITION and TEXT COLOR that maximize legibility on this specific photo.
 
-ANALYZE THE PHOTO and pick a design for the Hebrew text. Look at:
-- Subject: person/people, cake, object, landscape, abstract
-- Mood: formal/elegant, festive/playful, sweet/romantic, simple/minimal
-- Dominant tones (for contrast against text)
-- Where the focal point is (for placement)
-- Busy vs clean areas (text must land on a clean area)
+═══════════════════════════════════════════════════
+STEP 1 — ANALYZE THE PHOTO (think carefully before answering):
+═══════════════════════════════════════════════════
+A. Where is the SUBJECT? (face, cake, focal object) — top/middle/bottom × left/center/right.
+   The text must NEVER cover the subject — especially never over a face.
+B. Where is the LARGEST CLEAN AREA? (uniform color, low detail, no faces/objects).
+   This is where the text WILL go — find the biggest such region.
+C. What is the DOMINANT COLOR / TONE of that clean area?
+   - Light: white/cream/pastel/sky-blue/light-grass
+   - Dark: navy/forest/black/dark-skin/shadow/night
+   - Warm: red/orange/brown/skin-tones/sand/wood
+   - Cool: blue/green/teal/grey
+   - Multi-busy: many competing colors with no clear dominant
 
+═══════════════════════════════════════════════════
+STEP 2 — PICK A POSITION FROM STEP 1B
+═══════════════════════════════════════════════════
+The text goes in the CLEAN area you identified. Map it to one of the 9 keys.
+- Clean area on the left → use *-left.   On the right → *-right.   Centered → *-center.
+- Top of frame → top-*.   Middle → middle-*.   Bottom → bottom-*.
+- DO NOT default to bottom-center unless that's actually where the cleanest area is.
+
+═══════════════════════════════════════════════════
+STEP 3 — PICK A STYLE WITH MAXIMUM CONTRAST AGAINST STEP 1C
+═══════════════════════════════════════════════════
+Goal: pick the option that POPS MOST against the dominant tone where the text will sit.
+
+If clean area is LIGHT (white/pastel/cream/light-blue/light-grass):
+  → Strongest pops: navy, burgundy, classic (black-on-white).
+  → Avoid: pink, gold-on-light (low contrast).
+
+If clean area is DARK (night/shadow/black/dark-skin/forest):
+  → Strongest pops: gold, neon (pink glow), classic-inverted (white text — pick "classic", the white-stroke shows on dark).
+  → Avoid: navy, burgundy on dark (blends).
+
+If clean area is WARM (red/orange/sand/skin/wood):
+  → Strongest pops: navy, green (forest), classic.
+  → Avoid: gold, burgundy (similar tone).
+
+If clean area is COOL (blue/green/teal):
+  → Strongest pops: gold, neon, burgundy.
+  → Avoid: navy on blue (blends).
+
+If clean area is MULTI-BUSY:
+  → Use classic — the white outline + black fill reads on anything.
+
+If the photo is romantic/elegant → bias gold (weddings) when contrast allows.
+If the photo is vibrant/festive → bias neon when contrast allows.
+"shadow" only when minimal/modern style is requested by photo aesthetic AND the background is uniform-light.
+
+DO NOT default to "classic" just to be safe. Pick the BOLDEST option that still reads.
+
+═══════════════════════════════════════════════════
+STEP 4 — PICK FONT (matches occasion + photo mood)
+═══════════════════════════════════════════════════
+- Kids / playful birthday photo → rubik
+- Wedding / engagement / formal → frank or assistant
+- Generic מזל טוב / casual → heebo
+- Party / colorful → karantina or rubik
+- Stylish/distinctive → suez
+
+═══════════════════════════════════════════════════
+STEP 5 — SIZE
+═══════════════════════════════════════════════════
+- ≤6 chars → huge
+- 7-15 chars → large (default for short texts)
+- 16-30 chars → medium
+- 31+ chars → small
+Multi-line text counts as length of longest line.
+
+═══════════════════════════════════════════════════
 INPUT
+═══════════════════════════════════════════════════
 Cake size: ${presetLabel}
-Hebrew text: "${text}"
-Text length: ${text.length} characters
+Text: """${text}"""
+Text length: ${text.length} chars
+Lines: ${text.split('\n').length}
 
-FONTS (pick ONE; family must match the OCCASION + photo MOOD):
+FONTS available:
 ${fontList}
 
-STYLES (pick ONE; must CONTRAST with photo's dominant tones for legibility):
+STYLES available:
 ${styleList}
 
-DECISION RULES (apply in order):
-1. SIZE — default to "large" for short texts (≤15 chars) and "huge" only for ≤6 chars. Use "medium" for 16-30 chars. "small" only for very long texts (31+). Cake toppers must read from 1m away.
-2. POSITION — read the photo:
-   - Person's face visible → text below face (bottom-center) or above (top-center). NEVER over face.
-   - Close-up of a cake → text top-center or top-right.
-   - Centered subject (object/cake) → top-center or bottom-center, away from subject.
-   - Busy/textured background → place on the cleanest visible area.
-   - When in doubt → bottom-center (works on most cake topper layouts).
-3. FONT by occasion + photo mood:
-   - Kids / birthday with bright colors → rubik (rounded, friendly).
-   - Wedding / engagement / formal portrait → frank (luxury serif) or assistant.
-   - General מזל טוב / casual → heebo (clean default).
-   - Playful party / colorful → karantina or rubik.
-   - Distinctive / stylish event → suez.
-4. STYLE by photo tones:
-   - Photo dominantly LIGHT/PASTEL → classic (black on white outline) or navy or burgundy.
-   - Photo dominantly DARK → gold or pink (high contrast on dark).
-   - Photo BUSY/MULTI-COLORED → classic (always readable).
-   - Romantic / elegant photo → gold (weddings) or pink (baby/sweet).
-   - Modern / minimal photo → shadow (subtle drop shadow).
-   - Vibrant / party photo → neon.
-5. REASONING — one Hebrew sentence ≤90 chars. Briefly say WHAT you saw in the photo + WHY this design fits.
-
-Return ONLY valid JSON, no prose around it:
+═══════════════════════════════════════════════════
+OUTPUT — strict JSON only, no prose:
+═══════════════════════════════════════════════════
 {
   "font":     one of [${fontKeys.map((f) => `"${f}"`).join(', ')}],
   "style":    one of [${styleKeys.map((s) => `"${s}"`).join(', ')}],
   "sizeKey":  one of ["small", "medium", "large", "huge"],
   "position": one of ["top-left","top-center","top-right","middle-left","middle-center","middle-right","bottom-left","bottom-center","bottom-right"],
-  "reasoning": "<short Hebrew sentence>"
+  "reasoning": "<one Hebrew sentence ≤95 chars: name what you saw in the photo (subject + clean area + dominant tone) + why this style+position+font give max contrast/fit>"
 }`
 
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {

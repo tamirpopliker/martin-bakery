@@ -56,21 +56,29 @@ export default function StepTextAndStyle({ state, dispatch }: Props) {
       const suggestion = data as {
         font: FontKey; style: StyleKey; sizeKey: SizeKey; position: Position; reasoning: string
       }
-      // Compute coords from position. The Konva Text uses width=cropBox.w with
-      // align='center', so x is always cropBox.x — only the vertical position
-      // varies. The "left/right" part of the AI position is ignored (text is
-      // always centered horizontally to keep multi-line layouts symmetric).
+      // Compute coords from the AI's 9-position grid. The Konva Text uses
+      // width=cropBox.w*0.85 with align='center'; positioning shifts the
+      // wrapping box left/center/right so the AI's choice is honored visually.
       const preset = SIZE_PRESETS[state.preset]
-      const cropBox = getCropBox(preset)
+      const cropBox = getCropBox(preset, state.orientation)
       const fontSize = TEXT_SIZE_PX[suggestion.sizeKey]
       const lines = Math.max(1, selected.text.split('\n').length)
       const blockH = lines * fontSize * 1.15
-      const padY = cropBox.h * 0.08
-      const [vert] = suggestion.position.split('-')
-      const x = cropBox.x
+      const padY = cropBox.h * 0.06
+      const padX = cropBox.w * 0.04
+      const [vert, horz] = suggestion.position.split('-')
+
+      // Vertical
       let y = cropBox.y + (cropBox.h - blockH) / 2
       if (vert === 'top') y = cropBox.y + padY
       if (vert === 'bottom') y = cropBox.y + cropBox.h - blockH - padY
+
+      // Horizontal: shift the (narrower) text wrapping box.
+      // textBoxWidth is set in EditorCanvas; mirror that ratio here.
+      const textBoxWidth = cropBox.w * 0.85
+      let x = cropBox.x + (cropBox.w - textBoxWidth) / 2  // center
+      if (horz === 'left')  x = cropBox.x + padX
+      if (horz === 'right') x = cropBox.x + cropBox.w - textBoxWidth - padX
 
       dispatch({
         type: 'apply_ai_suggestion',

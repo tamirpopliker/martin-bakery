@@ -28,7 +28,8 @@ function defaultTextLayer(
     const preset = SIZE_PRESETS[presetKey]
     const box = getCropBox(preset, orientation)
     const fontSize = TEXT_SIZE_PX.medium
-    x = box.x
+    // Default: centered horizontally (matches the 85% wrap box in EditorCanvas)
+    x = box.x + box.w * 0.075
     y = box.y + box.h - fontSize - box.h * 0.12
   }
   return {

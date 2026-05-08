@@ -214,13 +214,15 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, Props>(function EditorCanvas
         )}
 
         {/* Text layers — rendered above the dim overlay so they're never dimmed.
-            Width = crop box width so multi-line text wraps and centers within
-            the cake shape. align="center" works for Hebrew, English, mixed. */}
+            Width is 85% of crop so x can shift left/center/right per AI choice
+            and the user can drag freely. align="center" works for Hebrew,
+            English, mixed; multi-line text wraps inside the wrapping box. */}
         {cropBox && state.textLayers.map(layer => {
           const font = FONTS[layer.fontKey]
           const style = STYLES[layer.styleKey]
           const fontSize = TEXT_SIZE_PX[layer.sizeKey]
           const strokeWidth = style.strokeWidthRatio ? fontSize * style.strokeWidthRatio : 0
+          const textBoxWidth = cropBox.w * 0.85
           return (
             <Text
               key={layer.id}
@@ -230,7 +232,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, Props>(function EditorCanvas
               fontSize={fontSize}
               x={layer.x}
               y={layer.y}
-              width={cropBox.w}
+              width={textBoxWidth}
               fill={style.fill}
               stroke={style.stroke}
               strokeWidth={strokeWidth}
