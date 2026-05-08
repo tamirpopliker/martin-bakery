@@ -106,6 +106,13 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
       return ['employee-home', 'employee-schedule', 'employee-constraints', 'employee-tasks'].includes(pageKey)
     }
 
+    // ─── HR pages: admin + non-restricted branch + factory ───
+    if (pageKey === 'hr_dashboard' || pageKey === 'changes_report') {
+      if (user.role === 'branch') return true // restricted already filtered above
+      if (user.role === 'factory') return true
+      return false
+    }
+
     // ─── Admin-only pages ───
     if (pageKey === 'user_management' || pageKey === 'data_import' ||
         pageKey === 'ceo_dashboard' || pageKey === 'reports_alerts' ||

@@ -42,12 +42,14 @@ import EmployerCostsUpload from './EmployerCostsUpload'
 import FactorySpecialOrders from './FactorySpecialOrders'
 import SuppliersReport from './SuppliersReport'
 import ManagementReports from './ManagementReports'
+import HRDashboard from './HRDashboard'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
   AlertTriangle, ClipboardList, Truck, UserCog, Activity,
   Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
   LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft, ShoppingCart, Wrench, Building2, CreditCard, Briefcase, Cake,
+  IdCard,
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
@@ -69,6 +71,7 @@ const PANEL_FACTORY = [
 ]
 
 const PANEL_MANAGE = [
+  { label: 'מחלקת HR', subtitle: 'עובדים · מסמכים · קליטה · יומן שינויים', Icon: IdCard, color: '#0d9488', page: 'hr_dashboard' },
   { label: 'לקוחות הקפה (B2B)', subtitle: 'חשבוניות · תשלומים · מעקב חובות', Icon: CreditCard, color: '#dc2626', page: 'b2b_customers' },
   { label: 'דשבורד מנכ"ל', subtitle: 'מבט רשתי · כל הסניפים', Icon: TrophyIcon,   color: '#f59e0b', page: 'ceo_dashboard' },
   { label: 'דוחות ניהול', subtitle: 'בקרת הכנסות · לייבור · קופות · שלמות נתונים', Icon: ClipboardList, color: '#6366f1', page: 'management_reports' },
@@ -116,7 +119,7 @@ export default function Home() {
   // Determine which sections to show based on role
   const showFactory = filteredPanelFactory.length > 0
   const showBranches = appUser?.role === 'admin' || (appUser?.role === 'branch' && filteredBranches.length > 0)
-  const showManage = appUser?.role === 'admin' && managePanelItems.length > 0
+  const showManage = managePanelItems.length > 0
 
   // Modified internal sales badge (internal_sales only)
   const [modifiedCount, setModifiedCount] = useState(0)
@@ -400,6 +403,7 @@ export default function Home() {
     if (page === 'system_settings')      return <UserManagement onBack={() => setPage(null)} initialTab="settings" />
     if (page === 'reports_alerts')       return <ReportsAlerts onBack={() => setPage(null)} />
 
+    if (page === 'hr_dashboard') return <HRDashboard onBack={() => setPage(null)} />
     if (page === 'b2b_customers') return <B2BCustomers onBack={() => setPage(null)} />
     if (page === 'suppliers_report') return <SuppliersReport onBack={() => setPage(null)} />
     if (page === 'management_reports') return <ManagementReports onBack={() => setPage(null)} />
