@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { safeDbOperation } from '../../lib/dbHelpers'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Building2, Factory } from 'lucide-react'
 import { Field } from './Field'
 import { tableSourceFor } from './utils'
 import type { UnifiedEmployee } from './types'
@@ -21,9 +21,6 @@ interface ProfileFormData {
   bank_name: string
   bank_branch: string
   bank_account_number: string
-  notes: string
-  emergency_contact_name: string
-  emergency_contact_phone: string
 }
 
 const EMPTY_FORM: ProfileFormData = {
@@ -31,7 +28,13 @@ const EMPTY_FORM: ProfileFormData = {
   monthly_salary: '', hourly_rate: '', retention_bonus: '',
   id_number: '', birth_date: '', address: '',
   bank_name: '', bank_branch: '', bank_account_number: '',
-  notes: '', emergency_contact_name: '', emergency_contact_phone: '',
+}
+
+const DEPARTMENT_LABELS: Record<string, string> = {
+  creams:    'קרמים',
+  dough:     'בצקים',
+  packaging: 'אריזה',
+  cleaning:  'ניקיון',
 }
 
 export function ProfileTab({ employee }: { employee: UnifiedEmployee }) {
@@ -58,9 +61,6 @@ export function ProfileTab({ employee }: { employee: UnifiedEmployee }) {
           bank_name: data.bank_name ?? '',
           bank_branch: data.bank_branch ?? '',
           bank_account_number: data.bank_account_number ?? '',
-          notes: data.notes ?? '',
-          emergency_contact_name: data.emergency_contact_name ?? '',
-          emergency_contact_phone: data.emergency_contact_phone ?? '',
         })
       }
     }
@@ -83,9 +83,6 @@ export function ProfileTab({ employee }: { employee: UnifiedEmployee }) {
       bank_name: form.bank_name || null,
       bank_branch: form.bank_branch || null,
       bank_account_number: form.bank_account_number || null,
-      notes: form.notes || null,
-      emergency_contact_name: form.emergency_contact_name || null,
-      emergency_contact_phone: form.emergency_contact_phone || null,
     }
     const res = await safeDbOperation(
       () => supabase.from(tableSourceFor(employee.kind)).update(payload).eq('id', employee.id),
@@ -138,21 +135,49 @@ export function ProfileTab({ employee }: { employee: UnifiedEmployee }) {
         </Button>
       </div>
 
+      <Card className="mb-4 border-indigo-100 bg-gradient-to-l from-indigo-50/40 to-white">
+        <CardContent className="p-6">
+          <h3 className="text-sm font-bold text-slate-700 mb-4 m-0">שיוך ותפקיד</h3>
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <ReadOnlyField
+              label="סוג עובד"
+              icon={employee.kind === 'branch'
+                ? <Building2 className="size-4 text-indigo-500" />
+                : <Factory className="size-4 text-purple-500" />}
+              value={employee.kind === 'branch' ? 'סניף' : 'מפעל'}
+            />
+            <ReadOnlyField
+              label={employee.kind === 'branch' ? 'סניף' : 'מחלקה'}
+              value={
+                employee.kind === 'branch'
+                  ? (employee.location_name || '—')
+                  : (DEPARTMENT_LABELS[employee.department || ''] || employee.department || '—')
+              }
+            />
+            <ReadOnlyField
+              label="סטטוס"
+              value={employee.active ? 'פעיל' : 'לא פעיל'}
+              valueClassName={employee.active ? 'text-green-700' : 'text-slate-500'}
+            />
+          </div>
+          <Field label="תפקיד" value={form.position} onChange={v => update('position', v)} placeholder="אופה / קופאי / מנהל..." />
+        </CardContent>
+      </Card>
+
       <Card className="mb-4">
         <CardContent className="p-6">
           <h3 className="text-sm font-bold text-slate-700 mb-4 m-0">פרטים אישיים ותעסוקה</h3>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="תפקיד" value={form.position} onChange={v => update('position', v)} />
             <Field label="ת.ז" value={form.id_number} onChange={v => update('id_number', v)} />
+            <Field label="ת. לידה" type="date" value={form.birth_date} onChange={v => update('birth_date', v)} />
             <Field label="ת. תחילת עבודה" type="date" value={form.start_date} onChange={v => update('start_date', v)} />
             <Field label="ת. סיום עבודה" type="date" value={form.end_date} onChange={v => update('end_date', v)} />
-            <Field label="ת. לידה" type="date" value={form.birth_date} onChange={v => update('birth_date', v)} />
             <Field label="כתובת" value={form.address} onChange={v => update('address', v)} />
           </div>
         </CardContent>
       </Card>
 
-      <Card className="mb-4">
+      <Card>
         <CardContent className="p-6">
           <h3 className="text-sm font-bold text-slate-700 mb-4 m-0">שכר ובנק</h3>
           <div className="grid grid-cols-2 gap-4">
@@ -166,25 +191,22 @@ export function ProfileTab({ employee }: { employee: UnifiedEmployee }) {
           </div>
         </CardContent>
       </Card>
-
-      <Card>
-        <CardContent className="p-6">
-          <h3 className="text-sm font-bold text-slate-700 mb-4 m-0">איש קשר לחירום + הערות</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="שם" value={form.emergency_contact_name} onChange={v => update('emergency_contact_name', v)} />
-            <Field label="טלפון" value={form.emergency_contact_phone} onChange={v => update('emergency_contact_phone', v)} />
-          </div>
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-slate-600 mb-1">הערות</label>
-            <textarea
-              value={form.notes}
-              onChange={e => update('notes', e.target.value)}
-              rows={3}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-        </CardContent>
-      </Card>
     </>
+  )
+}
+
+function ReadOnlyField({
+  label, value, icon, valueClassName,
+}: {
+  label: string; value: string; icon?: React.ReactNode; valueClassName?: string
+}) {
+  return (
+    <div>
+      <div className="text-xs font-medium text-slate-500 mb-1">{label}</div>
+      <div className={`flex items-center gap-2 text-sm font-semibold text-slate-900 ${valueClassName || ''}`}>
+        {icon}
+        {value}
+      </div>
+    </div>
   )
 }
