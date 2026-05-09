@@ -283,16 +283,20 @@ export default function Home() {
       const cons = await calculateConsolidatedPL(branchIds, from, to, overheadPct, monthKey)
       // Total revenue = branches' external POS/B2B + factory's external (excluding intercompany)
       setTotalBranchRevenue(totalBranchRev + cons.factory.externalRevenue)
-      // Labor (consolidated) = factory labor + branch labor + branch managers + HQ allocation
+      // Labor (consolidated) = factory labor + factory managers + branch labor +
+      // branch managers + HQ allocation (HQ is the global-salary of headquarters staff,
+      // counted as labor per the owner's request).
       const branchManagers = cons.branches.reduce((s, b) => s + b.managerSalary, 0)
-      setBranchLaborCost(cons.consolidated.labor + branchManagers + cons.consolidated.overhead)
+      setBranchLaborCost(
+        cons.consolidated.labor + cons.factory.managerSalary + branchManagers + cons.consolidated.overhead
+      )
       setBranchWaste(cons.consolidated.waste)
-      // Operating profit (consolidated) — matches CEODashboard's "סה"כ" cell:
-      // factory's external-only OP, plus each branch's OP with waste and factoryPurchases
-      // added back (since they aren't shown as cost rows in the consolidated table).
+      // Operating profit (consolidated) — true OP after waste deduction.
+      // Branch factoryPurchases are added back because the factory side already netted
+      // out the matching internalRevenue (intercompany elimination).
       const factoryConsOp = cons.factory.operatingProfit - cons.factory.internalRevenue
       const totalConsOp = factoryConsOp + cons.branches.reduce(
-        (s, b) => s + b.operatingProfit + b.waste + b.factoryPurchases, 0)
+        (s, b) => s + b.operatingProfit + b.factoryPurchases, 0)
       setBranchOperatingProfit(totalConsOp)
       setFactoryOp(factoryConsOp)
       setFactoryWasteState(cons.factory.waste)
@@ -338,11 +342,13 @@ export default function Home() {
       const prevCons = await calculateConsolidatedPL(branchIds, pFrom, pTo, overheadPct, pMonthKey)
       setPrevBranchRevenue(pTotalBranchRev + prevCons.factory.externalRevenue)
       const prevBranchManagers = prevCons.branches.reduce((s, b) => s + b.managerSalary, 0)
-      setPrevBranchLaborCost(prevCons.consolidated.labor + prevBranchManagers + prevCons.consolidated.overhead)
+      setPrevBranchLaborCost(
+        prevCons.consolidated.labor + prevCons.factory.managerSalary + prevBranchManagers + prevCons.consolidated.overhead
+      )
       setPrevBranchWaste(prevCons.consolidated.waste)
       const prevFactoryConsOp = prevCons.factory.operatingProfit - prevCons.factory.internalRevenue
       const prevTotalConsOp = prevFactoryConsOp + prevCons.branches.reduce(
-        (s, b) => s + b.operatingProfit + b.waste + b.factoryPurchases, 0)
+        (s, b) => s + b.operatingProfit + b.factoryPurchases, 0)
       setPrevBranchOperatingProfit(prevTotalConsOp)
     }
     loadKpi()
@@ -563,12 +569,11 @@ export default function Home() {
                       <div className="text-[11px] text-slate-400 font-semibold mb-0.5">רווח תפעולי</div>
                       <div className="flex items-baseline gap-1.5">
                         <span className={`text-lg font-extrabold ${branchOperatingProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{fmtK(branchOperatingProfit)}</span>
-                        {totalBranchRevenue > 0 && (
-                          <span className="text-xs font-bold mt-1" style={{ color: '#94a3b8' }}>
-                            {((branchOperatingProfit / totalBranchRevenue) * 100).toFixed(1)}%
-                          </span>
-                        )}
+                        <DiffBadge curr={branchOperatingProfit} prev={prevBranchOperatingProfit} />
                       </div>
+                      {totalBranchRevenue > 0 && (
+                        <div className="text-[10px] text-slate-400 mt-0.5">{((branchOperatingProfit / totalBranchRevenue) * 100).toFixed(1)}% מהכנסות</div>
+                      )}
                     </div>
                   </button>
 
@@ -581,10 +586,11 @@ export default function Home() {
                       <div className="text-[11px] text-slate-400 font-semibold mb-0.5">לייבור</div>
                       <div className="flex items-baseline gap-1.5">
                         <span className="text-lg font-extrabold text-slate-900">{fmtK(branchLaborCost)}</span>
-                        {totalBranchRevenue > 0 && (
-                          <span className="text-xs font-bold" style={{ color: '#94a3b8' }}>{branchLaborPct.toFixed(1)}%</span>
-                        )}
+                        <DiffBadge curr={branchLaborCost} prev={prevBranchLaborCost} inverse />
                       </div>
+                      {totalBranchRevenue > 0 && (
+                        <div className="text-[10px] text-slate-400 mt-0.5">{branchLaborPct.toFixed(1)}% מהכנסות</div>
+                      )}
                     </div>
                   </button>
 
@@ -597,10 +603,11 @@ export default function Home() {
                       <div className="text-[11px] text-slate-400 font-semibold mb-0.5">פחת</div>
                       <div className="flex items-baseline gap-1.5">
                         <span className="text-lg font-extrabold text-slate-900">{fmtK(branchWaste)}</span>
-                        {totalBranchRevenue > 0 && (
-                          <span className="text-xs font-bold" style={{ color: '#94a3b8' }}>{branchWastePct.toFixed(1)}%</span>
-                        )}
+                        <DiffBadge curr={branchWaste} prev={prevBranchWaste} inverse />
                       </div>
+                      {totalBranchRevenue > 0 && (
+                        <div className="text-[10px] text-slate-400 mt-0.5">{branchWastePct.toFixed(1)}% מהכנסות</div>
+                      )}
                     </div>
                   </button>
                 </>
