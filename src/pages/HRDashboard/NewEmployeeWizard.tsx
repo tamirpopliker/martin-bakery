@@ -12,6 +12,12 @@ import type { DocumentType, Branch, Kind } from './types'
 interface Props {
   onClose: () => void
   onCreated: () => void
+  initialKind?: Kind
+  initialBranchId?: number
+  initialDepartment?: string
+  initialName?: string
+  lockKind?: boolean
+  lockBranch?: boolean
 }
 
 const FACTORY_DEPARTMENTS = [
@@ -21,14 +27,18 @@ const FACTORY_DEPARTMENTS = [
   { value: 'cleaning',   label: 'ניקיון' },
 ]
 
-export function NewEmployeeWizard({ onClose, onCreated }: Props) {
+export function NewEmployeeWizard({
+  onClose, onCreated,
+  initialKind, initialBranchId, initialDepartment, initialName,
+  lockKind = false, lockBranch = false,
+}: Props) {
   const { appUser } = useAppUser()
-  const [kind, setKind] = useState<Kind>('branch')
+  const [kind, setKind] = useState<Kind>(initialKind ?? 'branch')
   const [branches, setBranches] = useState<Branch[]>([])
   const [docTypes, setDocTypes] = useState<DocumentType[]>([])
-  const [name, setName] = useState('')
-  const [branchId, setBranchId] = useState<number | null>(null)
-  const [department, setDepartment] = useState<string>('')
+  const [name, setName] = useState(initialName ?? '')
+  const [branchId, setBranchId] = useState<number | null>(initialBranchId ?? null)
+  const [department, setDepartment] = useState<string>(initialDepartment ?? '')
   const [position, setPosition] = useState('')
   const [hourlyRate, setHourlyRate] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -47,12 +57,14 @@ export function NewEmployeeWizard({ onClose, onCreated }: Props) {
       ])
       const brList = (brRes.data as Branch[]) || []
       setBranches(brList)
-      // Pre-fill branch if user is a branch manager
-      if (appUser?.role === 'branch' && appUser.branch_id) {
-        setBranchId(appUser.branch_id)
-        setKind('branch')
-      } else if (brList.length > 0) {
-        setBranchId(brList[0].id)
+      // Pre-fill branch: explicit prop wins, then branch-manager auto, then first
+      if (initialBranchId == null) {
+        if (appUser?.role === 'branch' && appUser.branch_id) {
+          setBranchId(appUser.branch_id)
+          if (initialKind == null) setKind('branch')
+        } else if (brList.length > 0) {
+          setBranchId(brList[0].id)
+        }
       }
       const requiredTypes = types.filter(t => t.key === 'kit_klita' || t.key === 'form_101')
       setDocTypes(requiredTypes.length > 0 ? requiredTypes : types)
@@ -60,19 +72,19 @@ export function NewEmployeeWizard({ onClose, onCreated }: Props) {
       else if (types.length > 0) setDocTypeId(types[0].id)
     }
     init()
-  }, [appUser])
+  }, [appUser, initialBranchId, initialKind])
 
+  // File is optional; if missing, employee is created with a yellow warning
+  // in HR Dashboard until the document is uploaded from the Documents tab.
   const isValid =
     name.trim().length > 0 &&
     Number(hourlyRate) > 0 &&
     !!startDate &&
     bankAccount.trim().length > 0 &&
-    file !== null &&
-    docTypeId !== null &&
     (kind === 'branch' ? branchId !== null : department !== '')
 
   async function submit() {
-    if (!isValid || !file || !docTypeId) return
+    if (!isValid) return
     setSaving(true)
     setError(null)
 
@@ -108,36 +120,39 @@ export function NewEmployeeWizard({ onClose, onCreated }: Props) {
     const empBranchId = (newEmp.branch_id ?? branchId) as number | null
     const empDepartment = newEmp.department ?? department ?? null
 
-    // Step 2: upload file
-    const docType = docTypes.find(t => t.id === docTypeId)!
-    const path = buildDocumentPath(kind, empId, empBranchId, empDepartment, docType.key, file.name)
-    const up = await supabase.storage.from('hr-documents').upload(path, file, {
-      contentType: file.type || 'application/octet-stream',
-      upsert: false,
-    })
-    if (up.error) {
-      // Employee was created, but upload failed. Notify but don't roll back.
-      setSaving(false)
-      setError(`העובד נוצר, אבל העלאת הקובץ נכשלה: ${up.error.message}. אפשר להעלות שוב מהטאב 'מסמכים'.`)
-      onCreated() // refresh list so user sees the employee
-      return
+    // Step 2: upload file (optional)
+    let fileUploaded = false
+    if (file && docTypeId) {
+      const docType = docTypes.find(t => t.id === docTypeId)!
+      const path = buildDocumentPath(kind, empId, empBranchId, empDepartment, docType.key, file.name)
+      const up = await supabase.storage.from('hr-documents').upload(path, file, {
+        contentType: file.type || 'application/octet-stream',
+        upsert: false,
+      })
+      if (up.error) {
+        setSaving(false)
+        setError(`העובד נוצר, אבל העלאת הקובץ נכשלה: ${up.error.message}. אפשר להעלות שוב מהטאב 'מסמכים'.`)
+        onCreated()
+        return
+      }
+      await safeDbOperation(
+        () => supabase.from('employee_documents').insert({
+          employee_kind: kind,
+          employee_id: empId,
+          document_type_id: docType.id,
+          document_type_label: docType.label_he,
+          file_name: file.name,
+          file_url: path,
+          file_size: file.size,
+        }),
+        'שמירת מסמך'
+      )
+      fileUploaded = true
     }
 
-    // Step 3: insert document record
-    await safeDbOperation(
-      () => supabase.from('employee_documents').insert({
-        employee_kind: kind,
-        employee_id: empId,
-        document_type_id: docType.id,
-        document_type_label: docType.label_he,
-        file_name: file.name,
-        file_url: path,
-        file_size: file.size,
-      }),
-      'שמירת מסמך'
-    )
-
-    // Step 4: auto-mark onboarding tasks (kit_klita/form_101 received + bank registered)
+    // Step 3: auto-mark onboarding tasks
+    // - Bank task: always (we got bank_account_number)
+    // - kit_klita/form_101 task: only if file was uploaded
     const { data: templates } = await supabase
       .from('onboarding_task_templates')
       .select('*')
@@ -149,8 +164,7 @@ export function NewEmployeeWizard({ onClose, onCreated }: Props) {
       for (const tpl of templates) {
         const lbl = (tpl as { label_he: string }).label_he
         const tplId = (tpl as { id: number }).id
-        // Match by Hebrew label - the seed labels are stable
-        if (lbl.includes('101') || lbl.includes('קיט')) {
+        if (fileUploaded && (lbl.includes('101') || lbl.includes('קיט'))) {
           onboardingRows.push({
             employee_kind: kind, employee_id: empId,
             task_template_id: tplId, task_label: lbl,
@@ -209,7 +223,8 @@ export function NewEmployeeWizard({ onClose, onCreated }: Props) {
                   <select
                     value={kind}
                     onChange={e => setKind(e.target.value as Kind)}
-                    className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+                    disabled={lockKind}
+                    className="w-full border rounded-lg px-3 py-2 text-sm bg-white disabled:bg-slate-100 disabled:text-slate-500"
                   >
                     <option value="branch">סניף</option>
                     <option value="factory">מפעל</option>
@@ -222,7 +237,8 @@ export function NewEmployeeWizard({ onClose, onCreated }: Props) {
                     <select
                       value={branchId ?? ''}
                       onChange={e => setBranchId(Number(e.target.value))}
-                      className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+                      disabled={lockBranch}
+                      className="w-full border rounded-lg px-3 py-2 text-sm bg-white disabled:bg-slate-100 disabled:text-slate-500"
                     >
                       <option value="">בחר סניף...</option>
                       {branches.map(b => (
@@ -282,7 +298,7 @@ export function NewEmployeeWizard({ onClose, onCreated }: Props) {
 
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1">
-                  קובץ קיט קליטה / טופס 101 <span className="text-red-500">*</span>
+                  קובץ קיט קליטה / טופס 101 <span className="text-slate-400 font-normal">(מומלץ — אפשר להעלות אחר כך מטאב מסמכים)</span>
                 </label>
                 <div className="flex gap-2 items-center">
                   <select

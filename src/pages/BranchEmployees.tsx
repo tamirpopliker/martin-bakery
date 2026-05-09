@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { ArrowRight, Plus, Pencil, Users, Save, ToggleLeft, ToggleRight, Send, Mail, Upload } from 'lucide-react'
+import { NewEmployeeWizard } from './HRDashboard/NewEmployeeWizard'
 
 interface Props {
   branchId: number
@@ -36,6 +37,7 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     id: undefined as number | undefined,
@@ -103,7 +105,7 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   useEffect(() => { fetchEmployees() }, [branchId])
 
   async function handleSave() {
-    if (!form.name.trim() || !form.hourly_rate) return
+    if (!form.id || !form.name.trim() || !form.hourly_rate) return
     setSaving(true)
     const payload: Record<string, any> = {
       branch_id: branchId,
@@ -113,12 +115,9 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
       hourly_rate: parseFloat(form.hourly_rate) || null,
       active: form.active,
     }
-    // Only include retention_bonus if the column exists (avoid 400 if PostgREST cache is stale)
     const bonusVal = parseFloat(form.retention_bonus) || 0
     if (bonusVal > 0) payload.retention_bonus = bonusVal
-    const { error } = form.id
-      ? await supabase.from('branch_employees').update(payload).eq('id', form.id)
-      : await supabase.from('branch_employees').insert(payload)
+    const { error } = await supabase.from('branch_employees').update(payload).eq('id', form.id)
     if (error) {
       console.error('[BranchEmployees handleSave] error:', error)
       alert(`שמירת פרטי העובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
@@ -227,8 +226,7 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   }
 
   function openNew() {
-    setForm({ id: undefined, name: '', email: '', phone: '', hourly_rate: '', retention_bonus: '', active: true })
-    setSheetOpen(true)
+    setWizardOpen(true)
   }
 
   function openEdit(emp: Employee) {
@@ -333,7 +331,7 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
           <SheetBackdrop />
           <SheetContent>
             <SheetHeader>
-              <SheetTitle>{form.id ? 'עריכת עובד' : 'עובד חדש'}</SheetTitle>
+              <SheetTitle>עריכת עובד</SheetTitle>
             </SheetHeader>
             <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
@@ -482,6 +480,18 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
             )}
           </div>
         </div>
+      )}
+
+      {/* New Employee Wizard (HR-complete creation) */}
+      {wizardOpen && (
+        <NewEmployeeWizard
+          initialKind="branch"
+          initialBranchId={branchId}
+          lockKind
+          lockBranch
+          onClose={() => setWizardOpen(false)}
+          onCreated={() => { setWizardOpen(false); fetchEmployees() }}
+        />
       )}
 
       {/* Bulk Invite Modal */}

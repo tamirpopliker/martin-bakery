@@ -5,6 +5,7 @@ import { parseTimeWatchPDF, type TimeWatchRow } from '../lib/parseTimeWatch'
 import { Plus, Pencil, Trash2, Upload, AlertTriangle, X, Check, Save, Calendar, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { useAppUser } from '../lib/UserContext'
+import { NewEmployeeWizard } from './HRDashboard/NewEmployeeWizard'
 
 interface Props { onBack: () => void }
 
@@ -46,16 +47,6 @@ interface ParsedRow {
   editing: boolean
 }
 
-interface AddForm {
-  name: string
-  employee_number: string
-  department: string
-  wage_type: 'hourly' | 'global'
-  hourly_rate: string
-  global_daily_rate: string
-  bonus: string
-}
-
 const deptOptions = [
   { value: 'creams', label: 'קרמים' },
   { value: 'dough', label: 'בצקים' },
@@ -76,8 +67,6 @@ function calcWage(emp: Employee, h100: number, h125: number, h150: number, worki
   const employerCost = (h100 * emp.hourly_rate * EMPLOYER_FACTOR) + (h125 * emp.hourly_rate * 1.25) + (h150 * emp.hourly_rate * 1.5) + ((emp.bonus || 0) * totalHours)
   return { gross, employerCost, total: employerCost }
 }
-
-const emptyForm: AddForm = { name: '', employee_number: '', department: 'creams', wage_type: 'hourly', hourly_rate: '', global_daily_rate: '', bonus: '' }
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
@@ -114,8 +103,8 @@ export default function Labor({ onBack }: Props) {
   const [replaceMode, setReplaceMode] = useState(false)
   const [duplicateDates, setDuplicateDates] = useState<string[]>([])
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
-  const [showAddEmp, setShowAddEmp] = useState(false)
-  const [addForm, setAddForm] = useState<AddForm>(emptyForm)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardName, setWizardName] = useState<string>('')
   const [editEmpId, setEditEmpId] = useState<number | null>(null)
   const [editEmpData, setEditEmpData] = useState<Partial<Employee>>({})
   const fileRef = useRef<HTMLInputElement>(null)
@@ -366,27 +355,6 @@ export default function Labor({ onBack }: Props) {
 
   const [savedInfo, setSavedInfo] = useState<{ count: number; dateCount: number } | null>(null)
 
-  async function handleAddEmployee() {
-    if (!addForm.name) return
-    const { error } = await supabase.from('employees').insert({
-      name: addForm.name,
-      employee_number: addForm.employee_number,
-      department: addForm.department,
-      wage_type: addForm.wage_type,
-      hourly_rate: parseFloat(addForm.hourly_rate) || 0,
-      global_daily_rate: parseFloat(addForm.global_daily_rate) || 0,
-      bonus: parseFloat(addForm.bonus) || 0,
-    })
-    if (error) {
-      console.error('[Labor handleAddEmployee] error:', error)
-      alert(`הוספת עובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
-      return
-    }
-    await fetchEmployees()
-    setShowAddEmp(false)
-    setAddForm(emptyForm)
-  }
-
   async function handleDeleteEmployee(id: number) {
     const { error } = await supabase.from('employees').update({ active: false }).eq('id', id)
     if (error) {
@@ -411,8 +379,6 @@ export default function Labor({ onBack }: Props) {
   const knownRows = rows.filter(r => r.found && r.employee)
   const unknownRows = rows.filter(r => !r.found)
   const totalCost = knownRows.reduce((s, r) => s + calcWage(r.employee!, r.hours_100, r.hours_125, r.hours_150, workingDays).total, 0)
-
-  const inpStyle: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 10, padding: '9px 12px', fontSize: 14, outline: 'none', fontFamily: 'inherit', textAlign: 'right' as const, width: '100%', boxSizing: 'border-box' as const }
 
   const tabBtn = (key: typeof tab, label: string) => (
     <button onClick={() => setTab(key)} style={{ padding: '13px 22px', background: 'none', border: 'none', borderBottom: tab === key ? '2px solid #6366f1' : '2px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: tab === key ? 700 : 500, color: tab === key ? '#6366f1' : '#64748b', transition: 'all 0.15s' }}>
@@ -509,7 +475,7 @@ export default function Labor({ onBack }: Props) {
                   <div key={row.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', borderRadius: 10, padding: '10px 14px', marginBottom: 6 }}>
                     <span style={{ fontWeight: 600, color: '#374151', fontSize: 13 }}>{row.name}</span>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => { setShowAddEmp(true); setAddForm(f => ({ ...f, name: row.name })) }}
+                      <button onClick={() => { setWizardName(row.name); setWizardOpen(true) }}
                         style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '5px 14px', fontWeight: 600, cursor: 'pointer', fontSize: 12 }}>
                         הקם עובד
                       </button>
@@ -774,7 +740,7 @@ export default function Labor({ onBack }: Props) {
         {tab === 'employees' && (
           <>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-              <button onClick={() => setShowAddEmp(true)} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 10, padding: '9px 20px', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button onClick={() => { setWizardName(''); setWizardOpen(true) }} style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 10, padding: '9px 20px', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Plus size={15} />הוסף עובד
               </button>
             </div>
@@ -843,70 +809,14 @@ export default function Labor({ onBack }: Props) {
         )}
       </div>
 
-      {/* Add employee modal */}
-      {showAddEmp && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'white', borderRadius: 16, padding: 28, width: 460, maxWidth: '90vw', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>הוספת עובד חדש</h2>
-              <button onClick={() => { setShowAddEmp(false); setAddForm(emptyForm) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                <X size={18} color="#64748b" />
-              </button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>שם עובד</label>
-                <input value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} style={inpStyle} placeholder="שם מלא..." />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>מספר עובד</label>
-                <input value={addForm.employee_number} onChange={e => setAddForm(f => ({ ...f, employee_number: e.target.value }))} style={inpStyle} placeholder="אופציונלי" />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>מחלקה</label>
-                <select value={addForm.department} onChange={e => setAddForm(f => ({ ...f, department: e.target.value }))} style={{ ...inpStyle, background: 'white' }}>
-                  {deptOptions.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-                </select>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>סוג שכר</label>
-                <select value={addForm.wage_type} onChange={e => setAddForm(f => ({ ...f, wage_type: e.target.value as any }))} style={{ ...inpStyle, background: 'white' }}>
-                  <option value="hourly">שעתי</option>
-                  <option value="global">גלובאלי</option>
-                </select>
-              </div>
-              {addForm.wage_type === 'hourly' ? (
-                <>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>תעריף שעתי (₪)</label>
-                    <input type="number" value={addForm.hourly_rate} onChange={e => setAddForm(f => ({ ...f, hourly_rate: e.target.value }))} style={inpStyle} placeholder="0" />
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>בונוס שעתי (₪/ש׳) <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופציונלי)</span></label>
-                    <input type="number" value={addForm.bonus} onChange={e => setAddForm(f => ({ ...f, bonus: e.target.value }))} style={inpStyle} placeholder="0" />
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>סכום נוסף לשעה — לא מוכפל ב-x1.3</span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>משכורת חודשית (₪)</label>
-                    <input type="number" value={addForm.global_daily_rate} onChange={e => setAddForm(f => ({ ...f, global_daily_rate: e.target.value }))} style={inpStyle} placeholder="0" />
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>בונוס חודשי (₪) <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופציונלי)</span></label>
-                    <input type="number" value={addForm.bonus} onChange={e => setAddForm(f => ({ ...f, bonus: e.target.value }))} style={inpStyle} placeholder="0" />
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>חישוב: (משכורת x 1.3) + בונוס</span>
-                  </div>
-                </>
-              )}
-              <button onClick={handleAddEmployee} disabled={!addForm.name}
-                style={{ background: !addForm.name ? '#e2e8f0' : '#6366f1', color: !addForm.name ? '#94a3b8' : 'white', border: 'none', borderRadius: 10, padding: 12, fontSize: 15, fontWeight: 700, cursor: addForm.name ? 'pointer' : 'not-allowed', marginTop: 8 }}>
-                הוסף עובד
-              </button>
-            </div>
-          </div>
-        </div>
+      {wizardOpen && (
+        <NewEmployeeWizard
+          initialKind="factory"
+          initialName={wizardName}
+          lockKind
+          onClose={() => { setWizardOpen(false); setWizardName('') }}
+          onCreated={() => { setWizardOpen(false); setWizardName(''); fetchEmployees() }}
+        />
       )}
     </div>
   )

@@ -5,6 +5,7 @@ import { useAppUser } from '../lib/UserContext'
 import { ArrowRight, Save, Plus, Pencil, Trash2 } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import DataImport from './DataImport'
+import { NewEmployeeWizard } from './HRDashboard/NewEmployeeWizard'
 
 // ─── types ────────────────────────────────────────────────────────────────
 interface Props {
@@ -75,10 +76,9 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
 
   // ── employees ──
   const [employees, setEmployees] = useState<BranchEmployee[]>([])
-  const [newEmpName, setNewEmpName] = useState('')
   const [editEmpId, setEditEmpId] = useState<number | null>(null)
   const [editEmpData, setEditEmpData] = useState<Partial<BranchEmployee>>({})
-  const [loadingEmp, setLoadingEmp] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
 
   const entityType = `branch_${branchId}`
 
@@ -209,23 +209,6 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
   }
 
   // ─── employees CRUD ──────────────────────────────────────────────────────
-  async function addEmployee() {
-    const name = newEmpName.trim()
-    if (!name) return
-    setErrorMsg('')
-    setLoadingEmp(true)
-    const { error } = await supabase.from('branch_employees').insert({ branch_id: branchId, name, active: true })
-    if (error) {
-      console.error('[BranchSettings addEmployee] error:', error)
-      setErrorMsg(`הוספת עובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
-      setLoadingEmp(false)
-      return
-    }
-    setNewEmpName('')
-    await fetchEmployees()
-    setLoadingEmp(false)
-  }
-
   async function saveEmployee(id: number) {
     setErrorMsg('')
     const { error } = await supabase.from('branch_employees').update(editEmpData).eq('id', id)
@@ -507,12 +490,8 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
 
             {/* Add employee */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-              <input type="text" placeholder="שם עובד חדש..." value={newEmpName}
-                onChange={e => setNewEmpName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addEmployee()}
-                style={{ ...S.input, flex: 1 }} />
-              <button onClick={addEmployee} disabled={loadingEmp || !newEmpName.trim()}
-                style={{ background: loadingEmp || !newEmpName.trim() ? '#e2e8f0' : '#6366f1', color: loadingEmp || !newEmpName.trim() ? '#94a3b8' : 'white', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' as const }}>
+              <button onClick={() => setWizardOpen(true)}
+                style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' as const }}>
                 <Plus size={16} />הוסף עובד
               </button>
             </div>
@@ -597,6 +576,17 @@ export default function BranchSettings({ branchId, branchName, branchColor, onBa
         )}
 
       </div>
+
+      {wizardOpen && (
+        <NewEmployeeWizard
+          initialKind="branch"
+          initialBranchId={branchId}
+          lockKind
+          lockBranch
+          onClose={() => setWizardOpen(false)}
+          onCreated={() => { setWizardOpen(false); fetchEmployees() }}
+        />
+      )}
     </div>
   )
 }

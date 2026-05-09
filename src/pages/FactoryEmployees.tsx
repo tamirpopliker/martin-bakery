@@ -5,6 +5,7 @@ import { useAppUser } from '../lib/UserContext'
 import { Plus, Pencil, Users } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import PageHeader from '../components/PageHeader'
+import { NewEmployeeWizard } from './HRDashboard/NewEmployeeWizard'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Props { onBack: () => void }
@@ -45,12 +46,6 @@ const fadeIn = {
 
 function fmtM(n: number) { return '₪' + Math.round(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 
-// ─── סגנונות ─────────────────────────────────────────────────────────────────
-const S = {
-  label: { fontSize: '13px', fontWeight: '600' as const, color: '#64748b', marginBottom: '6px', display: 'block' },
-  input: { border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const },
-}
-
 // ─── קומפוננטה ראשית ─────────────────────────────────────────────────────────
 export default function FactoryEmployees({ onBack }: Props) {
   const { appUser } = useAppUser()
@@ -72,9 +67,7 @@ export default function FactoryEmployees({ onBack }: Props) {
   const [loading, setLoading]       = useState(true)
   const [editEmpId, setEditEmpId]   = useState<number | null>(null)
   const [editEmpData, setEditEmpData] = useState<Partial<Employee>>({})
-  const [showAddEmp, setShowAddEmp] = useState(false)
-  const [newEmp, setNewEmp]         = useState<Partial<Employee>>({ wage_type: 'hourly', department: allowedDepts[0] })
-  const [loadingEmp, setLoadingEmp] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
 
   // ─── שליפות ──────────────────────────────────────────────────────────────
   async function fetchEmployees() {
@@ -87,30 +80,6 @@ export default function FactoryEmployees({ onBack }: Props) {
   useEffect(() => { fetchEmployees() }, [])
 
   // ─── CRUD ────────────────────────────────────────────────────────────────
-  async function addEmployee() {
-    if (!newEmp.name || !newEmp.department || !newEmp.wage_type) return
-    setLoadingEmp(true)
-    const { error } = await supabase.from('employees').insert({
-      name: newEmp.name,
-      employee_number: newEmp.employee_number || null,
-      department: newEmp.department,
-      wage_type: newEmp.wage_type,
-      hourly_rate: newEmp.wage_type === 'hourly' ? (newEmp.hourly_rate || null) : null,
-      global_daily_rate: newEmp.wage_type === 'global' ? (newEmp.global_daily_rate || null) : null,
-      bonus: newEmp.bonus || null,
-    })
-    if (error) {
-      console.error('[FactoryEmployees addEmployee] error:', error)
-      alert(`הוספת עובד נכשלה: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
-      setLoadingEmp(false)
-      return
-    }
-    setNewEmp({ wage_type: 'hourly', department: allowedDepts[0] })
-    setShowAddEmp(false)
-    await fetchEmployees()
-    setLoadingEmp(false)
-  }
-
   async function saveEmployee(id: number) {
     const { error } = await supabase.from('employees').update(editEmpData).eq('id', id)
     if (error) {
@@ -157,9 +126,9 @@ export default function FactoryEmployees({ onBack }: Props) {
         subtitle={`${currentDeptLabel} · ${activeCount} פעילים · ${inactiveCount} מושבתים`}
         onBack={onBack}
         action={
-          <button onClick={() => setShowAddEmp(v => !v)}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: showAddEmp ? '#64748b' : '#0f172a', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-            <Plus size={16} /> {showAddEmp ? 'ביטול' : 'הוסף עובד'}
+          <button onClick={() => setWizardOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#0f172a', color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            <Plus size={16} /> הוסף עובד
           </button>
         }
       />
@@ -185,63 +154,6 @@ export default function FactoryEmployees({ onBack }: Props) {
               </button>
             ))}
           </div>
-        )}
-
-        {/* ─── טופס הוספת עובד ────────────────────────────────────────── */}
-        {showAddEmp && (
-          <Card className="shadow-sm mb-5" style={{ borderTop: '3px solid #0f172a' }}>
-            <CardContent className="p-6">
-              <h3 style={{ margin: '0 0 18px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>עובד חדש</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gridColumn: 'span 2' }}>
-                  <label style={S.label}>שם מלא</label>
-                  <input type="text" placeholder="שם עובד..." value={newEmp.name || ''}
-                    onChange={e => setNewEmp(p => ({ ...p, name: e.target.value }))} style={S.input} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <label style={S.label}>מס׳ עובד <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
-                  <input type="text" placeholder="—" value={newEmp.employee_number || ''}
-                    onChange={e => setNewEmp(p => ({ ...p, employee_number: e.target.value || null }))} style={S.input} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <label style={S.label}>סוג שכר</label>
-                  <select value={newEmp.wage_type || 'hourly'} onChange={e => setNewEmp(p => ({ ...p, wage_type: e.target.value as 'hourly' | 'global' }))}
-                    style={{ ...S.input, background: 'white' }}>
-                    <option value="hourly">שעתי</option>
-                    <option value="global">גלובלי</option>
-                  </select>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <label style={S.label}>מחלקה</label>
-                  <select value={newEmp.department || allowedDepts[0]} onChange={e => setNewEmp(p => ({ ...p, department: e.target.value }))}
-                    style={{ ...S.input, background: 'white' }}>
-                    {allowedDepts.map(key => (
-                      <option key={key} value={key}>{DEPT_LABELS[key]}</option>
-                    ))}
-                  </select>
-                </div>
-                {newEmp.wage_type === 'hourly' ? (
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <label style={S.label}>תעריף שעתי (₪)</label>
-                    <input type="number" placeholder="0" value={newEmp.hourly_rate || ''}
-                      onChange={e => setNewEmp(p => ({ ...p, hourly_rate: parseFloat(e.target.value) || null }))}
-                      style={{ ...S.input, textAlign: 'right' }} />
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <label style={S.label}>משכורת חודשית (₪)</label>
-                    <input type="number" placeholder="0" value={newEmp.global_daily_rate || ''}
-                      onChange={e => setNewEmp(p => ({ ...p, global_daily_rate: parseFloat(e.target.value) || null }))}
-                      style={{ ...S.input, textAlign: 'right' }} />
-                  </div>
-                )}
-              </div>
-              <button onClick={addEmployee} disabled={loadingEmp || !newEmp.name}
-                style={{ background: loadingEmp || !newEmp.name ? '#e2e8f0' : '#0f172a', color: loadingEmp || !newEmp.name ? '#94a3b8' : 'white', border: 'none', borderRadius: '10px', padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Plus size={18} />הוסף עובד
-              </button>
-            </CardContent>
-          </Card>
         )}
 
         {/* ─── טבלת עובדים ────────────────────────────────────────────── */}
@@ -324,6 +236,16 @@ export default function FactoryEmployees({ onBack }: Props) {
           </motion.div>
         )}
       </div>
+
+      {wizardOpen && (
+        <NewEmployeeWizard
+          initialKind="factory"
+          initialDepartment={managedDept || allowedDepts[0]}
+          lockKind
+          onClose={() => setWizardOpen(false)}
+          onCreated={() => { setWizardOpen(false); fetchEmployees() }}
+        />
+      )}
     </div>
   )
 }

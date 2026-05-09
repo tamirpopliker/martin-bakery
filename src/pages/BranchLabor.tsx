@@ -994,6 +994,20 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                         </div>
                       </div>
 
+                      {(() => {
+                        const newCount = new Set(parsedRows.filter(r => r.selected && !r.hasStoredRate).map(r => r.name)).size
+                        if (newCount === 0) return null
+                        return (
+                          <div style={{ marginBottom: 16, padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                            <AlertTriangle size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                            <span>
+                              <strong>{newCount} עובדים חדשים יווצרו</strong> עם שם ותעריף בלבד.
+                              להשלמת תאריך תחילת עבודה, חשבון בנק ות.ז. — היכנס ל"HR Dashboard" אחרי השמירה (ההתראה הצהובה תסמן את העובדים החסרים).
+                            </span>
+                          </div>
+                        )
+                      })()}
+
                       <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', marginBottom: '16px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: isDetailedMode ? '32px 1fr 65px 65px 65px 70px 60px 95px 105px' : '32px 1fr 65px 65px 65px 105px 115px', padding: '9px 14px', background: '#f8fafc', fontSize: '11px', fontWeight: '700', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
                           <span />

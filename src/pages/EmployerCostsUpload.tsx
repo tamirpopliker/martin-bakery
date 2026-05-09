@@ -717,8 +717,11 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
               <div><label style={S.label}>אימייל <span style={{ color: '#94a3b8' }}>(אופציונלי)</span></label>
                 <input value={newEmpEmail} onChange={e => setNewEmpEmail(e.target.value)} placeholder="email@..." style={{ ...S.input, width: '100%' }} /></div>
             </div>
-            <div style={{ background: '#eff6ff', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#1d4ed8' }}>
+            <div style={{ background: '#eff6ff', borderRadius: 8, padding: '8px 12px', marginBottom: 8, fontSize: 12, color: '#1d4ed8' }}>
               💡 העובד ייווצר עם מספר שכר {employees[newEmpModal.idx]?.employee_number} ויזוהה אוטומטית בהעלאות הבאות
+            </div>
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#92400e' }}>
+              ⚠️ העובד ייווצר עם פרטים חלקיים (שם + סניף בלבד). להשלמת תעריף שעתי, תאריך תחילת עבודה, חשבון בנק ות.ז. — היכנס ל-HR Dashboard אחרי השמירה.
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={saveNewEmployee} disabled={newEmpSaving} style={{ ...S.btn, background: newEmpSaving ? '#94a3b8' : '#6366f1', color: 'white' }}>
