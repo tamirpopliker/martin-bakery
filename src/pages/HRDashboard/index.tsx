@@ -21,7 +21,7 @@ export default function HRDashboard({ onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [kindFilter, setKindFilter] = useState<'all' | Kind>('all')
-  const [activeFilter, setActiveFilter] = useState<'active' | 'all' | 'inactive'>('active')
+  const [activeFilter, setActiveFilter] = useState<'active' | 'all' | 'inactive'>('all')
   const [selected, setSelected] = useState<UnifiedEmployee | null>(null)
   const [wizardOpen, setWizardOpen] = useState(false)
 
