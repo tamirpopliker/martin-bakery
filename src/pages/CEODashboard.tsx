@@ -228,11 +228,11 @@ export default function CEODashboard({ onBack }: Props) {
         else if (r.source === 'credit') { totalCredit += amt; brCredit += amt }
         else if (r.source === 'website') { totalWebsite += amt; brWebsite += amt }
       }
+      // register_closings: both cash and credit-card sales are POS revenue (cashier bucket).
+      // The "credit" bucket is reserved for customer credit / Hakafa from branch_revenue.
       for (const c of (closeRes.data || [])) {
-        const cash = Number(c.cash_sales || 0)
-        const credit = Number(c.credit_sales || 0)
-        totalCashier += cash; brCashier += cash
-        totalCredit += credit; brCredit += credit
+        const total = Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
+        totalCashier += total; brCashier += total
       }
       const expenses = pl.factoryPurchases + pl.externalSuppliers + pl.repairs + pl.deliveries + pl.infrastructure + pl.otherExpenses
       return {
