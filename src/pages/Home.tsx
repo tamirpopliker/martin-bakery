@@ -281,8 +281,11 @@ export default function Home() {
       // employees are mostly on global salary so their cost belongs in the labor
       // line, not as a separate overhead row.
       const cons = await calculateConsolidatedPL(branchIds, from, to, overheadPct, monthKey)
-      // Total revenue = branches' external POS/B2B + factory's external (excluding intercompany)
-      setTotalBranchRevenue(totalBranchRev + cons.factory.externalRevenue)
+      // Total revenue = sum(branches' external POS/B2B from calculateBranchPL) +
+      // factory's external (intercompany eliminated). Uses calculateConsolidatedPL so
+      // the figure matches the CEO Dashboard's "הכנסות אמיתיות" KPI exactly.
+      const consolidatedRevenue = cons.branches.reduce((s, b) => s + b.revenue, 0) + cons.factory.externalRevenue
+      setTotalBranchRevenue(consolidatedRevenue)
       // Labor (consolidated) = factory labor + factory managers + branch labor +
       // branch managers + HQ allocation (HQ is the global-salary of headquarters staff,
       // counted as labor per the owner's request).
@@ -340,7 +343,8 @@ export default function Home() {
 
       // ─── Consolidated KPI for the comparison period (parallel to current period) ──
       const prevCons = await calculateConsolidatedPL(branchIds, pFrom, pTo, overheadPct, pMonthKey)
-      setPrevBranchRevenue(pTotalBranchRev + prevCons.factory.externalRevenue)
+      const prevConsolidatedRevenue = prevCons.branches.reduce((s, b) => s + b.revenue, 0) + prevCons.factory.externalRevenue
+      setPrevBranchRevenue(prevConsolidatedRevenue)
       const prevBranchManagers = prevCons.branches.reduce((s, b) => s + b.managerSalary, 0)
       setPrevBranchLaborCost(
         prevCons.consolidated.labor + prevCons.factory.managerSalary + prevBranchManagers + prevCons.consolidated.overhead
