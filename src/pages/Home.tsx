@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase, monthEnd, getFixedCostTotal, fetchFactoryPL, getOverheadPct } from '../lib/supabase'
-import { fetchAllBranchesProfit } from '../lib/profitCalc'
 import { calculateConsolidatedPL } from '../lib/calculatePL'
 import { usePeriod } from '../lib/PeriodContext'
 import { useAppUser } from '../lib/UserContext'
@@ -242,38 +241,10 @@ export default function Home() {
         setBranchLaborTargets(laborTargetMap)
       }
 
-      // Branch data via View (single query for all branches)
+      // Branch data — the branch_pl_summary VIEW reads from the stale branch_labor
+      // table (not employer_costs), so all per-branch numbers below come from
+      // calculateConsolidatedPL.
       const branchIds = BRANCHES.map(br => br.id)
-      const branchProfits = await fetchAllBranchesProfit(branchIds, from, to)
-
-      const bKpi: BranchKpi[] = []
-      let totalBranchRev = 0, totalBranchLab = 0, alertCount = 0
-      let totalBranchOP = 0
-
-      for (const br of BRANCHES) {
-        const bp = branchProfits.find(p => p.branchId === br.id)
-        const rev = bp?.revenue || 0
-        const lab = bp?.laborCost || 0
-        const labPct = rev > 0 ? (lab / rev) * 100 : 0
-        const brTarget = laborTargetMap[br.id] || 0
-        if (brTarget > 0 && labPct > brTarget) alertCount++
-        totalBranchRev += rev
-        totalBranchLab += lab
-        totalBranchOP += bp?.operatingProfit || 0
-        bKpi.push({ id: br.id, name: br.name, color: br.color, revenue: rev, laborCost: lab, laborPct: labPct,
-          managerSalary: 0, waste: 0, operatingProfit: bp?.operatingProfit || 0, hqAllocation: 0, factoryPurchases: 0 })
-      }
-
-      setBranchKpi(bKpi)
-      setTotalBranchRevenue(totalBranchRev)
-      const avgPct = totalBranchRev > 0 ? (totalBranchLab / totalBranchRev) * 100 : 0
-      setAvgLaborPct(avgPct)
-      setTotalLabor(fLabor + totalBranchLab)
-      setAlerts(alertCount)
-      setTotalBranchGross(totalBranchRev > 0 ? totalBranchRev - totalBranchLab : 0)
-      setOperatingProfit(factoryPL.operatingProfit + totalBranchOP)
-      setBranchOperatingProfit(totalBranchOP)
-      setBranchLaborCost(totalBranchLab)
 
       // ─── Consolidated KPI (intercompany-eliminated) — matches CEODashboard ──────
       // The KPI strip on the home page now reports consolidated figures (branches +
@@ -305,19 +276,35 @@ export default function Home() {
       setFactoryWasteState(cons.factory.waste)
       setHqAllocationTotal(cons.consolidated.overhead)
       setHqIsActual(cons.factory.hqIsActual)
-      // Enrich bKpi with manager / waste / OP / HQ allocation per branch
-      const enriched: BranchKpi[] = bKpi.map(b => {
-        const cb = cons.branches.find(c => c.branchId === b.id)
+      // Build per-branch KPI rows from calculateBranchPL — single source of truth.
+      let alertCount = 0
+      let totalBranchRev = 0, totalBranchLab = 0, totalBranchOP = 0
+      const enriched: BranchKpi[] = BRANCHES.map(br => {
+        const cb = cons.branches.find(c => c.branchId === br.id)
+        const rev = cb?.revenue ?? 0
+        const lab = cb?.labor ?? 0
+        const labPct = rev > 0 ? (lab / rev) * 100 : 0
+        const brTarget = laborTargetMap[br.id] || 0
+        if (brTarget > 0 && labPct > brTarget) alertCount++
+        totalBranchRev += rev
+        totalBranchLab += lab
+        totalBranchOP += cb?.operatingProfit ?? 0
         return {
-          ...b,
+          id: br.id, name: br.name, color: br.color,
+          revenue: rev, laborCost: lab, laborPct,
           managerSalary: cb?.managerSalary || 0,
           waste: cb?.waste || 0,
-          operatingProfit: cb?.operatingProfit ?? b.operatingProfit,
+          operatingProfit: cb?.operatingProfit ?? 0,
           hqAllocation: cb?.overhead || 0,
           factoryPurchases: cb?.factoryPurchases || 0,
         }
       })
       setBranchKpi(enriched)
+      setAvgLaborPct(totalBranchRev > 0 ? (totalBranchLab / totalBranchRev) * 100 : 0)
+      setTotalLabor(fLabor + totalBranchLab)
+      setAlerts(alertCount)
+      setTotalBranchGross(totalBranchRev > 0 ? totalBranchRev - totalBranchLab : 0)
+      setOperatingProfit(factoryPL.operatingProfit + totalBranchOP)
 
       // Previous period (comparison) via shared functions
       const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
@@ -327,22 +314,22 @@ export default function Home() {
       setPrevFactoryRevenue(prevFactoryPL.sales)
       setPrevFactoryGross(prevFactoryPL.controllableMargin)
 
-      const prevBranchProfits = await fetchAllBranchesProfit(branchIds, pFrom, pTo)
+      // ─── Consolidated KPI for the comparison period (parallel to current period) ──
+      // Same reasoning as the current period: branch_pl_summary VIEW is stale,
+      // so we derive everything from calculateConsolidatedPL.
+      const prevCons = await calculateConsolidatedPL(branchIds, pFrom, pTo, overheadPct, pMonthKey)
       let pTotalBranchRev = 0, pTotalBranchLab = 0, pTotalBranchOP = 0
-      for (const bp of prevBranchProfits) {
-        pTotalBranchRev += bp.revenue
-        pTotalBranchLab += bp.laborCost
-        pTotalBranchOP += bp.operatingProfit
+      for (const cb of prevCons.branches) {
+        pTotalBranchRev += cb.revenue
+        pTotalBranchLab += cb.labor
+        pTotalBranchOP += cb.operatingProfit
       }
-      setPrevBranchRevenue(pTotalBranchRev)
       const pAvgPct = pTotalBranchRev > 0 ? (pTotalBranchLab / pTotalBranchRev) * 100 : 0
       setPrevAvgLaborPct(pAvgPct)
       setPrevTotalLabor(prevFactoryPL.labor + pTotalBranchLab)
       setPrevBranchGross(pTotalBranchRev > 0 ? pTotalBranchRev - pTotalBranchLab : 0)
       setPrevOperatingProfit(prevFactoryPL.operatingProfit + pTotalBranchOP)
 
-      // ─── Consolidated KPI for the comparison period (parallel to current period) ──
-      const prevCons = await calculateConsolidatedPL(branchIds, pFrom, pTo, overheadPct, pMonthKey)
       const prevConsolidatedRevenue = prevCons.branches.reduce((s, b) => s + b.revenue, 0) + prevCons.factory.externalRevenue
       setPrevBranchRevenue(prevConsolidatedRevenue)
       const prevBranchManagers = prevCons.branches.reduce((s, b) => s + b.managerSalary, 0)

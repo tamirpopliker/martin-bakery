@@ -3,7 +3,6 @@ import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, fetchBranchPL, getOverheadPct, type BranchPLResult } from '../lib/supabase'
 import { calculateBranchPL } from '../lib/calculatePL'
-import { fetchBranchProfit } from '../lib/profitCalc'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -190,13 +189,10 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
         supabase.from('branch_kpi_targets').select('labor_pct, waste_pct').eq('branch_id', branchId).maybeSingle(),
       ])
 
-      // Override supplier split from View (single source of truth)
-      const viewProfit = await fetchBranchProfit(branchId, from, to)
-      if (viewProfit.revenue > 0) {
-        current.expSuppliersInternal = viewProfit.internalSupplierCost
-        current.expSuppliersExternal = viewProfit.externalSupplierCost
-        current.expSuppliers = viewProfit.totalSupplierCost
-      }
+      // fetchBranchPL already returns the correct supplier split (internal
+      // from internal_sales, external from branch_expenses). The previous
+      // override via fetchBranchProfit pulled from the stale branch_pl_summary
+      // VIEW (built on branch_labor, not employer_costs) — removed.
 
       setPl(current)
       setPrevPl(prev)
