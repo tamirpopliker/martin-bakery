@@ -93,7 +93,7 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
 
   // Parallel fetch all needed tables for the 6-month range
   const [
-    branchRevRes, factorySalesRes, factoryB2bRes,
+    branchRevRes, factorySalesRes, factoryB2bRes, externalSalesRes,
     supplierRes, laborRes, branchLaborRes,
     fixedCostsRes, factoryRepairsRes, branchExpensesRes,
     factoryWasteRes, branchWasteRes, globalEmpRes,
@@ -101,6 +101,7 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
     supabase.from('branch_revenue').select('date, amount').gte('date', tFrom).lt('date', tTo),
     supabase.from('factory_sales').select('date, amount, is_internal').gte('date', tFrom).lt('date', tTo),
     supabase.from('factory_b2b_sales').select('date, amount, is_internal').gte('date', tFrom).lt('date', tTo),
+    supabase.from('external_sales').select('invoice_date, total_before_vat').gte('invoice_date', tFrom).lt('invoice_date', tTo),
     supabase.from('supplier_invoices').select('date, amount').gte('date', tFrom).lt('date', tTo),
     supabase.from('labor').select('date, employer_cost').gte('date', tFrom).lt('date', tTo),
     supabase.from('branch_labor').select('date, employer_cost').gte('date', tFrom).lt('date', tTo),
@@ -132,6 +133,13 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
   const branchRevByM = groupByMonth(branchRevRes.data, 'amount')
   const factorySalesByM = groupByMonth(factorySalesRes.data, 'amount', r => !r.is_internal)
   const factoryB2bByM = groupByMonth(factoryB2bRes.data, 'amount', r => !r.is_internal)
+  // external_sales (PDF-imported invoices): factory's third revenue table.
+  // Field name on this table is invoice_date / total_before_vat, so we group manually.
+  const externalSalesByM: Record<string, number> = {}
+  ;(externalSalesRes.data || []).forEach((r: any) => {
+    const m = r.invoice_date?.slice(0, 7)
+    if (m) externalSalesByM[m] = (externalSalesByM[m] || 0) + Number(r.total_before_vat || 0)
+  })
 
   // Costs for gross profit
   const suppliersByM = groupByMonth(supplierRes.data, 'amount')
@@ -150,7 +158,7 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
   const branchExpByM = groupByMonth(branchExpensesRes.data, 'amount')
 
   return months.map(m => {
-    const revenue = (branchRevByM[m] || 0) + (factorySalesByM[m] || 0) + (factoryB2bByM[m] || 0)
+    const revenue = (branchRevByM[m] || 0) + (factorySalesByM[m] || 0) + (factoryB2bByM[m] || 0) + (externalSalesByM[m] || 0)
     const totalLabor = (factoryLaborByM[m] || 0) + (branchLaborByM[m] || 0) + globalEmpMonthlyCost
     const totalWaste = (factoryWasteByM[m] || 0) + (branchWasteByM[m] || 0)
     const grossProfit = revenue - (suppliersByM[m] || 0) - totalLabor
@@ -201,9 +209,10 @@ export async function fetchFactoryTrends(refMonth: string): Promise<MonthTrend[]
   const tFrom = months[0] + '-01'
   const tTo = monthEnd(months[5])
 
-  const [salesRes, b2bRes, suppRes, labRes, wasteRes, repairsRes, fcRes, empRes] = await Promise.all([
+  const [salesRes, b2bRes, extSalesRes, suppRes, labRes, wasteRes, repairsRes, fcRes, empRes] = await Promise.all([
     supabase.from('factory_sales').select('date, amount, is_internal').gte('date', tFrom).lt('date', tTo),
     supabase.from('factory_b2b_sales').select('date, amount, is_internal').gte('date', tFrom).lt('date', tTo),
+    supabase.from('external_sales').select('invoice_date, total_before_vat').gte('invoice_date', tFrom).lt('invoice_date', tTo),
     supabase.from('supplier_invoices').select('date, amount').gte('date', tFrom).lt('date', tTo),
     supabase.from('labor').select('date, employer_cost').gte('date', tFrom).lt('date', tTo),
     supabase.from('factory_waste').select('date, amount').gte('date', tFrom).lt('date', tTo),
@@ -221,6 +230,11 @@ export async function fetchFactoryTrends(refMonth: string): Promise<MonthTrend[]
   }
   const salesByM = grp(salesRes.data, 'amount', r => !r.is_internal)
   const b2bByM = grp(b2bRes.data, 'amount', r => !r.is_internal)
+  const extSalesByM: Record<string, number> = {}
+  ;(extSalesRes.data || []).forEach((r: any) => {
+    const m = r.invoice_date?.slice(0, 7)
+    if (m) extSalesByM[m] = (extSalesByM[m] || 0) + Number(r.total_before_vat || 0)
+  })
   const suppByM = grp(suppRes.data, 'amount')
   const labByM = grp(labRes.data, 'employer_cost')
   const wasteByM = grp(wasteRes.data, 'amount')
@@ -230,7 +244,7 @@ export async function fetchFactoryTrends(refMonth: string): Promise<MonthTrend[]
   const fcByM = fillFixedCostsMap(rawFcByM, months)
 
   return months.map(m => {
-    const revenue = (salesByM[m] || 0) + (b2bByM[m] || 0)
+    const revenue = (salesByM[m] || 0) + (b2bByM[m] || 0) + (extSalesByM[m] || 0)
     const totalLabor = (labByM[m] || 0) + globalEmpCost
     const grossProfit = revenue - (suppByM[m] || 0) - totalLabor
     const operatingProfit = grossProfit - (fcByM[m] || 0) - (repByM[m] || 0) - (wasteByM[m] || 0)

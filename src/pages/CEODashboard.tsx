@@ -616,18 +616,22 @@ export default function CEODashboard({ onBack }: Props) {
   }
 
   function renderProfitTable(mode: 'gross' | 'operating') {
+    // Expenses must include every cost line that the profit formula deducts —
+    // otherwise revenue − expenses ≠ profit and the row looks self-contradictory.
+    // gross profit  = revenue − labor − managerSalary − expenses − waste
+    // operating prof = gross profit − fixedCosts − overhead
     const rows = branches.map(br => {
       const rev = br.revenue
       const exp = mode === 'gross'
-        ? br.labor + br.expenses
-        : br.labor + br.expenses + br.fixedCosts + br.waste
+        ? br.labor + br.managerSalary + br.expenses + br.waste
+        : br.labor + br.managerSalary + br.expenses + br.waste + br.fixedCosts + br.overhead
       const profit = mode === 'gross' ? br.grossProfit : br.operatingProfit
       const pct = rev > 0 ? (profit / rev) * 100 : 0
       return { name: br.name, color: br.color, rev, exp, profit, pct }
     })
     const factoryExp = mode === 'gross'
-      ? factoryLabor + factorySuppliers
-      : factoryLabor + factorySuppliers + factoryFixed + factoryWaste + factoryRepairs
+      ? factoryLabor + factoryManagerSalary + factorySuppliers + factoryWaste + factoryRepairs
+      : factoryLabor + factoryManagerSalary + factorySuppliers + factoryWaste + factoryRepairs + factoryFixed + factoryOverhead
     const factoryProfit = mode === 'gross' ? factoryGrossProfit : factoryOperatingProfit
     const factoryPct = factorySales > 0 ? (factoryProfit / factorySales) * 100 : 0
     const totalProfit = mode === 'gross' ? grandGross : grandOperating
@@ -777,7 +781,7 @@ export default function CEODashboard({ onBack }: Props) {
       case 'labor_total':      return renderLaborTable()
       case 'gross_profit':     return renderProfitTable('gross')
       case 'operating_profit': return renderProfitTable('operating')
-      case 'labor_pct_total':  return renderProfitTable('operating')
+      case 'labor_pct_total':  return renderLaborTable()
       case 'fixed_costs':      return renderFixedCostsTable()
       case 'suppliers_total':  return renderSuppliersTable()
     }

@@ -290,6 +290,38 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
       setPayrollUpdateFailures(0)
     }
 
+    // Step C.5: Sync is_manager from HR. DEPT_MAP only flags managers when the
+    // source file places them in a dedicated manager department (1, 11). Any
+    // manager filed under a regular department gets is_manager=false, which
+    // then double-counts: the cost appears in ליבור עובדים AND calculatePL's
+    // fallback adds an estimated שכר מנהלים line. The two sources of truth:
+    //   - branch_employees.is_manager=true (matched by payroll_number)
+    //   - hard-coded factory manager names (migration 026)
+    const { data: hrManagers } = await supabase
+      .from('branch_employees')
+      .select('payroll_number')
+      .eq('is_manager', true).eq('active', true)
+      .not('payroll_number', 'is', null)
+    const branchMgrNumbers = (hrManagers ?? []).map(r => r.payroll_number).filter(Boolean)
+    const factoryMgrNames = [
+      'נאור אורן', 'אורן נאור',
+      'תמיר רוזנברג', 'רוזנברג תמיר', 'תמיר שי רוזנברג',
+    ]
+    if (branchMgrNumbers.length > 0) {
+      await safeDbOperation(
+        () => supabase.from('employer_costs').update({ is_manager: true })
+          .eq('year', reportYear).eq('month', reportMonth)
+          .in('employee_number', branchMgrNumbers),
+        'סנכרון is_manager — מנהלי סניף',
+      )
+    }
+    await safeDbOperation(
+      () => supabase.from('employer_costs').update({ is_manager: true })
+        .eq('year', reportYear).eq('month', reportMonth)
+        .in('employee_name', factoryMgrNames),
+      'סנכרון is_manager — מנהלי מפעל',
+    )
+
     // Step D: record a completed upload only after the INSERT succeeded.
     const logRes = await safeDbOperation(
       () => supabase.from('employer_costs_uploads').insert({

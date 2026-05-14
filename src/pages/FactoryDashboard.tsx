@@ -77,6 +77,7 @@ export default function FactoryDashboard({ onBack }: Props) {
   const [salesDough, setSalesDough]     = useState(0)
   const [salesB2B, setSalesB2B]         = useState(0)
   const [salesMisc, setSalesMisc]       = useState(0)
+  const [salesPdfExt, setSalesPdfExt]   = useState(0)
   const [salesInternal, setSalesInternal] = useState(0)
 
   // Suppliers
@@ -126,6 +127,7 @@ export default function FactoryDashboard({ onBack }: Props) {
       globalEmpsData, wdData,
       prodRes,
       intSalesRes,
+      extSalesRes,
     ] = await Promise.all([
       supabase.from('factory_sales').select('department, amount, is_internal').gte('date', from).lt('date', to),
       supabase.from('factory_b2b_sales').select('sale_type, customer, amount, is_internal').gte('date', from).lt('date', to),
@@ -140,6 +142,7 @@ export default function FactoryDashboard({ onBack }: Props) {
       getWorkingDays(monthKey || from.slice(0, 7)),
       supabase.from('daily_production').select('department, amount').gte('date', from).lt('date', to),
       supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', from).lt('order_date', to),
+      supabase.from('external_sales').select('total_before_vat').gte('invoice_date', from).lt('invoice_date', to),
     ])
 
     // Global employees
@@ -156,6 +159,10 @@ export default function FactoryDashboard({ onBack }: Props) {
 
     const miscTotal = b2b.filter((r: any) => r.sale_type === 'misc').reduce((s: number, r: any) => s + Number(r.amount), 0)
     setSalesMisc(miscTotal)
+
+    // external_sales: factory's PDF-imported B2B invoices (separate table from factory_b2b_sales).
+    const extSalesTotal = (extSalesRes.data || []).reduce((s: number, r: any) => s + Number(r.total_before_vat), 0)
+    setSalesPdfExt(extSalesTotal)
 
     // Internal revenue: prefer internal_sales (completed), fallback to factory_sales/b2b is_internal
     const intSalesTotal = (intSalesRes.data || []).reduce((s: number, r: any) => s + Number(r.total_amount), 0)
@@ -231,9 +238,10 @@ export default function FactoryDashboard({ onBack }: Props) {
 
     // Previous period
     const pFrom = comparisonPeriod.from, pTo = comparisonPeriod.to
-    const [pSales, pB2b, pWaste, pRepairs, pLabor, pSupp, pWd, pProd] = await Promise.all([
+    const [pSales, pB2b, pExtSales, pWaste, pRepairs, pLabor, pSupp, pWd, pProd] = await Promise.all([
       supabase.from('factory_sales').select('amount').gte('date', pFrom).lt('date', pTo),
       supabase.from('factory_b2b_sales').select('amount').gte('date', pFrom).lt('date', pTo),
+      supabase.from('external_sales').select('total_before_vat').gte('invoice_date', pFrom).lt('invoice_date', pTo),
       supabase.from('factory_waste').select('amount').gte('date', pFrom).lt('date', pTo),
       supabase.from('factory_repairs').select('amount').gte('date', pFrom).lt('date', pTo),
       supabase.from('labor').select('employee_name, employer_cost').eq('entity_type', 'factory').gte('date', pFrom).lt('date', pTo),
@@ -241,8 +249,8 @@ export default function FactoryDashboard({ onBack }: Props) {
       getWorkingDays(comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)),
       supabase.from('daily_production').select('amount').gte('date', pFrom).lt('date', pTo),
     ])
-    const sum = (res: any) => (res.data || []).reduce((s: number, r: any) => s + Number(r.amount || r.employer_cost || 0), 0)
-    const pSalesTotal = sum(pSales) + sum(pB2b)
+    const sum = (res: any) => (res.data || []).reduce((s: number, r: any) => s + Number(r.amount || r.employer_cost || r.total_before_vat || 0), 0)
+    const pSalesTotal = sum(pSales) + sum(pB2b) + sum(pExtSales)
     const pGlobalLaborCreams = calcGlobalLaborForDept(globalEmpsData, 'creams', pWd)
     const pGlobalLaborDough = calcGlobalLaborForDept(globalEmpsData, 'dough', pWd)
     const pTotalGlobalLabor = pGlobalLaborCreams + pGlobalLaborDough
@@ -259,7 +267,7 @@ export default function FactoryDashboard({ onBack }: Props) {
   }, [from, to])
 
   // ─── Computed Values ────────────────────────────────────────────────────
-  const totalSales   = salesCreams + salesDough + salesB2B + salesMisc + salesInternal
+  const totalSales   = salesCreams + salesDough + salesB2B + salesMisc + salesPdfExt + salesInternal
   const totalWaste   = DEPTS.reduce((s, d) => s + wasteDept[d], 0)
   const totalRepairs = DEPTS.reduce((s, d) => s + repairsDept[d], 0)
   const hourlyLabor  = DEPTS.reduce((s, d) => s + laborDept[d].employer, 0)
@@ -296,6 +304,7 @@ export default function FactoryDashboard({ onBack }: Props) {
     { label: 'בצקים', value: salesDough },
     { label: 'B2B', value: salesB2B },
     { label: 'שונות', value: salesMisc },
+    { label: 'B2B חיצוני (PDF)', value: salesPdfExt },
   ]
   const maxSale = Math.max(...salesItems.map(i => i.value), 1)
 
@@ -310,7 +319,7 @@ export default function FactoryDashboard({ onBack }: Props) {
   const maxCost = Math.max(...costItems.map(i => i.value), 1)
 
   // ─── P&L Table rows ───────────────────────────────────────────────────
-  const externalSales = salesCreams + salesDough + salesB2B + salesMisc
+  const externalSales = salesCreams + salesDough + salesB2B + salesMisc + salesPdfExt
   const plRows: { label: string; amount: number; type: 'normal' | 'separator' | 'bold' }[] = [
     { label: 'מכירות חיצוניות', amount: externalSales, type: 'normal' },
     ...(salesInternal > 0 ? [{ label: 'מכירות פנימיות לסניפים', amount: salesInternal, type: 'normal' as const }] : []),
