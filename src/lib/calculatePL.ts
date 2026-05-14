@@ -412,13 +412,14 @@ export interface ConsolidatedResult {
   consolidated: {
     revenue: number
     suppliers: number
-    labor: number
+    labor: number               // is_manager=false rows only (factory + branches)
+    managerSalary: number       // is_manager=true rows (factory + branches)
     waste: number
     repairs: number
     fixedCosts: number
-    overhead: number
-    controllableProfit: number
-    operatingProfit: number
+    overhead: number            // HQ allocation across all entities
+    controllableProfit: number  // revenue − suppliers − labor − managerSalary
+    operatingProfit: number     // controllableProfit − waste − repairs − fixedCosts − overhead
   }
   elimination: number  // should be ~0
   eliminationWarning: string | null
@@ -447,6 +448,7 @@ export async function calculateConsolidatedPL(
     revenue: branches.reduce((s, b) => s + b.revenue, 0) + factory.externalRevenue,
     suppliers: factory.suppliers + branches.reduce((s, b) => s + b.externalSuppliers, 0),
     labor: factory.labor + branches.reduce((s, b) => s + b.labor, 0),
+    managerSalary: factory.managerSalary + branches.reduce((s, b) => s + b.managerSalary, 0),
     waste: factory.waste + branches.reduce((s, b) => s + b.waste, 0),
     repairs: factory.repairs + branches.reduce((s, b) => s + b.repairs, 0),
     fixedCosts: factory.fixedCosts + branches.reduce((s, b) => s + b.fixedCosts, 0),
@@ -455,7 +457,7 @@ export async function calculateConsolidatedPL(
     operatingProfit: 0,
   }
 
-  consolidated.controllableProfit = consolidated.revenue - consolidated.suppliers - consolidated.labor
+  consolidated.controllableProfit = consolidated.revenue - consolidated.suppliers - consolidated.labor - consolidated.managerSalary
   consolidated.operatingProfit = consolidated.controllableProfit - consolidated.waste - consolidated.repairs - consolidated.fixedCosts - consolidated.overhead
 
   return {
