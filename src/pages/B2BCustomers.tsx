@@ -12,7 +12,12 @@ const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, tra
 
 interface Props { onBack: () => void }
 interface Customer { id: number; name: string; company_number: string | null; phone: string | null; address: string | null; branch_id: number | null; credit_limit: number; payment_terms: string | null; notes: string | null; open_balance?: number }
-interface Invoice { id: number; customer_id: number; invoice_number: string | null; invoice_date: string; due_date: string | null; total_before_vat: number; total_with_vat: number; status: string; branch_id: number | null; uploaded_by: string | null; customer_name?: string; paid_amount?: number }
+interface Invoice { id: number; customer_id: number; invoice_number: string | null; invoice_date: string; due_date: string | null; total_before_vat: number; total_with_vat: number; status: string; branch_id: number | null; uploaded_by: string | null; doc_type?: 'invoice' | 'delivery_note'; customer_name?: string; paid_amount?: number }
+
+const DOC_TYPE_LABEL: Record<'invoice' | 'delivery_note', string> = {
+  invoice: 'חשבונית',
+  delivery_note: 'תעודת משלוח',
+}
 
 const PAYMENT_TERMS_OPTIONS = ['מיידי', 'שוטף', 'שוטף + 30', 'שוטף + 60', 'שוטף + 90']
 const PAYMENT_METHODS = ['מזומן', 'העברה בנקאית', 'צ\'ק', 'אשראי']
@@ -72,7 +77,7 @@ export default function B2BCustomers({ onBack }: Props) {
   const [invStatus, setInvStatus] = useState<string>('all')
   const [invSearch, setInvSearch] = useState('')
   const [showAddInv, setShowAddInv] = useState(false)
-  const [invForm, setInvForm] = useState({ customer_id: 0, invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], due_date: '', total_before_vat: '', total_with_vat: '', branch_id: 0 })
+  const [invForm, setInvForm] = useState({ customer_id: 0, invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], due_date: '', total_before_vat: '', total_with_vat: '', branch_id: 0, doc_type: 'invoice' as 'invoice' | 'delivery_note' })
   const [editInvId, setEditInvId] = useState<number | null>(null)
   const [deleteInv, setDeleteInv] = useState<Invoice | null>(null)
   const [paymentInv, setPaymentInv] = useState<Invoice | null>(null)
@@ -182,7 +187,7 @@ export default function B2BCustomers({ onBack }: Props) {
   async function saveInvoice() {
     const cust = customers.find(c => c.id === invForm.customer_id)
     const dueDate = invForm.due_date || calcDueDate(invForm.invoice_date, cust?.payment_terms || null)
-    const payload = { customer_id: invForm.customer_id, invoice_number: invForm.invoice_number || null, invoice_date: invForm.invoice_date, due_date: dueDate, total_before_vat: parseFloat(invForm.total_before_vat) || 0, total_with_vat: parseFloat(invForm.total_with_vat) || 0, branch_id: invForm.branch_id || null, status: 'open', uploaded_by: appUser?.name || null }
+    const payload = { customer_id: invForm.customer_id, invoice_number: invForm.invoice_number || null, invoice_date: invForm.invoice_date, due_date: dueDate, total_before_vat: parseFloat(invForm.total_before_vat) || 0, total_with_vat: parseFloat(invForm.total_with_vat) || 0, branch_id: invForm.branch_id || null, status: 'open', doc_type: invForm.doc_type, uploaded_by: appUser?.name || null }
     if (editInvId) {
       const { error } = await supabase.from('b2b_invoices').update(payload).eq('id', editInvId)
       if (error) {
@@ -212,7 +217,7 @@ export default function B2BCustomers({ onBack }: Props) {
         return
       }
     }
-    setShowAddInv(false); setInvForm({ customer_id: 0, invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], due_date: '', total_before_vat: '', total_with_vat: '', branch_id: 0 }); loadInvoices()
+    setShowAddInv(false); setInvForm({ customer_id: 0, invoice_number: '', invoice_date: new Date().toISOString().split('T')[0], due_date: '', total_before_vat: '', total_with_vat: '', branch_id: 0, doc_type: 'invoice' }); loadInvoices()
   }
 
   async function deleteInvoice(inv: Invoice) {
@@ -286,8 +291,9 @@ export default function B2BCustomers({ onBack }: Props) {
       }
     }
     const branchId = inv.branch_id || null; const amount = Number(inv.total_before_vat) || 0
+    const docType = inv.doc_type === 'delivery_note' ? 'delivery_note' : 'invoice'
     const invRes = await safeDbOperation(
-      () => supabase.from('b2b_invoices').insert({ customer_id: customerId, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', uploaded_by: appUser?.name }),
+      () => supabase.from('b2b_invoices').insert({ customer_id: customerId, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', doc_type: docType, uploaded_by: appUser?.name }),
       'יצירת חשבונית B2B',
     )
     if (!invRes.ok) { alert(invRes.error + '. נסה שוב או פנה למנהל המערכת.'); return }
@@ -324,8 +330,9 @@ export default function B2BCustomers({ onBack }: Props) {
     const inv = parsedPdfs[idx]; let dateDb = inv.invoice_date_db
     if (inv.invoice_date && inv.invoice_date.includes('/')) { const p = inv.invoice_date.split('/'); if (p.length === 3) dateDb = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}` }
     const dueDateStr = calcDueDate(dateDb, 'שוטף + 30'); const branchId = inv.branch_id || null; const amount = Number(inv.total_before_vat) || 0
+    const docType = inv.doc_type === 'delivery_note' ? 'delivery_note' : 'invoice'
     const invRes = await safeDbOperation(
-      () => supabase.from('b2b_invoices').insert({ customer_id: newCust.id, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', uploaded_by: appUser?.name }),
+      () => supabase.from('b2b_invoices').insert({ customer_id: newCust.id, invoice_number: inv.invoice_number || null, invoice_date: dateDb, due_date: dueDateStr, total_before_vat: amount, total_with_vat: amount * 1.17, branch_id: branchId, status: 'open', doc_type: docType, uploaded_by: appUser?.name }),
       'יצירת חשבונית B2B',
     )
     if (!invRes.ok) { alert(invRes.error + '. הלקוח נוצר אך החשבונית לא — נסה לשמור אותה שוב מהרשימה.'); return }
@@ -453,6 +460,7 @@ export default function B2BCustomers({ onBack }: Props) {
                   <div><label style={S.label}>תאריך פירעון</label><input type="date" value={invForm.due_date} onChange={e => setInvForm(p => ({ ...p, due_date: e.target.value }))} style={S.input} /></div>
                   <div><label style={S.label}>סה"כ לפני מע"מ</label><input type="number" value={invForm.total_before_vat} onChange={e => setInvForm(p => ({ ...p, total_before_vat: e.target.value, total_with_vat: String(Number(e.target.value) * 1.17) }))} style={S.input} /></div>
                   <div><label style={S.label}>סניף</label><select value={invForm.branch_id} onChange={e => setInvForm(p => ({ ...p, branch_id: Number(e.target.value) }))} style={S.input}><option value={0}>מפעל</option>{branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
+                  <div><label style={S.label}>סוג מסמך</label><select value={invForm.doc_type} onChange={e => setInvForm(p => ({ ...p, doc_type: e.target.value as 'invoice' | 'delivery_note' }))} style={S.input}><option value="invoice">חשבונית</option><option value="delivery_note">תעודת משלוח</option></select></div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                   <button onClick={saveInvoice} disabled={!invForm.customer_id} style={{ ...S.btn, background: invForm.customer_id ? '#0f172a' : '#e2e8f0', color: invForm.customer_id ? 'white' : '#94a3b8', padding: '8px 16px', fontSize: 13 }}>שמור</button>
@@ -477,7 +485,7 @@ export default function B2BCustomers({ onBack }: Props) {
                         onChange={() => setParsedPdfs(prev => prev.map(p => p.status === 'parsed' ? { ...p, selected: !allSelected } : p))}
                         style={{ cursor: 'pointer', width: 16, height: 16 }} />
                     </th>
-                    <th style={S.th}>קובץ</th><th style={S.th}>שם לקוח</th><th style={S.th}>שיוך</th><th style={S.th}>חשבונית</th><th style={S.th}>תאריך</th><th style={S.th}>סכום</th><th style={S.th}>סניף</th><th style={{ ...S.th, width: 36 }}></th>
+                    <th style={S.th}>קובץ</th><th style={S.th}>שם לקוח</th><th style={S.th}>שיוך</th><th style={S.th}>סוג</th><th style={S.th}>חשבונית</th><th style={S.th}>תאריך</th><th style={S.th}>סכום</th><th style={S.th}>סניף</th><th style={{ ...S.th, width: 36 }}></th>
                   </tr></thead>
                   <tbody>{parsedPdfs.map((p, i) => (
                     <tr key={i} style={{ background: p.status === 'error' ? '#fef2f2' : p.status === 'saved' ? '#f0fdf4' : !p.selected ? '#f8fafc' : i % 2 === 0 ? 'white' : '#fafbfc', opacity: p.status === 'parsed' && !p.selected ? 0.5 : 1, textDecoration: p.status === 'parsed' && !p.selected ? 'line-through' : 'none' }}>
@@ -485,11 +493,12 @@ export default function B2BCustomers({ onBack }: Props) {
                         {p.status === 'parsed' && <input type="checkbox" checked={p.selected ?? true} onChange={() => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, selected: !pp.selected } : pp))} style={{ cursor: 'pointer', width: 16, height: 16 }} />}
                       </td>
                       <td style={{ ...S.td, fontSize: 11, color: '#94a3b8', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.fileName}</td>
-                      {p.status === 'error' ? <td colSpan={6} style={{ ...S.td, color: '#dc2626', fontSize: 12 }}>❌ {p.error}</td>
-                      : p.status === 'saved' ? <td colSpan={6} style={{ ...S.td, color: '#16a34a', fontWeight: 600 }}>✅ נשמר</td>
+                      {p.status === 'error' ? <td colSpan={7} style={{ ...S.td, color: '#dc2626', fontSize: 12 }}>❌ {p.error}</td>
+                      : p.status === 'saved' ? <td colSpan={7} style={{ ...S.td, color: '#16a34a', fontWeight: 600 }}>✅ נשמר</td>
                       : (<>
                         <td style={S.td}><input type="text" value={p.customer_name || ''} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, customer_name: e.target.value } : pp))} style={{ ...S.input, padding: '4px 8px', fontSize: 12, fontWeight: 600 }} /></td>
                         <td style={S.td}><select value={p.customer_id} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, customer_id: Number(e.target.value) } : pp))} style={{ ...S.input, padding: '4px 8px', fontSize: 12 }}><option value={0}>לקוח חדש</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></td>
+                        <td style={S.td}><select value={p.doc_type || 'invoice'} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, doc_type: e.target.value } : pp))} style={{ ...S.input, padding: '4px 8px', fontSize: 12 }}><option value="invoice">חשבונית</option><option value="delivery_note">תעודת משלוח</option></select></td>
                         <td style={S.td}><input type="text" value={p.invoice_number || ''} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, invoice_number: e.target.value } : pp))} style={{ ...S.input, padding: '4px 8px', fontSize: 12 }} /></td>
                         <td style={S.td}><input type="text" value={p.invoice_date || ''} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, invoice_date: e.target.value } : pp))} style={{ ...S.input, padding: '4px 8px', fontSize: 12, width: 90 }} /></td>
                         <td style={{ ...S.td, fontWeight: 600 }}><input type="number" step="0.01" value={p.total_before_vat || ''} onChange={e => setParsedPdfs(prev => prev.map((pp, j) => j === i ? { ...pp, total_before_vat: Number(e.target.value) } : pp))} style={{ ...S.input, padding: '4px 8px', fontSize: 12, width: 80 }} /></td>
@@ -516,11 +525,12 @@ export default function B2BCustomers({ onBack }: Props) {
 
             {invLoading ? <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>טוען...</div> : filteredInv.length === 0 ? <div style={{ textAlign: 'center', padding: '32px', color: '#94a3b8' }}>אין חשבוניות</div> : (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr><th style={S.th}>תאריך</th><th style={S.th}>חשבונית</th><th style={S.th}>לקוח</th><th style={S.th}>סכום</th><th style={S.th}>קבלה</th><th style={S.th}>פירעון</th><th style={S.th}>סטטוס</th><th style={{ ...S.th, width: 130 }}></th></tr></thead>
-                <tbody>{filteredInv.map((inv, i) => { const st = STATUS_LABELS[inv.status] || STATUS_LABELS.open; const remaining = inv.total_with_vat - (inv.paid_amount || 0); return (
+                <thead><tr><th style={S.th}>תאריך</th><th style={S.th}>חשבונית</th><th style={S.th}>סוג</th><th style={S.th}>לקוח</th><th style={S.th}>סכום</th><th style={S.th}>קבלה</th><th style={S.th}>פירעון</th><th style={S.th}>סטטוס</th><th style={{ ...S.th, width: 130 }}></th></tr></thead>
+                <tbody>{filteredInv.map((inv, i) => { const st = STATUS_LABELS[inv.status] || STATUS_LABELS.open; const remaining = inv.total_with_vat - (inv.paid_amount || 0); const dt = (inv.doc_type === 'delivery_note' ? 'delivery_note' : 'invoice') as 'invoice' | 'delivery_note'; return (
                   <tr key={inv.id} style={{ background: inv.status === 'overdue' ? '#fef2f2' : i % 2 === 0 ? 'white' : '#fafbfc' }}>
                     <td style={S.td}>{fmtDate(inv.invoice_date)}</td>
                     <td style={S.td}>{inv.invoice_number || '—'}</td>
+                    <td style={S.td}><span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: dt === 'delivery_note' ? '#faf5ff' : '#eff6ff', color: dt === 'delivery_note' ? '#7c3aed' : '#1d4ed8' }}>{DOC_TYPE_LABEL[dt]}</span></td>
                     <td style={{ ...S.td, fontWeight: 500, cursor: 'pointer', color: '#6366f1' }} onClick={() => { const c = customers.find(cc => cc.id === inv.customer_id); if (c) { setTab('customers'); openCustDetail(c) } }}>{inv.customer_name}</td>
                     <td style={{ ...S.td, fontWeight: 600 }}>{fmtM(inv.total_with_vat)}{(inv.paid_amount || 0) > 0 ? <div style={{ fontSize: 11, color: '#16a34a' }}>שולם: {fmtM(inv.paid_amount!)}</div> : null}</td>
                     <td style={{ ...S.td, fontSize: 12, color: '#94a3b8' }}>{(inv as any).receipt_number || '—'}</td>
