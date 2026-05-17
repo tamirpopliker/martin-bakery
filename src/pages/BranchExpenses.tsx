@@ -380,6 +380,11 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
 
       <div style={{ padding: '0 20px 24px', maxWidth: '1000px', margin: '0 auto' }}>
 
+        {/* פילטר תקופה — תואם לשאר העמודים */}
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <PeriodPicker period={period} onChange={setPeriod} />
+        </div>
+
         {/* סיכום לפי סוג — clean gray pills */}
         {byType.length > 0 && (
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' as const, marginBottom: '20px' }}>

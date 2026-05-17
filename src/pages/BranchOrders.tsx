@@ -142,27 +142,51 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
   }
 
   // ─── שליפת הזמנות ──────────────────────────────────────────────────────────
+  // Approved + disputed orders are filtered by the selected period (historic
+  // view). Pending orders are ALWAYS fetched across all time — clicking the
+  // "X הזמנות ממתינות" badge on BranchHome must reveal exactly those X items
+  // even when the manager arrived a few weeks late.
   async function fetchOrders() {
     setLoading(true)
-    const [fsRes, b2bRes] = await Promise.all([
+    const select = (col: string) =>
+      `id, date, customer, amount, doc_number, notes, branch_status, ${col}`
+    const [fsPeriod, b2bPeriod, fsPending, b2bPending] = await Promise.all([
       supabase.from('factory_sales')
-        .select('id, date, customer, amount, doc_number, notes, branch_status, department')
+        .select(select('department'))
         .eq('target_branch_id', branchId)
         .gte('date', from).lt('date', to)
+        .neq('branch_status', 'pending')
         .order('date', { ascending: false }),
       supabase.from('factory_b2b_sales')
-        .select('id, date, customer, amount, doc_number, notes, branch_status, sale_type')
+        .select(select('sale_type'))
         .eq('target_branch_id', branchId)
         .gte('date', from).lt('date', to)
+        .neq('branch_status', 'pending')
+        .order('date', { ascending: false }),
+      supabase.from('factory_sales')
+        .select(select('department'))
+        .eq('target_branch_id', branchId)
+        .or('branch_status.eq.pending,branch_status.is.null')
+        .order('date', { ascending: false }),
+      supabase.from('factory_b2b_sales')
+        .select(select('sale_type'))
+        .eq('target_branch_id', branchId)
+        .or('branch_status.eq.pending,branch_status.is.null')
         .order('date', { ascending: false }),
     ])
 
     const all: Order[] = [
-      ...(fsRes.data || []).map((r: any) => ({
+      ...(fsPeriod.data || []).map((r: any) => ({
         ...r, branch_status: r.branch_status || 'pending', source_table: 'factory_sales' as const, source_type: r.department,
       })),
-      ...(b2bRes.data || []).map((r: any) => ({
+      ...(b2bPeriod.data || []).map((r: any) => ({
         ...r, branch_status: r.branch_status || 'pending', source_table: 'factory_b2b_sales' as const, source_type: r.sale_type,
+      })),
+      ...(fsPending.data || []).map((r: any) => ({
+        ...r, branch_status: 'pending' as const, source_table: 'factory_sales' as const, source_type: r.department,
+      })),
+      ...(b2bPending.data || []).map((r: any) => ({
+        ...r, branch_status: 'pending' as const, source_table: 'factory_b2b_sales' as const, source_type: r.sale_type,
       })),
     ].sort((a, b) => b.date.localeCompare(a.date))
 
