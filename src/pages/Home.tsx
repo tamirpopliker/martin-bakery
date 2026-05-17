@@ -292,7 +292,7 @@ export default function Home() {
         totalBranchOP += cb?.operatingProfit ?? 0
         return {
           id: br.id, name: br.name, color: br.color,
-          revenue: rev, laborCost: lab, laborPct,
+          revenue: rev, laborCost: lab, laborPct: labPct,
           managerSalary: cb?.managerSalary || 0,
           waste: cb?.waste || 0,
           operatingProfit: cb?.operatingProfit ?? 0,
