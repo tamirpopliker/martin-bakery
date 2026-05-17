@@ -990,13 +990,16 @@ export default function Home() {
               <SheetTitle className="text-base font-bold text-slate-900">פירוט הכנסות — {period.label}</SheetTitle>
             </SheetHeader>
           {(() => {
-            // Use factory EXTERNAL only — factoryRevenue (= factoryPL.sales) includes
-            // internal factory→branch transfers, which would double-count against
-            // the branch revenue rows above.
-            const grandRevenue = factoryExternalRevenue + totalBranchRevenue
+            // totalBranchRevenue already includes factory external (it's the
+            // consolidated revenue per setTotalBranchRevenue above). Don't add
+            // factoryExternalRevenue again or we double-count the factory share.
+            // Per-row percentages still split correctly because the rows sum
+            // to (branches + factoryExt) which equals totalBranchRevenue.
+            const grandRevenue = totalBranchRevenue
+            const branchSum = branchKpi.reduce((s, br) => s + br.revenue, 0)
             const rows = [
               ...branchKpi.map(br => ({ name: br.name, revenue: br.revenue, pct: grandRevenue > 0 ? (br.revenue / grandRevenue) * 100 : 0 })),
-              { name: 'מפעל (חיצוני)', revenue: factoryExternalRevenue, pct: grandRevenue > 0 ? (factoryExternalRevenue / grandRevenue) * 100 : 0 },
+              { name: 'מפעל (חיצוני)', revenue: Math.max(0, grandRevenue - branchSum), pct: grandRevenue > 0 ? (Math.max(0, grandRevenue - branchSum) / grandRevenue) * 100 : 0 },
             ]
             return (
               <Table>
