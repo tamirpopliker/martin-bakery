@@ -58,20 +58,34 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
   const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set())
 
   // ─── Internal sales state ───
-  const [internalOrders, setInternalOrders] = useState<any[]>([])
+  const [internalOrders, setInternalOrders] = useState<any[]>([])         // pending + modified (action needed)
+  const [internalCompleted, setInternalCompleted] = useState<any[]>([])   // completed within selected period (read-only)
   const [internalExpanded, setInternalExpanded] = useState(true)
+  const [completedExpanded, setCompletedExpanded] = useState(false)
   const [viewInternal, setViewInternal] = useState<any | null>(null)
   const [viewInternalItems, setViewInternalItems] = useState<any[]>([])
   const [editInternalItems, setEditInternalItems] = useState<any[]>([])
   const [editingInternal, setEditingInternal] = useState(false)
 
   async function fetchInternalOrders() {
-    const { data } = await supabase.from('internal_sales')
-      .select('*')
-      .eq('branch_id', branchId)
-      .in('status', ['pending', 'modified'])
-      .order('order_date', { ascending: false })
-    setInternalOrders(data || [])
+    // Pending/modified: no date filter (action items, always relevant).
+    // Completed: filtered to the selected period so the page reconciles
+    // with the dashboard's "רכישות מפעל" KPI for the same period.
+    const [pendingRes, completedRes] = await Promise.all([
+      supabase.from('internal_sales')
+        .select('*')
+        .eq('branch_id', branchId)
+        .in('status', ['pending', 'modified'])
+        .order('order_date', { ascending: false }),
+      supabase.from('internal_sales')
+        .select('*')
+        .eq('branch_id', branchId)
+        .eq('status', 'completed')
+        .gte('order_date', from).lt('order_date', to)
+        .order('order_date', { ascending: false }),
+    ])
+    setInternalOrders(pendingRes.data || [])
+    setInternalCompleted(completedRes.data || [])
   }
 
   async function openInternalOrder(sale: any) {
@@ -382,6 +396,48 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
                     <button onClick={() => openInternalOrder(s)}
                       style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 8, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Eye size={14} /> צפה ואשר
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── Internal Sales — completed (informational, reconciles with dashboard) ──── */}
+        {internalCompleted.length > 0 && !viewInternal && (
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e2e8f0', marginBottom: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <button onClick={() => setCompletedExpanded(!completedExpanded)}
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', background: '#f0fdf4', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <CheckCircle size={18} color="#16a34a" />
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                  תעודות משלוח שהתקבלו ({internalCompleted.length})
+                </span>
+                <span style={{ fontSize: 12, color: '#64748b' }}>
+                  · ₪{internalCompleted.reduce((s, r) => s + Number(r.total_amount || 0), 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              {completedExpanded ? <ChevronUp size={16} color="#94a3b8" /> : <ChevronDown size={16} color="#94a3b8" />}
+            </button>
+            {completedExpanded && (
+              <div>
+                {internalCompleted.map((s: any) => (
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderTop: '1px solid #f1f5f9' }}>
+                    <div>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                        תעודה {s.order_number || '—'}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#94a3b8', marginRight: 8 }}>
+                        {new Date(s.order_date + 'T12:00:00').toLocaleDateString('he-IL')}
+                      </span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginRight: 12 }}>
+                        ₪{Number(s.total_amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <button onClick={() => openInternalOrder(s)}
+                      style={{ background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 8, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Eye size={14} /> צפה
                     </button>
                   </div>
                 ))}
