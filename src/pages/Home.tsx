@@ -221,6 +221,7 @@ export default function Home() {
     // Wait for the async branch list from BranchContext — otherwise .in('branch_id', []) returns 0 rows.
     if (branchList.length === 0) return
     async function loadKpi() {
+     try {
       const monthKey = period.monthKey || from.slice(0, 7)
       const overheadPct = await getOverheadPct()
 
@@ -341,6 +342,10 @@ export default function Home() {
       const prevTotalConsOp = prevFactoryConsOp + prevCons.branches.reduce(
         (s, b) => s + b.operatingProfit + b.factoryPurchases, 0)
       setPrevBranchOperatingProfit(prevTotalConsOp)
+     } catch (err) {
+       // Surface any failure so the empty-state on the home page is debuggable.
+       console.error('[Home loadKpi] failed:', err)
+     }
     }
     loadKpi()
   }, [from, to, branchList.length])
@@ -990,16 +995,26 @@ export default function Home() {
               <SheetTitle className="text-base font-bold text-slate-900">פירוט הכנסות — {period.label}</SheetTitle>
             </SheetHeader>
           {(() => {
-            // totalBranchRevenue already includes factory external (it's the
-            // consolidated revenue per setTotalBranchRevenue above). Don't add
-            // factoryExternalRevenue again or we double-count the factory share.
-            // Per-row percentages still split correctly because the rows sum
-            // to (branches + factoryExt) which equals totalBranchRevenue.
+            // Source of truth for which branches exist is BRANCHES (from
+            // BranchContext); the values come from branchKpi (populated by
+            // the loadKpi effect). If branchKpi hasn't loaded yet, we still
+            // want to show the branch rows so the user can see what's
+            // pending — falling back to a 0 marker for the value.
             const grandRevenue = totalBranchRevenue
             const branchSum = branchKpi.reduce((s, br) => s + br.revenue, 0)
+            const factoryRevenue = Math.max(0, grandRevenue - branchSum)
+            const branchRows = BRANCHES.map(br => {
+              const kpi = branchKpi.find(k => k.id === br.id)
+              const revenue = kpi?.revenue ?? 0
+              return {
+                name: br.name,
+                revenue,
+                pct: grandRevenue > 0 ? (revenue / grandRevenue) * 100 : 0,
+              }
+            })
             const rows = [
-              ...branchKpi.map(br => ({ name: br.name, revenue: br.revenue, pct: grandRevenue > 0 ? (br.revenue / grandRevenue) * 100 : 0 })),
-              { name: 'מפעל (חיצוני)', revenue: Math.max(0, grandRevenue - branchSum), pct: grandRevenue > 0 ? (Math.max(0, grandRevenue - branchSum) / grandRevenue) * 100 : 0 },
+              ...branchRows,
+              { name: 'מפעל (חיצוני)', revenue: factoryRevenue, pct: grandRevenue > 0 ? (factoryRevenue / grandRevenue) * 100 : 0 },
             ]
             return (
               <Table>
