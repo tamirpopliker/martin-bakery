@@ -310,8 +310,8 @@ export default function BranchHome({ branch, onBack }: Props) {
             if (appUser && isRestrictedBranchUser(appUser)) {
               return ['branch-team', 'special_orders', 'cake_print_editor', 'change_password'].includes(item.page)
             }
-            // Hide settings and data_import for non-admin users
-            if (!isAdmin && (item.page === 'settings' || item.page === 'data_import')) return false
+            // Hide settings, data_import, HR dashboard and changes report for non-admin users
+            if (!isAdmin && (item.page === 'settings' || item.page === 'data_import' || item.page === 'hr_dashboard' || item.page === 'changes_report')) return false
             // Hide change_password for email-auth branch users; they manage it via settings
             if (item.page === 'change_password' && !isRestrictedBranchUser(appUser || ({ role: '', email: '' } as any))) return false
             return true
