@@ -224,8 +224,17 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
   const credit = parseFloat(creditSales) || 0
   const expectedCash = opening + cash
   const depositToBag = cash
-  const defaultNextOpening = Math.round((countedCash - cash) * 100) / 100
   const variance = countedCash - expectedCash
+  // יתרת פתיחה מחר משתנה לפי בחירת המשתמש בטיפול בפער:
+  //   surplus_fund — העודף/חוסר עובר לקופת עודף, אז הקופה חוזרת בדיוק לסכום הפתיחה המקורי.
+  //   documented / kept — הפער נשאר בתוך הקופה, אז יתרת המחר היא counted - cash (כל מה שנשאר אחרי הפקדת המזומן).
+  // כשאין פער (variance = 0) שתי הנוסחאות מחזירות את אותו ערך, אז אין רגרסיה במצב התקין.
+  const defaultNextOpening = Math.round(
+    ((varianceAction === 'surplus_fund' && Math.abs(variance) > 0.009)
+      ? opening
+      : countedCash - cash
+    ) * 100
+  ) / 100
   const isLargeVariance = Math.abs(variance) > 50
 
   // Reset large-variance acknowledgment when the count changes
@@ -613,8 +622,12 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                   <label style={S.label}>יתרת פתיחה מחר (₪)</label>
                   <input type="number" inputMode="decimal" value={nextOpeningOverride} onChange={e => setNextOpeningOverride(e.target.value)} style={S.input} placeholder={String(defaultNextOpening.toFixed(2))} />
                   <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>
-                    ברירת מחדל: {fmtDec(defaultNextOpening)} (נספר − מכירות מזומן).
-                    שינוי יגרור משיכה/דחיפה מקופת עודף.
+                    ברירת מחדל: {fmtDec(defaultNextOpening)}
+                    {' '}
+                    {varianceAction === 'surplus_fund' && Math.abs(variance) > 0.009
+                      ? '(חזרה לפתיחה — הפער עובר לקופת עודף)'
+                      : '(נספר − מכירות מזומן)'}.
+                    {' '}שינוי יגרור משיכה/דחיפה מקופת עודף.
                   </div>
                 </div>
 
