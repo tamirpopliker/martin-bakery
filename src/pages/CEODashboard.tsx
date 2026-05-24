@@ -155,6 +155,11 @@ export default function CEODashboard({ onBack }: Props) {
   const [priceAlerts, setPriceAlerts] = useState<{ product_name: string; current_price: number; last_price: number; pct: number }[]>([])
   const [hqCost, setHqCost] = useState(0)
   const [hasEmployerReport, setHasEmployerReport] = useState(false)
+  const [dataFreshness, setDataFreshness] = useState<Array<{
+    branchId: number; name: string;
+    lastRegister: string | null; lastExpense: string | null; lastWaste: string | null;
+    registerDaysBehind: number; worstDaysBehind: number;
+  }>>([])
 
   // Sheet (drawer) state
   const [sheetType, setSheetType] = useState<KpiSheetType | null>(null)
@@ -441,6 +446,25 @@ export default function CEODashboard({ onBack }: Props) {
     const { count: reportCount } = await supabase.from('employer_costs_uploads')
       .select('id', { count: 'exact', head: true }).eq('month', mMonth).eq('year', mYear)
     setHasEmployerReport((reportCount || 0) > 0)
+
+    // Data-freshness alert: which branches are behind on daily data entry.
+    // Computes "days behind" from today (not from period end) — useful even when
+    // viewing past months. Shown only when at least one branch is >0 days behind.
+    const freshnessResults = await Promise.all(BRANCHES.map(async br => {
+      const [reg, exp, waste] = await Promise.all([
+        supabase.from('register_closings').select('date').eq('branch_id', br.id).order('date', { ascending: false }).limit(1),
+        supabase.from('branch_expenses').select('date').eq('branch_id', br.id).order('date', { ascending: false }).limit(1),
+        supabase.from('branch_waste').select('date').eq('branch_id', br.id).order('date', { ascending: false }).limit(1),
+      ])
+      const lastRegister = reg.data?.[0]?.date || null
+      const lastExpense = exp.data?.[0]?.date || null
+      const lastWaste = waste.data?.[0]?.date || null
+      const daysBehind = (d: string | null) => d ? Math.floor((Date.now() - new Date(d + 'T12:00:00').getTime()) / 86400000) : 999
+      const registerDaysBehind = daysBehind(lastRegister)
+      const worstDaysBehind = Math.max(registerDaysBehind, daysBehind(lastExpense), daysBehind(lastWaste))
+      return { branchId: br.id, name: br.name, lastRegister, lastExpense, lastWaste, registerDaysBehind, worstDaysBehind }
+    }))
+    setDataFreshness(freshnessResults)
 
     } catch (err) {
       console.error('[CEODashboard] fetchData error:', err)
@@ -853,6 +877,38 @@ export default function CEODashboard({ onBack }: Props) {
       <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
 
         {insightsSummary && <InsightsPanel summary={insightsSummary} />}
+
+        {/* Data freshness — surfaces branches that stopped entering data */}
+        {dataFreshness.some(b => b.worstDaysBehind >= 2) && (
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #fde68a', padding: 16, marginTop: 10, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: '#92400e', margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 16 }}>⏰</span> פיגור בהזנת נתונים יומית
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 0, fontSize: 12 }}>
+              <span style={{ fontWeight: 600, color: '#94a3b8', padding: '6px 0', borderBottom: '1px solid #e2e8f0' }}>סניף</span>
+              <span style={{ fontWeight: 600, color: '#94a3b8', padding: '6px 0', borderBottom: '1px solid #e2e8f0' }}>קופה אחרונה</span>
+              <span style={{ fontWeight: 600, color: '#94a3b8', padding: '6px 0', borderBottom: '1px solid #e2e8f0' }}>הוצאה אחרונה</span>
+              <span style={{ fontWeight: 600, color: '#94a3b8', padding: '6px 0', borderBottom: '1px solid #e2e8f0' }}>פחת אחרון</span>
+              {dataFreshness.map(b => {
+                const fmtRel = (d: string | null) => {
+                  if (!d) return <span style={{ color: '#ef4444', fontWeight: 700 }}>אף פעם</span>
+                  const days = Math.floor((Date.now() - new Date(d + 'T12:00:00').getTime()) / 86400000)
+                  const color = days >= 3 ? '#ef4444' : days >= 2 ? '#f59e0b' : days >= 1 ? '#64748b' : '#16a34a'
+                  const label = days === 0 ? 'היום' : days === 1 ? 'אתמול' : `לפני ${days} ימים`
+                  return <span style={{ color, fontWeight: 700 }}>{label}</span>
+                }
+                return (
+                  <div key={b.branchId} style={{ display: 'contents' }}>
+                    <span style={{ padding: '8px 0', borderBottom: '1px solid #f8fafc', fontWeight: 600 }}>{b.name}</span>
+                    <span style={{ padding: '8px 0', borderBottom: '1px solid #f8fafc' }}>{fmtRel(b.lastRegister)}</span>
+                    <span style={{ padding: '8px 0', borderBottom: '1px solid #f8fafc' }}>{fmtRel(b.lastExpense)}</span>
+                    <span style={{ padding: '8px 0', borderBottom: '1px solid #f8fafc' }}>{fmtRel(b.lastWaste)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Price Alerts */}
         {priceAlerts.length > 0 && (

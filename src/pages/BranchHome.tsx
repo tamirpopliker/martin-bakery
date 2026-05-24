@@ -121,6 +121,7 @@ export default function BranchHome({ branch, onBack }: Props) {
   const [pendingOrders, setPendingOrders] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [unreadSpecialOrders, setUnreadSpecialOrders] = useState(0)
+  const [registerDaysBehind, setRegisterDaysBehind] = useState<number | null>(null)
 
   // ─── טעינת התראות הזמנות מיוחדות ──────────────────────────────────────────
   useEffect(() => {
@@ -171,6 +172,18 @@ export default function BranchHome({ branch, onBack }: Props) {
       setPendingOrders((fs.count || 0) + (b2b.count || 0) + (internal.count || 0))
     }
     loadPendingCount()
+
+    // Surface a banner if the manager hasn't closed the register in the last few days.
+    async function loadDaysBehind() {
+      const { data } = await supabase.from('register_closings')
+        .select('date').eq('branch_id', branch.id)
+        .order('date', { ascending: false }).limit(1)
+      if (!data || data.length === 0) { setRegisterDaysBehind(999); return }
+      const last = new Date(data[0].date + 'T12:00:00')
+      const days = Math.floor((Date.now() - last.getTime()) / 86400000)
+      setRegisterDaysBehind(days)
+    }
+    loadDaysBehind()
   }, [branch.id])
 
   // ─── ניתוב פנימי ──────────────────────────────────────────────────────────
@@ -298,6 +311,23 @@ export default function BranchHome({ branch, onBack }: Props) {
       {/* ─── כרטיסי מודולים ──────────────────────────────────────────────── */}
       <div style={{ padding: '36px', maxWidth: '960px', margin: '0 auto' }}>
 
+        {registerDaysBehind !== null && registerDaysBehind >= 2 && (
+          <div style={{ background: registerDaysBehind >= 5 ? '#fef2f2' : '#fef3c7', border: `1px solid ${registerDaysBehind >= 5 ? '#fca5a5' : '#fcd34d'}`, borderRadius: 12, padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 22 }}>⏰</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: registerDaysBehind >= 5 ? '#991b1b' : '#92400e' }}>
+                {registerDaysBehind >= 999 ? 'עדיין לא נסגרו קופות בסניף' : `סגירת הקופה האחרונה הייתה לפני ${registerDaysBehind} ימים`}
+              </div>
+              <div style={{ fontSize: 12, color: '#78716c', marginTop: 2 }}>
+                מומלץ להזין סגירת קופה מדי יום — בלעדיה נתוני הדשבורד לא משקפים את המצב בפועל
+              </div>
+            </div>
+            <button onClick={() => setPage('register_closings')}
+              style={{ background: '#0f172a', color: 'white', border: 'none', borderRadius: 10, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              לסגירת קופה ←
+            </button>
+          </div>
+        )}
 
         <motion.div
           style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}
