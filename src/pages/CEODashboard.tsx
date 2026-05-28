@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import InsightsPanel from '../components/InsightsPanel'
+import WeeklyInsightsSelector from '../components/WeeklyInsightsSelector'
 import { buildInsightsSummary, type InsightsSummary, type EntityInput } from '../lib/branchInsights'
 
 interface Props { onBack: () => void }
@@ -885,6 +886,11 @@ export default function CEODashboard({ onBack }: Props) {
       <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
 
         {insightsSummary && <InsightsPanel summary={insightsSummary} />}
+
+        {/* Weekly AI advisor — runs every Monday at 10:00 IST on the prior Sun-Sat */}
+        <div style={{ marginTop: 10 }}>
+          <WeeklyInsightsSelector branches={BRANCHES} />
+        </div>
 
         {/* Data freshness — surfaces branches that stopped entering data */}
         {dataFreshness.some(b => b.worstDaysBehind >= 2) && (
