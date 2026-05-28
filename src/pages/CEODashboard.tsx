@@ -383,7 +383,9 @@ export default function CEODashboard({ onBack }: Props) {
     // is apples-to-apples with what's displayed in the tiles.
     const prevFactoryControllableKpi = prevFactoryPL.externalRevenue - prevFactoryPL.suppliers
       - prevFactoryPL.labor - prevFactoryPL.managerSalary - prevFactoryPL.repairs
-    const prevBranchAddback = (b: typeof prevBranchPLs[number]) => b.waste + b.factoryPurchases
+    // Waste no longer included in the add-back — calculatePL excludes it from
+    // controllableProfit/operatingProfit (it's already inside raw materials).
+    const prevBranchAddback = (b: typeof prevBranchPLs[number]) => b.factoryPurchases
     setPrevKpiGross(prevFactoryControllableKpi
       + prevBranchPLs.reduce((s, pl) => s + pl.controllableProfit + prevBranchAddback(pl), 0))
     setPrevKpiOp(prevFactoryControllableKpi - prevFactoryPL.fixedCosts - prevFactoryPL.overhead
@@ -1003,14 +1005,16 @@ export default function CEODashboard({ onBack }: Props) {
               const fRevKpi = isSegment ? factorySales : factorySales - factoryInternalSales
               // Match the table's row formulas:
               //   - subtract factoryManagerSalary (now split out of factoryLabor)
-              //   - waste excluded (removed by user request)
+              //   - waste excluded (already counted in raw materials)
               //   - factoryOverhead is the factory's share of HQ; subtract from OP
               const factoryControllableKpi = fRevKpi - factorySuppliers - factoryLabor - factoryManagerSalary - factoryRepairs
               const factoryOpKpi = factoryControllableKpi - factoryFixed - factoryOverhead
               const kpiRev = fRevKpi + branches.reduce((s, b) => s + b.revenue, 0)
               // In consolidated view, branches don't show factoryPurchases as a cost row, so add
-              // it back (along with waste) to align with the table's "סה"כ" cells.
-              const branchAddback = (b: BranchData) => b.waste + (isSegment ? 0 : b.expInternal)
+              // it back to align with the table's "סה"כ" cells. Waste is NOT added back —
+              // calculatePL no longer deducts it, so b.grossProfit / b.operatingProfit already
+              // reflect the right figure.
+              const branchAddback = (b: BranchData) => (isSegment ? 0 : b.expInternal)
               const kpiGross = factoryControllableKpi + branches.reduce((s, b) => s + b.grossProfit + branchAddback(b), 0)
               const kpiOp = factoryOpKpi + branches.reduce((s, b) => s + b.operatingProfit + branchAddback(b), 0)
               // Total labor = factory employees + factory managers + branch employees + branch managers
@@ -1033,7 +1037,7 @@ export default function CEODashboard({ onBack }: Props) {
               </motion.div>
               <motion.div variants={fadeUp}>
                 <div onClick={() => setSheetType('gross_profit')} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px', cursor: 'pointer' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }} title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }} title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל ותיקונים. לא כולל עלויות קבועות והעמסת מטה. פחת מוצג כמדד נפרד.">רווח נשלט</span>
                     <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '4px', color: kpiGross >= 0 ? '#639922' : '#E24B4A' }}>
                       <CountUp end={Math.round(kpiGross)} duration={1.5} separator="," prefix="₪" />
                     </div>
