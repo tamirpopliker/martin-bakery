@@ -1049,10 +1049,12 @@ export default function Home() {
       </Sheet>
 
       {/* ─── Labor Drill-Down Sheet ───────────────────────────────────────── */}
+      {/* Wider than the default 420px because the table has 4 columns
+          (גוף, עלות, % מהכנסותיו, % מסה"כ) and the % columns wrap otherwise. */}
       <Sheet open={laborSheetOpen} onOpenChange={setLaborSheetOpen}>
         <SheetPortal>
           <SheetBackdrop />
-          <SheetContent>
+          <SheetContent className="w-[560px]">
             <SheetHeader className="pb-3">
               <SheetTitle className="text-base font-bold text-slate-900">פירוט לייבור — {period.label}</SheetTitle>
             </SheetHeader>
