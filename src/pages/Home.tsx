@@ -1058,27 +1058,34 @@ export default function Home() {
             </SheetHeader>
           {(() => {
             const grandRevenue = totalBranchRevenue   // already consolidated (branches + factory external)
-            // Per-entity rows: each branch shows labor + manager + its HQ allocation share
-            const rows = branchKpi.map(br => {
-              const entityCost = br.laborCost + br.managerSalary + br.hqAllocation
+            // Per-entity rows: branches and factory show employer cost WITHOUT HQ allocation.
+            // HQ is a separate row at the bottom so the figures match what each entity's own
+            // dashboard reports (where HQ is shown as "העמסת מטה" on its own line).
+            type LaborRow = { name: string; cost: number; pctOfOwn: number | null; entityId?: number }
+            const rows: LaborRow[] = branchKpi.map(br => {
+              const entityCost = br.laborCost + br.managerSalary
               return {
                 name: br.name,
                 cost: entityCost,
-                pct: br.revenue > 0 ? (entityCost / br.revenue) * 100 : 0,
+                pctOfOwn: br.revenue > 0 ? (entityCost / br.revenue) * 100 : 0,
+                entityId: br.id,
               }
             })
-            // Factory row — labor + factory managers + factory's own HQ share.
-            // Branch rows already include their managers, so the factory must include its own
-            // for the sum to match the consolidated card.
-            const factoryHq = Math.max(0, hqAllocationTotal - branchKpi.reduce((s, b) => s + b.hqAllocation, 0))
-            const factoryEntityCost = factoryLabor + factoryManagerSalary + factoryHq
+            const factoryEntityCost = factoryLabor + factoryManagerSalary
             rows.push({
               name: 'מפעל',
               cost: factoryEntityCost,
-              pct: factoryRevenue > 0 ? (factoryEntityCost / factoryRevenue) * 100 : 0,
+              pctOfOwn: factoryRevenue > 0 ? (factoryEntityCost / factoryRevenue) * 100 : 0,
+            })
+            // HQ row — full allocation across the business. No "own revenue" so the % column is —.
+            rows.push({
+              name: 'מטה',
+              cost: hqAllocationTotal,
+              pctOfOwn: null,
             })
             const totalAll = rows.reduce((s, r) => s + r.cost, 0)
             const totalPct = grandRevenue > 0 ? (totalAll / grandRevenue) * 100 : 0
+            const pctOfGrand = (cost: number) => grandRevenue > 0 ? (cost / grandRevenue) * 100 : 0
             return (
               <Table>
                 <TableHeader>
@@ -1086,6 +1093,7 @@ export default function Home() {
                     <TableHead className="text-right">גוף</TableHead>
                     <TableHead className="text-center">עלות מעסיק</TableHead>
                     <TableHead className="text-center">% מהכנסותיו</TableHead>
+                    <TableHead className="text-center">% מסה"כ הכנסות</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1094,13 +1102,22 @@ export default function Home() {
                       <TableCell className="font-medium text-right">{r.name}</TableCell>
                       <TableCell className="text-center">{fmtK(r.cost)}</TableCell>
                       <TableCell className="text-center">
-                        {(() => { const t = branchLaborTargets[branchKpi.find(b => b.name === r.name)?.id ?? 0] || 0; return <span className={t > 0 ? (r.pct <= t ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-700'}>{r.pct.toFixed(1)}%</span> })()}
+                        {r.pctOfOwn === null
+                          ? <span className="text-slate-400">—</span>
+                          : (() => { const t = branchLaborTargets[r.entityId ?? 0] || 0; return <span className={t > 0 ? (r.pctOfOwn! <= t ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-700'}>{r.pctOfOwn!.toFixed(1)}%</span> })()
+                        }
+                      </TableCell>
+                      <TableCell className="text-center text-slate-700">
+                        {pctOfGrand(r.cost).toFixed(1)}%
                       </TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="bg-slate-50 font-bold">
                     <TableCell className="font-bold text-right">סה"כ</TableCell>
                     <TableCell className="text-center font-bold">{fmtK(totalAll)}</TableCell>
+                    <TableCell className="text-center font-bold">
+                      <span className="text-slate-700">{totalPct.toFixed(1)}%</span>
+                    </TableCell>
                     <TableCell className="text-center font-bold">
                       <span className="text-slate-700">{totalPct.toFixed(1)}%</span>
                     </TableCell>
