@@ -206,6 +206,7 @@ export default function Home() {
     return () => { supabase.removeChannel(ch) }
   }, [])
   const [factoryLabor, setFactoryLabor] = useState(0)
+  const [factoryManagerSalary, setFactoryManagerSalary] = useState(0)
   const [factoryWasteState, setFactoryWasteState] = useState(0)
   const [factoryOp, setFactoryOp] = useState(0)
   const [hqAllocationTotal, setHqAllocationTotal] = useState(0)
@@ -274,6 +275,7 @@ export default function Home() {
         (s, b) => s + b.operatingProfit + b.factoryPurchases, 0)
       setBranchOperatingProfit(totalConsOp)
       setFactoryOp(factoryConsOp)
+      setFactoryManagerSalary(cons.factory.managerSalary)
       setFactoryWasteState(cons.factory.waste)
       setHqAllocationTotal(cons.consolidated.overhead)
       setHqIsActual(cons.factory.hqIsActual)
@@ -1065,9 +1067,11 @@ export default function Home() {
                 pct: br.revenue > 0 ? (entityCost / br.revenue) * 100 : 0,
               }
             })
-            // Factory row — labor + factory's own HQ share
+            // Factory row — labor + factory managers + factory's own HQ share.
+            // Branch rows already include their managers, so the factory must include its own
+            // for the sum to match the consolidated card.
             const factoryHq = Math.max(0, hqAllocationTotal - branchKpi.reduce((s, b) => s + b.hqAllocation, 0))
-            const factoryEntityCost = factoryLabor + factoryHq
+            const factoryEntityCost = factoryLabor + factoryManagerSalary + factoryHq
             rows.push({
               name: 'מפעל',
               cost: factoryEntityCost,
