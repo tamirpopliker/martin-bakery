@@ -278,8 +278,10 @@ export default function FactoryDashboard({ onBack }: Props) {
   const totalGlobalLabor  = globalLaborCreams + globalLaborDough
   const totalLabor        = hourlyLabor + totalGlobalLabor
 
-  // Profit formulas — controllable margin = sales - suppliers - labor - waste - repairs
-  const controllableMargin = totalSales - totalSuppliers - totalLabor - totalWaste - totalRepairs
+  // Profit formulas — controllable margin = sales - suppliers - labor - repairs.
+  // Waste is NOT deducted — thrown-away products are already counted in raw materials
+  // (suppliers). It remains as a KPI tracked separately. See lib/calculatePL.ts.
+  const controllableMargin = totalSales - totalSuppliers - totalLabor - totalRepairs
   const operatingProfit    = controllableMargin - fixedCosts
 
   // KPI percentages
@@ -287,8 +289,8 @@ export default function FactoryDashboard({ onBack }: Props) {
   const wastePct  = pct(totalWaste, totalSales)
   const opPct     = pct(operatingProfit, totalSales)
 
-  // Previous period profit (for DiffBadge)
-  const prevControllable    = prev.sales - prev.suppliers - prev.labor - prev.waste - prev.repairs
+  // Previous period profit (for DiffBadge) — same policy: waste excluded.
+  const prevControllable    = prev.sales - prev.suppliers - prev.labor - prev.repairs
   const prevOperatingProfit = prevControllable - fixedCosts
 
   // ─── Loading State ──────────────────────────────────────────────────────
@@ -308,12 +310,12 @@ export default function FactoryDashboard({ onBack }: Props) {
   ]
   const maxSale = Math.max(...salesItems.map(i => i.value), 1)
 
-  // Costs breakdown
+  // Costs breakdown — waste excluded (already inside ספקים / חומרי גלם).
+  // Shown separately as a KPI panel below.
   const costItems = [
     { label: 'ספקים', value: totalSuppliers },
     { label: 'לייבור', value: totalLabor },
     { label: 'עלויות קבועות', value: fixedCosts },
-    { label: 'פחת', value: totalWaste },
     { label: 'תיקונים', value: totalRepairs },
   ]
   const maxCost = Math.max(...costItems.map(i => i.value), 1)
@@ -326,7 +328,6 @@ export default function FactoryDashboard({ onBack }: Props) {
     { label: 'סה"כ מכירות', amount: totalSales, type: 'bold' },
     { label: 'חומרי גלם', amount: totalSuppliers, type: 'normal' },
     { label: 'לייבור', amount: totalLabor, type: 'normal' },
-    { label: 'פחת', amount: totalWaste, type: 'normal' },
     { label: 'תיקונים', amount: totalRepairs, type: 'normal' },
     { label: '──────', amount: 0, type: 'separator' },
     { label: 'רווח נשלט', amount: controllableMargin, type: 'bold' },
@@ -373,7 +374,7 @@ export default function FactoryDashboard({ onBack }: Props) {
 
           {/* 2. Controllable Margin */}
           <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4, cursor: 'help' }} title="מכירות פחות ספקים, לייבור, פחת ותיקונים">רווח נשלט</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4, cursor: 'help' }} title="מכירות פחות ספקים, לייבור ותיקונים. פחת אינו מנוכה — הוא כבר כלול בעלות חומרי הגלם, ומוצג כמדד נפרד.">רווח נשלט</div>
             <div className="flex items-center gap-2">
               <span style={{ fontSize: 24, fontWeight: 700, color: controllableMargin >= 0 ? '#639922' : '#E24B4A' }}>{fmtM(controllableMargin)}</span>
               <DiffBadge current={controllableMargin} previous={prevControllable} />

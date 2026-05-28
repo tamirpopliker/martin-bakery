@@ -285,7 +285,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
 
                 {/* רווח נשלט (gross) */}
                 <div style={{ ...summaryRowStyle, background: '#fafafa', borderBottom: '1px solid #f1f5f9' }}>
-                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }} className="cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }} className="cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל ותיקונים. לא כולל עלויות קבועות והעמסת מטה. פחת מוצג כמדד ניהולי נפרד למטה.">רווח נשלט</span>
                   <span style={{ fontSize: '16px', fontWeight: '700', color: grossProfit >= 0 ? '#34d399' : '#fb7185', textAlign: 'left' as const }}>{fmtM(grossProfit)}</span>
                   <span style={{ fontSize: '13px', fontWeight: '600', color: grossProfit >= 0 ? '#34d399' : '#fb7185', textAlign: 'left' as const }}>{grossPct.toFixed(1)}%</span>
                 </div>
@@ -298,7 +298,6 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                 </div>
                 {[
                   { label: 'הנהלה וכלליות', amount: mgmtCosts },
-                  { label: 'פחת', amount: wasteTotal },
                 ].map((l, i) => (
                   <div key={i} style={plRowStyle}>
                     <span style={{ fontSize: '14px', color: '#374151' }}>{l.label}</span>

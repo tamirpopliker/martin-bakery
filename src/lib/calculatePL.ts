@@ -264,11 +264,14 @@ export async function calculateBranchPL(
     }
   }
 
-  // Controllable profit = revenue - all variable costs
+  // Controllable profit = revenue - all variable costs.
+  // Waste is intentionally NOT deducted here: thrown-away products are already counted
+  // in factoryPurchases / externalSuppliers (raw materials). `waste` remains on the
+  // result so dashboards can display it as a standalone management KPI.
   const controllableProfit = revenue
     - factoryPurchases - externalSuppliers
     - labor - managerSalary
-    - waste - repairs - deliveries - infrastructure - otherExpenses
+    - repairs - deliveries - infrastructure - otherExpenses
 
   const controllableMargin = revenue > 0 ? (controllableProfit / revenue) * 100 : 0
 
@@ -391,7 +394,9 @@ export async function calculateFactoryPL(
   const repairs = sum(fRepairs)
   const fixedCosts = sum(fFixed)
 
-  const controllableProfit = revenue - suppliers - labor - managerSalary - waste - repairs
+  // Waste excluded — already counted in `suppliers` (raw materials). Kept on the result
+  // as a KPI only. See calculateBranchPL for the same reasoning.
+  const controllableProfit = revenue - suppliers - labor - managerSalary - repairs
 
   // Headquarters allocation — factory pays its share of HQ cost based on external revenue.
   const { allocation: overhead, isActual: hqIsActual } = computeHQAllocation(hq.factoryExternalRev, hq)
@@ -458,7 +463,8 @@ export async function calculateConsolidatedPL(
   }
 
   consolidated.controllableProfit = consolidated.revenue - consolidated.suppliers - consolidated.labor - consolidated.managerSalary
-  consolidated.operatingProfit = consolidated.controllableProfit - consolidated.waste - consolidated.repairs - consolidated.fixedCosts - consolidated.overhead
+  // Waste excluded from operating profit — already inside `suppliers`. See per-entity functions.
+  consolidated.operatingProfit = consolidated.controllableProfit - consolidated.repairs - consolidated.fixedCosts - consolidated.overhead
 
   return {
     branches,

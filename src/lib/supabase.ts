@@ -681,9 +681,11 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     }
   }
 
-  // Controllable margin = revenue - all expenses - labor - mgmt - waste
+  // Controllable margin = revenue - all expenses - labor - mgmt.
+  // Waste is NOT deducted — thrown-away products are already counted in raw materials
+  // (suppliers / factory purchases). It remains on the result as a KPI only.
   const totalExpenses = expSuppliers + expRepairs + expInfra + expDelivery + expOther
-  const controllableMargin = revenue - totalExpenses - laborEmployer - mgmtCosts - wasteTotal
+  const controllableMargin = revenue - totalExpenses - laborEmployer - mgmtCosts
 
   // Headquarters allocation
   const branchExtRev = hq.branchExternalRev[branchId] ?? revenue
@@ -700,7 +702,6 @@ export async function fetchBranchPL(branchId: number, dateFrom: string, dateTo: 
     { label: 'ספקים חיצוניים', amount: expSuppliersExternal, color: 'expense' },
     { label: laborIsActual ? 'לייבור ✓' : 'לייבור ~', amount: laborEmployer, color: 'expense' },
     { label: mgmtIsActual ? 'שכר מנהל ✓' : 'שכר מנהל (משוער)', amount: mgmtCosts, color: 'expense' },
-    { label: 'פחת', amount: wasteTotal, color: 'expense' },
     { label: 'תיקונים', amount: expRepairs, color: 'expense' },
     { label: 'רווח נשלט', amount: controllableMargin, pct: pct(controllableMargin), bold: true, separator: true, color: 'profit' },
     { label: 'עלויות קבועות', amount: fixedCosts, color: 'expense' },
@@ -750,7 +751,6 @@ export async function fetchFactoryPL(dateFrom: string, dateTo: string, monthKey:
     { label: 'מכירות', amount: sales, bold: true, color: '' },
     { label: 'חומרי גלם', amount: suppliers, color: 'expense' },
     { label: 'לייבור', amount: labor, color: 'expense' },
-    { label: 'פחת', amount: waste, color: 'expense' },
     { label: 'תיקונים', amount: repairs, color: 'expense' },
     { label: 'רווח נשלט', amount: controllableMargin, pct: pct(controllableMargin), bold: true, separator: true, color: 'profit' },
     { label: 'עלויות קבועות', amount: fixedCosts, color: 'expense' },
@@ -805,7 +805,8 @@ export async function fetchConsolidatedPL(
   const repairs = branchExpenses + factoryPL.repairs
   const fixedCosts = branchFixed + factoryPL.fixedCosts
 
-  const controllableMargin = revenue - suppliers - labor - waste - repairs
+  // Waste NOT deducted — already inside `suppliers` (raw materials). Tracked separately as a KPI.
+  const controllableMargin = revenue - suppliers - labor - repairs
   const operatingProfit = controllableMargin - fixedCosts
 
   const pct = (n: number) => revenue > 0 ? (n / revenue) * 100 : 0
@@ -814,7 +815,6 @@ export async function fetchConsolidatedPL(
     { label: 'הכנסות אמיתיות', amount: revenue, bold: true, color: '' },
     { label: 'חומרי גלם', amount: suppliers, color: 'expense' },
     { label: 'לייבור', amount: labor, color: 'expense' },
-    { label: 'פחת', amount: waste, color: 'expense' },
     { label: 'תיקונים / הוצאות', amount: repairs, color: 'expense' },
     { label: 'רווח נשלט', amount: controllableMargin, pct: pct(controllableMargin), bold: true, separator: true, color: 'profit' },
     { label: 'עלויות קבועות', amount: fixedCosts, color: 'expense' },

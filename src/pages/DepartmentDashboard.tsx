@@ -445,7 +445,7 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                 <span style={{ textAlign: 'left' }}>לייבור</span>
                 <span style={{ textAlign: 'left' }}>פחת</span>
                 <span style={{ textAlign: 'left' }}>תיקונים</span>
-                <span style={{ textAlign: 'left' }} className="cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span>
+                <span style={{ textAlign: 'left' }} className="cursor-help" title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל ותיקונים. לא כולל עלויות קבועות והעמסת מטה. פחת מוצג כמדד נפרד.">רווח נשלט</span>
                 <span style={{ textAlign: 'left' }}>רווח תפעולי</span>
               </div>
 
@@ -453,7 +453,9 @@ export default function DepartmentDashboard({ department, onBack }: Props) {
                 <div className="py-10 text-center text-slate-400">אין נתונים לתקופה זו</div>
               ) : [...days].reverse().map((d, i) => {
                 const gp = d.sales - d.production - d.labor
-                const op = gp - d.waste - d.repairs
+                // Waste excluded — already inside production/raw materials. Shown in its own
+                // column as a KPI but not deducted from the operating profit calc.
+                const op = gp - d.repairs
                 return (
                   <div key={d.date} style={{
                     display: 'grid', gridTemplateColumns: '100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr',

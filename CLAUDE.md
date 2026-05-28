@@ -26,6 +26,7 @@ These exist because past duplication caused real bugs (dashboards and email repo
 - **VAT** = 18% (Israel, Jan-2025+). Single constant; if you need it in a new place, extract to `lib/` rather than re-declaring.
 - **Labor cost priority**: `employer_costs` table → fall back to `labor` table. Never sum both.
 - **Internal sales priority**: `branch_expenses` rows with `from_factory=true` take precedence over `internal_sales`. Avoid double-counting.
+- **Waste is a KPI, never a P&L deduction**. Thrown-away products are already counted in raw materials (`factoryPurchases` / `externalSuppliers` / factory `suppliers`). Deducting `waste` from `controllableProfit` / `operatingProfit` double-counts. Keep `waste` on the result for the standalone `% פחת` KPI, but don't subtract it from profit anywhere. If you see a P&L line labelled "פחת" between expenses and "רווח נשלט", that's a bug.
 - **Manager salary**: lives in `fixed_costs` with `entity_id='mgmt'`. Excluded from per-branch fixed costs, added separately as "controlled profit" subtraction. The fallback chain is encoded in `calculatePL.ts` — read it before changing.
 - **Auth / username mode**: `Login.tsx` synthesizes `<username>@martin.local` emails so Supabase Auth + RLS work while users see a username UX. Don't expose the synthetic email anywhere.
 - **Anon key is in the browser** — every new table needs RLS with branch-scoped policies. Never trust the client.

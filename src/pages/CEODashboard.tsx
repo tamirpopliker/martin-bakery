@@ -1134,13 +1134,15 @@ export default function CEODashboard({ onBack }: Props) {
                 // (it's intercompany — eliminated). br.grossProfit subtracts it though, so we add
                 // it back here so per-column profit = revenue − VISIBLE costs only, and
                 // sum(branches) + factory == proper consolidated profit.
+                // Waste is no longer added back: calculatePL no longer deducts it (it's already
+                // inside raw materials), so per-branch profits already reflect the right number.
                 { label: 'רווח נשלט', factory: factoryGross,
-                  getBr: br => br.grossProfit + br.waste + (isSegment ? 0 : br.expInternal),
+                  getBr: br => br.grossProfit + (isSegment ? 0 : br.expInternal),
                   bold: true, color: 'profit' },
                 { label: 'עלויות קבועות', factory: factoryFixed, getBr: br => br.fixedCosts, bold: false, color: '' },
                 { label: 'העמסת מטה' + (hasEmployerReport ? ' ✓' : ' ~'), factory: factoryOverhead, getBr: br => br.overhead, bold: false, color: '' },
                 { label: 'רווח תפעולי', factory: factoryOp,
-                  getBr: br => br.operatingProfit + br.waste + (isSegment ? 0 : br.expInternal),
+                  getBr: br => br.operatingProfit + (isSegment ? 0 : br.expInternal),
                   bold: true, color: 'profit', kpiKey: 'operating' },
               ]
 

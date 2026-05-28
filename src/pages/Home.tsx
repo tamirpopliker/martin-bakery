@@ -1118,13 +1118,14 @@ export default function Home() {
               <SheetTitle className="text-base font-bold text-slate-900">פירוט רווח תפעולי — {period.label}</SheetTitle>
             </SheetHeader>
             {(() => {
-              // Per-entity OP for the consolidated view: branches add back waste + factoryPurchases
-              // (since neither is shown as a deduction at the company level — same logic as
-              // CEODashboard's "סה"כ" cell).
+              // Per-entity OP for the consolidated view: branches add back factoryPurchases
+              // (intercompany — eliminated at the company level). Waste is NOT added back:
+              // calculatePL no longer deducts it (raw materials already include it), so
+              // b.operatingProfit is already the correct figure.
               const rows = [
                 ...branchKpi.map(b => ({
                   name: b.name,
-                  op: b.operatingProfit + b.waste + b.factoryPurchases,
+                  op: b.operatingProfit + b.factoryPurchases,
                   rev: b.revenue,
                 })),
                 { name: 'מפעל', op: factoryOp, rev: factoryExternalRevenue },

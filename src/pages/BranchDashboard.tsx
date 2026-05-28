@@ -230,7 +230,6 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
     { label: 'ספקים חיצוניים', amount: expSuppliersExternal },
     { label: 'לייבור', amount: laborEmployer },
     { label: 'שכר מנהל', amount: mgmtCosts },
-    { label: 'פחת', amount: wasteTotal },
     { label: 'תיקונים', amount: expRepairs },
     { label: '', amount: 0, isSeparator: true },
     { label: 'רווח נשלט', amount: controllableMargin, bold: true, bgClass: controllableMargin >= 0 ? 'bg-emerald-50' : 'bg-rose-50' },

@@ -583,7 +583,6 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                         { label: 'ספקים חיצוניים', key: 'expSuppliersExternal', color: '#ef4444' },
                         { label: 'לייבור', key: 'laborEmployer', color: '#f59e0b' },
                         { label: 'הנהלה וכלליות', key: 'mgmtCosts', color: '#64748b' },
-                        { label: 'פחת', key: 'wasteTotal', color: '#ef4444' },
                       ]
                       const visibleCostRows = presentationMode ? costRows.filter(r => !HIDDEN_IN_PRESENTATION.has(r.key)) : costRows
                       const rows: JSX.Element[] = []
@@ -641,7 +640,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
                       // Gross profit
                       rows.push(
                         <tr key="grossProfit" style={{ background: '#fafafa' }}>
-                          <td style={{ ...cellStyle(true), textAlign: 'right' }}><span style={{ cursor: 'help' }} title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל, פחת ותיקונים. לא כולל עלויות קבועות והעמסת מטה.">רווח נשלט</span></td>
+                          <td style={{ ...cellStyle(true), textAlign: 'right' }}><span style={{ cursor: 'help' }} title="מדד יעילות — כולל רק עלויות שהמנהל שולט בהן: לייבור, ספקים, שכר מנהל ותיקונים. לא כולל עלויות קבועות והעמסת מטה. פחת מוצג כמדד נפרד.">רווח נשלט</span></td>
                           {branches.map(br => {
                             const gp = brGross(br)
                             return <td key={br.id} style={cellStyle(true, gp >= 0 ? '#34d399' : '#ef4444')}>{fmtM(gp)}</td>

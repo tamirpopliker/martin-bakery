@@ -137,7 +137,6 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
     { label: 'משלוחים', key: 'deliveries', positive: false },
     { label: 'הוצאות קבועות', key: 'fixedCosts', positive: false },
     { label: 'הנהלה וכלליות', key: 'admin', positive: false },
-    { label: 'פחת וסחורה שנזרקה', key: 'waste', positive: false },
     { label: 'העמסת מטה', key: 'overhead', positive: false },
     { label: 'רווח תפעולי', key: 'operatingProfit', positive: true, bold: true },
   ]
