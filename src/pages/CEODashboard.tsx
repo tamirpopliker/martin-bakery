@@ -459,7 +459,13 @@ export default function CEODashboard({ onBack }: Props) {
       const lastRegister = reg.data?.[0]?.date || null
       const lastExpense = exp.data?.[0]?.date || null
       const lastWaste = waste.data?.[0]?.date || null
-      const daysBehind = (d: string | null) => d ? Math.floor((Date.now() - new Date(d + 'T12:00:00').getTime()) / 86400000) : 999
+      // Slice to YYYY-MM-DD before appending the noon time, so timestamp-typed
+      // columns (e.g. "2026-05-21T00:00:00+00:00") don't produce NaN.
+      const daysBehind = (d: string | null) => {
+        if (!d) return 999
+        const ms = new Date(d.slice(0, 10) + 'T12:00:00').getTime()
+        return Number.isNaN(ms) ? 999 : Math.floor((Date.now() - ms) / 86400000)
+      }
       const registerDaysBehind = daysBehind(lastRegister)
       const worstDaysBehind = Math.max(registerDaysBehind, daysBehind(lastExpense), daysBehind(lastWaste))
       return { branchId: br.id, name: br.name, lastRegister, lastExpense, lastWaste, registerDaysBehind, worstDaysBehind }
@@ -892,7 +898,10 @@ export default function CEODashboard({ onBack }: Props) {
               {dataFreshness.map(b => {
                 const fmtRel = (d: string | null) => {
                   if (!d) return <span style={{ color: '#ef4444', fontWeight: 700 }}>אף פעם</span>
-                  const days = Math.floor((Date.now() - new Date(d + 'T12:00:00').getTime()) / 86400000)
+                  // Slice to YYYY-MM-DD so timestamp values don't yield NaN.
+                  const ms = new Date(d.slice(0, 10) + 'T12:00:00').getTime()
+                  if (Number.isNaN(ms)) return <span style={{ color: '#ef4444', fontWeight: 700 }}>—</span>
+                  const days = Math.floor((Date.now() - ms) / 86400000)
                   const color = days >= 3 ? '#ef4444' : days >= 2 ? '#f59e0b' : days >= 1 ? '#64748b' : '#16a34a'
                   const label = days === 0 ? 'היום' : days === 1 ? 'אתמול' : `לפני ${days} ימים`
                   return <span style={{ color, fontWeight: 700 }}>{label}</span>
