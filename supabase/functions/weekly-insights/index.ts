@@ -1,20 +1,20 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// weekly-insights — Monday-morning business-advisor agent
+// weekly-insights — AI business-advisor agent (weekly auto + manual monthly)
 // ═══════════════════════════════════════════════════════════════════════════
-// Runs every Monday at 10:00 IST (via pg_cron — see sql/050_schedule_weekly_insights.sql).
-// Analyzes the PRIOR Sunday-Saturday week.
+// Auto: runs every Monday at 10:00 IST via pg_cron with body `{}`, producing
+//       weekly insights for the prior Sun–Sat.
+// Manual: invoked from the UI with body `{ "period_type": "monthly" }` (or
+//         "weekly") to generate insights on demand for the prior period.
+//         Optionally accepts `period_start` + `period_end` for backfill.
 //
 // For each entity (each active branch + factory + consolidated):
 //   1. Call get_<entity>_weekly_metrics(period_start, period_end) RPC
+//      (the SQL function aggregates any date range — name kept for history)
 //   2. Compute derived KPIs (labor %, waste %, controllable/operating profit)
 //   3. Send a compact Hebrew prompt to Claude Haiku 4.5 with structured output
-//   4. Upsert the response into weekly_insights
+//   4. Upsert into `insights` keyed on (period_end, period_type, entity_type, entity_id)
 //
-// Cost: ~$0.005/run × 4 runs/month ≈ ₪0.10/month.
-// Manual trigger:
-//   curl -X POST <fn-url>/weekly-insights -H "Authorization: Bearer <SERVICE_KEY>"
-// With a specific week:
-//   curl -X POST '<fn-url>/weekly-insights?period_end=2026-05-23'
+// Cost: ~₪0.10/run (5 entities × Haiku 4.5). 4 weekly + occasional monthly.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
@@ -74,6 +74,21 @@ function previousWeek(refDate: string): { period_start: string; period_end: stri
   const period_end = addDays(refDate, -daysToLastSat)
   const period_start = addDays(period_end, -6)
   return { period_start, period_end }
+}
+
+// Previous full calendar month relative to refDate.
+//   ref any day in April → returns the entire March
+function previousMonth(refDate: string): { period_start: string; period_end: string } {
+  const [y, m] = refDate.split('-').map(Number)
+  // Previous month: if January, roll back to Dec of prior year
+  const prevYear = m === 1 ? y - 1 : y
+  const prevMonth = m === 1 ? 12 : m - 1
+  const lastDay = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate()
+  const mm = String(prevMonth).padStart(2, '0')
+  return {
+    period_start: `${prevYear}-${mm}-01`,
+    period_end: `${prevYear}-${mm}-${String(lastDay).padStart(2, '0')}`,
+  }
 }
 
 // ─── Derived KPIs ───────────────────────────────────────────────────────────
@@ -239,25 +254,30 @@ function deriveConsolidatedView(m: ConsolidatedMetrics) {
 
 // ─── Claude prompt ──────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `אתה יועץ עסקי מומחה לרשת מאפיות ישראלית. תפקידך לנתח את **השבוע שעבר** (ראשון-שבת) של היחידה (סניף / מפעל / מאוחד) ולספק תובנות פעולה.
+function buildSystemPrompt(periodType: 'weekly' | 'monthly'): string {
+  const periodLabel = periodType === 'weekly' ? 'השבוע שעבר (ראשון-שבת)' : 'החודש שעבר (חודש מלא)'
+  const prorationNote = periodType === 'weekly'
+    ? 'עלויות קבועות ושכר מנהל חולקו באופן פרופורציוני (≈7/30 מהחודש)'
+    : 'עלויות קבועות ושכר מנהל מוצגים בערכם החודשי המלא (פרורציה=1.0 — כל החודש)'
+  return `אתה יועץ עסקי מומחה לרשת מאפיות ישראלית. תפקידך לנתח את **${periodLabel}** של היחידה (סניף / מפעל / מאוחד) ולספק תובנות פעולה.
 
 עיקרי הניתוח:
-- האם השבוע היה רווחי תפעולית? למה כן/למה לא?
+- האם התקופה הייתה רווחית תפעולית? למה כן/למה לא?
 - אילו מדדים חרגו מהיעדים (לייבור, פחת, רווח)?
 - האם יש אנומליות שיכולות להעיד על בעיה (למשל ספקים גבוהים מאוד יחסית להכנסות)?
-- 2-4 פעולות קונקרטיות שניתן לבצע השבוע
+- 2-4 פעולות קונקרטיות שניתן לבצע ${periodType === 'weekly' ? 'השבוע' : 'החודש'} הקרוב
 
 חוקי דירוג חומרה (severity):
 - אחוז לייבור מעל יעד ב-2 נק׳+ → high; חרגה קלה → medium
 - אחוז פחת מעל היעד ב-50%+ → high; חריגה קלה → medium
-- רווח תפעולי שלילי (לאחר פרורציה של קבועים) → high
+- רווח תפעולי שלילי → high
 - אחוז רווח תפעולי 5%-15% → low; מעל 15% → win
 
 חוקי ניסוח:
 - כתוב פשוט, ישיר, ללא מילים גבוהות
 - המלצות קונקרטיות שמנהל יכול לבצע — לא "לבדוק את הלייבור" אלא "להוריד משמרת חצי-יום ביום ב׳"
 - אם נתון "סטטוס_נתוני_שכר" הוא "משוער" — תזכיר שהמספר משוער ולא לפעול עליו בלעדית
-- אל תתעלם מהקשר חודשי: עלויות קבועות ושכר מנהל חולקו באופן פרופורציוני (≈7/30 מהחודש)
+- ${prorationNote}
 
 חשוב לדעת על הספקים הפנימיים (מפעל לסניפים):
 - אלו מוצרים שהמפעל מוכר לסניפים — הם עלות לסניף, הכנסה למפעל
@@ -265,6 +285,7 @@ const SYSTEM_PROMPT = `אתה יועץ עסקי מומחה לרשת מאפיות
 - חריגה מעל 80% → תזכיר שצריך לבחון אם יש פערי תזמון בין הזמנה למכירה
 
 לא להמציא נתונים. רק לפרש את מה שמוצג.`
+}
 
 const INSIGHTS_SCHEMA = {
   type: 'object',
@@ -307,12 +328,13 @@ interface ClaudeResponse {
   usage: { input_tokens: number; output_tokens: number }
 }
 
-async function callClaude(metricsView: unknown): Promise<{
+async function callClaude(metricsView: unknown, periodType: 'weekly' | 'monthly'): Promise<{
   insights: unknown
   input_tokens: number
   output_tokens: number
 }> {
-  const userPrompt = `נתוני השבוע שעבר של היחידה:\n\n${JSON.stringify(metricsView, null, 2)}\n\nספק תובנות בפורמט המבוקש.`
+  const periodLabel = periodType === 'weekly' ? 'השבוע שעבר' : 'החודש שעבר'
+  const userPrompt = `נתוני ${periodLabel} של היחידה:\n\n${JSON.stringify(metricsView, null, 2)}\n\nספק תובנות בפורמט המבוקש.`
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -324,7 +346,7 @@ async function callClaude(metricsView: unknown): Promise<{
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 2048,
-      system: SYSTEM_PROMPT,
+      system: buildSystemPrompt(periodType),
       output_config: {
         format: { type: 'json_schema', schema: INSIGHTS_SCHEMA },
       },
@@ -350,51 +372,51 @@ async function callClaude(metricsView: unknown): Promise<{
 
 // ─── Per-entity generation ──────────────────────────────────────────────────
 
-async function generateForBranch(db: SupabaseClient, branchId: number, periodStart: string, periodEnd: string) {
+async function generateForBranch(db: SupabaseClient, branchId: number, periodStart: string, periodEnd: string, periodType: 'weekly' | 'monthly') {
   const { data, error } = await db.rpc('get_branch_weekly_metrics', {
     p_branch_id: branchId, p_period_start: periodStart, p_period_end: periodEnd,
   })
   if (error) throw error
   const metrics = data as BranchMetrics
   const view = deriveBranchView(metrics)
-  const { insights, input_tokens, output_tokens } = await callClaude(view)
+  const { insights, input_tokens, output_tokens } = await callClaude(view, periodType)
   const cost_usd = (input_tokens / 1_000_000) * INPUT_COST_PER_MTOK + (output_tokens / 1_000_000) * OUTPUT_COST_PER_MTOK
   return upsertInsight(db, {
-    period_start: periodStart, period_end: periodEnd,
+    period_start: periodStart, period_end: periodEnd, period_type: periodType,
     entity_type: 'branch', entity_id: branchId,
     insights, metrics_snapshot: view,
     input_tokens, output_tokens, cost_usd,
   })
 }
 
-async function generateForFactory(db: SupabaseClient, periodStart: string, periodEnd: string) {
+async function generateForFactory(db: SupabaseClient, periodStart: string, periodEnd: string, periodType: 'weekly' | 'monthly') {
   const { data, error } = await db.rpc('get_factory_weekly_metrics', {
     p_period_start: periodStart, p_period_end: periodEnd,
   })
   if (error) throw error
   const metrics = data as FactoryMetrics
   const view = deriveFactoryView(metrics)
-  const { insights, input_tokens, output_tokens } = await callClaude(view)
+  const { insights, input_tokens, output_tokens } = await callClaude(view, periodType)
   const cost_usd = (input_tokens / 1_000_000) * INPUT_COST_PER_MTOK + (output_tokens / 1_000_000) * OUTPUT_COST_PER_MTOK
   return upsertInsight(db, {
-    period_start: periodStart, period_end: periodEnd,
+    period_start: periodStart, period_end: periodEnd, period_type: periodType,
     entity_type: 'factory', entity_id: null,
     insights, metrics_snapshot: view,
     input_tokens, output_tokens, cost_usd,
   })
 }
 
-async function generateForConsolidated(db: SupabaseClient, periodStart: string, periodEnd: string) {
+async function generateForConsolidated(db: SupabaseClient, periodStart: string, periodEnd: string, periodType: 'weekly' | 'monthly') {
   const { data, error } = await db.rpc('get_consolidated_weekly_metrics', {
     p_period_start: periodStart, p_period_end: periodEnd,
   })
   if (error) throw error
   const metrics = data as ConsolidatedMetrics
   const view = deriveConsolidatedView(metrics)
-  const { insights, input_tokens, output_tokens } = await callClaude(view)
+  const { insights, input_tokens, output_tokens } = await callClaude(view, periodType)
   const cost_usd = (input_tokens / 1_000_000) * INPUT_COST_PER_MTOK + (output_tokens / 1_000_000) * OUTPUT_COST_PER_MTOK
   return upsertInsight(db, {
-    period_start: periodStart, period_end: periodEnd,
+    period_start: periodStart, period_end: periodEnd, period_type: periodType,
     entity_type: 'consolidated', entity_id: null,
     insights, metrics_snapshot: view,
     input_tokens, output_tokens, cost_usd,
@@ -404,6 +426,7 @@ async function generateForConsolidated(db: SupabaseClient, periodStart: string, 
 interface InsightRow {
   period_start: string
   period_end: string
+  period_type: 'weekly' | 'monthly'
   entity_type: string
   entity_id: number | null
   insights: unknown
@@ -414,8 +437,8 @@ interface InsightRow {
 }
 
 async function upsertInsight(db: SupabaseClient, row: InsightRow) {
-  const { error } = await db.from('weekly_insights').upsert({ ...row, model: MODEL }, {
-    onConflict: 'period_end,entity_type,entity_id',
+  const { error } = await db.from('insights').upsert({ ...row, model: MODEL }, {
+    onConflict: 'period_end,period_type,entity_type,entity_id',
   })
   if (error) throw error
   return { entity_type: row.entity_type, entity_id: row.entity_id, cost_usd: row.cost_usd }
@@ -432,17 +455,27 @@ serve(async (req) => {
 
   try {
     const db = createClient(SUPABASE_URL, SERVICE_KEY)
-    const url = new URL(req.url)
 
-    // Allow overriding period via ?period_end=YYYY-MM-DD (the Saturday of the prior week).
-    // Otherwise compute the previous Sun-Sat relative to today (Israel TZ).
+    // Body params (all optional): { period_type?, period_start?, period_end? }
+    // - period_type defaults to 'weekly'
+    // - if period_start/period_end omitted: weekly → previous Sun-Sat;
+    //                                       monthly → previous full calendar month
+    let body: { period_type?: 'weekly' | 'monthly'; period_start?: string; period_end?: string } = {}
+    try {
+      const txt = await req.text()
+      if (txt && txt.trim().length > 0) body = JSON.parse(txt)
+    } catch {
+      // ignore — body may not be JSON when invoked from cron
+    }
+
+    const periodType: 'weekly' | 'monthly' = body.period_type === 'monthly' ? 'monthly' : 'weekly'
+
     let periodStart: string, periodEnd: string
-    const overrideEnd = url.searchParams.get('period_end')
-    if (overrideEnd) {
-      periodEnd = overrideEnd
-      periodStart = addDays(periodEnd, -6)
+    if (body.period_start && body.period_end) {
+      periodStart = body.period_start
+      periodEnd = body.period_end
     } else {
-      const range = previousWeek(todayInIsrael())
+      const range = periodType === 'monthly' ? previousMonth(todayInIsrael()) : previousWeek(todayInIsrael())
       periodStart = range.period_start
       periodEnd = range.period_end
     }
@@ -451,9 +484,9 @@ serve(async (req) => {
     if (brErr) throw brErr
 
     const tasks: Array<Promise<{ entity_type: string; entity_id: number | null; cost_usd: number }>> = [
-      ...((branches || []) as Array<{ id: number }>).map((b) => generateForBranch(db, b.id, periodStart, periodEnd)),
-      generateForFactory(db, periodStart, periodEnd),
-      generateForConsolidated(db, periodStart, periodEnd),
+      ...((branches || []) as Array<{ id: number }>).map((b) => generateForBranch(db, b.id, periodStart, periodEnd, periodType)),
+      generateForFactory(db, periodStart, periodEnd, periodType),
+      generateForConsolidated(db, periodStart, periodEnd, periodType),
     ]
 
     const results = await Promise.allSettled(tasks)
@@ -469,6 +502,7 @@ serve(async (req) => {
 
     return jsonResponse({
       ok: true,
+      period_type: periodType,
       period_start: periodStart,
       period_end: periodEnd,
       succeeded: succeeded.length,

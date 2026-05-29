@@ -1,20 +1,23 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// WeeklyInsightsCard — displays the most recent weekly-insights row
+// WeeklyInsightsCard — AI advisor card with weekly/monthly toggle + manual run
 // ═══════════════════════════════════════════════════════════════════════════
-// Reads from `weekly_insights` table (populated by the weekly-insights Edge
-// Function every Monday at 10:00 IST). RLS ensures branch managers only see
-// their own branch's row.
+// Reads from `insights` (the renamed weekly_insights table). RLS ensures
+// branch managers only see their own branch's row.
 //
 // Used on:
 //   - CEODashboard (entity_type prop varies via selector)
 //   - BranchHome   (entity_type='branch', entity_id=user's branch)
+//
+// Includes a period toggle (weekly/monthly) and a "Run now" button that
+// invokes the weekly-insights Edge Function on demand.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Lightbulb, AlertTriangle, CheckCircle, Info, ChevronDown, ChevronUp } from 'lucide-react'
+import { Lightbulb, AlertTriangle, CheckCircle, Info, ChevronDown, ChevronUp, Play, Loader2 } from 'lucide-react'
 
 type EntityType = 'branch' | 'factory' | 'consolidated'
+type PeriodType = 'weekly' | 'monthly'
 
 interface Alert {
   severity: 'high' | 'medium' | 'low'
@@ -30,10 +33,11 @@ interface Insights {
   summary: string
 }
 
-interface WeeklyInsightsRow {
+interface InsightRow {
   id: string
   period_start: string
   period_end: string
+  period_type: PeriodType
   entity_type: EntityType
   entity_id: number | null
   insights: Insights
@@ -46,9 +50,12 @@ const SEVERITY_STYLE = {
   low:    { bg: '#eff6ff', border: '#93c5fd', text: '#1e40af', icon: <Info size={16} color="#2563eb" /> },
 }
 
-function fmtPeriod(start: string, end: string): string {
+function fmtPeriod(start: string, end: string, periodType: PeriodType): string {
   const s = new Date(start + 'T12:00:00')
   const e = new Date(end + 'T12:00:00')
+  if (periodType === 'monthly') {
+    return s.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })
+  }
   const sStr = s.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })
   const eStr = e.toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' })
   return `${sStr} – ${eStr}`
@@ -61,10 +68,14 @@ interface Props {
 }
 
 export default function WeeklyInsightsCard({ entityType, entityId, title }: Props) {
-  const [row, setRow] = useState<WeeklyInsightsRow | null>(null)
+  const [periodType, setPeriodType] = useState<PeriodType>('weekly')
+  const [row, setRow] = useState<InsightRow | null>(null)
   const [loading, setLoading] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [runError, setRunError] = useState<string | null>(null)
   const [expandedAlertIdx, setExpandedAlertIdx] = useState<number | null>(null)
   const [showWins, setShowWins] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -72,9 +83,10 @@ export default function WeeklyInsightsCard({ entityType, entityId, title }: Prop
 
     async function load() {
       let q = supabase
-        .from('weekly_insights')
+        .from('insights')
         .select('*')
         .eq('entity_type', entityType)
+        .eq('period_type', periodType)
         .order('period_end', { ascending: false })
         .limit(1)
 
@@ -90,25 +102,98 @@ export default function WeeklyInsightsCard({ entityType, entityId, title }: Prop
         console.error('[WeeklyInsightsCard] load error:', error)
         setRow(null)
       } else {
-        setRow(data as WeeklyInsightsRow | null)
+        setRow(data as InsightRow | null)
       }
+      setExpandedAlertIdx(null)
+      setShowWins(false)
       setLoading(false)
     }
 
     load()
     return () => { cancelled = true }
-  }, [entityType, entityId])
+  }, [entityType, entityId, periodType, refreshKey])
+
+  async function runNow() {
+    setRunning(true)
+    setRunError(null)
+    try {
+      const { data, error } = await supabase.functions.invoke('weekly-insights', {
+        body: { period_type: periodType },
+      })
+      if (error) throw error
+      const failed = (data as { failed?: number })?.failed ?? 0
+      if (failed > 0) {
+        setRunError(`${failed} מהיחידות נכשלו — בדוק את הלוגים`)
+      }
+      // Trigger reload regardless (partial success still updates available entities)
+      setRefreshKey((k) => k + 1)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setRunError(msg)
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const renderHeader = () => (
+    <div style={headerStyle}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+        <Lightbulb size={18} color="#f59e0b" />
+        <span style={titleStyle}>{title ?? 'תובנות'}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Period toggle */}
+        <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 999, overflow: 'hidden' }}>
+          {(['weekly', 'monthly'] as PeriodType[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriodType(p)}
+              style={{
+                background: periodType === p ? '#7C3AED' : 'white',
+                color: periodType === p ? 'white' : '#475569',
+                border: 'none',
+                padding: '4px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              {p === 'weekly' ? 'שבועי' : 'חודשי'}
+            </button>
+          ))}
+        </div>
+        {/* Run now */}
+        <button
+          onClick={runNow}
+          disabled={running}
+          title={`הפעל ניתוח ${periodType === 'weekly' ? 'שבועי' : 'חודשי'} עכשיו`}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            background: running ? '#e2e8f0' : '#0f172a',
+            color: running ? '#94a3b8' : 'white',
+            border: 'none',
+            borderRadius: 8,
+            padding: '5px 10px',
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: running ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          {running
+            ? <><Loader2 size={12} className="animate-spin" /> מריץ...</>
+            : <><Play size={12} /> הפעל עכשיו</>}
+        </button>
+      </div>
+    </div>
+  )
 
   if (loading) {
     return (
       <div style={cardStyle}>
-        <div style={{ ...headerStyle, justifyContent: 'space-between' }}>
-          <span style={titleStyle}>
-            <Lightbulb size={18} color="#f59e0b" style={{ marginInlineEnd: 8, verticalAlign: 'middle' }} />
-            {title ?? 'תובנות שבועיות'}
-          </span>
-          <span style={{ fontSize: 12, color: '#94a3b8' }}>טוען...</span>
-        </div>
+        {renderHeader()}
+        <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>טוען…</div>
       </div>
     )
   }
@@ -116,32 +201,33 @@ export default function WeeklyInsightsCard({ entityType, entityId, title }: Prop
   if (!row) {
     return (
       <div style={cardStyle}>
-        <div style={{ ...headerStyle, justifyContent: 'space-between' }}>
-          <span style={titleStyle}>
-            <Lightbulb size={18} color="#f59e0b" style={{ marginInlineEnd: 8, verticalAlign: 'middle' }} />
-            {title ?? 'תובנות שבועיות'}
-          </span>
-        </div>
+        {renderHeader()}
+        {runError && (
+          <div style={errorStyle}>שגיאה בהפעלה: {runError}</div>
+        )}
         <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: 13 }}>
-          טרם נוצרו תובנות. הניתוח השבועי האוטומטי רץ כל יום שני בבוקר.
+          טרם נוצרו תובנות {periodType === 'weekly' ? 'שבועיות' : 'חודשיות'}.
+          {periodType === 'weekly'
+            ? ' הניתוח השבועי האוטומטי רץ כל יום שני בבוקר, או לחץ "הפעל עכשיו".'
+            : ' לחץ "הפעל עכשיו" כדי לנתח את החודש שעבר.'}
         </div>
       </div>
     )
   }
 
-  const { insights, period_start, period_end } = row
+  const { insights, period_start, period_end, period_type } = row
 
   return (
     <div style={cardStyle}>
-      {/* Header */}
-      <div style={headerStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Lightbulb size={18} color="#f59e0b" />
-          <span style={titleStyle}>{title ?? 'תובנות שבועיות'}</span>
-        </div>
-        <span style={{ fontSize: 12, color: '#64748b' }}>
-          {fmtPeriod(period_start, period_end)}
-        </span>
+      {renderHeader()}
+
+      {runError && (
+        <div style={errorStyle}>שגיאה בהפעלה: {runError}</div>
+      )}
+
+      {/* Period subtitle */}
+      <div style={{ padding: '8px 20px', background: '#fefce8', fontSize: 12, color: '#64748b', borderBottom: '1px solid #f1f5f9' }}>
+        תקופה: {fmtPeriod(period_start, period_end, period_type)}
       </div>
 
       {/* Headline */}
@@ -210,11 +296,11 @@ export default function WeeklyInsightsCard({ entityType, entityId, title }: Prop
         </div>
       )}
 
-      {/* Wins (collapsible) */}
+      {/* Wins */}
       {insights.wins.length > 0 && (
         <div style={{ padding: '12px 20px', borderBottom: '1px solid #f1f5f9' }}>
           <button
-            onClick={() => setShowWins(v => !v)}
+            onClick={() => setShowWins((v) => !v)}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               background: 'none', border: 'none', cursor: 'pointer',
@@ -242,12 +328,8 @@ export default function WeeklyInsightsCard({ entityType, entityId, title }: Prop
 
       {/* Summary */}
       <div style={{ padding: '14px 20px' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', marginBottom: 6 }}>
-          סיכום
-        </div>
-        <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
-          {insights.summary}
-        </div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', marginBottom: 6 }}>סיכום</div>
+        <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>{insights.summary}</div>
       </div>
     </div>
   )
@@ -266,13 +348,23 @@ const headerStyle = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  padding: '14px 20px',
+  gap: 8,
+  padding: '12px 20px',
   borderBottom: '1px solid #f1f5f9',
   background: '#fefce8',
+  flexWrap: 'wrap' as const,
 }
 
 const titleStyle = {
   fontSize: 14,
   fontWeight: 700,
   color: '#0f172a',
+}
+
+const errorStyle = {
+  padding: '8px 20px',
+  background: '#fef2f2',
+  color: '#991b1b',
+  fontSize: 12,
+  borderBottom: '1px solid #fecaca',
 }
