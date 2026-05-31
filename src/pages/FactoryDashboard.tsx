@@ -90,8 +90,12 @@ export default function FactoryDashboard({ onBack }: Props) {
   // Production per dept
   const [prodDept, setProdDept] = useState<Record<string, number>>({ creams: 0, dough: 0, packaging: 0, cleaning: 0 })
 
-  // Internal sales broken down by department (rollup of internal_sale_items)
-  const [internalByDept, setInternalByDept] = useState<Record<string, number>>({ creams: 0, dough: 0, packaging: 0, other: 0 })
+  // Internal sales broken down by department (rollup of internal_sale_items).
+  // Keys are Hebrew because that's how the data is stored in internal_sale_items.department
+  // ('קרמים' / 'בצקים' / 'אריזה' / 'ניקיון' / 'שונות'); items without a tag default to 'אחר'.
+  const [internalByDept, setInternalByDept] = useState<Record<string, number>>({
+    'קרמים': 0, 'בצקים': 0, 'אריזה': 0, 'ניקיון': 0, 'שונות': 0, 'אחר': 0,
+  })
 
   // Repairs per dept
   const [repairsDept, setRepairsDept] = useState<Record<Dept, number>>({ creams: 0, dough: 0, packaging: 0, cleaning: 0 })
@@ -182,17 +186,20 @@ export default function FactoryDashboard({ onBack }: Props) {
                          + b2b.filter((r: any) => r.is_internal).reduce((s: number, r: any) => s + Number(r.amount), 0)
     setSalesInternal(intSalesTotal > 0 ? intSalesTotal : legacyInternal)
 
-    // Per-department rollup of internal sales (from item-level data)
+    // Per-department rollup of internal sales (from item-level data).
+    // Departments are stored as Hebrew strings; anything not in the known set
+    // (typo / NULL / new category) falls into 'אחר'.
     const itemRows = intSaleItemsRes.data || []
-    const intByDept: Record<string, number> = { creams: 0, dough: 0, packaging: 0, other: 0 }
+    const KNOWN_DEPTS = ['קרמים', 'בצקים', 'אריזה', 'ניקיון', 'שונות', 'אחר']
+    const intByDept: Record<string, number> = Object.fromEntries(KNOWN_DEPTS.map(k => [k, 0]))
     itemRows.forEach((r: any) => {
       const amt = Number(r.quantity_supplied || 0) * Number(r.unit_price || 0)
-      const d = r.department && intByDept[r.department] !== undefined ? r.department : 'other'
+      const d = r.department && KNOWN_DEPTS.includes(r.department) ? r.department : 'אחר'
       intByDept[d] += amt
     })
     setInternalByDept(intByDept)
     // Sanity check: rollup should reconcile to the parent total within ₪50
-    const intRollup = intByDept.creams + intByDept.dough + intByDept.packaging + intByDept.other
+    const intRollup = KNOWN_DEPTS.reduce((s, k) => s + intByDept[k], 0)
     if (intSalesTotal > 0 && Math.abs(intRollup - intSalesTotal) > 50) {
       console.warn(`[FactoryDashboard] internal sales rollup mismatch: items=${Math.round(intRollup)} vs parent=${Math.round(intSalesTotal)}`)
     }
@@ -339,10 +346,13 @@ export default function FactoryDashboard({ onBack }: Props) {
   // Aggregates production / sales / waste / labor cost+hours per department so
   // production managers can compare which dept is most efficient (sales / hour
   // worked) and where labor% is heaviest relative to revenue.
+  // The English keys (DEPTS) are used by daily_production / factory_waste /
+  // labor / factory_repairs. Sales come from internal_sale_items which uses
+  // Hebrew strings — map English → Hebrew here so the lookup works.
   const deptLabel: Record<Dept, string> = { creams: 'קרמים', dough: 'בצקים', packaging: 'אריזה', cleaning: 'ניקיון' }
   const deptTotals = DEPTS.map(d => {
     const production = prodDept[d] ?? 0
-    const sales      = internalByDept[d] ?? 0
+    const sales      = internalByDept[deptLabel[d]] ?? 0
     const waste      = wasteDept[d] ?? 0
     const hourly     = laborDept[d]
     const globalCost = d === 'creams' ? globalLaborCreams : d === 'dough' ? globalLaborDough : 0
@@ -371,11 +381,17 @@ export default function FactoryDashboard({ onBack }: Props) {
     { label: 'שונות', value: salesOther, kind: 'other' as const },
   ]
   const maxSale = Math.max(...salesChannels.map(i => i.value), 1)
+  // Sub-rows under "מכירות פנימיות לסניפים" — read directly from Hebrew keys.
+  // 'שונות' is intentional (raw materials sold to branches without a department);
+  // 'אחר' = items uploaded without a department mapping (needs tagging — flagged
+  // with a warning style in the UI).
   const internalSubRows = [
-    { label: 'קרמים', value: internalByDept.creams ?? 0 },
-    { label: 'בצקים', value: internalByDept.dough ?? 0 },
-    { label: 'אריזה', value: internalByDept.packaging ?? 0 },
-    { label: 'אחר', value: internalByDept.other ?? 0 },
+    { label: 'קרמים', value: internalByDept['קרמים'] ?? 0, kind: 'normal' as const },
+    { label: 'בצקים', value: internalByDept['בצקים'] ?? 0, kind: 'normal' as const },
+    { label: 'אריזה', value: internalByDept['אריזה'] ?? 0, kind: 'normal' as const },
+    { label: 'ניקיון', value: internalByDept['ניקיון'] ?? 0, kind: 'normal' as const },
+    { label: 'שונות (חומרי גלם)', value: internalByDept['שונות'] ?? 0, kind: 'normal' as const },
+    { label: 'לא מתויגים', value: internalByDept['אחר'] ?? 0, kind: 'warn' as const },
   ].filter(r => r.value > 0)
 
   // Costs breakdown — waste excluded (already inside ספקים / חומרי גלם).
@@ -634,12 +650,17 @@ export default function FactoryDashboard({ onBack }: Props) {
                   <ProgressRow label={channel.label} value={channel.value} max={maxSale} color="#6366f1" />
                   {channel.kind === 'internal' && internalSubRows.length > 0 && (
                     <div style={{ marginInlineStart: 14, paddingInlineStart: 10, borderInlineStart: '2px solid #e2e8f0', marginTop: -6, marginBottom: 10 }}>
-                      {internalSubRows.map(sub => (
-                        <div key={sub.label} className="flex items-center justify-between" style={{ padding: '4px 0' }}>
-                          <span style={{ fontSize: 12, color: '#64748b' }}>{sub.label}</span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>{fmtM(sub.value)}</span>
-                        </div>
-                      ))}
+                      {internalSubRows.map(sub => {
+                        const isWarn = sub.kind === 'warn'
+                        return (
+                          <div key={sub.label} className="flex items-center justify-between" style={{ padding: '4px 0' }}>
+                            <span style={{ fontSize: 12, color: isWarn ? '#c2410c' : '#64748b', fontWeight: isWarn ? 600 : 400 }}>
+                              {isWarn ? '⚠ ' : ''}{sub.label}
+                            </span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: isWarn ? '#c2410c' : '#475569' }}>{fmtM(sub.value)}</span>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
