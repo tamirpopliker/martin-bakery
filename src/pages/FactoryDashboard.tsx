@@ -88,7 +88,10 @@ export default function FactoryDashboard({ onBack }: Props) {
   const [wasteDept, setWasteDept] = useState<Record<Dept, number>>({ creams: 0, dough: 0, packaging: 0, cleaning: 0 })
 
   // Production per dept
-  const [_prodDept, setProdDept] = useState<Record<string, number>>({ creams: 0, dough: 0, packaging: 0 })
+  const [prodDept, setProdDept] = useState<Record<string, number>>({ creams: 0, dough: 0, packaging: 0, cleaning: 0 })
+
+  // Internal sales broken down by department (rollup of internal_sale_items)
+  const [internalByDept, setInternalByDept] = useState<Record<string, number>>({ creams: 0, dough: 0, packaging: 0, other: 0 })
 
   // Repairs per dept
   const [repairsDept, setRepairsDept] = useState<Record<Dept, number>>({ creams: 0, dough: 0, packaging: 0, cleaning: 0 })
@@ -128,6 +131,7 @@ export default function FactoryDashboard({ onBack }: Props) {
       prodRes,
       intSalesRes,
       extSalesRes,
+      intSaleItemsRes,
     ] = await Promise.all([
       supabase.from('factory_sales').select('department, amount, is_internal').gte('date', from).lt('date', to),
       supabase.from('factory_b2b_sales').select('sale_type, customer, amount, is_internal').gte('date', from).lt('date', to),
@@ -143,6 +147,14 @@ export default function FactoryDashboard({ onBack }: Props) {
       supabase.from('daily_production').select('department, amount').gte('date', from).lt('date', to),
       supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', from).lt('order_date', to),
       supabase.from('external_sales').select('total_before_vat').gte('invoice_date', from).lt('invoice_date', to),
+      // Per-department breakdown of internal sales — joins items to their parent
+      // sale to filter by status='completed' + order_date in range.
+      supabase
+        .from('internal_sale_items')
+        .select('department, quantity_supplied, unit_price, sale_id, internal_sales!inner(order_date, status)')
+        .eq('internal_sales.status', 'completed')
+        .gte('internal_sales.order_date', from)
+        .lt('internal_sales.order_date', to),
     ])
 
     // Global employees
@@ -169,6 +181,21 @@ export default function FactoryDashboard({ onBack }: Props) {
     const legacyInternal = fs.filter((r: any) => r.is_internal).reduce((s: number, r: any) => s + Number(r.amount), 0)
                          + b2b.filter((r: any) => r.is_internal).reduce((s: number, r: any) => s + Number(r.amount), 0)
     setSalesInternal(intSalesTotal > 0 ? intSalesTotal : legacyInternal)
+
+    // Per-department rollup of internal sales (from item-level data)
+    const itemRows = intSaleItemsRes.data || []
+    const intByDept: Record<string, number> = { creams: 0, dough: 0, packaging: 0, other: 0 }
+    itemRows.forEach((r: any) => {
+      const amt = Number(r.quantity_supplied || 0) * Number(r.unit_price || 0)
+      const d = r.department && intByDept[r.department] !== undefined ? r.department : 'other'
+      intByDept[d] += amt
+    })
+    setInternalByDept(intByDept)
+    // Sanity check: rollup should reconcile to the parent total within ₪50
+    const intRollup = intByDept.creams + intByDept.dough + intByDept.packaging + intByDept.other
+    if (intSalesTotal > 0 && Math.abs(intRollup - intSalesTotal) > 50) {
+      console.warn(`[FactoryDashboard] internal sales rollup mismatch: items=${Math.round(intRollup)} vs parent=${Math.round(intSalesTotal)}`)
+    }
 
     // Suppliers
     const suppInvData = suppInvRes.data || []
@@ -271,12 +298,27 @@ export default function FactoryDashboard({ onBack }: Props) {
   const totalWaste   = DEPTS.reduce((s, d) => s + wasteDept[d], 0)
   const totalRepairs = DEPTS.reduce((s, d) => s + repairsDept[d], 0)
   const hourlyLabor  = DEPTS.reduce((s, d) => s + laborDept[d].employer, 0)
+  const totalHourlyHours = DEPTS.reduce((s, d) => s + laborDept[d].hours, 0)
 
   // Global employees - employer cost per dept
   const globalLaborCreams = calcGlobalLaborForDept(globalEmps, 'creams', wdCount)
   const globalLaborDough  = calcGlobalLaborForDept(globalEmps, 'dough', wdCount)
   const totalGlobalLabor  = globalLaborCreams + globalLaborDough
   const totalLabor        = hourlyLabor + totalGlobalLabor
+
+  // Approximate hours for global (monthly-salary) employees: each is paid for
+  // wdCount × 9h / month. Used only as a denominator for the sales-per-hour KPI
+  // so it stays comparable to hourly workers. The labor cost itself is taken
+  // from calcGlobalLaborForDept — we never mix the two.
+  const globalHoursCreams = (globalLaborCreams > 0 ? wdCount * 9 : 0)
+  const globalHoursDough  = (globalLaborDough > 0 ? wdCount * 9 : 0)
+  const totalLaborHours   = totalHourlyHours + globalHoursCreams + globalHoursDough
+  const salesPerHour      = totalLaborHours > 0 ? totalSales / totalLaborHours : 0
+
+  // "Other" channel = misc B2B + PDF external + legacy raw external creams/dough.
+  // Most months these are near zero — they're shown together so we don't lose
+  // visibility on stray non-channel sales without cluttering the top tier.
+  const salesOther = salesMisc + salesPdfExt + salesCreams + salesDough
 
   // Profit formulas — controllable margin = sales - suppliers - labor - repairs.
   // Waste is NOT deducted — thrown-away products are already counted in raw materials
@@ -293,6 +335,26 @@ export default function FactoryDashboard({ onBack }: Props) {
   const prevControllable    = prev.sales - prev.suppliers - prev.labor - prev.repairs
   const prevOperatingProfit = prevControllable - fixedCosts
 
+  // ─── Per-department efficiency table ────────────────────────────────────
+  // Aggregates production / sales / waste / labor cost+hours per department so
+  // production managers can compare which dept is most efficient (sales / hour
+  // worked) and where labor% is heaviest relative to revenue.
+  const deptLabel: Record<Dept, string> = { creams: 'קרמים', dough: 'בצקים', packaging: 'אריזה', cleaning: 'ניקיון' }
+  const deptTotals = DEPTS.map(d => {
+    const production = prodDept[d] ?? 0
+    const sales      = internalByDept[d] ?? 0
+    const waste      = wasteDept[d] ?? 0
+    const hourly     = laborDept[d]
+    const globalCost = d === 'creams' ? globalLaborCreams : d === 'dough' ? globalLaborDough : 0
+    const laborCost  = hourly.employer + globalCost
+    const globalHrs  = d === 'creams' ? globalHoursCreams : d === 'dough' ? globalHoursDough : 0
+    const hours      = hourly.hours + globalHrs
+    const salesPerHr = hours > 0 ? sales / hours : 0
+    const wPct       = sales > 0 ? (waste / sales) * 100 : 0
+    const lPct       = sales > 0 ? (laborCost / sales) * 100 : 0
+    return { dept: d, name: deptLabel[d], production, sales, waste, hours, laborCost, salesPerHr, wastePct: wPct, laborPct: lPct }
+  }).sort((a, b) => b.sales - a.sales)
+
   // ─── Loading State ──────────────────────────────────────────────────────
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ direction: 'rtl', background: '#f8fafc' }}>
@@ -301,14 +363,20 @@ export default function FactoryDashboard({ onBack }: Props) {
   )
 
   // ─── Sales breakdown ────────────────────────────────────────────────────
-  const salesItems = [
-    { label: 'קרמים', value: salesCreams },
-    { label: 'בצקים', value: salesDough },
-    { label: 'B2B', value: salesB2B },
-    { label: 'שונות', value: salesMisc },
-    { label: 'B2B חיצוני (PDF)', value: salesPdfExt },
+  // Channel-level (top tier): internal-to-branches / B2B / other. Internal also
+  // has per-dept sub-rows fed by internalByDept (rollup of internal_sale_items).
+  const salesChannels = [
+    { label: 'מכירות פנימיות לסניפים', value: salesInternal, kind: 'internal' as const },
+    { label: 'B2B', value: salesB2B, kind: 'b2b' as const },
+    { label: 'שונות', value: salesOther, kind: 'other' as const },
   ]
-  const maxSale = Math.max(...salesItems.map(i => i.value), 1)
+  const maxSale = Math.max(...salesChannels.map(i => i.value), 1)
+  const internalSubRows = [
+    { label: 'קרמים', value: internalByDept.creams ?? 0 },
+    { label: 'בצקים', value: internalByDept.dough ?? 0 },
+    { label: 'אריזה', value: internalByDept.packaging ?? 0 },
+    { label: 'אחר', value: internalByDept.other ?? 0 },
+  ].filter(r => r.value > 0)
 
   // Costs breakdown — waste excluded (already inside ספקים / חומרי גלם).
   // Shown separately as a KPI panel below.
@@ -357,8 +425,8 @@ export default function FactoryDashboard({ onBack }: Props) {
       {/* ─── Main Content ─────────────────────────────────────────────── */}
       <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
 
-        {/* ═══ ROW 1 — 4 KPI Cards ═══ */}
-        <motion.div variants={fadeIn} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-2.5">
+        {/* ═══ ROW 1 — KPI Cards ═══ */}
+        <motion.div variants={fadeIn} initial="hidden" animate="visible" className="grid grid-cols-2 md:grid-cols-5 gap-2.5 mb-2.5">
 
           {/* 1. Total Sales */}
           <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -403,6 +471,21 @@ export default function FactoryDashboard({ onBack }: Props) {
               <span style={{ marginRight: 6, color: laborPct <= targets.labor_pct ? '#639922' : '#E24B4A' }}>
                 ({laborPct <= targets.labor_pct ? 'עומד ביעד' : 'חורג'})
               </span>
+            </div>
+          </div>
+
+          {/* 5. Sales per labor hour — productivity benchmark */}
+          <div style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 4, cursor: 'help' }} title="מכירות לכל שעת עבודה. שעות עובדים בשכר חודשי משוערות לפי ימי עבודה × 9.">
+              מכירות / שעה
+            </div>
+            <div className="flex items-center gap-2">
+              <span style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>
+                {totalLaborHours > 0 ? `₪${Math.round(salesPerHour).toLocaleString()}` : '—'}
+              </span>
+            </div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+              {totalLaborHours > 0 ? `${Math.round(totalLaborHours).toLocaleString()} שעות בחודש` : 'אין נתוני שעות'}
             </div>
           </div>
 
@@ -543,12 +626,28 @@ export default function FactoryDashboard({ onBack }: Props) {
         {/* ═══ ROW 5 — Detail Cards (Sales + Costs breakdown) ═══ */}
         <motion.div variants={fadeIn} initial="hidden" animate="visible" className="grid grid-cols-2 gap-2.5 mb-2.5" transition={{ delay: 0.4 }}>
 
-          {/* Sales by Department */}
+          {/* Sales breakdown — channel level (internal / B2B / other) with internal sub-rows by department */}
           <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>מכירות לפי מחלקה</div>
-              {salesItems.map(item => (
-                <ProgressRow key={item.label} label={item.label} value={item.value} max={maxSale} color="#6366f1" />
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>הרכב מכירות החודש</div>
+              {salesChannels.map(channel => (
+                <div key={channel.label}>
+                  <ProgressRow label={channel.label} value={channel.value} max={maxSale} color="#6366f1" />
+                  {channel.kind === 'internal' && internalSubRows.length > 0 && (
+                    <div style={{ marginInlineStart: 14, paddingInlineStart: 10, borderInlineStart: '2px solid #e2e8f0', marginTop: -6, marginBottom: 10 }}>
+                      {internalSubRows.map(sub => (
+                        <div key={sub.label} className="flex items-center justify-between" style={{ padding: '4px 0' }}>
+                          <span style={{ fontSize: 12, color: '#64748b' }}>{sub.label}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>{fmtM(sub.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
+              <div className="flex items-center justify-between" style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>סה"כ</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{fmtM(totalSales)}</span>
+              </div>
           </div>
 
           {/* Costs */}
@@ -559,6 +658,64 @@ export default function FactoryDashboard({ onBack }: Props) {
               ))}
           </div>
 
+        </motion.div>
+
+        {/* ═══ ROW 6 — Department Performance ═══ */}
+        {/* Headline operational view for production managers — compare each dept's
+            output / labor cost / waste / sales-per-hour side-by-side. */}
+        <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5" transition={{ delay: 0.5 }}>
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>ביצועי מחלקות</span>
+              <span title="שעות עובדים בשכר חודשי משוערות לפי ימי עבודה × 9" style={{ fontSize: 11, color: '#94a3b8', cursor: 'help' }}>ⓘ</span>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs font-bold text-slate-500">מחלקה</TableHead>
+                  <TableHead className="text-xs font-bold text-slate-500 text-center">ייצור</TableHead>
+                  <TableHead className="text-xs font-bold text-slate-500 text-center">מכירות</TableHead>
+                  <TableHead className="text-xs font-bold text-slate-500 text-center">לייבור</TableHead>
+                  <TableHead className="text-xs font-bold text-slate-500 text-center">% לייבור</TableHead>
+                  <TableHead className="text-xs font-bold text-slate-500 text-center">פחת</TableHead>
+                  <TableHead className="text-xs font-bold text-slate-500 text-center">% פחת</TableHead>
+                  <TableHead className="text-xs font-bold text-slate-500 text-center">מכירות / שעה</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deptTotals.map(row => {
+                  const lColor = row.sales > 0 ? kpiColor(row.laborPct, targets.labor_pct, true) : '#94a3b8'
+                  const wColor = row.sales > 0 ? kpiColor(row.wastePct, targets.waste_pct, true) : '#94a3b8'
+                  return (
+                    <TableRow key={row.dept} style={{ borderBottom: '1px solid #f8fafc' }}>
+                      <TableCell className="px-3.5 py-2.5 text-[12px] font-medium text-slate-700">{row.name}</TableCell>
+                      <TableCell className="px-3.5 py-2.5 text-[12px] text-center text-slate-600">
+                        {row.production > 0 ? fmtM(row.production) : '—'}
+                      </TableCell>
+                      <TableCell className="px-3.5 py-2.5 text-[12px] text-center text-slate-600">
+                        {row.sales > 0 ? fmtM(row.sales) : '—'}
+                      </TableCell>
+                      <TableCell className="px-3.5 py-2.5 text-[12px] text-center text-slate-600">
+                        {row.laborCost > 0 ? fmtM(row.laborCost) : '—'}
+                      </TableCell>
+                      <TableCell className="px-3.5 py-2.5 text-[12px] text-center font-bold" style={{ color: lColor }}>
+                        {row.sales > 0 ? `${row.laborPct.toFixed(1)}%` : '—'}
+                      </TableCell>
+                      <TableCell className="px-3.5 py-2.5 text-[12px] text-center text-slate-600">
+                        {row.waste > 0 ? fmtM(row.waste) : '—'}
+                      </TableCell>
+                      <TableCell className="px-3.5 py-2.5 text-[12px] text-center font-bold" style={{ color: wColor }}>
+                        {row.sales > 0 ? `${row.wastePct.toFixed(1)}%` : '—'}
+                      </TableCell>
+                      <TableCell className="px-3.5 py-2.5 text-[12px] text-center font-bold text-slate-700">
+                        {row.hours > 0 && row.sales > 0 ? `₪${Math.round(row.salesPerHr).toLocaleString()}` : '—'}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </motion.div>
 
       </div>
