@@ -154,14 +154,37 @@ export default function InternalSalesUpload({ onBack }: Props) {
         setZeroItems(zeros)
         if (parsed.length === 0) { setError('לא נמצאו מוצרים עם כמות גדולה מ-0'); return }
 
-        // Auto-map departments from product_department_mapping
-        supabase.from('product_department_mapping').select('product_name, department').then(({ data }) => {
-          if (data) {
-            const map = new Map(data.map(r => [r.product_name, r.department]))
-            setItems(parsed.map(p => ({ ...p, department: map.get(p.product_name) || p.department })))
-          } else {
-            setItems(parsed)
+        // Auto-map departments in priority order:
+        //   1. product_department_mapping  (manual / previously-tagged)
+        //   2. production_reports          (latest dept the factory tagged the product with)
+        //   3. fall back to 'אחר'           (user still sees it in preview and can fix)
+        // Step 2 prevents the historical pattern where products that never
+        // passed through the mapping table sat on 'אחר' forever — see
+        // sql/053 + sql/054 backfills.
+        const productNames = parsed.map(p => p.product_name)
+        Promise.all([
+          supabase.from('product_department_mapping').select('product_name, department'),
+          supabase
+            .from('production_reports')
+            .select('product_name, department, report_date')
+            .in('product_name', productNames)
+            .order('report_date', { ascending: false }),
+        ]).then(([mapRes, prodRes]) => {
+          const mainMap = new Map((mapRes.data || []).map((r: { product_name: string; department: string }) => [r.product_name, r.department]))
+          // Take the most recent non-'אחר' department per product from production_reports.
+          const prodMap = new Map<string, string>()
+          for (const row of (prodRes.data || []) as { product_name: string; department: string }[]) {
+            if (!prodMap.has(row.product_name) && row.department && row.department !== 'אחר') {
+              prodMap.set(row.product_name, row.department)
+            }
           }
+          setItems(parsed.map(p => {
+            const fromMap = mainMap.get(p.product_name)
+            if (fromMap && fromMap !== 'אחר') return { ...p, department: fromMap }
+            const fromProd = prodMap.get(p.product_name)
+            if (fromProd) return { ...p, department: fromProd }
+            return p
+          }))
         })
         setStep('preview')
       } catch (err) {
