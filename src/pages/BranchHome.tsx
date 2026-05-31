@@ -330,14 +330,17 @@ export default function BranchHome({ branch, onBack }: Props) {
           </div>
         )}
 
-        {/* Weekly AI advisor — runs every Monday at 10:00 IST. Shows insights for this branch only (RLS-enforced). */}
-        <div style={{ marginBottom: 16 }}>
-          <WeeklyInsightsCard
-            entityType="branch"
-            entityId={branch.id}
-            title={`תובנות שבועיות — ${branch.name}`}
-          />
-        </div>
+        {/* Weekly AI advisor — branch managers only (admin/factory see it on CEODashboard).
+            Hidden from restricted @martin.local users (permanent staff who shouldn't see P&L commentary). */}
+        {appUser && !isRestrictedBranchUser(appUser) && (
+          <div style={{ marginBottom: 16 }}>
+            <WeeklyInsightsCard
+              entityType="branch"
+              entityId={branch.id}
+              title={`תובנות שבועיות — ${branch.name}`}
+            />
+          </div>
+        )}
 
         <motion.div
           style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}
