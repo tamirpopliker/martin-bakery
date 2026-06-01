@@ -42,7 +42,14 @@ export default function Login() {
     setError('')
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin }
+      options: {
+        redirectTo: window.location.origin,
+        // Force Google to show the account-picker every time so users can
+        // switch between Google accounts without first signing out of Google
+        // itself. Without this, OAuth silently re-uses the currently-active
+        // account in the browser.
+        queryParams: { prompt: 'select_account' },
+      },
     })
     if (error) setError('שגיאה בהתחברות עם Google')
     setLoading(false)
