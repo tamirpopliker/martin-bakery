@@ -178,13 +178,21 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     return { hires, departures, salaryChanges, bankChanges, roleChanges, documentEvents, otherChanges }
   }, [entries])
 
+  // Some audit-log rows have `null` (or a non-object) values for a field in
+  // changed_fields — defensively skip those instead of crashing on `.old`.
+  // Without the guard, a single null in any month's data blows up the whole
+  // page render (React unmounts the tree → looks like the app is frozen).
+  function isDiff(v: unknown): v is { old: unknown; new: unknown } {
+    return v !== null && typeof v === 'object'
+  }
+
   function describeFieldDiff(e: AuditEntry, allowedFields: Set<string>): string {
     const fields = e.changed_fields || {}
     const parts: string[] = []
     for (const [k, v] of Object.entries(fields)) {
       if (!allowedFields.has(k)) continue
-      const diff = v as { old: unknown; new: unknown }
-      parts.push(`${fieldLabel(k)}: ${formatValue(diff.old)} → ${formatValue(diff.new)}`)
+      if (!isDiff(v)) continue
+      parts.push(`${fieldLabel(k)}: ${formatValue(v.old)} → ${formatValue(v.new)}`)
     }
     return parts.join(' · ')
   }
@@ -195,8 +203,8 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     for (const [k, v] of Object.entries(fields)) {
       if (SALARY_FIELDS.has(k) || BANK_FIELDS.has(k) || ROLE_FIELDS.has(k)) continue
       if (['active', 'updated_at', 'created_at', 'end_date'].includes(k)) continue
-      const diff = v as { old: unknown; new: unknown }
-      parts.push(`${fieldLabel(k)}: ${formatValue(diff.old)} → ${formatValue(diff.new)}`)
+      if (!isDiff(v)) continue
+      parts.push(`${fieldLabel(k)}: ${formatValue(v.old)} → ${formatValue(v.new)}`)
     }
     return parts.join(' · ')
   }
