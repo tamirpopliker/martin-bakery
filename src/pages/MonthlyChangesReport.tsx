@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react'
-import JSZip from 'jszip'
+import { useState, useEffect, useMemo } from 'react'
+// JSZip is loaded lazily inside exportAccountingZip — it's ~95KB minified and
+// only needed when the user actually clicks "ייצוא להנה"ח". Keeping it out of
+// the page's static imports cuts the initial chunk and prevents a long parse
+// when the page mounts.
 import { supabase } from '../lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -75,25 +78,34 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     const nextMonthDate = new Date(year, month, 1)
     const nextMonth = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`
 
-    const [auditRes, empsRes] = await Promise.all([
-      supabase
-        .from('hr_audit_log')
-        .select('id, table_name, employee_kind, employee_id, operation, changed_fields, changed_by_email, changed_at')
-        .gte('changed_at', monthStart)
-        .lt('changed_at', nextMonth)
-        .order('changed_at', { ascending: false }),
-      supabase
-        .from('hr_employees_unified')
-        .select('kind, id, name, location_name, department'),
-    ])
+    try {
+      const [auditRes, empsRes] = await Promise.all([
+        supabase
+          .from('hr_audit_log')
+          .select('id, table_name, employee_kind, employee_id, operation, changed_fields, changed_by_email, changed_at')
+          .gte('changed_at', monthStart)
+          .lt('changed_at', nextMonth)
+          .order('changed_at', { ascending: false })
+          .limit(5000),
+        supabase
+          .from('hr_employees_unified')
+          .select('kind, id, name, location_name, department')
+          .limit(2000),
+      ])
+      if (auditRes.error) console.error('[MonthlyChangesReport] hr_audit_log query failed:', auditRes.error)
+      if (empsRes.error) console.error('[MonthlyChangesReport] hr_employees_unified query failed:', empsRes.error)
 
-    setEntries((auditRes.data as AuditEntry[]) || [])
-    const map = new Map<string, UnifiedEmployee>()
-    for (const e of (empsRes.data as UnifiedEmployee[] || [])) {
-      map.set(`${e.kind}-${e.id}`, e)
+      setEntries((auditRes.data as AuditEntry[]) || [])
+      const map = new Map<string, UnifiedEmployee>()
+      for (const e of (empsRes.data as UnifiedEmployee[] || [])) {
+        map.set(`${e.kind}-${e.id}`, e)
+      }
+      setEmployeeMap(map)
+    } catch (err) {
+      console.error('[MonthlyChangesReport] load failed:', err)
+    } finally {
+      setLoading(false)
     }
-    setEmployeeMap(map)
-    setLoading(false)
   }
 
   function changeMonth(delta: number) {
@@ -116,51 +128,55 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     return new Date(s).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })
   }
 
-  // Categorize entries
-  const hires: AuditEntry[] = []
-  const departures: AuditEntry[] = []
-  const salaryChanges: AuditEntry[] = []
-  const bankChanges: AuditEntry[] = []
-  const roleChanges: AuditEntry[] = []
-  const documentEvents: AuditEntry[] = []
-  const otherChanges: AuditEntry[] = []
+  // Categorize entries — memoized so it doesn't re-run on every render
+  // (e.g. when the user clicks the month picker or hovers a button).
+  const { hires, departures, salaryChanges, bankChanges, roleChanges, documentEvents, otherChanges } = useMemo(() => {
+    const hires: AuditEntry[] = []
+    const departures: AuditEntry[] = []
+    const salaryChanges: AuditEntry[] = []
+    const bankChanges: AuditEntry[] = []
+    const roleChanges: AuditEntry[] = []
+    const documentEvents: AuditEntry[] = []
+    const otherChanges: AuditEntry[] = []
 
-  for (const e of entries) {
-    if (e.table_name === 'employee_documents') {
-      documentEvents.push(e)
-      continue
-    }
-    if (e.table_name === 'employee_onboarding') continue // skip onboarding noise
-
-    if (e.table_name === 'branch_employees' || e.table_name === 'employees') {
-      if (e.operation === 'INSERT') {
-        hires.push(e)
+    for (const e of entries) {
+      if (e.table_name === 'employee_documents') {
+        documentEvents.push(e)
         continue
       }
-      const fields = e.changed_fields || {}
-      const changedKeys = Object.keys(fields)
-      // End-date set means departure
-      if (changedKeys.includes('end_date')) {
-        const newVal = (fields.end_date as { old: unknown; new: unknown } | undefined)?.new
-        if (newVal) {
-          departures.push(e)
+      if (e.table_name === 'employee_onboarding') continue // skip onboarding noise
+
+      if (e.table_name === 'branch_employees' || e.table_name === 'employees') {
+        if (e.operation === 'INSERT') {
+          hires.push(e)
           continue
         }
-      }
-      const hasSalary = changedKeys.some(k => SALARY_FIELDS.has(k))
-      const hasBank = changedKeys.some(k => BANK_FIELDS.has(k))
-      const hasRole = changedKeys.some(k => ROLE_FIELDS.has(k))
-      if (hasSalary) salaryChanges.push(e)
-      if (hasBank) bankChanges.push(e)
-      if (hasRole) roleChanges.push(e)
-      if (!hasSalary && !hasBank && !hasRole) {
-        // Skip if only "active" or system-y fields
-        const meaningful = changedKeys.filter(k =>
-          !['active', 'updated_at', 'created_at'].includes(k))
-        if (meaningful.length > 0) otherChanges.push(e)
+        const fields = e.changed_fields || {}
+        const changedKeys = Object.keys(fields)
+        // End-date set means departure
+        if (changedKeys.includes('end_date')) {
+          const newVal = (fields.end_date as { old: unknown; new: unknown } | undefined)?.new
+          if (newVal) {
+            departures.push(e)
+            continue
+          }
+        }
+        const hasSalary = changedKeys.some(k => SALARY_FIELDS.has(k))
+        const hasBank = changedKeys.some(k => BANK_FIELDS.has(k))
+        const hasRole = changedKeys.some(k => ROLE_FIELDS.has(k))
+        if (hasSalary) salaryChanges.push(e)
+        if (hasBank) bankChanges.push(e)
+        if (hasRole) roleChanges.push(e)
+        if (!hasSalary && !hasBank && !hasRole) {
+          // Skip if only "active" or system-y fields
+          const meaningful = changedKeys.filter(k =>
+            !['active', 'updated_at', 'created_at'].includes(k))
+          if (meaningful.length > 0) otherChanges.push(e)
+        }
       }
     }
-  }
+    return { hires, departures, salaryChanges, bankChanges, roleChanges, documentEvents, otherChanges }
+  }, [entries])
 
   function describeFieldDiff(e: AuditEntry, allowedFields: Set<string>): string {
     const fields = e.changed_fields || {}
@@ -224,8 +240,11 @@ export default function MonthlyChangesReport({ onBack }: Props) {
   // document for the month (uploaded this month + full doc set for hires/leavers).
   async function exportAccountingZip() {
     setExportingZip(true)
-    setZipProgress('אוסף נתונים...')
+    setZipProgress('טוען...')
     try {
+      // Lazy-load JSZip — keeps it out of the page's initial bundle.
+      const { default: JSZip } = await import('jszip')
+      setZipProgress('אוסף נתונים...')
       const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
       const nextMonthDate = new Date(year, month, 1)
       const nextMonth = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`
