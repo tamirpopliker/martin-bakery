@@ -323,18 +323,29 @@ export default function SuppliersReport({ onBack, hideHeader }: Props) {
         }
       }
 
-      // Merge suggestions for unassigned: find unified suppliers with >80% similarity
+      // Merge suggestions for unassigned: find unified suppliers that look like the
+      // same business. Three signals — substring containment (catches company-suffix
+      // variants like "דני וגלית" ⊂ "דני וגלית בעמ" where Levenshtein gives only
+      // ~71%), then Levenshtein ≥ 0.7 as a softer fallback.
       const mergeSuggestions: Array<{ existing: UnifiedSupplier; similarity: number }> = []
       if (b.unifiedId === null) {
         const candName = normalizeName(b.canonicalName)
         for (const u of unified) {
           const names = [u.canonical_name, ...(u.aliases || [])]
           let best = 0
+          let hasContainment = false
           for (const n of names) {
-            const sim = similarity(candName, normalizeName(n))
+            const normN = normalizeName(n)
+            const shortLen = Math.min(candName.length, normN.length)
+            if (shortLen >= 4 && (candName.includes(normN) || normN.includes(candName))) {
+              hasContainment = true
+            }
+            const sim = similarity(candName, normN)
             if (sim > best) best = sim
           }
-          if (best >= 0.8) mergeSuggestions.push({ existing: u, similarity: best })
+          // Containment overrides the threshold (force-show as ≥0.9 so it sorts near the top).
+          if (hasContainment) mergeSuggestions.push({ existing: u, similarity: Math.max(best, 0.9) })
+          else if (best >= 0.7) mergeSuggestions.push({ existing: u, similarity: best })
         }
         mergeSuggestions.sort((a, b) => b.similarity - a.similarity)
       }
@@ -613,6 +624,11 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
   const [editDraft, setEditDraft] = useState<{ canonical: string; aliases: string; category: string }>({ canonical: '', aliases: '', category: '' })
   const [analyzing, setAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
+  // Inline merge picker — when set, the row for `mergingId` shows a target picker
+  // instead of the normal view. mergeTargetId is the selected target.
+  const [mergingId, setMergingId] = useState<number | null>(null)
+  const [mergeTargetId, setMergeTargetId] = useState<number | null>(null)
+  const [mergeBusy, setMergeBusy] = useState(false)
 
   async function runAutoAnalysis() {
     setAnalyzing(true)
@@ -792,6 +808,64 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
     await onRefresh()
   }
 
+  // Merge one unified supplier into another. Renames matching invoices on
+  // branch_expenses (raw text) and reassigns supplier_id on supplier_invoices
+  // via the suppliers FK chain, then deletes the source from suppliers_new.
+  // After this, all invoices that previously displayed under `source` will
+  // group under `target` in the report.
+  async function mergeTwoUnified(sourceId: number, targetId: number) {
+    const source = unified.find(u => u.id === sourceId)
+    const target = unified.find(u => u.id === targetId)
+    if (!source || !target || source.id === target.id) return
+    if (!confirm(`למזג את "${source.canonical_name}" לתוך "${target.canonical_name}"?\n\nכל החשבוניות שלו יעברו לספק היעד, והרשומה שלו תימחק.`)) return
+
+    setMergeBusy(true)
+    try {
+      // 1. Rename branch_expenses raw text — TRIM both sides to neutralise trailing
+      //    whitespace artifacts the report has hit in the past.
+      const { error: beErr } = await supabase
+        .from('branch_expenses')
+        .update({ supplier: target.canonical_name })
+        .eq('supplier', source.canonical_name)
+      if (beErr) throw new Error(`branch_expenses: ${beErr.message}`)
+
+      // 2. Reassign supplier_invoices via the suppliers FK. Cases:
+      //    - Both target+source rows exist in suppliers → update FK, delete source row
+      //    - Only source exists → rename it (no FK churn)
+      //    - Source row absent → nothing to do
+      const { data: srcRow } = await supabase
+        .from('suppliers').select('id').eq('name', source.canonical_name).maybeSingle()
+      const { data: tgtRow } = await supabase
+        .from('suppliers').select('id').eq('name', target.canonical_name).maybeSingle()
+      if (srcRow) {
+        if (tgtRow && tgtRow.id !== srcRow.id) {
+          const { error: siErr } = await supabase
+            .from('supplier_invoices').update({ supplier_id: tgtRow.id }).eq('supplier_id', srcRow.id)
+          if (siErr) throw new Error(`supplier_invoices: ${siErr.message}`)
+          const { error: delSrcErr } = await supabase.from('suppliers').delete().eq('id', srcRow.id)
+          if (delSrcErr) throw new Error(`suppliers (delete source): ${delSrcErr.message}`)
+        } else if (!tgtRow) {
+          const { error: renameErr } = await supabase
+            .from('suppliers').update({ name: target.canonical_name }).eq('id', srcRow.id)
+          if (renameErr) throw new Error(`suppliers (rename): ${renameErr.message}`)
+        }
+      }
+
+      // 3. Delete the source unified entry
+      const { error: delUniErr } = await supabase.from('suppliers_new').delete().eq('id', source.id)
+      if (delUniErr) throw new Error(`suppliers_new: ${delUniErr.message}`)
+
+      setMergingId(null)
+      setMergeTargetId(null)
+      await onRefresh()
+    } catch (err: any) {
+      console.error('[SuppliersReport mergeTwoUnified] error:', err)
+      alert(`איחוד הספקים נכשל: ${err?.message || 'שגיאה לא ידועה'}.\nשום שינוי לא נשמר אם החיבור נופל באמצע — בדוק את הדוח ונסה שוב.`)
+    } finally {
+      setMergeBusy(false)
+    }
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetPortal>
@@ -875,9 +949,38 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
 
               {unified.map(u => {
                 const isEditing = editingId === u.id
+                const isMerging = mergingId === u.id
                 return (
                   <div key={u.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 10, padding: 12 }}>
-                    {!isEditing ? (
+                    {isMerging ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ fontSize: 13, color: '#475569' }}>
+                          מזג את <b>{u.canonical_name}</b> לתוך:
+                        </div>
+                        <select
+                          value={mergeTargetId ?? ''}
+                          onChange={e => setMergeTargetId(e.target.value ? Number(e.target.value) : null)}
+                          style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13 }}
+                        >
+                          <option value="">— בחר ספק יעד —</option>
+                          {unified.filter(other => other.id !== u.id).map(other => (
+                            <option key={other.id} value={other.id}>{other.canonical_name}</option>
+                          ))}
+                        </select>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          <Button variant="outline" onClick={() => { setMergingId(null); setMergeTargetId(null) }} disabled={mergeBusy}>
+                            <X size={14} /> ביטול
+                          </Button>
+                          <Button
+                            onClick={() => mergeTargetId && mergeTwoUnified(u.id, mergeTargetId)}
+                            disabled={!mergeTargetId || mergeBusy}
+                            className="bg-emerald-500 hover:bg-emerald-600"
+                          >
+                            <Merge size={14} /> {mergeBusy ? 'מבצע...' : 'מזג'}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : !isEditing ? (
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{u.canonical_name}</div>
@@ -897,6 +1000,11 @@ function ManageSheet({ open, onOpenChange, unified, unassignedGroups, onRefresh 
                           )}
                         </div>
                         <div style={{ display: 'flex', gap: 4 }}>
+                          <button onClick={() => { setMergingId(u.id); setMergeTargetId(null) }}
+                            title="מזג לתוך ספק מאוחד אחר"
+                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+                            <Merge size={15} color="#10b981" />
+                          </button>
                           <button onClick={() => { setEditingId(u.id); setEditDraft({ canonical: u.canonical_name, aliases: (u.aliases || []).join(', '), category: u.category || '' }) }}
                             style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
                             <Pencil size={15} color="#6366f1" />
