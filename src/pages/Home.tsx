@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase, monthEnd, getFixedCostTotal, fetchFactoryPL, getOverheadPct } from '../lib/supabase'
 import { calculateConsolidatedPL } from '../lib/calculatePL'
+import { fetchRevenueBySource } from '../lib/revenueBySource'
 import { usePeriod } from '../lib/PeriodContext'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
@@ -49,7 +50,7 @@ import {
   AlertTriangle, ClipboardList, Truck, UserCog, Activity,
   Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
   LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft, ShoppingCart, Wrench, Building2, CreditCard, Briefcase, Cake,
-  IdCard, FileSignature,
+  IdCard, FileSignature, Globe, BookOpen,
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
@@ -216,6 +217,16 @@ export default function Home() {
   const [opSheetOpen, setOpSheetOpen] = useState(false)
   const [wasteSheetOpen, setWasteSheetOpen] = useState(false)
   const [branchLaborTargets, setBranchLaborTargets] = useState<Record<number, number>>({})
+  // Revenue-by-source (קופות / אתר / הקפה) — per-branch maps + prev-period totals + drill-down flags
+  const [posByBranch, setPosByBranch] = useState<Record<number, number>>({})
+  const [websiteByBranch, setWebsiteByBranch] = useState<Record<number, number>>({})
+  const [creditByBranch, setCreditByBranch] = useState<Record<number, number>>({})
+  const [prevPosTotal, setPrevPosTotal] = useState(0)
+  const [prevWebsiteTotal, setPrevWebsiteTotal] = useState(0)
+  const [prevCreditTotal, setPrevCreditTotal] = useState(0)
+  const [posSheetOpen, setPosSheetOpen] = useState(false)
+  const [websiteSheetOpen, setWebsiteSheetOpen] = useState(false)
+  const [creditSheetOpen, setCreditSheetOpen] = useState(false)
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -247,6 +258,12 @@ export default function Home() {
       // table (not employer_costs), so all per-branch numbers below come from
       // calculateConsolidatedPL.
       const branchIds = BRANCHES.map(br => br.id)
+
+      // Revenue split by source (קופות / אתר / הקפה) — drives the new card row below the KPI strip.
+      const sources = await fetchRevenueBySource(branchIds, from, to)
+      setPosByBranch(sources.pos)
+      setWebsiteByBranch(sources.website)
+      setCreditByBranch(sources.credit)
 
       // ─── Consolidated KPI (intercompany-eliminated) — matches CEODashboard ──────
       // The KPI strip on the home page now reports consolidated figures (branches +
@@ -332,6 +349,13 @@ export default function Home() {
       setPrevTotalLabor(prevFactoryPL.labor + pTotalBranchLab)
       setPrevBranchGross(pTotalBranchRev > 0 ? pTotalBranchRev - pTotalBranchLab : 0)
       setPrevOperatingProfit(prevFactoryPL.operatingProfit + pTotalBranchOP)
+
+      // Revenue split by source — comparison period (used only for DiffBadge on the new card row).
+      const prevSources = await fetchRevenueBySource(branchIds, pFrom, pTo)
+      const sumValues = (m: Record<number, number>) => Object.values(m).reduce((s, v) => s + v, 0)
+      setPrevPosTotal(sumValues(prevSources.pos))
+      setPrevWebsiteTotal(sumValues(prevSources.website))
+      setPrevCreditTotal(sumValues(prevSources.credit))
 
       const prevConsolidatedRevenue = prevCons.branches.reduce((s, b) => s + b.revenue, 0) + prevCons.factory.externalRevenue
       setPrevBranchRevenue(prevConsolidatedRevenue)
@@ -606,6 +630,62 @@ export default function Home() {
                       {totalBranchRevenue > 0 && (
                         <div className="text-[10px] text-slate-400 mt-0.5">{branchWastePct.toFixed(1)}% מהכנסות</div>
                       )}
+                    </div>
+                  </button>
+                </>
+              })()}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ─── Revenue-by-Source Strip (קופות / אתר / הקפה) ───────────────── */}
+        <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.15 }}>
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', marginBottom: 20, padding: 0 }}>
+            <div className="flex items-center gap-0 flex-wrap" style={{ padding: '14px 24px' }}>
+              {(() => {
+                const posTotal = Object.values(posByBranch).reduce((s, v) => s + v, 0)
+                const websiteTotal = Object.values(websiteByBranch).reduce((s, v) => s + v, 0)
+                const creditTotal = Object.values(creditByBranch).reduce((s, v) => s + v, 0)
+                return <>
+                  {/* קופות */}
+                  <button onClick={() => setPosSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 pe-4 border-e border-slate-200 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#F59E0B15' }}>
+                      <CreditCard size={16} color="#F59E0B" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-400 font-semibold mb-0.5">קופות</div>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-lg font-extrabold text-slate-900">{fmtK(posTotal)}</span>
+                        <DiffBadge curr={posTotal} prev={prevPosTotal} />
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* אתר */}
+                  <button onClick={() => setWebsiteSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 px-4 border-e border-slate-200 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#0EA5E915' }}>
+                      <Globe size={16} color="#0EA5E9" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-400 font-semibold mb-0.5">אתר</div>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-lg font-extrabold text-slate-900">{fmtK(websiteTotal)}</span>
+                        <DiffBadge curr={websiteTotal} prev={prevWebsiteTotal} />
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* הקפה */}
+                  <button onClick={() => setCreditSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 ps-4 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#8B5CF615' }}>
+                      <BookOpen size={16} color="#8B5CF6" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-400 font-semibold mb-0.5">הקפה</div>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-lg font-extrabold text-slate-900">{fmtK(creditTotal)}</span>
+                        <DiffBadge curr={creditTotal} prev={prevCreditTotal} />
+                      </div>
                     </div>
                   </button>
                 </>
@@ -1239,6 +1319,60 @@ export default function Home() {
           </SheetContent>
         </SheetPortal>
       </Sheet>
+
+      {/* ─── Source Drill-Down Sheets: קופות / אתר / הקפה ─────────────────── */}
+      {(() => {
+        type SourceSheet = {
+          open: boolean
+          setOpen: (v: boolean) => void
+          title: string
+          data: Record<number, number>
+        }
+        const sheets: SourceSheet[] = [
+          { open: posSheetOpen,     setOpen: setPosSheetOpen,     title: 'פירוט קופות',  data: posByBranch },
+          { open: websiteSheetOpen, setOpen: setWebsiteSheetOpen, title: 'פירוט אתר',    data: websiteByBranch },
+          { open: creditSheetOpen,  setOpen: setCreditSheetOpen,  title: 'פירוט הקפה',   data: creditByBranch },
+        ]
+        return sheets.map(({ open, setOpen, title, data }) => {
+          const rows = BRANCHES.map(br => ({ name: br.name, amount: data[br.id] ?? 0 }))
+          const total = rows.reduce((s, r) => s + r.amount, 0)
+          return (
+            <Sheet key={title} open={open} onOpenChange={setOpen}>
+              <SheetPortal>
+                <SheetBackdrop />
+                <SheetContent>
+                  <SheetHeader className="pb-3">
+                    <SheetTitle className="text-base font-bold text-slate-900">{title} — {period.label}</SheetTitle>
+                  </SheetHeader>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">סניף</TableHead>
+                        <TableHead className="text-center">סכום</TableHead>
+                        <TableHead className="text-center">% מהמקור</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rows.map(r => (
+                        <TableRow key={r.name}>
+                          <TableCell className="font-medium text-right">{r.name}</TableCell>
+                          <TableCell className="text-center">{fmtK(r.amount)}</TableCell>
+                          <TableCell className="text-center">{total > 0 ? ((r.amount / total) * 100).toFixed(1) + '%' : '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="bg-slate-50 font-bold">
+                        <TableCell className="font-bold text-right">סה"כ</TableCell>
+                        <TableCell className="text-center font-bold">{fmtK(total)}</TableCell>
+                        <TableCell className="text-center font-bold">{total > 0 ? '100%' : '—'}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </SheetContent>
+              </SheetPortal>
+            </Sheet>
+          )
+        })
+      })()}
     </div>
   )
 }
