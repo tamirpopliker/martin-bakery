@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept, fetchFactoryTrends, getFixedCostTotal } from '../lib/supabase'
-import type { GlobalEmployee, MonthTrend } from '../lib/supabase'
+import { supabase, fetchGlobalEmployees, getWorkingDays, calcGlobalLaborForDept, fetchFactoryTrends, fetchInternalSalesByDeptTrend, getFixedCostTotal } from '../lib/supabase'
+import type { GlobalEmployee, MonthTrend, InternalDeptTrend } from '../lib/supabase'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
@@ -121,6 +121,7 @@ export default function FactoryDashboard({ onBack }: Props) {
 
   // 6-month trends
   const [trendData, setTrendData] = useState<MonthTrend[]>([])
+  const [deptTrendData, setDeptTrendData] = useState<InternalDeptTrend[]>([])
 
   // ─── Data Fetching ──────────────────────────────────────────────────────
   async function fetchAll() {
@@ -298,6 +299,7 @@ export default function FactoryDashboard({ onBack }: Props) {
 
   useEffect(() => {
     fetchFactoryTrends(monthKey || from.slice(0, 7)).then(setTrendData)
+    fetchInternalSalesByDeptTrend(monthKey || from.slice(0, 7)).then(setDeptTrendData)
   }, [from, to])
 
   // ─── Computed Values ────────────────────────────────────────────────────
@@ -633,6 +635,26 @@ export default function FactoryDashboard({ onBack }: Props) {
                     <Line type="monotone" dataKey="revenue" name="מכירות" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
                     <Line type="monotone" dataKey="grossProfit" name="רווח נשלט" stroke="#94a3b8" strokeWidth={2} dot={{ r: 3 }} />
                     <Line type="monotone" dataKey="operatingProfit" name="רווח תפעולי" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ═══ ROW 4b — מכירות לפי מחלקה (6 חודשים) ═══ */}
+        {deptTrendData.length > 0 && (
+          <motion.div variants={fadeIn} initial="hidden" animate="visible" className="mb-2.5" transition={{ delay: 0.35 }}>
+            <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 12 }}>מכירות לפי מחלקה — 6 חודשים</div>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={deptTrendData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => `₪${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(value: any, name: any) => [`₪${Math.round(Number(value)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, String(name)]} />
+                    <Legend />
+                    <Line type="monotone" dataKey="creams" name="קרמים" stroke="#ec4899" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="dough"  name="בצקים" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
                   </LineChart>
                 </ResponsiveContainer>
             </div>

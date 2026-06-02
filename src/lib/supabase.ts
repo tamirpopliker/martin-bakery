@@ -209,10 +209,11 @@ export async function fetchFactoryTrends(refMonth: string): Promise<MonthTrend[]
   const tFrom = months[0] + '-01'
   const tTo = monthEnd(months[5])
 
-  const [salesRes, b2bRes, extSalesRes, suppRes, labRes, wasteRes, repairsRes, fcRes, empRes] = await Promise.all([
+  const [salesRes, b2bRes, extSalesRes, intSalesRes, suppRes, labRes, wasteRes, repairsRes, fcRes, empRes] = await Promise.all([
     supabase.from('factory_sales').select('date, amount, is_internal').gte('date', tFrom).lt('date', tTo),
     supabase.from('factory_b2b_sales').select('date, amount, is_internal').gte('date', tFrom).lt('date', tTo),
     supabase.from('external_sales').select('invoice_date, total_before_vat').gte('invoice_date', tFrom).lt('invoice_date', tTo),
+    supabase.from('internal_sales').select('order_date, total_amount').eq('status', 'completed').gte('order_date', tFrom).lt('order_date', tTo),
     supabase.from('supplier_invoices').select('date, amount').gte('date', tFrom).lt('date', tTo),
     supabase.from('labor').select('date, employer_cost').gte('date', tFrom).lt('date', tTo),
     supabase.from('factory_waste').select('date, amount').gte('date', tFrom).lt('date', tTo),
@@ -230,10 +231,19 @@ export async function fetchFactoryTrends(refMonth: string): Promise<MonthTrend[]
   }
   const salesByM = grp(salesRes.data, 'amount', r => !r.is_internal)
   const b2bByM = grp(b2bRes.data, 'amount', r => !r.is_internal)
+  // Legacy internal-sales (pre-internal_sales-table months) — used as fallback per month.
+  const salesIntByM = grp(salesRes.data, 'amount', r => !!r.is_internal)
+  const b2bIntByM = grp(b2bRes.data, 'amount', r => !!r.is_internal)
   const extSalesByM: Record<string, number> = {}
   ;(extSalesRes.data || []).forEach((r: any) => {
     const m = r.invoice_date?.slice(0, 7)
     if (m) extSalesByM[m] = (extSalesByM[m] || 0) + Number(r.total_before_vat || 0)
+  })
+  // New internal_sales table — preferred source for any month that has rows.
+  const intSalesByM: Record<string, number> = {}
+  ;(intSalesRes.data || []).forEach((r: any) => {
+    const m = r.order_date?.slice(0, 7)
+    if (m) intSalesByM[m] = (intSalesByM[m] || 0) + Number(r.total_amount || 0)
   })
   const suppByM = grp(suppRes.data, 'amount')
   const labByM = grp(labRes.data, 'employer_cost')
@@ -244,12 +254,52 @@ export async function fetchFactoryTrends(refMonth: string): Promise<MonthTrend[]
   const fcByM = fillFixedCostsMap(rawFcByM, months)
 
   return months.map(m => {
-    const revenue = (salesByM[m] || 0) + (b2bByM[m] || 0) + (extSalesByM[m] || 0)
+    // Internal: prefer the new internal_sales table; fall back per-month to legacy
+    // factory_sales.is_internal / factory_b2b_sales.is_internal so historical months
+    // entered before the new table existed don't drop to zero.
+    const internalByM = intSalesByM[m] || ((salesIntByM[m] || 0) + (b2bIntByM[m] || 0))
+    const revenue = (salesByM[m] || 0) + (b2bByM[m] || 0) + (extSalesByM[m] || 0) + internalByM
     const totalLabor = (labByM[m] || 0) + globalEmpCost
     const grossProfit = revenue - (suppByM[m] || 0) - totalLabor
     const operatingProfit = grossProfit - (fcByM[m] || 0) - (repByM[m] || 0) - (wasteByM[m] || 0)
     return { month: m, label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1], revenue, grossProfit, operatingProfit }
   })
+}
+
+// ─── מגמות מכירות פנימיות לפי מחלקה (קרמים / בצקים) ─────────────────────
+
+export interface InternalDeptTrend { month: string; label: string; creams: number; dough: number }
+
+/** 6-month trend of internal-sales revenue, split into the two real selling departments. */
+export async function fetchInternalSalesByDeptTrend(refMonth: string): Promise<InternalDeptTrend[]> {
+  const months = getLast6Months(refMonth)
+  const tFrom = months[0] + '-01'
+  const tTo = monthEnd(months[5])
+
+  const { data } = await supabase
+    .from('internal_sale_items')
+    .select('department, quantity_supplied, unit_price, internal_sales!inner(order_date, status)')
+    .eq('internal_sales.status', 'completed')
+    .in('department', ['קרמים', 'בצקים'])
+    .gte('internal_sales.order_date', tFrom)
+    .lt('internal_sales.order_date', tTo)
+
+  const byM: Record<string, { creams: number; dough: number }> = {}
+  months.forEach(m => { byM[m] = { creams: 0, dough: 0 } })
+  ;(data || []).forEach((r: any) => {
+    const m = r.internal_sales?.order_date?.slice(0, 7)
+    if (!m || !byM[m]) return
+    const amt = Number(r.quantity_supplied || 0) * Number(r.unit_price || 0)
+    if (r.department === 'קרמים') byM[m].creams += amt
+    else if (r.department === 'בצקים') byM[m].dough += amt
+  })
+
+  return months.map(m => ({
+    month: m,
+    label: HEB_MONTHS[parseInt(m.split('-')[1]) - 1],
+    creams: byM[m].creams,
+    dough: byM[m].dough,
+  }))
 }
 
 // ─── מגמות סניף מפורטות ──────────────────────────────────────────────────
