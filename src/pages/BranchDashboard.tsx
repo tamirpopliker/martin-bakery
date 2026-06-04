@@ -7,7 +7,8 @@ import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { TrendingUp, TrendingDown } from 'lucide-react'
+import { TrendingUp, TrendingDown, CreditCard, Globe, BookOpen } from 'lucide-react'
+import { fetchRevenueBySource } from '../lib/revenueBySource'
 import PageHeader from '../components/PageHeader'
 import { RevenueIcon, ProfitIcon, LaborIcon } from '@/components/icons'
 import { generateInsights, type InsightsInput } from '../lib/generateInsights'
@@ -121,6 +122,11 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
   // Trend
   const [trendData, setTrendData] = useState<any[]>([])
 
+  // Revenue split by source (קופות / אתר / הקפה) for this branch
+  const [posRevenue, setPosRevenue] = useState(0)
+  const [websiteRevenue, setWebsiteRevenue] = useState(0)
+  const [creditRevenue, setCreditRevenue] = useState(0)
+
   // Derived values from current P&L
   const totalRevenue = pl?.revenue ?? 0
   const expSupplier = pl?.expSuppliers ?? 0
@@ -182,12 +188,17 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
       const curMonthKey = monthKey || from.slice(0, 7)
       const prevMonthKey = comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)
 
-      const [current, prev, trend, kpiRes] = await Promise.all([
+      const [current, prev, trend, kpiRes, sources] = await Promise.all([
         fetchBranchPL(branchId, from, to, curMonthKey, oh),
         fetchBranchPL(branchId, comparisonPeriod.from, comparisonPeriod.to, prevMonthKey, oh),
         fetchTrend(),
         supabase.from('branch_kpi_targets').select('labor_pct, waste_pct').eq('branch_id', branchId).maybeSingle(),
+        fetchRevenueBySource([branchId], from, to),
       ])
+
+      setPosRevenue(sources.pos[branchId] ?? 0)
+      setWebsiteRevenue(sources.website[branchId] ?? 0)
+      setCreditRevenue(sources.credit[branchId] ?? 0)
 
       // fetchBranchPL already returns the correct supplier split (internal
       // from internal_sales, external from branch_expenses). The previous
@@ -332,6 +343,38 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                   )}
                 </CardContent>
               </Card>
+            </motion.div>
+
+            {/* ROW 1b — Revenue by Source (קופות / אתר / הקפה) */}
+            <motion.div variants={fadeIn(0.05)} initial="hidden" animate="visible" className="grid grid-cols-3 gap-2.5 mb-2.5">
+              {(() => {
+                const sourceTotal = posRevenue + websiteRevenue + creditRevenue
+                const pctOfSource = (v: number) => sourceTotal > 0 ? ((v / sourceTotal) * 100).toFixed(1) + '%' : '—'
+                const cards = [
+                  { label: 'קופות',  amount: posRevenue,     Icon: CreditCard, color: '#F59E0B' },
+                  { label: 'אתר',    amount: websiteRevenue, Icon: Globe,      color: '#0EA5E9' },
+                  { label: 'הקפה',   amount: creditRevenue,  Icon: BookOpen,   color: '#8B5CF6' },
+                ]
+                return cards.map(({ label, amount, Icon, color }) => (
+                  <Card key={label} className="bg-white border-[0.5px] border-slate-200 rounded-xl p-4">
+                    <CardContent className="p-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon size={18} color={color} />
+                        <span className="text-[11px] text-slate-400">{label}</span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-[22px] font-medium" style={{ color }}>
+                          <CountUp end={amount} prefix="₪" separator="," duration={0.8} />
+                        </span>
+                        <span className="text-[12px] font-bold text-slate-500">{pctOfSource(amount)}</span>
+                      </div>
+                      <span className="text-[11px] text-slate-400">
+                        {totalRevenue > 0 ? `${((amount / totalRevenue) * 100).toFixed(1)}% מההכנסות` : '—'}
+                      </span>
+                    </CardContent>
+                  </Card>
+                ))
+              })()}
             </motion.div>
 
             {/* ROW 2 — P&L Table */}
