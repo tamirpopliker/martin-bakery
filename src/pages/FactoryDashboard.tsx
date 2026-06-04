@@ -149,7 +149,9 @@ export default function FactoryDashboard({ onBack }: Props) {
       supabase.from('suppliers').select('id, name'),
       fetchGlobalEmployees(),
       getWorkingDays(monthKey || from.slice(0, 7)),
-      supabase.from('daily_production').select('department, amount').gte('date', from).lt('date', to),
+      // Production cost: read from production_reports (Excel-upload table) which
+      // has total_cost per product. Hebrew dept names mapped to English keys below.
+      supabase.from('production_reports').select('department, total_cost').gte('report_date', from).lt('report_date', to),
       supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', from).lt('order_date', to),
       supabase.from('external_sales').select('total_before_vat').gte('invoice_date', from).lt('invoice_date', to),
       // Per-department breakdown of internal sales — joins items to their parent
@@ -226,10 +228,14 @@ export default function FactoryDashboard({ onBack }: Props) {
     wData.forEach((r: any) => { if (wDept[r.department as Dept] !== undefined) wDept[r.department as Dept] += Number(r.amount) })
     setWasteDept(wDept)
 
-    // Production
+    // Production cost from production_reports (Hebrew dept names) → map to English Dept keys.
     const prodData = prodRes.data || []
+    const HEB_TO_DEPT: Record<string, string> = { 'קרמים': 'creams', 'בצקים': 'dough', 'אריזה': 'packaging' }
     const pDeptMap: Record<string, number> = { creams: 0, dough: 0, packaging: 0 }
-    prodData.forEach((r: any) => { if (pDeptMap[r.department] !== undefined) pDeptMap[r.department] += Number(r.amount) })
+    prodData.forEach((r: any) => {
+      const dept = HEB_TO_DEPT[r.department]
+      if (dept) pDeptMap[dept] += Number(r.total_cost || 0)
+    })
     setProdDept(pDeptMap)
 
     // Repairs
@@ -282,9 +288,9 @@ export default function FactoryDashboard({ onBack }: Props) {
       supabase.from('labor').select('employee_name, employer_cost').eq('entity_type', 'factory').gte('date', pFrom).lt('date', pTo),
       supabase.from('supplier_invoices').select('amount').gte('date', pFrom).lt('date', pTo),
       getWorkingDays(comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)),
-      supabase.from('daily_production').select('amount').gte('date', pFrom).lt('date', pTo),
+      supabase.from('production_reports').select('total_cost').gte('report_date', pFrom).lt('report_date', pTo),
     ])
-    const sum = (res: any) => (res.data || []).reduce((s: number, r: any) => s + Number(r.amount || r.employer_cost || r.total_before_vat || 0), 0)
+    const sum = (res: any) => (res.data || []).reduce((s: number, r: any) => s + Number(r.amount || r.employer_cost || r.total_before_vat || r.total_cost || 0), 0)
     const pSalesTotal = sum(pSales) + sum(pB2b) + sum(pExtSales)
     const pGlobalLaborCreams = calcGlobalLaborForDept(globalEmpsData, 'creams', pWd)
     const pGlobalLaborDough = calcGlobalLaborForDept(globalEmpsData, 'dough', pWd)
@@ -364,7 +370,8 @@ export default function FactoryDashboard({ onBack }: Props) {
     const salesPerHr = hours > 0 ? sales / hours : 0
     const wPct       = sales > 0 ? (waste / sales) * 100 : 0
     const lPct       = sales > 0 ? (laborCost / sales) * 100 : 0
-    return { dept: d, name: deptLabel[d], production, sales, waste, hours, laborCost, salesPerHr, wastePct: wPct, laborPct: lPct }
+    const prodPct    = sales > 0 ? (production / sales) * 100 : 0
+    return { dept: d, name: deptLabel[d], production, sales, waste, hours, laborCost, salesPerHr, wastePct: wPct, laborPct: lPct, prodCostPct: prodPct }
   }).sort((a, b) => b.sales - a.sales)
 
   // ─── Loading State ──────────────────────────────────────────────────────
@@ -716,8 +723,9 @@ export default function FactoryDashboard({ onBack }: Props) {
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-xs font-bold text-slate-500">מחלקה</TableHead>
-                  <TableHead className="text-xs font-bold text-slate-500 text-center">ייצור</TableHead>
+                  <TableHead className="text-xs font-bold text-slate-500 text-center">עלות ייצור</TableHead>
                   <TableHead className="text-xs font-bold text-slate-500 text-center">מכירות</TableHead>
+                  <TableHead className="text-xs font-bold text-slate-500 text-center">% עלות ייצור</TableHead>
                   <TableHead className="text-xs font-bold text-slate-500 text-center">לייבור</TableHead>
                   <TableHead className="text-xs font-bold text-slate-500 text-center">% לייבור</TableHead>
                   <TableHead className="text-xs font-bold text-slate-500 text-center">פחת</TableHead>
@@ -729,6 +737,7 @@ export default function FactoryDashboard({ onBack }: Props) {
                 {deptTotals.map(row => {
                   const lColor = row.sales > 0 ? kpiColor(row.laborPct, targets.labor_pct, true) : '#94a3b8'
                   const wColor = row.sales > 0 ? kpiColor(row.wastePct, targets.waste_pct, true) : '#94a3b8'
+                  const pColor = row.sales > 0 && row.production > 0 ? kpiColor(row.prodCostPct, targets.production_pct, true) : '#94a3b8'
                   return (
                     <TableRow key={row.dept} style={{ borderBottom: '1px solid #f8fafc' }}>
                       <TableCell className="px-3.5 py-2.5 text-[12px] font-medium text-slate-700">{row.name}</TableCell>
@@ -737,6 +746,9 @@ export default function FactoryDashboard({ onBack }: Props) {
                       </TableCell>
                       <TableCell className="px-3.5 py-2.5 text-[12px] text-center text-slate-600">
                         {row.sales > 0 ? fmtM(row.sales) : '—'}
+                      </TableCell>
+                      <TableCell className="px-3.5 py-2.5 text-[12px] text-center font-bold" style={{ color: pColor }}>
+                        {row.sales > 0 && row.production > 0 ? `${row.prodCostPct.toFixed(1)}%` : '—'}
                       </TableCell>
                       <TableCell className="px-3.5 py-2.5 text-[12px] text-center text-slate-600">
                         {row.laborCost > 0 ? fmtM(row.laborCost) : '—'}
