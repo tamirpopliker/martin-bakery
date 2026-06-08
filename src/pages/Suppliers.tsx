@@ -5,7 +5,7 @@ import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import {
   Plus, Pencil, Trash2, Search, X,
-  Building2
+  Building2, FileSpreadsheet
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 
@@ -85,7 +85,7 @@ function AutocompleteInput({ value, onChange, options, placeholder }: {
 }
 
 // ─── קומפוננטה ראשית ─────────────────────────────────────────────────────────
-export default function Suppliers({ onBack }: { onBack: () => void }) {
+export default function Suppliers({ onBack, onNavigate }: { onBack: () => void; onNavigate?: (page: string) => void }) {
   const [tab, setTab] = useState<'invoices' | 'suppliers'>('invoices')
 
   // ── מצב חשבוניות ──
@@ -387,6 +387,13 @@ export default function Suppliers({ onBack }: { onBack: () => void }) {
                   style={{ ...S.input, paddingRight: 36 }} />
                 {searchInv && <button onClick={() => setSearchInv('')} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}><X size={13} color="#94a3b8" /></button>}
               </div>
+              {onNavigate && (
+                <button onClick={() => onNavigate('suppliers_report')}
+                  title="עובר לדוח ספקים מאוחד — שם אפשר להוריד אקסל עם פירוט לפי סניף"
+                  style={{ background: '#059669', color: 'white', border: 'none', borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                  <FileSpreadsheet size={15} /> ייצוא לאקסל לפי סניף
+                </button>
+              )}
             </div>
 
             {/* סיכום לפי ספק */}

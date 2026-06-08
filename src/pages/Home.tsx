@@ -413,7 +413,7 @@ export default function Home() {
     if (page === 'packaging_labor')      return <DepartmentLabor department="packaging" onBack={() => setPage(null)} />
     if (page === 'cleaning_labor')       return <DepartmentLabor department="cleaning"  onBack={() => setPage(null)} />
 
-    if (page === 'suppliers')            return <Suppliers onBack={() => setPage(null)} />
+    if (page === 'suppliers')            return <Suppliers onBack={() => setPage(null)} onNavigate={(p) => setPage(p)} />
 
     if (page === 'creams_dashboard')     return <DepartmentDashboard department="creams" onBack={() => setPage(null)} />
     if (page === 'dough_dashboard')      return <DepartmentDashboard department="dough"  onBack={() => setPage(null)} />
