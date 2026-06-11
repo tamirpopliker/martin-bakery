@@ -6,7 +6,7 @@ import { calculateBranchPL, calculateFactoryPL, getHQAllocationContext, type PLR
 import { TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck, Building2, Layers } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon, TrophyIcon } from '@/components/icons'
-import { BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { BarChart, Bar, AreaChart, Area, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -1399,7 +1399,10 @@ export default function CEODashboard({ onBack }: Props) {
                 <span style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '12px' }}>הכנסות יומיות לפי סניף</span>
                 <div>
                   <ResponsiveContainer width="100%" height={250}>
-                    <AreaChart data={dailyRevenue}>
+                    <AreaChart data={dailyRevenue.map(row => ({
+                      ...row,
+                      'סה"כ': BRANCHES.reduce((s, br) => s + (Number(row[br.name]) || 0), 0),
+                    }))}>
                       <defs>
                         {BRANCHES.map(br => (
                           <linearGradient key={br.id} id={`grad-${br.id}`} x1="0" y1="0" x2="0" y2="1">
@@ -1415,6 +1418,7 @@ export default function CEODashboard({ onBack }: Props) {
                       {BRANCHES.map(br => (
                         <Area key={br.id} type="monotone" dataKey={br.name} stroke={br.color} strokeWidth={2.5} fill={`url(#grad-${br.id})`} dot={{ r: 3, fill: 'white', stroke: br.color, strokeWidth: 2 }} activeDot={{ r: 5, fill: br.color, stroke: 'white', strokeWidth: 2 }} />
                       ))}
+                      <Line type="monotone" dataKey='סה"כ' stroke="#0f172a" strokeWidth={2} strokeDasharray="6 4" dot={false} activeDot={{ r: 4, fill: '#0f172a', stroke: 'white', strokeWidth: 2 }} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
