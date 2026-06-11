@@ -6,7 +6,7 @@ import { calculateBranchPL, calculateFactoryPL, getHQAllocationContext, type PLR
 import { TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck, Building2, Layers } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon, TrophyIcon } from '@/components/icons'
-import { BarChart, Bar, AreaChart, Area, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { BarChart, Bar, AreaChart, Area, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts'
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -515,6 +515,9 @@ export default function CEODashboard({ onBack }: Props) {
   const consOverhead    = totalRevenue * overheadPct / 100  // only branches get overhead
   const consOperating   = consGross - consWaste - consFixed - consRepairs - consOverhead
 
+  // Per-unit bar chart — branches + factory. The grand consolidated total is
+  // intentionally omitted: it appears in the KPI tiles above the chart and
+  // visually dwarfs the individual units when shown side-by-side here.
   const barData = [
     ...branches.map(b => ({
       name: b.name,
@@ -527,12 +530,6 @@ export default function CEODashboard({ onBack }: Props) {
       הכנסות: Math.round(factorySales),
       הוצאות: Math.round(factoryLabor + factorySuppliers + factoryWaste + factoryRepairs + factoryFixed),
       'רווח תפעולי': Math.round(factoryOperatingProfit),
-    },
-    {
-      name: 'סה"כ',
-      הכנסות: Math.round(grandRevenue),
-      הוצאות: Math.round(totalExpenses + totalLabor + totalWaste + totalFixed + factoryLabor + factorySuppliers + factoryWaste + factoryRepairs + factoryFixed),
-      'רווח תפעולי': Math.round(grandOperating),
     },
   ]
 
@@ -1356,16 +1353,17 @@ export default function CEODashboard({ onBack }: Props) {
                 <span style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '12px' }}>הכנסות/הוצאות לפי יחידה</span>
                 <div>
                   <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={barData} barGap={4}>
-                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <BarChart data={barData} barGap={4} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} interval={0} />
                       <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => `₪${(v / 1000).toFixed(0)}K`} axisLine={false} tickLine={false} />
                       <Tooltip content={<ChartTooltip />} cursor={{ fill: '#f1f5f9', radius: 8 }} />
                       <Legend wrapperStyle={{ fontSize: '12px' }} />
+                      <ReferenceLine y={0} stroke="#cbd5e1" strokeWidth={1} />
                       <Bar dataKey="הכנסות" fill={CHART_INDIGO} radius={[6, 6, 0, 0]} />
                       <Bar dataKey="הוצאות" fill={CHART_GRAY} radius={[6, 6, 0, 0]} />
                       <Bar dataKey="רווח תפעולי" radius={[6, 6, 0, 0]}>
                         {barData.map((entry, index) => (
-                          <Cell key={index} fill={entry['רווח תפעולי'] >= 0 ? CHART_EMERALD : '#94a3b8'} />
+                          <Cell key={index} fill={entry['רווח תפעולי'] >= 0 ? CHART_EMERALD : '#E24B4A'} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -1379,10 +1377,24 @@ export default function CEODashboard({ onBack }: Props) {
                   {expenseBreakdown.length > 0 ? (
                     <ResponsiveContainer width="100%" height={250}>
                       <PieChart>
-                        <Pie data={expenseBreakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={40} paddingAngle={2} label={({ name, percent }: any) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false} style={{ fontSize: '11px' }}>
+                        <Pie data={expenseBreakdown} dataKey="value" nameKey="name" cx="35%" cy="50%" outerRadius={90} innerRadius={55} paddingAngle={2} labelLine={false}>
                           {expenseBreakdown.map((_, i) => (<Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />))}
                         </Pie>
                         <Tooltip content={<PieTooltip />} />
+                        <Legend
+                          layout="vertical"
+                          align="left"
+                          verticalAlign="middle"
+                          iconType="circle"
+                          iconSize={9}
+                          wrapperStyle={{ fontSize: '12px', paddingLeft: '8px', lineHeight: '20px' }}
+                          formatter={(value: string) => {
+                            const item = expenseBreakdown.find(e => e.name === value)
+                            const sum = expenseBreakdown.reduce((s, e) => s + e.value, 0)
+                            const pct = item && sum > 0 ? ((item.value / sum) * 100).toFixed(1) : '0.0'
+                            return <span style={{ color: '#64748b' }}>{value} <strong style={{ color: '#0f172a' }}>{pct}%</strong></span>
+                          }}
+                        />
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
