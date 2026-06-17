@@ -125,6 +125,19 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     return loc ? `${emp.name} (${loc})` : emp.name
   }
 
+  // Same data as empName but split for the Excel export, where the location
+  // belongs in its own column (the UI keeps the combined "(שם סניף)" form
+  // because it's denser on screen).
+  function empParts(e: AuditEntry): { name: string; location: string } {
+    if (!e.employee_kind || !e.employee_id) return { name: '—', location: '' }
+    const emp = employeeMap.get(`${e.employee_kind}-${e.employee_id}`)
+    if (!emp) {
+      const kind = e.employee_kind === 'branch' ? 'סניף' : 'מפעל'
+      return { name: '[עובד לא נמצא במאגר]', location: `${kind} #${e.employee_id}` }
+    }
+    return { name: emp.name, location: emp.location_name || emp.department || '' }
+  }
+
   // A "bulk import" is 5+ audit entries sharing the same second, same author,
   // same table, same operation — almost always a single bulk DB load that
   // would otherwise flood the export. We move these to their own sheet.
@@ -241,21 +254,23 @@ export default function MonthlyChangesReport({ onBack }: Props) {
   // for that employee — Excel can filter/sort by field name. Filters out
   // entries that produced no diff (null fields, system-y changes).
   function buildFieldRows(es: AuditEntry[], allowedFields: Set<string>) {
-    type Row = { עובד: string; שדה: string; 'מ-': string; 'אל-': string; תאריך: string; מבצע: string; _sortName: string; _sortDate: string }
+    type Row = { עובד: string; סניף: string; שדה: string; 'מ-': string; 'אל-': string; תאריך: string; מבצע: string; _sortName: string; _sortDate: string }
     const rows: Row[] = []
     for (const e of es) {
       const fields = e.changed_fields || {}
+      const parts = empParts(e)
       for (const [k, v] of Object.entries(fields)) {
         if (!allowedFields.has(k)) continue
         if (!isDiff(v)) continue
         rows.push({
-          עובד: empName(e),
+          עובד: parts.name,
+          סניף: parts.location,
           שדה: fieldLabel(k),
           'מ-': formatValue(v.old),
           'אל-': formatValue(v.new),
           תאריך: new Date(e.changed_at).toLocaleString('he-IL'),
           מבצע: e.changed_by_email || '',
-          _sortName: empName(e),
+          _sortName: parts.name,
           _sortDate: e.changed_at,
         })
       }
@@ -290,7 +305,10 @@ export default function MonthlyChangesReport({ onBack }: Props) {
 
     // ── Sheet 2: hires ──
     const hireRows = hires
-      .map(e => ({ עובד: empName(e), 'תאריך קליטה': new Date(e.changed_at).toLocaleString('he-IL'), מבצע: e.changed_by_email || '' }))
+      .map(e => {
+        const p = empParts(e)
+        return { עובד: p.name, סניף: p.location, 'תאריך קליטה': new Date(e.changed_at).toLocaleString('he-IL'), מבצע: e.changed_by_email || '' }
+      })
       .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
     appendSheet(wb, 'עובדים שנקלטו', hireRows)
 
@@ -298,8 +316,10 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     const departRows = departures
       .map(e => {
         const newEnd = (e.changed_fields?.end_date as { new?: unknown } | undefined)?.new
+        const p = empParts(e)
         return {
-          עובד: empName(e),
+          עובד: p.name,
+          סניף: p.location,
           'תאריך סיום עבודה': formatValue(newEnd),
           'תאריך רישום': new Date(e.changed_at).toLocaleString('he-IL'),
           מבצע: e.changed_by_email || '',
@@ -319,8 +339,10 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         const fields = e.changed_fields || {}
         const fileRaw = (fields.file_name as { new?: unknown })?.new ?? fields.file_name
         const dtypeRaw = (fields.document_type_label as { new?: unknown })?.new ?? fields.document_type_label
+        const p = empParts(e)
         return {
-          עובד: empName(e),
+          עובד: p.name,
+          סניף: p.location,
           'סוג מסמך': formatValue(dtypeRaw),
           'שם קובץ': formatValue(fileRaw),
           פעולה: e.operation === 'INSERT' ? 'הועלה' : e.operation === 'DELETE' ? 'הוסר' : 'עודכן',
@@ -333,7 +355,10 @@ export default function MonthlyChangesReport({ onBack }: Props) {
 
     // ── Sheet 8: other changes — skip rows with empty description ──
     const otherRows = otherChanges
-      .map(e => ({ עובד: empName(e), 'תיאור שינוי': describeOtherDiff(e), תאריך: new Date(e.changed_at).toLocaleString('he-IL'), מבצע: e.changed_by_email || '' }))
+      .map(e => {
+        const p = empParts(e)
+        return { עובד: p.name, סניף: p.location, 'תיאור שינוי': describeOtherDiff(e), תאריך: new Date(e.changed_at).toLocaleString('he-IL'), מבצע: e.changed_by_email || '' }
+      })
       .filter(r => r['תיאור שינוי'].trim() !== '')
       .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
     appendSheet(wb, 'שינויים אחרים', otherRows)
