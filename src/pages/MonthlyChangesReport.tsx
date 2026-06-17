@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react'
 // only needed when the user actually clicks "ייצוא להנה"ח". Keeping it out of
 // the page's static imports cuts the initial chunk and prevents a long parse
 // when the page mounts.
+import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -119,9 +120,34 @@ export default function MonthlyChangesReport({ onBack }: Props) {
   function empName(e: AuditEntry): string {
     if (!e.employee_kind || !e.employee_id) return '—'
     const emp = employeeMap.get(`${e.employee_kind}-${e.employee_id}`)
-    if (!emp) return `(${e.employee_kind === 'branch' ? 'סניף' : 'מפעל'} #${e.employee_id})`
+    if (!emp) return `[עובד לא נמצא במאגר] (${e.employee_kind === 'branch' ? 'סניף' : 'מפעל'} #${e.employee_id})`
     const loc = emp.location_name || (emp.department || '')
     return loc ? `${emp.name} (${loc})` : emp.name
+  }
+
+  // A "bulk import" is 5+ audit entries sharing the same second, same author,
+  // same table, same operation — almost always a single bulk DB load that
+  // would otherwise flood the export. We move these to their own sheet.
+  interface BulkBatch { changed_at: string; changed_by_email: string; table_name: string; operation: string; rows: AuditEntry[] }
+  function detectBulkImports(es: AuditEntry[]): { bulk: BulkBatch[]; normal: AuditEntry[] } {
+    const groups = new Map<string, AuditEntry[]>()
+    for (const e of es) {
+      const key = `${e.changed_at.slice(0, 19)}|${e.changed_by_email || ''}|${e.table_name}|${e.operation}`
+      const arr = groups.get(key) || []
+      arr.push(e)
+      groups.set(key, arr)
+    }
+    const bulk: BulkBatch[] = []
+    const normal: AuditEntry[] = []
+    for (const [key, rows] of groups) {
+      if (rows.length >= 5) {
+        const [changed_at, changed_by_email, table_name, operation] = key.split('|')
+        bulk.push({ changed_at, changed_by_email, table_name, operation, rows })
+      } else {
+        normal.push(...rows)
+      }
+    }
+    return { bulk, normal }
   }
 
   function formatDate(s: string): string {
@@ -130,7 +156,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
 
   // Categorize entries — memoized so it doesn't re-run on every render
   // (e.g. when the user clicks the month picker or hovers a button).
-  const { hires, departures, salaryChanges, bankChanges, roleChanges, documentEvents, otherChanges } = useMemo(() => {
+  const { hires, departures, salaryChanges, bankChanges, roleChanges, documentEvents, otherChanges, bulkBatches } = useMemo(() => {
     const hires: AuditEntry[] = []
     const departures: AuditEntry[] = []
     const salaryChanges: AuditEntry[] = []
@@ -139,7 +165,9 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     const documentEvents: AuditEntry[] = []
     const otherChanges: AuditEntry[] = []
 
-    for (const e of entries) {
+    const { bulk: bulkBatches, normal } = detectBulkImports(entries)
+
+    for (const e of normal) {
       if (e.table_name === 'employee_documents') {
         documentEvents.push(e)
         continue
@@ -175,7 +203,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         }
       }
     }
-    return { hires, departures, salaryChanges, bankChanges, roleChanges, documentEvents, otherChanges }
+    return { hires, departures, salaryChanges, bankChanges, roleChanges, documentEvents, otherChanges, bulkBatches }
   }, [entries])
 
   // Some audit-log rows have `null` (or a non-object) values for a field in
@@ -209,39 +237,130 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     return parts.join(' · ')
   }
 
-  function buildSummaryCsv(): string {
-    const headers = ['קטגוריה', 'עובד', 'תיאור שינוי', 'מבצע', 'תאריך']
-    const rows: string[][] = []
-    const push = (cat: string, e: AuditEntry, desc: string) =>
-      rows.push([cat, empName(e), desc, e.changed_by_email || '', new Date(e.changed_at).toLocaleString('he-IL')])
-
-    for (const e of hires)         push('עובדים שנקלטו', e, 'נקלט')
-    for (const e of departures)    push('עובדים שעזבו', e, `סיום עבודה: ${formatValue((e.changed_fields?.end_date as { new: unknown } | undefined)?.new)}`)
-    for (const e of salaryChanges) push('שינויי שכר', e, describeFieldDiff(e, SALARY_FIELDS))
-    for (const e of bankChanges)   push('שינויי בנק', e, describeFieldDiff(e, BANK_FIELDS))
-    for (const e of roleChanges)   push('שינויי תפקיד/מחלקה', e, describeFieldDiff(e, ROLE_FIELDS))
-    for (const e of documentEvents) {
+  // Build a row per *changed field* (not per entry) so each row is one fact
+  // for that employee — Excel can filter/sort by field name. Filters out
+  // entries that produced no diff (null fields, system-y changes).
+  function buildFieldRows(es: AuditEntry[], allowedFields: Set<string>) {
+    type Row = { עובד: string; שדה: string; 'מ-': string; 'אל-': string; תאריך: string; מבצע: string; _sortName: string; _sortDate: string }
+    const rows: Row[] = []
+    for (const e of es) {
       const fields = e.changed_fields || {}
-      const file = (fields.file_name as { new?: unknown })?.new || fields.file_name || '?'
-      const dtype = (fields.document_type_label as { new?: unknown })?.new || fields.document_type_label || ''
-      push('מסמכים', e, `${e.operation === 'INSERT' ? 'הועלה' : 'הוסר'}: ${formatValue(dtype)} (${formatValue(file)})`)
+      for (const [k, v] of Object.entries(fields)) {
+        if (!allowedFields.has(k)) continue
+        if (!isDiff(v)) continue
+        rows.push({
+          עובד: empName(e),
+          שדה: fieldLabel(k),
+          'מ-': formatValue(v.old),
+          'אל-': formatValue(v.new),
+          תאריך: new Date(e.changed_at).toLocaleString('he-IL'),
+          מבצע: e.changed_by_email || '',
+          _sortName: empName(e),
+          _sortDate: e.changed_at,
+        })
+      }
     }
-    for (const e of otherChanges)  push('שינויים אחרים', e, describeOtherDiff(e))
-
-    return [headers, ...rows]
-      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
-      .join('\n')
+    rows.sort((a, b) => a._sortName.localeCompare(b._sortName, 'he') || b._sortDate.localeCompare(a._sortDate))
+    return rows.map(({ _sortName, _sortDate, ...rest }) => rest)
   }
 
-  function exportCsv() {
-    const csv = buildSummaryCsv()
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `monthly_changes_${year}_${String(month).padStart(2, '0')}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  function appendSheet(wb: XLSX.WorkBook, name: string, rows: Record<string, unknown>[]) {
+    if (rows.length === 0) return
+    const ws = XLSX.utils.json_to_sheet(rows)
+    // Mark the sheet RTL so Excel renders Hebrew columns right-to-left.
+    ws['!sheetViews'] = [{ rightToLeft: true }]
+    XLSX.utils.book_append_sheet(wb, ws, name)
+  }
+
+  function buildWorkbook(): XLSX.WorkBook {
+    const wb = XLSX.utils.book_new()
+
+    // ── Sheet 1: summary ──
+    const summary = [
+      { קטגוריה: 'עובדים שנקלטו', 'מספר אירועים': hires.length },
+      { קטגוריה: 'עובדים שעזבו', 'מספר אירועים': departures.length },
+      { קטגוריה: 'שינויי שכר', 'מספר אירועים': salaryChanges.length },
+      { קטגוריה: 'שינויי בנק', 'מספר אירועים': bankChanges.length },
+      { קטגוריה: 'שינויי תפקיד/מחלקה', 'מספר אירועים': roleChanges.length },
+      { קטגוריה: 'מסמכים', 'מספר אירועים': documentEvents.length },
+      { קטגוריה: 'שינויים אחרים', 'מספר אירועים': otherChanges.length },
+      { קטגוריה: 'ייבוא נתונים (Bulk)', 'מספר אירועים': bulkBatches.reduce((s, b) => s + b.rows.length, 0) },
+    ]
+    appendSheet(wb, 'סיכום', summary)
+
+    // ── Sheet 2: hires ──
+    const hireRows = hires
+      .map(e => ({ עובד: empName(e), 'תאריך קליטה': new Date(e.changed_at).toLocaleString('he-IL'), מבצע: e.changed_by_email || '' }))
+      .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
+    appendSheet(wb, 'עובדים שנקלטו', hireRows)
+
+    // ── Sheet 3: departures ──
+    const departRows = departures
+      .map(e => {
+        const newEnd = (e.changed_fields?.end_date as { new?: unknown } | undefined)?.new
+        return {
+          עובד: empName(e),
+          'תאריך סיום עבודה': formatValue(newEnd),
+          'תאריך רישום': new Date(e.changed_at).toLocaleString('he-IL'),
+          מבצע: e.changed_by_email || '',
+        }
+      })
+      .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
+    appendSheet(wb, 'עובדים שעזבו', departRows)
+
+    // ── Sheets 4–6: salary / bank / role — one row per changed field ──
+    appendSheet(wb, 'שינויי שכר', buildFieldRows(salaryChanges, SALARY_FIELDS))
+    appendSheet(wb, 'שינויי בנק', buildFieldRows(bankChanges, BANK_FIELDS))
+    appendSheet(wb, 'שינויי תפקיד-מחלקה', buildFieldRows(roleChanges, ROLE_FIELDS))
+
+    // ── Sheet 7: documents ──
+    const docRows = documentEvents
+      .map(e => {
+        const fields = e.changed_fields || {}
+        const fileRaw = (fields.file_name as { new?: unknown })?.new ?? fields.file_name
+        const dtypeRaw = (fields.document_type_label as { new?: unknown })?.new ?? fields.document_type_label
+        return {
+          עובד: empName(e),
+          'סוג מסמך': formatValue(dtypeRaw),
+          'שם קובץ': formatValue(fileRaw),
+          פעולה: e.operation === 'INSERT' ? 'הועלה' : e.operation === 'DELETE' ? 'הוסר' : 'עודכן',
+          תאריך: new Date(e.changed_at).toLocaleString('he-IL'),
+          מבצע: e.changed_by_email || '',
+        }
+      })
+      .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
+    appendSheet(wb, 'מסמכים', docRows)
+
+    // ── Sheet 8: other changes — skip rows with empty description ──
+    const otherRows = otherChanges
+      .map(e => ({ עובד: empName(e), 'תיאור שינוי': describeOtherDiff(e), תאריך: new Date(e.changed_at).toLocaleString('he-IL'), מבצע: e.changed_by_email || '' }))
+      .filter(r => r['תיאור שינוי'].trim() !== '')
+      .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
+    appendSheet(wb, 'שינויים אחרים', otherRows)
+
+    // ── Sheet 9: bulk imports — one row per batch, not per row ──
+    const tableLabels: Record<string, string> = {
+      branch_employees: 'עובדי סניפים', employees: 'עובדי מפעל',
+      employee_documents: 'מסמכי עובדים', employee_onboarding: 'קליטה',
+    }
+    const opLabels: Record<string, string> = { INSERT: 'הוספה', UPDATE: 'עדכון', DELETE: 'מחיקה' }
+    const bulkRows = bulkBatches
+      .map(b => ({
+        תאריך: new Date(b.changed_at).toLocaleString('he-IL'),
+        מבצע: b.changed_by_email || '',
+        טבלה: tableLabels[b.table_name] || b.table_name,
+        פעולה: opLabels[b.operation] || b.operation,
+        'מספר רשומות': b.rows.length,
+      }))
+      .sort((a, b) => b['תאריך'].localeCompare(a['תאריך']))
+    appendSheet(wb, 'ייבוא נתונים (Bulk)', bulkRows)
+
+    return wb
+  }
+
+  function exportXlsx() {
+    const wb = buildWorkbook()
+    XLSX.writeFile(wb, `monthly_changes_${year}_${String(month).padStart(2, '0')}.xlsx`)
   }
 
   // Accounting-friendly export: ZIP containing the summary CSV + every relevant
@@ -259,9 +378,10 @@ export default function MonthlyChangesReport({ onBack }: Props) {
 
       const zip = new JSZip()
 
-      // 1. Summary CSV
-      const csv = buildSummaryCsv()
-      zip.file(`סיכום שינויים ${HEBREW_MONTHS[month - 1]} ${year}.csv`, '﻿' + csv)
+      // 1. Summary XLSX (multi-sheet, organized for accountant)
+      const wb = buildWorkbook()
+      const xlsxBuf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+      zip.file(`סיכום שינויים ${HEBREW_MONTHS[month - 1]} ${year}.xlsx`, xlsxBuf)
 
       // 2. Collect employee keys to grab full doc set for: hires + leavers
       const fullDocEmpKeys = new Set<string>()
@@ -371,9 +491,9 @@ export default function MonthlyChangesReport({ onBack }: Props) {
           <Printer className="size-4 ml-2" />
           הדפסה / PDF
         </Button>
-        <Button variant="outline" onClick={exportCsv}>
+        <Button variant="outline" onClick={exportXlsx}>
           <Download className="size-4 ml-2" />
-          ייצוא CSV
+          ייצוא לאקסל
         </Button>
         <Button onClick={exportAccountingZip} disabled={exportingZip}>
           <Archive className="size-4 ml-2" />
