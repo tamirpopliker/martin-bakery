@@ -126,16 +126,22 @@ export default function MonthlyChangesReport({ onBack }: Props) {
   }
 
   // Same data as empName but split for the Excel export, where the location
-  // belongs in its own column (the UI keeps the combined "(שם סניף)" form
-  // because it's denser on screen).
-  function empParts(e: AuditEntry): { name: string; location: string } {
-    if (!e.employee_kind || !e.employee_id) return { name: '—', location: '' }
+  // and department belong in their own columns (the UI keeps the combined
+  // "(שם סניף)" form because it's denser on screen).
+  // For branch employees: location = branch name, department is usually empty.
+  // For factory employees: location = "מפעל", department = "בצקים"/"קרמים"/etc.
+  function empParts(e: AuditEntry): { name: string; location: string; department: string } {
+    if (!e.employee_kind || !e.employee_id) return { name: '—', location: '', department: '' }
     const emp = employeeMap.get(`${e.employee_kind}-${e.employee_id}`)
     if (!emp) {
       const kind = e.employee_kind === 'branch' ? 'סניף' : 'מפעל'
-      return { name: '[עובד לא נמצא במאגר]', location: `${kind} #${e.employee_id}` }
+      return { name: '[עובד לא נמצא במאגר]', location: `${kind} #${e.employee_id}`, department: '' }
     }
-    return { name: emp.name, location: emp.location_name || emp.department || '' }
+    return {
+      name: emp.name,
+      location: emp.location_name || (e.employee_kind === 'factory' ? 'מפעל' : ''),
+      department: emp.department || '',
+    }
   }
 
   // A "bulk import" is 5+ audit entries sharing the same second, same author,
@@ -254,7 +260,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
   // for that employee — Excel can filter/sort by field name. Filters out
   // entries that produced no diff (null fields, system-y changes).
   function buildFieldRows(es: AuditEntry[], allowedFields: Set<string>) {
-    type Row = { עובד: string; סניף: string; שדה: string; 'מ-': string; 'אל-': string; תאריך: string; מבצע: string; _sortName: string; _sortDate: string }
+    type Row = { עובד: string; סניף: string; מחלקה: string; שדה: string; 'מ-': string; 'אל-': string; תאריך: string; מבצע: string; _sortName: string; _sortDate: string }
     const rows: Row[] = []
     for (const e of es) {
       const fields = e.changed_fields || {}
@@ -265,6 +271,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         rows.push({
           עובד: parts.name,
           סניף: parts.location,
+          מחלקה: parts.department,
           שדה: fieldLabel(k),
           'מ-': formatValue(v.old),
           'אל-': formatValue(v.new),
@@ -315,10 +322,13 @@ export default function MonthlyChangesReport({ onBack }: Props) {
       .map(e => {
         const p = empParts(e)
         const rate = extractInitial(e.changed_fields, 'hourly_rate')
+        const globalRate = extractInitial(e.changed_fields, 'global_daily_rate')
         return {
           עובד: p.name,
           סניף: p.location,
+          מחלקה: p.department,
           'שכר שעתי': formatValue(rate),
+          'שכר גלובלי': formatValue(globalRate),
           'תאריך קליטה': new Date(e.changed_at).toLocaleString('he-IL'),
           מבצע: e.changed_by_email || '',
         }
@@ -334,6 +344,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         return {
           עובד: p.name,
           סניף: p.location,
+          מחלקה: p.department,
           'תאריך סיום עבודה': formatValue(newEnd),
           'תאריך רישום': new Date(e.changed_at).toLocaleString('he-IL'),
           מבצע: e.changed_by_email || '',
@@ -357,6 +368,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         return {
           עובד: p.name,
           סניף: p.location,
+          מחלקה: p.department,
           'סוג מסמך': formatValue(dtypeRaw),
           'שם קובץ': formatValue(fileRaw),
           פעולה: e.operation === 'INSERT' ? 'הועלה' : e.operation === 'DELETE' ? 'הוסר' : 'עודכן',
@@ -371,7 +383,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     const otherRows = otherChanges
       .map(e => {
         const p = empParts(e)
-        return { עובד: p.name, סניף: p.location, 'תיאור שינוי': describeOtherDiff(e), תאריך: new Date(e.changed_at).toLocaleString('he-IL'), מבצע: e.changed_by_email || '' }
+        return { עובד: p.name, סניף: p.location, מחלקה: p.department, 'תיאור שינוי': describeOtherDiff(e), תאריך: new Date(e.changed_at).toLocaleString('he-IL'), מבצע: e.changed_by_email || '' }
       })
       .filter(r => r['תיאור שינוי'].trim() !== '')
       .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
