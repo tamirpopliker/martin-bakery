@@ -79,6 +79,15 @@ const HEBREW_MONTHS = [
   'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
 ]
 
+// Fallback manager names by exact branch name — used when branches.manager_name
+// is empty or the column doesn't exist yet (i.e. sql/055 hasn't been applied).
+// Once sql/055 is run, the DB value takes precedence so this list becomes inert.
+const FALLBACK_MANAGERS: Record<string, string> = {
+  'סניף אברהם אבינו': 'אבי חורב',
+  'סניף הפועלים': 'קובי לוי',
+  'סניף יעקב כהן': 'זהר ספונוב',
+}
+
 const TARGET_FIELD_LABELS: Record<string, string> = {
   revenue_target: 'הכנסות (₪)',
   labor_pct: '% לייבור',
@@ -134,19 +143,26 @@ export default function BonusKPI({ onBack }: Props) {
     setDirty(false)
     setManualValues({})
     try {
+      // Pull branch name + manager_name (column might not exist yet — query gracefully
+      // degrades). Fall back to a name→manager map if no DB value.
       const [
         { data: branchRow },
+        { data: branchNameRow },
         { data: modelRow },
         { data: monthlyRow },
         { data: kpiTargetRow },
       ] = await Promise.all([
         supabase.from('branches').select('manager_name').eq('id', bId).maybeSingle(),
+        supabase.from('branches').select('name').eq('id', bId).maybeSingle(),
         supabase.from('branch_bonus_models').select('*').eq('branch_id', bId).maybeSingle(),
         supabase.from('branch_bonus_monthly').select('*').eq('branch_id', bId).eq('month', monthKey).maybeSingle(),
         supabase.from('branch_kpi_targets').select('revenue_target, labor_pct, waste_pct, basket_target, controllable_margin_pct, transaction_target').eq('branch_id', bId).maybeSingle(),
       ])
 
-      const branchManager = (branchRow?.manager_name as string) || ''
+      const branchName = (branchNameRow?.name as string) || ''
+      const branchManager = (branchRow?.manager_name as string)
+        || FALLBACK_MANAGERS[branchName]
+        || ''
 
       // Effective config: prefer existing monthly snapshot (so historical edits stay stable),
       // else use the live model, else fall back to a sensible default.
