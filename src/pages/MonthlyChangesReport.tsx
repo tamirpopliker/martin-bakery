@@ -304,10 +304,24 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     appendSheet(wb, 'סיכום', summary)
 
     // ── Sheet 2: hires ──
+    // INSERT rows store the initial value either as a bare scalar OR as
+    // { new: value } depending on the trigger version. Probe both.
+    const extractInitial = (fields: Record<string, unknown> | null, key: string): unknown => {
+      const v = fields?.[key]
+      if (v && typeof v === 'object' && 'new' in (v as object)) return (v as { new: unknown }).new
+      return v
+    }
     const hireRows = hires
       .map(e => {
         const p = empParts(e)
-        return { עובד: p.name, סניף: p.location, 'תאריך קליטה': new Date(e.changed_at).toLocaleString('he-IL'), מבצע: e.changed_by_email || '' }
+        const rate = extractInitial(e.changed_fields, 'hourly_rate')
+        return {
+          עובד: p.name,
+          סניף: p.location,
+          'שכר שעתי': formatValue(rate),
+          'תאריך קליטה': new Date(e.changed_at).toLocaleString('he-IL'),
+          מבצע: e.changed_by_email || '',
+        }
       })
       .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
     appendSheet(wb, 'עובדים שנקלטו', hireRows)
