@@ -14,9 +14,15 @@ import { OnboardingTab } from './OnboardingTab'
 import { NewEmployeeWizard } from './NewEmployeeWizard'
 import type { UnifiedEmployee, Kind, TabKey } from './types'
 
-interface Props { onBack: () => void }
+interface Props {
+  onBack: () => void
+  // When set, the dashboard auto-opens the EmployeeDetail view for that
+  // {kind, id} on first load — used by FactoryEmployees "edit" button to
+  // jump straight to the full profile.
+  initialEmployeeKey?: { kind: Kind; id: number } | null
+}
 
-export default function HRDashboard({ onBack }: Props) {
+export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
   const [employees, setEmployees] = useState<UnifiedEmployee[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -26,6 +32,16 @@ export default function HRDashboard({ onBack }: Props) {
   const [wizardOpen, setWizardOpen] = useState(false)
 
   useEffect(() => { load() }, [])
+
+  // After the employee list loads, resolve initialEmployeeKey into the
+  // matching UnifiedEmployee and open the detail view. Runs once per
+  // load+key change so navigating back from the detail doesn't re-open it.
+  useEffect(() => {
+    if (!initialEmployeeKey || employees.length === 0 || selected) return
+    const match = employees.find(e => e.kind === initialEmployeeKey.kind && e.id === initialEmployeeKey.id)
+    if (match) setSelected(match)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employees, initialEmployeeKey?.kind, initialEmployeeKey?.id])
 
   async function load() {
     setLoading(true)

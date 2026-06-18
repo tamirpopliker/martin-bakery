@@ -8,7 +8,12 @@ import PageHeader from '../components/PageHeader'
 import { NewEmployeeWizard } from './HRDashboard/NewEmployeeWizard'
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
-interface Props { onBack: () => void }
+interface Props {
+  onBack: () => void
+  // Optional — when provided, the row "edit" pencil navigates to the full
+  // HR profile of that employee instead of opening the inline edit form.
+  onEditEmployee?: (id: number) => void
+}
 
 type DeptKey = 'creams' | 'dough' | 'packaging' | 'cleaning'
 
@@ -47,7 +52,7 @@ const fadeIn = {
 function fmtM(n: number) { return '₪' + Math.round(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 
 // ─── קומפוננטה ראשית ─────────────────────────────────────────────────────────
-export default function FactoryEmployees({ onBack }: Props) {
+export default function FactoryEmployees({ onBack, onEditEmployee }: Props) {
   const { appUser } = useAppUser()
 
   const isAdmin = appUser?.role === 'admin'
@@ -110,8 +115,36 @@ export default function FactoryEmployees({ onBack }: Props) {
     return true
   })
 
-  const activeCount = filteredEmps.filter(e => e.active).length
-  const inactiveCount = filteredEmps.filter(e => !e.active).length
+  // ─── הסרת כפילויות לפי שם מנורמל ─────────────────────────────────────
+  // Several rows share the same person (typo'd names, accidental re-adds,
+  // imports). Collapse them by normalized name: prefer the active record,
+  // tie-break on highest id (newest). Stash the dupe count on the kept row
+  // so the UI can show a small badge.
+  function normalize(name: string) {
+    return name.replace(/\s+/g, '').toLowerCase()
+  }
+  const byNormName = new Map<string, Employee[]>()
+  for (const e of filteredEmps) {
+    const key = normalize(e.name)
+    const arr = byNormName.get(key) || []
+    arr.push(e)
+    byNormName.set(key, arr)
+  }
+  const displayedEmps: (Employee & { _dupeCount: number })[] = []
+  for (const group of byNormName.values()) {
+    const winner = [...group].sort((a, b) =>
+      (Number(b.active) - Number(a.active)) || (b.id - a.id)
+    )[0]
+    displayedEmps.push({ ...winner, _dupeCount: group.length - 1 })
+  }
+  // Preserve the original department→name order so the page doesn't shuffle.
+  displayedEmps.sort((a, b) =>
+    a.department.localeCompare(b.department) || a.name.localeCompare(b.name, 'he')
+  )
+
+  const activeCount = displayedEmps.filter(e => e.active).length
+  const inactiveCount = displayedEmps.filter(e => !e.active).length
+  const hiddenDupes = displayedEmps.reduce((s, e) => s + e._dupeCount, 0)
 
   const currentDeptLabel = deptFilter === 'all'
     ? 'כל המחלקות'
@@ -123,7 +156,7 @@ export default function FactoryEmployees({ onBack }: Props) {
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
       <PageHeader
         title="עובדי מפעל"
-        subtitle={`${currentDeptLabel} · ${activeCount} פעילים · ${inactiveCount} מושבתים`}
+        subtitle={`${currentDeptLabel} · ${activeCount} פעילים · ${inactiveCount} מושבתים${hiddenDupes > 0 ? ` · ${hiddenDupes} כפילויות הוסתרו` : ''}`}
         onBack={onBack}
         action={
           <button onClick={() => setWizardOpen(true)}
@@ -174,13 +207,13 @@ export default function FactoryEmployees({ onBack }: Props) {
                     <span />
                   </div>
 
-                  {filteredEmps.length === 0 ? (
+                  {displayedEmps.length === 0 ? (
                     <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
                       <Users size={40} color="#e2e8f0" style={{ marginBottom: '12px' }} />
                       <div>אין עובדים</div>
                     </div>
-                  ) : filteredEmps.map((emp, i) => (
-                    <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 90px 70px 110px 50px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < filteredEmps.length - 1 ? '1px solid #f1f5f9' : 'none', background: !emp.active ? '#fff1f2' : i % 2 === 0 ? 'white' : '#fafafa', opacity: emp.active ? 1 : 0.6 }}>
+                  ) : displayedEmps.map((emp, i) => (
+                    <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 90px 70px 110px 50px 36px', alignItems: 'center', padding: '12px 20px', borderBottom: i < displayedEmps.length - 1 ? '1px solid #f1f5f9' : 'none', background: !emp.active ? '#fff1f2' : i % 2 === 0 ? 'white' : '#fafafa', opacity: emp.active ? 1 : 0.6 }}>
                       {editEmpId === emp.id ? (
                         <>
                           <input type="text" value={editEmpData.name || ''} onChange={e => setEditEmpData(p => ({ ...p, name: e.target.value }))} autoFocus style={{ border: '1.5px solid #0f172a', borderRadius: '8px', padding: '5px 8px', fontSize: '13px', fontFamily: 'inherit' }} />
@@ -198,7 +231,14 @@ export default function FactoryEmployees({ onBack }: Props) {
                         </>
                       ) : (
                         <>
-                          <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>{emp.name}</span>
+                          <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {emp.name}
+                            {emp._dupeCount > 0 && (
+                              <span title={`${emp._dupeCount} רשומות נוספות עם אותו שם הוסתרו`} style={{ fontSize: 10, background: '#fef3c7', color: '#92400e', padding: '1px 6px', borderRadius: 999, fontWeight: 700 }}>
+                                +{emp._dupeCount}
+                              </span>
+                            )}
+                          </span>
                           <span style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>{emp.employee_number || '—'}</span>
                           <span style={{ fontSize: '12px', color: '#64748b' }}>
                             {DEPT_LABELS[emp.department] || emp.department}
@@ -217,7 +257,14 @@ export default function FactoryEmployees({ onBack }: Props) {
                               {emp.active ? '&#10003;' : '&#10005;'}
                             </button>
                           </span>
-                          <button onClick={() => { setEditEmpId(emp.id); setEditEmpData(emp) }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}>
+                          <button
+                            onClick={() => {
+                              if (onEditEmployee) onEditEmployee(emp.id)
+                              else { setEditEmpId(emp.id); setEditEmpData(emp) }
+                            }}
+                            title={onEditEmployee ? 'פתח פרופיל מלא' : 'עריכה מהירה'}
+                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}
+                          >
                             <Pencil size={14} color="#94a3b8" />
                           </button>
                         </>
