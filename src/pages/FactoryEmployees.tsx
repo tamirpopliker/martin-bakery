@@ -106,11 +106,23 @@ export default function FactoryEmployees({ onBack, onEditEmployee }: Props) {
     await fetchEmployees()
   }
 
+  // Inactive employees live behind a dedicated tab so the active list isn't
+  // cluttered. Counted across allowed departments (admin sees all dept dupes).
+  const inactiveAllowed = employees.filter(e =>
+    !e.active && (allowedDepts.includes(e.department as DeptKey) || e.department === 'both')
+  )
+
   // ─── סינון ─────────────────────────────────────────────────────────────
   const filteredEmps = employees.filter(e => {
-    // First check allowed departments
+    if (deptFilter === 'inactive') {
+      // Inactive tab — show only inactive employees within allowed departments.
+      if (e.active) return false
+      if (!allowedDepts.includes(e.department as DeptKey) && e.department !== 'both') return false
+      return true
+    }
+    // Default tabs (הכל + per-dept) — active employees only.
+    if (!e.active) return false
     if (!allowedDepts.includes(e.department as DeptKey) && e.department !== 'both') return false
-    // Then apply selected filter
     if (deptFilter !== 'all' && e.department !== deptFilter) return false
     return true
   })
@@ -143,12 +155,13 @@ export default function FactoryEmployees({ onBack, onEditEmployee }: Props) {
   )
 
   const activeCount = displayedEmps.filter(e => e.active).length
-  const inactiveCount = displayedEmps.filter(e => !e.active).length
   const hiddenDupes = displayedEmps.reduce((s, e) => s + e._dupeCount, 0)
 
   const currentDeptLabel = deptFilter === 'all'
     ? 'כל המחלקות'
-    : DEPT_LABELS[deptFilter] || deptFilter
+    : deptFilter === 'inactive'
+      ? 'עובדים לא פעילים'
+      : DEPT_LABELS[deptFilter] || deptFilter
 
   return (
     <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
@@ -156,7 +169,9 @@ export default function FactoryEmployees({ onBack, onEditEmployee }: Props) {
       {/* ─── כותרת ───────────────────────────────────────────────────────── */}
       <PageHeader
         title="עובדי מפעל"
-        subtitle={`${currentDeptLabel} · ${activeCount} פעילים · ${inactiveCount} מושבתים${hiddenDupes > 0 ? ` · ${hiddenDupes} כפילויות הוסתרו` : ''}`}
+        subtitle={deptFilter === 'inactive'
+          ? `${displayedEmps.length} עובדים לא פעילים${hiddenDupes > 0 ? ` · ${hiddenDupes} כפילויות הוסתרו` : ''}`
+          : `${currentDeptLabel} · ${activeCount} פעילים · ${inactiveAllowed.length} בטאב לא פעילים${hiddenDupes > 0 ? ` · ${hiddenDupes} כפילויות הוסתרו` : ''}`}
         onBack={onBack}
         action={
           <button onClick={() => setWizardOpen(true)}
@@ -186,6 +201,18 @@ export default function FactoryEmployees({ onBack, onEditEmployee }: Props) {
                 {d.label}
               </button>
             ))}
+            <button
+              onClick={() => setDeptFilter('inactive')}
+              className={`border-0 rounded-lg py-1.5 px-3.5 text-[13px] font-semibold cursor-pointer inline-flex items-center gap-1.5 ${deptFilter === 'inactive' ? 'bg-rose-700 text-white' : 'bg-rose-50 text-rose-700'}`}
+              style={{ marginInlineStart: 'auto' }}
+            >
+              לא פעילים
+              {inactiveAllowed.length > 0 && (
+                <span className={`text-[11px] font-bold rounded-full px-1.5 py-0.5 ${deptFilter === 'inactive' ? 'bg-white/20 text-white' : 'bg-rose-200 text-rose-800'}`}>
+                  {inactiveAllowed.length}
+                </span>
+              )}
+            </button>
           </div>
         )}
 
@@ -274,7 +301,9 @@ export default function FactoryEmployees({ onBack, onEditEmployee }: Props) {
 
                   {filteredEmps.length > 0 && (
                     <div style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderRadius: '0 0 20px 20px', fontSize: '13px', color: '#64748b', fontWeight: '600' }}>
-                      {filteredEmps.length} עובדים — {activeCount} פעילים · {inactiveCount} מושבתים
+                      {deptFilter === 'inactive'
+                        ? `${filteredEmps.length} עובדים לא פעילים`
+                        : `${filteredEmps.length} עובדים — ${activeCount} פעילים`}
                     </div>
                   )}
                 </CardContent>
