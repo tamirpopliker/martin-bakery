@@ -58,7 +58,21 @@ interface KpiTargets {
   labor_pct: number | null
   waste_pct: number | null
   basket_target: number | null
+  controllable_margin_pct: number | null
+  transaction_target: number | null
 }
+
+// Client-side default model — used when no branch_bonus_models row exists yet
+// for the branch (e.g. before sql/055 ran or for a newly-created branch).
+// Mirrors the SQL seed so the page is usable out of the box.
+const DEFAULT_PARAMETERS: KpiParam[] = [
+  { id: 'sales',   name: 'מכירות',                  weight: 25,  source: 'auto',   kind: 'higher_better', target_field: 'revenue_target' },
+  { id: 'labor',   name: 'ממוצע לייבור',            weight: 25,  source: 'auto',   kind: 'lower_better',  target_field: 'labor_pct' },
+  { id: 'waste',   name: 'פחת ממוצע',               weight: 10,  source: 'auto',   kind: 'lower_better',  target_field: 'waste_pct' },
+  { id: 'basket',  name: 'סל ממוצע',                weight: 25,  source: 'auto',   kind: 'higher_better', target_field: 'basket_target' },
+  { id: 'mystery', name: 'לקוח סמוי/דוח מנהל',       weight: 7.5, source: 'manual', kind: 'binary' },
+  { id: 'safety',  name: 'ביקורות בטיחות מזון וניקיון', weight: 7.5, source: 'manual', kind: 'binary' },
+]
 
 const HEBREW_MONTHS = [
   'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
@@ -70,6 +84,8 @@ const TARGET_FIELD_LABELS: Record<string, string> = {
   labor_pct: '% לייבור',
   waste_pct: '% פחת',
   basket_target: 'סל ממוצע (₪)',
+  controllable_margin_pct: '% רווח נשלט',
+  transaction_target: 'עסקאות יומי',
 }
 
 const fmt = (n: number, frac = 0) => Math.round(n * Math.pow(10, frac)) / Math.pow(10, frac)
@@ -93,7 +109,7 @@ export default function BonusKPI({ onBack }: Props) {
   const [baseAmount, setBaseAmount] = useState(2000)
   const [thresholdPct, setThresholdPct] = useState(97)
   const [parameters, setParameters] = useState<KpiParam[]>([])
-  const [autoActuals, setAutoActuals] = useState<{ revenue: number; labor_pct: number; waste_pct: number; basket: number } | null>(null)
+  const [autoActuals, setAutoActuals] = useState<{ revenue: number; labor_pct: number; waste_pct: number; basket: number; controllable_margin_pct: number; daily_tx: number } | null>(null)
   const [targets, setTargets] = useState<KpiTargets | null>(null)
   const [manualValues, setManualValues] = useState<Record<string, 'YES' | 'NO'>>({})
   const [loading, setLoading] = useState(false)
@@ -127,7 +143,7 @@ export default function BonusKPI({ onBack }: Props) {
         supabase.from('branches').select('manager_name').eq('id', bId).maybeSingle(),
         supabase.from('branch_bonus_models').select('*').eq('branch_id', bId).maybeSingle(),
         supabase.from('branch_bonus_monthly').select('*').eq('branch_id', bId).eq('month', monthKey).maybeSingle(),
-        supabase.from('branch_kpi_targets').select('revenue_target, labor_pct, waste_pct, basket_target').eq('branch_id', bId).maybeSingle(),
+        supabase.from('branch_kpi_targets').select('revenue_target, labor_pct, waste_pct, basket_target, controllable_margin_pct, transaction_target').eq('branch_id', bId).maybeSingle(),
       ])
 
       const branchManager = (branchRow?.manager_name as string) || ''
@@ -141,9 +157,18 @@ export default function BonusKPI({ onBack }: Props) {
       setManagerName(mm?.manager_name || branchManager)
       setBaseAmount(Number(mm?.base_amount ?? m?.base_amount ?? 2000))
       setThresholdPct(Number(mm?.threshold_pct ?? m?.threshold_pct ?? 97))
-      const params: KpiParam[] = (mm?.parameters as KpiRow[] | undefined)?.map(stripRuntime) || m?.parameters || []
+      // Parameter precedence:
+      //   1. monthly snapshot (stable history for already-approved/drafted months)
+      //   2. current branch model
+      //   3. client-side defaults (so the page works before sql/055 or for new branches)
+      const params: KpiParam[] = (mm?.parameters as KpiRow[] | undefined)?.map(stripRuntime)
+        || m?.parameters
+        || DEFAULT_PARAMETERS
       setParameters(params)
-      setTargets((kpiTargetRow as KpiTargets) || { revenue_target: null, labor_pct: null, waste_pct: null, basket_target: null })
+      setTargets((kpiTargetRow as KpiTargets) || {
+        revenue_target: null, labor_pct: null, waste_pct: null,
+        basket_target: null, controllable_margin_pct: null, transaction_target: null,
+      })
 
       // Restore manual YES/NO from the snapshot if present
       const mv: Record<string, 'YES' | 'NO'> = {}
@@ -157,16 +182,20 @@ export default function BonusKPI({ onBack }: Props) {
       const to = monthEnd(monthKey)
       const [pl, { data: closings }] = await Promise.all([
         calculateBranchPL(bId, from, to, undefined, monthKey),
-        supabase.from('register_closings').select('transaction_count, cash_sales, credit_sales').eq('branch_id', bId).gte('date', from).lt('date', to),
+        supabase.from('register_closings').select('date, transaction_count, cash_sales, credit_sales').eq('branch_id', bId).gte('date', from).lt('date', to),
       ])
       const txCount = (closings || []).reduce((s, c: any) => s + (Number(c.transaction_count) || 0), 0)
       const closingsRevenue = (closings || []).reduce((s, c: any) => s + (Number(c.cash_sales) || 0) + (Number(c.credit_sales) || 0), 0)
       const basketRevenue = closingsRevenue > 0 ? closingsRevenue : pl.revenue
+      // Working days in the month for daily-tx target: distinct dates with any closing activity.
+      const workingDays = new Set((closings || []).map((c: any) => c.date)).size
       setAutoActuals({
         revenue: pl.revenue,
         labor_pct: pl.revenue > 0 ? (pl.labor / pl.revenue) * 100 : 0,
         waste_pct: pl.revenue > 0 ? (pl.waste / pl.revenue) * 100 : 0,
         basket: txCount > 0 ? basketRevenue / txCount : 0,
+        controllable_margin_pct: pl.revenue > 0 ? (pl.controllableProfit / pl.revenue) * 100 : 0,
+        daily_tx: workingDays > 0 ? txCount / workingDays : 0,
       })
     } catch (err) {
       console.error('[BonusKPI] load failed', err)
@@ -191,11 +220,13 @@ export default function BonusKPI({ onBack }: Props) {
     if (p.source === 'manual') return manualValues[p.id] || 'NO'
     if (!autoActuals || !p.target_field) return null
     switch (p.target_field) {
-      case 'revenue_target': return autoActuals.revenue
-      case 'labor_pct':      return autoActuals.labor_pct
-      case 'waste_pct':      return autoActuals.waste_pct
-      case 'basket_target':  return autoActuals.basket
-      default:               return null
+      case 'revenue_target':           return autoActuals.revenue
+      case 'labor_pct':                return autoActuals.labor_pct
+      case 'waste_pct':                return autoActuals.waste_pct
+      case 'basket_target':            return autoActuals.basket
+      case 'controllable_margin_pct':  return autoActuals.controllable_margin_pct
+      case 'transaction_target':       return autoActuals.daily_tx
+      default:                         return null
     }
   }
 
