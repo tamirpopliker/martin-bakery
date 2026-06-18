@@ -117,7 +117,8 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
     if (pageKey === 'user_management' || pageKey === 'data_import' ||
         pageKey === 'ceo_dashboard' || pageKey === 'reports_alerts' ||
         pageKey === 'branch_dashboard' || pageKey === 'branch_comparison' ||
-        pageKey === 'suppliers_report' || pageKey === 'management_reports') {
+        pageKey === 'suppliers_report' || pageKey === 'management_reports' ||
+        pageKey === 'bonus_kpi') {
       return false
     }
 

@@ -25,6 +25,31 @@ interface AuditEntry {
   changed_at: string
 }
 
+interface BonusKpiSnapshot {
+  id: string
+  name: string
+  weight: number
+  source: string
+  kind: string
+  achieved: boolean
+  bonus: number
+}
+
+interface BonusRecord {
+  id: number
+  branch_id: number
+  branch_name: string
+  month: string
+  status: 'draft' | 'approved'
+  manager_name: string
+  base_amount: number
+  threshold_pct: number
+  parameters: BonusKpiSnapshot[]
+  total_bonus: number
+  approved_by: string | null
+  approved_at: string | null
+}
+
 interface UnifiedEmployee {
   kind: 'branch' | 'factory'
   id: number
@@ -74,6 +99,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
   const [month, setMonth] = useState(initialDate.getMonth() + 1) // 1-12
   const [entries, setEntries] = useState<AuditEntry[]>([])
   const [employeeMap, setEmployeeMap] = useState<Map<string, UnifiedEmployee>>(new Map())
+  const [bonuses, setBonuses] = useState<BonusRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [exportingZip, setExportingZip] = useState(false)
   const [zipProgress, setZipProgress] = useState<string | null>(null)
@@ -86,8 +112,9 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     const nextMonthDate = new Date(year, month, 1)
     const nextMonth = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`
 
+    const monthKey = `${year}-${String(month).padStart(2, '0')}`
     try {
-      const [auditRes, empsRes] = await Promise.all([
+      const [auditRes, empsRes, bonusRes, branchesRes] = await Promise.all([
         supabase
           .from('hr_audit_log')
           .select('id, table_name, employee_kind, employee_id, operation, changed_fields, changed_by_email, changed_at')
@@ -99,11 +126,35 @@ export default function MonthlyChangesReport({ onBack }: Props) {
           .from('hr_employees_unified')
           .select('kind, id, name, location_name, department')
           .limit(2000),
+        supabase
+          .from('branch_bonus_monthly')
+          .select('*')
+          .eq('month', monthKey)
+          .eq('status', 'approved'),
+        supabase.from('branches').select('id, name'),
       ])
       if (auditRes.error) console.error('[MonthlyChangesReport] hr_audit_log query failed:', auditRes.error)
       if (empsRes.error) console.error('[MonthlyChangesReport] hr_employees_unified query failed:', empsRes.error)
 
       setEntries((auditRes.data as AuditEntry[]) || [])
+      // Bonuses — enrich with branch name for the export sheet.
+      const branchNameById = new Map<number, string>()
+      for (const b of (branchesRes.data || [])) branchNameById.set(b.id, b.name)
+      const bRows: BonusRecord[] = ((bonusRes.data as any[]) || []).map(b => ({
+        id: b.id,
+        branch_id: b.branch_id,
+        branch_name: branchNameById.get(b.branch_id) || `סניף #${b.branch_id}`,
+        month: b.month,
+        status: b.status,
+        manager_name: b.manager_name,
+        base_amount: Number(b.base_amount),
+        threshold_pct: Number(b.threshold_pct),
+        parameters: (b.parameters as BonusKpiSnapshot[]) || [],
+        total_bonus: Number(b.total_bonus),
+        approved_by: b.approved_by,
+        approved_at: b.approved_at,
+      }))
+      setBonuses(bRows)
       const map = new Map<string, UnifiedEmployee>()
       for (const e of (empsRes.data as UnifiedEmployee[] || [])) {
         map.set(`${e.kind}-${e.id}`, e)
@@ -320,6 +371,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
       { קטגוריה: 'מסמכים', 'מספר אירועים': documentEvents.length },
       { קטגוריה: 'שינויים אחרים', 'מספר אירועים': otherChanges.length },
       { קטגוריה: 'ייבוא נתונים (Bulk)', 'מספר אירועים': bulkBatches.reduce((s, b) => s + b.rows.length, 0) },
+      { קטגוריה: 'בונוסי מנהלי סניף', 'מספר אירועים': bonuses.length },
     ]
     appendSheet(wb, 'סיכום', summary)
 
@@ -420,6 +472,29 @@ export default function MonthlyChangesReport({ onBack }: Props) {
       }))
       .sort((a, b) => b['תאריך'].localeCompare(a['תאריך']))
     appendSheet(wb, 'ייבוא נתונים (Bulk)', bulkRows)
+
+    // ── Sheet 10: bonuses approved for this month ──
+    const bonusRows = bonuses
+      .map(b => {
+        const passed = b.parameters.filter(p => p.achieved).length
+        const kpiSummary = b.parameters
+          .map(p => `${p.name} ${p.achieved ? '✓ ' : '✗ '}${Math.round(p.bonus)}`)
+          .join(' · ')
+        return {
+          מנהל: b.manager_name,
+          סניף: b.branch_name,
+          חודש: b.month,
+          'בונוס בסיס': Math.round(b.base_amount),
+          'סף עמידה (%)': b.threshold_pct,
+          'מדדים שעברו': `${passed}/${b.parameters.length}`,
+          'סה"כ בונוס': Math.round(b.total_bonus),
+          'פירוט KPI': kpiSummary,
+          מאשר: b.approved_by || '',
+          'תאריך אישור': b.approved_at ? new Date(b.approved_at).toLocaleString('he-IL') : '',
+        }
+      })
+      .sort((a, b) => a['מנהל'].localeCompare(b['מנהל'], 'he'))
+    appendSheet(wb, 'בונוסי מנהלי סניף', bonusRows)
 
     return wb
   }
