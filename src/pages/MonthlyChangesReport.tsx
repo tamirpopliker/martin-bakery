@@ -42,6 +42,13 @@ const SALARY_FIELDS = new Set(['hourly_rate', 'monthly_salary', 'retention_bonus
 const BANK_FIELDS = new Set(['bank_name', 'bank_branch', 'bank_account_number'])
 const ROLE_FIELDS = new Set(['position', 'department'])
 
+// Display order for the Excel sheets — drives the column order of the row-
+// per-entry export. Each list must contain only keys that appear in the
+// matching *_FIELDS Set above.
+const SALARY_FIELDS_ORDER = ['hourly_rate', 'monthly_salary', 'global_daily_rate', 'bonus', 'retention_bonus'] as const
+const BANK_FIELDS_ORDER = ['bank_name', 'bank_branch', 'bank_account_number'] as const
+const ROLE_FIELDS_ORDER = ['position', 'department'] as const
+
 const FIELD_LABELS: Record<string, string> = {
   hourly_rate: 'תעריף שעתי', monthly_salary: 'שכר חודשי', retention_bonus: 'בונוס שמירה',
   bonus: 'בונוס', global_daily_rate: 'תעריף יומי', bank_name: 'בנק',
@@ -256,31 +263,37 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     return parts.join(' · ')
   }
 
-  // Build a row per *changed field* (not per entry) so each row is one fact
-  // for that employee — Excel can filter/sort by field name. Filters out
-  // entries that produced no diff (null fields, system-y changes).
-  function buildFieldRows(es: AuditEntry[], allowedFields: Set<string>) {
-    type Row = { עובד: string; סניף: string; מחלקה: string; שדה: string; 'מ-': string; 'אל-': string; תאריך: string; מבצע: string; _sortName: string; _sortDate: string }
+  // One row per audit entry — one column per allowed field. When multiple
+  // fields change in the same UPDATE (e.g. all 3 bank fields at once), they
+  // share a single row instead of being split across N rows. Filters out
+  // entries that produced no diff in the allowed set.
+  function buildFieldRows(es: AuditEntry[], fieldOrder: readonly string[]) {
+    type Row = Record<string, string> & { _sortName: string; _sortDate: string }
     const rows: Row[] = []
     for (const e of es) {
       const fields = e.changed_fields || {}
       const parts = empParts(e)
-      for (const [k, v] of Object.entries(fields)) {
-        if (!allowedFields.has(k)) continue
-        if (!isDiff(v)) continue
-        rows.push({
-          עובד: parts.name,
-          סניף: parts.location,
-          מחלקה: parts.department,
-          שדה: fieldLabel(k),
-          'מ-': formatValue(v.old),
-          'אל-': formatValue(v.new),
-          תאריך: new Date(e.changed_at).toLocaleString('he-IL'),
-          מבצע: e.changed_by_email || '',
-          _sortName: parts.name,
-          _sortDate: e.changed_at,
-        })
+      const row: Row = {
+        עובד: parts.name,
+        סניף: parts.location,
+        מחלקה: parts.department,
+        _sortName: parts.name,
+        _sortDate: e.changed_at,
       }
+      let hasAnyDiff = false
+      for (const k of fieldOrder) {
+        const v = fields[k]
+        if (isDiff(v)) {
+          row[fieldLabel(k)] = `${formatValue(v.old)} → ${formatValue(v.new)}`
+          hasAnyDiff = true
+        } else {
+          row[fieldLabel(k)] = ''
+        }
+      }
+      if (!hasAnyDiff) continue
+      row['תאריך'] = new Date(e.changed_at).toLocaleString('he-IL')
+      row['מבצע'] = e.changed_by_email || ''
+      rows.push(row)
     }
     rows.sort((a, b) => a._sortName.localeCompare(b._sortName, 'he') || b._sortDate.localeCompare(a._sortDate))
     return rows.map(({ _sortName, _sortDate, ...rest }) => rest)
@@ -353,10 +366,12 @@ export default function MonthlyChangesReport({ onBack }: Props) {
       .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
     appendSheet(wb, 'עובדים שעזבו', departRows)
 
-    // ── Sheets 4–6: salary / bank / role — one row per changed field ──
-    appendSheet(wb, 'שינויי שכר', buildFieldRows(salaryChanges, SALARY_FIELDS))
-    appendSheet(wb, 'שינויי בנק', buildFieldRows(bankChanges, BANK_FIELDS))
-    appendSheet(wb, 'שינויי תפקיד-מחלקה', buildFieldRows(roleChanges, ROLE_FIELDS))
+    // ── Sheets 4–6: salary / bank / role — one row per audit entry,
+    // column per known field. Multiple field changes in the same UPDATE
+    // collapse to a single row.
+    appendSheet(wb, 'שינויי שכר', buildFieldRows(salaryChanges, SALARY_FIELDS_ORDER))
+    appendSheet(wb, 'שינויי בנק', buildFieldRows(bankChanges, BANK_FIELDS_ORDER))
+    appendSheet(wb, 'שינויי תפקיד-מחלקה', buildFieldRows(roleChanges, ROLE_FIELDS_ORDER))
 
     // ── Sheet 7: documents ──
     const docRows = documentEvents
