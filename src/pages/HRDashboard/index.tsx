@@ -30,16 +30,20 @@ export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
   const [activeFilter, setActiveFilter] = useState<'active' | 'all' | 'inactive'>('all')
   const [selected, setSelected] = useState<UnifiedEmployee | null>(null)
   const [wizardOpen, setWizardOpen] = useState(false)
+  // Tracks whether the current detail view was auto-opened via
+  // initialEmployeeKey (vs. opened by the user clicking a row). When true,
+  // closing the detail returns the user to the origin page instead of the
+  // HR list — and we don't auto-reopen it after a refresh.
+  const [autoOpened, setAutoOpened] = useState(false)
 
   useEffect(() => { load() }, [])
 
   // After the employee list loads, resolve initialEmployeeKey into the
-  // matching UnifiedEmployee and open the detail view. Runs once per
-  // load+key change so navigating back from the detail doesn't re-open it.
+  // matching UnifiedEmployee and open the detail view exactly once.
   useEffect(() => {
-    if (!initialEmployeeKey || employees.length === 0 || selected) return
+    if (!initialEmployeeKey || employees.length === 0 || selected || autoOpened) return
     const match = employees.find(e => e.kind === initialEmployeeKey.kind && e.id === initialEmployeeKey.id)
-    if (match) setSelected(match)
+    if (match) { setSelected(match); setAutoOpened(true) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employees, initialEmployeeKey?.kind, initialEmployeeKey?.id])
 
@@ -87,7 +91,9 @@ export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
   if (selected) {
     return <EmployeeDetail
       employee={selected}
-      onBack={() => { setSelected(null); load() }}
+      onBack={autoOpened
+        ? onBack                              // came from another page → return there
+        : () => { setSelected(null); load() }} // organic click → back to HR list
     />
   }
 

@@ -106,6 +106,9 @@ export default function Home() {
   // here and switch to hr_dashboard. HRDashboard reads it on mount and opens
   // the EmployeeDetail directly. Cleared when we leave hr_dashboard.
   const [hrInitialKey, setHrInitialKey] = useState<{ kind: 'branch' | 'factory'; id: number } | null>(null)
+  // Remembers which page navigated into hr_dashboard, so its back button
+  // returns the user there instead of dumping them at the home screen.
+  const [hrOriginPage, setHrOriginPage] = useState<string | null>(null)
   const [expandedSection, setExpandedSection] = useState<string | null>('factory')
 
   // ─── Dynamic branches for navigation ──────────────────────────────────────
@@ -425,7 +428,7 @@ export default function Home() {
     if (page === 'factory_b2b')          return <FactoryB2B onBack={() => setPage(null)} />
     if (page === 'factory_special_orders') return <FactorySpecialOrders onBack={() => setPage(null)} />
     if (page === 'settings')             return <FactorySettings onBack={() => setPage(null)} />
-    if (page === 'factory_employees')  return <FactoryEmployees onBack={() => setPage(null)} onEditEmployee={(id) => { setHrInitialKey({ kind: 'factory', id }); setPage('hr_dashboard') }} />
+    if (page === 'factory_employees')  return <FactoryEmployees onBack={() => setPage(null)} onEditEmployee={(id) => { setHrInitialKey({ kind: 'factory', id }); setHrOriginPage('factory_employees'); setPage('hr_dashboard') }} />
     if (page === 'production_report_upload') return <ProductionReportUpload onBack={() => setPage(null)} />
     if (page === 'internal_sales') return <InternalSalesUpload onBack={() => setPage(null)} />
     if (page === 'product_catalog') return <ProductCatalog onBack={() => setPage(null)} />
@@ -436,7 +439,7 @@ export default function Home() {
     if (page === 'system_settings')      return <UserManagement onBack={() => setPage(null)} initialTab="settings" />
     if (page === 'reports_alerts')       return <ReportsAlerts onBack={() => setPage(null)} />
 
-    if (page === 'hr_dashboard') return <HRDashboard onBack={() => { setHrInitialKey(null); setPage(null) }} initialEmployeeKey={hrInitialKey} />
+    if (page === 'hr_dashboard') return <HRDashboard onBack={() => { const origin = hrOriginPage; setHrInitialKey(null); setHrOriginPage(null); setPage(origin) }} initialEmployeeKey={hrInitialKey} />
     if (page === 'changes_report') return <MonthlyChangesReport onBack={() => setPage(null)} />
     if (page === 'b2b_customers') return <B2BCustomers onBack={() => setPage(null)} />
     if (page === 'suppliers_report') return <SuppliersReport onBack={() => setPage(null)} />
