@@ -48,17 +48,19 @@ CREATE POLICY "branch_bonus_models_admin_all" ON branch_bonus_models FOR ALL
   USING (EXISTS (SELECT 1 FROM app_users u WHERE u.auth_uid = auth.uid() AND u.role = 'admin'))
   WITH CHECK (EXISTS (SELECT 1 FROM app_users u WHERE u.auth_uid = auth.uid() AND u.role = 'admin'));
 
--- Seed default model for each active branch, matching the screenshot:
---   25% sales, 25% labor, 10% waste, 25% basket, 7.5% mystery shopper, 7.5% safety audit.
+-- Seed default model for each active branch:
+--   20% sales, 20% labor, 10% waste, 20% basket, 15% controllable profit,
+--   7.5% mystery shopper, 7.5% safety audit  (sums to 100%).
 -- Branches can edit/extend afterwards via the UI.
 INSERT INTO branch_bonus_models (branch_id, base_amount, threshold_pct, parameters)
 SELECT b.id, 2000, 97, '[
-  { "id":"sales",       "name":"מכירות",                "weight":25,  "source":"auto",   "kind":"higher_better", "target_field":"revenue_target" },
-  { "id":"labor",       "name":"ממוצע לייבור",          "weight":25,  "source":"auto",   "kind":"lower_better",  "target_field":"labor_pct" },
-  { "id":"waste",       "name":"פחת ממוצע",             "weight":10,  "source":"auto",   "kind":"lower_better",  "target_field":"waste_pct" },
-  { "id":"basket",      "name":"סל ממוצע",              "weight":25,  "source":"auto",   "kind":"higher_better", "target_field":"basket_target" },
-  { "id":"mystery",     "name":"לקוח סמוי/דוח מנהל",     "weight":7.5, "source":"manual", "kind":"binary" },
-  { "id":"safety",      "name":"ביקורות בטיחות מזון וניקיון", "weight":7.5, "source":"manual", "kind":"binary" }
+  { "id":"sales",        "name":"מכירות",                "weight":20,  "source":"auto",   "kind":"higher_better", "target_field":"revenue_target" },
+  { "id":"labor",        "name":"ממוצע לייבור",          "weight":20,  "source":"auto",   "kind":"lower_better",  "target_field":"labor_pct" },
+  { "id":"waste",        "name":"פחת ממוצע",             "weight":10,  "source":"auto",   "kind":"lower_better",  "target_field":"waste_pct" },
+  { "id":"basket",       "name":"סל ממוצע",              "weight":20,  "source":"auto",   "kind":"higher_better", "target_field":"basket_target" },
+  { "id":"controllable", "name":"רווח נשלט",             "weight":15,  "source":"auto",   "kind":"higher_better", "target_field":"controllable_margin_pct" },
+  { "id":"mystery",      "name":"לקוח סמוי/דוח מנהל",     "weight":7.5, "source":"manual", "kind":"binary" },
+  { "id":"safety",       "name":"ביקורות בטיחות מזון וניקיון", "weight":7.5, "source":"manual", "kind":"binary" }
 ]'::jsonb
 FROM branches b
 WHERE b.active = true

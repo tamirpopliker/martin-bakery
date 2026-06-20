@@ -66,12 +66,13 @@ interface KpiTargets {
 // for the branch (e.g. before sql/055 ran or for a newly-created branch).
 // Mirrors the SQL seed so the page is usable out of the box.
 const DEFAULT_PARAMETERS: KpiParam[] = [
-  { id: 'sales',   name: 'מכירות',                  weight: 25,  source: 'auto',   kind: 'higher_better', target_field: 'revenue_target' },
-  { id: 'labor',   name: 'ממוצע לייבור',            weight: 25,  source: 'auto',   kind: 'lower_better',  target_field: 'labor_pct' },
-  { id: 'waste',   name: 'פחת ממוצע',               weight: 10,  source: 'auto',   kind: 'lower_better',  target_field: 'waste_pct' },
-  { id: 'basket',  name: 'סל ממוצע',                weight: 25,  source: 'auto',   kind: 'higher_better', target_field: 'basket_target' },
-  { id: 'mystery', name: 'לקוח סמוי/דוח מנהל',       weight: 7.5, source: 'manual', kind: 'binary' },
-  { id: 'safety',  name: 'ביקורות בטיחות מזון וניקיון', weight: 7.5, source: 'manual', kind: 'binary' },
+  { id: 'sales',          name: 'מכירות',                  weight: 20,  source: 'auto',   kind: 'higher_better', target_field: 'revenue_target' },
+  { id: 'labor',          name: 'ממוצע לייבור',            weight: 20,  source: 'auto',   kind: 'lower_better',  target_field: 'labor_pct' },
+  { id: 'waste',          name: 'פחת ממוצע',               weight: 10,  source: 'auto',   kind: 'lower_better',  target_field: 'waste_pct' },
+  { id: 'basket',         name: 'סל ממוצע',                weight: 20,  source: 'auto',   kind: 'higher_better', target_field: 'basket_target' },
+  { id: 'controllable',   name: 'רווח נשלט',               weight: 15,  source: 'auto',   kind: 'higher_better', target_field: 'controllable_margin_pct' },
+  { id: 'mystery',        name: 'לקוח סמוי/דוח מנהל',       weight: 7.5, source: 'manual', kind: 'binary' },
+  { id: 'safety',         name: 'ביקורות בטיחות מזון וניקיון', weight: 7.5, source: 'manual', kind: 'binary' },
 ]
 
 const HEBREW_MONTHS = [
@@ -99,6 +100,20 @@ const TARGET_FIELD_LABELS: Record<string, string> = {
 
 const fmt = (n: number, frac = 0) => Math.round(n * Math.pow(10, frac)) / Math.pow(10, frac)
 const fmtMoney = (n: number) => '₪' + Math.round(n).toLocaleString('he-IL')
+
+// Friendly error formatter — surfaces the most common cause (missing table from
+// the un-applied sql/055 migration) with an actionable hint instead of the raw
+// PostgREST schema-cache message.
+function formatDbError(prefix: string, error: { message?: string } | null | undefined): string {
+  const msg = error?.message || 'שגיאת מסד נתונים'
+  if (/branch_bonus_models|branch_bonus_monthly|schema cache/.test(msg)) {
+    return `${prefix}: הטבלאות עוד לא נוצרו במסד.\n\nצריך להריץ את הקובץ sql/055_branch_manager_bonus.sql ב-Supabase Studio (SQL Editor → Paste → Run) ואז לרענן את הדף.`
+  }
+  if (/manager_name/.test(msg)) {
+    return `${prefix}: עמודת manager_name לא קיימת ב-branches.\n\nצריך להריץ את הקובץ sql/055_branch_manager_bonus.sql ב-Supabase Studio.`
+  }
+  return `${prefix}: ${msg}`
+}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 export default function BonusKPI({ onBack }: Props) {
@@ -301,7 +316,7 @@ export default function BonusKPI({ onBack }: Props) {
       parameters: parameters as any,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'branch_id' })
-    if (error) { alert('שמירת המודל נכשלה: ' + error.message); setSaving(false); return }
+    if (error) { alert(formatDbError('שמירת המודל נכשלה', error)); setSaving(false); return }
     // Also persist current manager_name on branches
     if (managerName) await supabase.from('branches').update({ manager_name: managerName }).eq('id', branchId)
     setSaving(false)
@@ -327,7 +342,7 @@ export default function BonusKPI({ onBack }: Props) {
       updated_at: new Date().toISOString(),
     }
     const { error } = await supabase.from('branch_bonus_monthly').upsert(snapshot, { onConflict: 'branch_id,month' })
-    if (error) { alert('אישור הבונוס נכשל: ' + error.message); setSaving(false); return }
+    if (error) { alert(formatDbError('אישור הבונוס נכשל', error)); setSaving(false); return }
     if (managerName) await supabase.from('branches').update({ manager_name: managerName }).eq('id', branchId)
     setSaving(false)
     setDirty(false)
