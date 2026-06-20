@@ -5,7 +5,7 @@ export const MAX_DOC_BYTES = 15 * 1024 * 1024
 
 export const FIELD_LABELS: Record<string, string> = {
   position: 'תפקיד', hourly_rate: 'תעריף שעתי', monthly_salary: 'שכר חודשי',
-  retention_bonus: 'בונוס שמירה', start_date: 'תחילת עבודה', end_date: 'סיום עבודה',
+  retention_bonus: 'בונוס התמדה', start_date: 'תחילת עבודה', end_date: 'סיום עבודה',
   active: 'פעיל', id_number: 'ת.ז', birth_date: 'ת. לידה', address: 'כתובת',
   bank_name: 'בנק', bank_branch: 'סניף בנק', bank_account_number: 'חשבון',
   email: 'אימייל', phone: 'טלפון', name: 'שם', notes: 'הערות',

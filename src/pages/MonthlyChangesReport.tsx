@@ -75,7 +75,7 @@ const BANK_FIELDS_ORDER = ['bank_name', 'bank_branch', 'bank_account_number'] as
 const ROLE_FIELDS_ORDER = ['position', 'department'] as const
 
 const FIELD_LABELS: Record<string, string> = {
-  hourly_rate: 'תעריף שעתי', monthly_salary: 'שכר חודשי', retention_bonus: 'בונוס שמירה',
+  hourly_rate: 'תעריף שעתי', monthly_salary: 'שכר חודשי', retention_bonus: 'בונוס התמדה',
   bonus: 'בונוס', global_daily_rate: 'תעריף יומי', bank_name: 'בנק',
   bank_branch: 'סניף בנק', bank_account_number: 'חשבון', position: 'תפקיד',
   department: 'מחלקה', start_date: 'תחילת עבודה', end_date: 'סיום עבודה',
