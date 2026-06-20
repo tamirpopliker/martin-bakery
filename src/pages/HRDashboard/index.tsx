@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useAppUser } from '../../lib/UserContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,10 +24,17 @@ interface Props {
 }
 
 export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
+  const { appUser } = useAppUser()
+  // Branch managers (role='branch' + real email — restricted cashiers are
+  // blocked by canAccessPage upstream) are scoped to their own branch.
+  // For them: hide the kind selector and force kind='branch' + their branch_id.
+  const branchScope = appUser?.role === 'branch' ? (appUser.branch_id ?? null) : null
+  const isBranchScoped = branchScope != null
+
   const [employees, setEmployees] = useState<UnifiedEmployee[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [kindFilter, setKindFilter] = useState<'all' | Kind>('all')
+  const [kindFilter, setKindFilter] = useState<'all' | Kind>(isBranchScoped ? 'branch' : 'all')
   const [activeFilter, setActiveFilter] = useState<'active' | 'all' | 'inactive'>('all')
   const [selected, setSelected] = useState<UnifiedEmployee | null>(null)
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -51,7 +59,13 @@ export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
     setLoading(true)
     const { data, error } = await supabase.from('hr_employees_unified').select('*').order('name')
     if (error) console.error('[HRDashboard] load error', error)
-    setEmployees((data as UnifiedEmployee[]) || [])
+    let rows = (data as UnifiedEmployee[]) || []
+    // Branch managers only see their own branch (and never factory). Frontend
+    // scope; write-side RLS on branch_employees independently enforces this.
+    if (isBranchScoped) {
+      rows = rows.filter(e => e.kind === 'branch' && e.branch_id === branchScope)
+    }
+    setEmployees(rows)
     setLoading(false)
   }
 
@@ -129,15 +143,18 @@ export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
                 className="w-full border rounded-lg pr-10 pl-3 py-2 text-sm bg-white"
               />
             </div>
-            <select
-              value={kindFilter}
-              onChange={e => setKindFilter(e.target.value as 'all' | Kind)}
-              className="border rounded-lg px-3 py-2 text-sm bg-white"
-            >
-              <option value="all">סניף + מפעל</option>
-              <option value="branch">סניפים בלבד</option>
-              <option value="factory">מפעל בלבד</option>
-            </select>
+            {/* Branch-scoped managers always see only their own branch — no kind toggle. */}
+            {!isBranchScoped && (
+              <select
+                value={kindFilter}
+                onChange={e => setKindFilter(e.target.value as 'all' | Kind)}
+                className="border rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                <option value="all">סניף + מפעל</option>
+                <option value="branch">סניפים בלבד</option>
+                <option value="factory">מפעל בלבד</option>
+              </select>
+            )}
             <select
               value={activeFilter}
               onChange={e => setActiveFilter(e.target.value as 'active' | 'all' | 'inactive')}
@@ -207,6 +224,10 @@ export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
         <NewEmployeeWizard
           onClose={() => setWizardOpen(false)}
           onCreated={() => { setWizardOpen(false); load() }}
+          initialKind={isBranchScoped ? 'branch' : undefined}
+          initialBranchId={branchScope ?? undefined}
+          lockKind={isBranchScoped}
+          lockBranch={isBranchScoped}
         />
       )}
     </div>

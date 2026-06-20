@@ -106,10 +106,25 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
       return ['employee-home', 'employee-schedule', 'employee-constraints', 'employee-tasks'].includes(pageKey)
     }
 
-    // ─── HR pages: admin + non-restricted branch + factory ───
-    if (pageKey === 'hr_dashboard' || pageKey === 'changes_report') {
-      if (user.role === 'branch') return true // restricted already filtered above
+    // ─── HR Dashboard: factory + non-restricted branch managers ───
+    // (Restricted @martin.local cashiers are blocked in the earlier restricted
+    // gate above. Branch managers see HR scoped to their branch by the page.)
+    if (pageKey === 'hr_dashboard') {
+      if (user.role === 'branch') return true
       if (user.role === 'factory') return true
+      return false
+    }
+    // ─── Monthly changes report: admin + factory only ───
+    // Branch managers use HR Dashboard; the cross-branch audit is admin scope.
+    if (pageKey === 'changes_report') {
+      if (user.role === 'factory') return true
+      return false
+    }
+    // ─── Branch team management: restricted cashiers only ───
+    // Managers (non-restricted branch) use HR Dashboard instead — branch-team
+    // is the shift/team page that cashiers still need. Restricted users get
+    // it via the earlier whitelist; everyone else is blocked here.
+    if (pageKey === 'branch-team') {
       return false
     }
 
