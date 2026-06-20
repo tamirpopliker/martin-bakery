@@ -56,14 +56,33 @@ interface QueueItem {
   statusMsg?: string
 }
 
+// Keep only Hebrew letters, latin word chars, and digits — strip whitespace,
+// punctuation, dashes, RTL marks. Robust against spacing variants between
+// the PDF text and the DB branch name.
 function normName(s: string): string {
-  return s.toLowerCase().replace(/[\s\-־–׳']/g, '')
+  return s.toLowerCase().replace(/[^֐-׿\w]/g, '')
 }
+
+// Fabios prints the building address, not our internal branch name. Each
+// entry: alias text from the PDF → fragment of our DB branch name.
+// Extend here if a new branch shows up under a different printed label.
+const BRANCH_NAME_ALIASES: Array<[string, string]> = [
+  ['עמק שרה', 'הפועלים'],
+]
 
 function matchBranchByName(branches: { id: number; name: string }[], hint: string | null): number {
   if (!hint) return 0
-  const target = normName(hint)
+  let target = normName(hint)
   if (!target) return 0
+
+  // Apply alias substitution before matching.
+  for (const [src, dst] of BRANCH_NAME_ALIASES) {
+    if (target.includes(normName(src))) {
+      target = normName(dst)
+      break
+    }
+  }
+
   const exact = branches.find(b => normName(b.name) === target)
   if (exact) return exact.id
   const contains = branches.find(b => normName(b.name).includes(target) || target.includes(normName(b.name)))
