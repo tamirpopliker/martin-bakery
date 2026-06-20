@@ -72,22 +72,32 @@ export async function parseDeliveryNotePDF(file: File): Promise<ParsedDeliveryNo
   const buf = await file.arrayBuffer()
   const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise
 
-  const all: TextItem[] = []
+  // Build lines PER PAGE then concatenate. pdfjs gives each page its own
+  // y-coordinate space (origin = bottom-left of that page), so a global
+  // y-sort jumbles items from different pages — page 1 line at y=400 would
+  // be grouped with a page 2 line at y=400, breaking everything.
+  const rawLines: string[] = []
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p)
     const content = await page.getTextContent()
+    const pageItems: TextItem[] = []
     for (const it of (content.items as any[])) {
       if (!it.str?.trim()) continue
-      all.push({
+      pageItems.push({
         text: it.str.trim(),
         x: Math.round(it.transform[4]),
         y: Math.round(it.transform[5]),
       })
     }
+    for (const line of groupIntoLines(pageItems, 3)) {
+      const t = lineText(line)
+      if (t) rawLines.push(t)
+    }
   }
 
-  const lines = groupIntoLines(all, 3)
-  const rawLines = lines.map(lineText)
+  if (typeof window !== 'undefined' && (window as any).__DELIVERY_PDF_DEBUG__) {
+    console.log('[parseDeliveryNotePDF] rawLines:', rawLines)
+  }
 
   let orderNumber: string | null = null
   let orderDate: string | null = null
@@ -106,9 +116,15 @@ export async function parseDeliveryNotePDF(file: File): Promise<ParsedDeliveryNo
       if (m) orderNumber = m[1]
     }
 
-    if (branchHint == null) {
-      const m = text.match(/לידי:?\s*מרטין\s*[-–]\s*(.+?)\s*$/)
-      if (m) branchHint = m[1].trim()
+    if (branchHint == null && /לידי/.test(text)) {
+      // Accept "מרטין - X", "מרטין- X", "מרטין -X", "מרטין X". Capture the
+      // suffix and strip an optional "מרטין" prefix + dash. RTL text from
+      // pdfjs occasionally keeps the dash attached to "מרטין" with no space.
+      const m = text.match(/לידי:?\s*(.+?)\s*$/)
+      if (m) {
+        const name = m[1].replace(/^מרטין\s*[-–]?\s*/, '').trim()
+        if (name) branchHint = name
+      }
     }
 
     if (orderDate == null && text.includes('תאריך')) {
