@@ -151,24 +151,36 @@ export async function parseDeliveryNotePDF(file: File): Promise<ParsedDeliveryNo
     }
 
     if (inItemsTable) {
-      // Expected: <product> [יח'] <qty> יחידות <unit_price> [<discount>] <total>
+      // Expected layout: <product> <qty> <unit> <unit_price> [<line_discount>] <total>
+      // Units seen so far: "יחידות", "ק"ג", "ארגז" (and pdfjs sometimes splits
+      // ק"ג into separate tokens around the quote). The robust strategy:
+      // walk from the end — collect trailing numbers, the next non-number
+      // token(s) are the unit, the number before that is the qty.
       const tokens = text.split(/\s+/)
-      const yIdx = tokens.findIndex(t => /^יחיד/.test(t))
-      if (yIdx <= 0) continue
-      const qty = parseNum(tokens[yIdx - 1])
-      if (!Number.isFinite(qty)) continue
+      const isNumTok = (t: string) => /^-?\d/.test(t.replace(/,/g, ''))
 
-      const trailingNums = tokens.slice(yIdx + 1)
-        .map(parseNum)
-        .filter(n => Number.isFinite(n))
+      let i = tokens.length - 1
+      const trailingNums: number[] = []
+      while (i >= 0 && isNumTok(tokens[i])) {
+        trailingNums.unshift(parseNum(tokens[i]))
+        i--
+      }
       if (trailingNums.length < 2) continue
 
+      // Skip over the unit word(s) — there can be 1+ non-number tokens here
+      // (e.g. "ק"ג" split as ק / " / ג depending on pdfjs).
+      while (i >= 0 && !isNumTok(tokens[i])) i--
+      if (i < 0) continue
+
+      const qty = parseNum(tokens[i])
+      if (!Number.isFinite(qty)) continue
+
+      // 2 trailing nums = [price, total]; 3 = [price, discount, total]; 4+ = pick
+      // first as price and last as total (safest given known formats).
       const unit_price = trailingNums[0]
       const total = trailingNums[trailingNums.length - 1]
 
-      // Product = everything before the qty token, minus an optional "יח'" sku marker.
-      const beforeQty = tokens.slice(0, yIdx - 1).join(' ').trim()
-      const product_name = beforeQty.replace(/\s*יח['׳]\s*$/, '').replace(/\s+/g, ' ').trim()
+      const product_name = tokens.slice(0, i).join(' ').replace(/\s+/g, ' ').trim()
       if (!product_name) continue
 
       if (qty === 0) { zeroItems.push(product_name); continue }
