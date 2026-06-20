@@ -5,10 +5,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   ArrowRight, Search, Download, Building2, Factory,
-  FileText, History, User, TrendingUp, ListChecks, UserPlus,
+  FileText, History, User, TrendingUp, ListChecks, UserPlus, CalendarDays,
 } from 'lucide-react'
 import { ProfileTab } from './ProfileTab'
 import { DocumentsTab } from './DocumentsTab'
+import { MonthlyEventsTab } from './MonthlyEventsTab'
 import { AuditTab } from './AuditTab'
 import { SalaryTab } from './SalaryTab'
 import { OnboardingTab } from './OnboardingTab'
@@ -257,6 +258,7 @@ function EmployeeDetail({ employee, onBack }: { employee: UnifiedEmployee; onBac
         <div className="max-w-[800px] mx-auto flex gap-1 overflow-x-auto">
           <TabButton active={tab === 'profile'}    onClick={() => setTab('profile')}    icon={<User className="size-4" />}        label="פרופיל" />
           <TabButton active={tab === 'documents'}  onClick={() => setTab('documents')}  icon={<FileText className="size-4" />}    label="מסמכים" />
+          <TabButton active={tab === 'events'}     onClick={() => setTab('events')}     icon={<CalendarDays className="size-4" />} label="אירועים" />
           <TabButton active={tab === 'salary'}     onClick={() => setTab('salary')}     icon={<TrendingUp className="size-4" />}  label="שכר" />
           <TabButton active={tab === 'onboarding'} onClick={() => setTab('onboarding')} icon={<ListChecks className="size-4" />}  label="קליטה" />
           <TabButton active={tab === 'audit'}      onClick={() => setTab('audit')}      icon={<History className="size-4" />}     label="יומן" />
@@ -264,11 +266,12 @@ function EmployeeDetail({ employee, onBack }: { employee: UnifiedEmployee; onBac
       </div>
 
       <div className="max-w-[800px] mx-auto px-6 py-6">
-        {tab === 'profile'    && <ProfileTab    employee={employee} />}
-        {tab === 'documents'  && <DocumentsTab  employee={employee} />}
-        {tab === 'salary'     && <SalaryTab     employee={employee} />}
-        {tab === 'onboarding' && <OnboardingTab employee={employee} />}
-        {tab === 'audit'      && <AuditTab      employee={employee} />}
+        {tab === 'profile'    && <ProfileTab       employee={employee} />}
+        {tab === 'documents'  && <DocumentsTab     employee={employee} />}
+        {tab === 'events'     && <MonthlyEventsTab employee={employee} />}
+        {tab === 'salary'     && <SalaryTab        employee={employee} />}
+        {tab === 'onboarding' && <OnboardingTab    employee={employee} />}
+        {tab === 'audit'      && <AuditTab         employee={employee} />}
       </div>
     </div>
   )

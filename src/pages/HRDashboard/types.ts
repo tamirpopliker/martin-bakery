@@ -1,5 +1,5 @@
 export type Kind = 'branch' | 'factory'
-export type TabKey = 'profile' | 'documents' | 'salary' | 'onboarding' | 'audit'
+export type TabKey = 'profile' | 'documents' | 'events' | 'salary' | 'onboarding' | 'audit'
 
 export interface UnifiedEmployee {
   kind: Kind
@@ -30,6 +30,7 @@ export interface DocumentType {
   label_he: string
   is_default: boolean
   display_order: number
+  is_monthly_event: boolean
 }
 
 export interface EmployeeDocument {
@@ -43,6 +44,7 @@ export interface EmployeeDocument {
   file_size: number | null
   uploaded_at: string
   uploaded_by: string | null
+  document_month: string | null
 }
 
 export interface AuditEntry {

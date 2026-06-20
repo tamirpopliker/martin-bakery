@@ -533,12 +533,21 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         if (e.employee_kind && e.employee_id) fullDocEmpKeys.add(`${e.employee_kind}-${e.employee_id}`)
       }
 
-      // 3. Query: docs uploaded this month
+      // 3a. Query: docs uploaded this month (permanent docs scope — kit_klita, form_101, etc.)
       const { data: monthDocs } = await supabase
         .from('employee_documents')
         .select('*')
         .gte('uploaded_at', monthStart)
         .lt('uploaded_at', nextMonth)
+
+      // 3b. Query: monthly-event docs whose document_month falls in the reported
+      // month. These represent events that BELONG to this month (sick note for
+      // an April absence, etc.) regardless of when the file was actually uploaded.
+      const { data: eventDocs } = await supabase
+        .from('employee_documents')
+        .select('*')
+        .gte('document_month', monthStart)
+        .lt('document_month', nextMonth)
 
       // 4. Query: full doc set for hires + leavers (regardless of upload date)
       const fullDocs: Array<Record<string, unknown>> = []
@@ -552,15 +561,27 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         if (data) fullDocs.push(...data)
       }
 
-      // 5. Merge by id (avoid duplicates)
+      // 4b. Lookup of document_type_id → is_monthly_event so we can route each
+      // doc to the right ZIP subfolder. One small query; types table is tiny.
+      const { data: docTypes } = await supabase
+        .from('document_types')
+        .select('id, is_monthly_event')
+      const eventTypeIds = new Set<number>()
+      for (const t of (docTypes || [])) {
+        if (t.is_monthly_event) eventTypeIds.add(t.id as number)
+      }
+
+      // 5. Merge by id (avoid duplicates across all three queries)
       const allDocs = new Map<number, Record<string, unknown>>()
       for (const d of (monthDocs || [])) allDocs.set(d.id as number, d)
+      for (const d of (eventDocs || [])) allDocs.set(d.id as number, d)
       for (const d of fullDocs) allDocs.set(d.id as number, d)
 
       const total = allDocs.size
       let i = 0
       if (total > 0) {
         const docsFolder = zip.folder('מסמכים')!
+        const eventsFolder = docsFolder.folder('אירועים חודשיים')!
         for (const doc of allDocs.values()) {
           i++
           setZipProgress(`מוריד מסמכים... ${i}/${total}`)
@@ -576,7 +597,9 @@ export default function MonthlyChangesReport({ onBack }: Props) {
           const dl = await supabase.storage.from('hr-documents').download(fileUrl)
           if (dl.error || !dl.data) continue
           const arrayBuffer = await dl.data.arrayBuffer()
-          docsFolder.file(`${folderName}/${dtype}/${fileName}`, arrayBuffer)
+          const isEvent = doc.document_type_id != null && eventTypeIds.has(doc.document_type_id as number)
+          const targetFolder = isEvent ? eventsFolder : docsFolder
+          targetFolder.file(`${folderName}/${dtype}/${fileName}`, arrayBuffer)
         }
       }
 
