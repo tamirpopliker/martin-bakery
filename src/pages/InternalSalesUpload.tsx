@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle, ChevronLeft, History, Pencil, Trash2, Eye } from 'lucide-react'
+import { Upload, FileSpreadsheet, FileText, CheckCircle, AlertTriangle, ChevronLeft, History, Pencil, Trash2, Eye } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
 import PageHeader from '../components/PageHeader'
 import * as XLSX from 'xlsx'
+import { parseDeliveryNotePDF } from '../lib/parseDeliveryNotePdf'
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
 
@@ -42,6 +43,59 @@ interface SaleItemRow {
   total_price: number
 }
 
+interface QueueItem {
+  fileName: string
+  source: 'excel' | 'pdf'
+  orderNumber: string
+  orderDate: string
+  branchId: number
+  items: ParsedItem[]
+  zeroItems: string[]
+  // Result tracking after Save All
+  status: 'ready' | 'saved' | 'duplicate' | 'error'
+  statusMsg?: string
+}
+
+function normName(s: string): string {
+  return s.toLowerCase().replace(/[\s\-־–׳']/g, '')
+}
+
+function matchBranchByName(branches: { id: number; name: string }[], hint: string | null): number {
+  if (!hint) return 0
+  const target = normName(hint)
+  if (!target) return 0
+  const exact = branches.find(b => normName(b.name) === target)
+  if (exact) return exact.id
+  const contains = branches.find(b => normName(b.name).includes(target) || target.includes(normName(b.name)))
+  return contains?.id || 0
+}
+
+async function enrichDepartments(items: ParsedItem[]): Promise<ParsedItem[]> {
+  if (items.length === 0) return items
+  const productNames = items.map(p => p.product_name)
+  const [mapRes, prodRes] = await Promise.all([
+    supabase.from('product_department_mapping').select('product_name, department'),
+    supabase.from('production_reports')
+      .select('product_name, department, report_date')
+      .in('product_name', productNames)
+      .order('report_date', { ascending: false }),
+  ])
+  const mainMap = new Map((mapRes.data || []).map((r: { product_name: string; department: string }) => [r.product_name, r.department]))
+  const prodMap = new Map<string, string>()
+  for (const row of (prodRes.data || []) as { product_name: string; department: string }[]) {
+    if (!prodMap.has(row.product_name) && row.department && row.department !== 'אחר') {
+      prodMap.set(row.product_name, row.department)
+    }
+  }
+  return items.map(p => {
+    const fromMap = mainMap.get(p.product_name)
+    if (fromMap && fromMap !== 'אחר') return { ...p, department: fromMap }
+    const fromProd = prodMap.get(p.product_name)
+    if (fromProd) return { ...p, department: fromProd }
+    return p
+  })
+}
+
 const DEPT_OPTIONS = ['בצקים', 'קרמים', 'אריזה', 'ניקיון', 'שונות']
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   pending:   { label: 'ממתין',   color: '#a16207', bg: '#fefce8' },
@@ -71,7 +125,7 @@ export default function InternalSalesUpload({ onBack }: Props) {
   const [tab, setTab] = useState<'upload' | 'history'>('upload')
 
   // ─── Upload state ───
-  const [step, setStep] = useState<'upload' | 'preview' | 'saving' | 'done'>('upload')
+  const [step, setStep] = useState<'upload' | 'queue' | 'preview' | 'saving' | 'done'>('upload')
   const [orderNumber, setOrderNumber] = useState('')
   const [orderDate, setOrderDate] = useState(() => new Date().toISOString().split('T')[0])
   const [selectedBranch, setSelectedBranch] = useState<number>(0)
@@ -79,6 +133,12 @@ export default function InternalSalesUpload({ onBack }: Props) {
   const [zeroItems, setZeroItems] = useState<string[]>([])
   const [error, setError] = useState('')
   const [duplicateOrder, setDuplicateOrder] = useState<SaleRow | null>(null)
+  const [parsing, setParsing] = useState(false)
+  // Batch upload state: when >1 file is selected, we hold all parsed orders here.
+  // queueIdx tracks which queue row is currently open in the single-preview UI.
+  const [queue, setQueue] = useState<QueueItem[]>([])
+  const [queueIdx, setQueueIdx] = useState<number | null>(null)
+  const [bulkSaving, setBulkSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   // ─── History state ───
@@ -98,100 +158,192 @@ export default function InternalSalesUpload({ onBack }: Props) {
   const [deleteConfirm, setDeleteConfirm] = useState<SaleRow | null>(null)
   const [modifiedCount, setModifiedCount] = useState(0)
 
-  // ─── Parse Excel ───
-  function parseExcel(file: File) {
-    setError(''); setZeroItems([])
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer)
-        const wb = XLSX.read(data, { type: 'array' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
+  // ─── Pure parsers — return parsed data, no state mutation ───
+  // Excel: order_number in row 1, date in I6, items from row 7 onwards.
+  async function parseExcelToData(file: File): Promise<{ orderNumber: string; orderDate: string; items: ParsedItem[]; zeroItems: string[] }> {
+    const buf = await file.arrayBuffer()
+    const data = new Uint8Array(buf)
+    const wb = XLSX.read(data, { type: 'array' })
+    const ws = wb.Sheets[wb.SheetNames[0]]
 
-        // Row 1: order number
-        const r1 = ws['A1'] || ws['B1']
-        let oNum = ''
-        if (r1) {
-          const m = String(r1.v || '').match(/(\d+)/)
-          if (m) oNum = m[1]
-        }
-        setOrderNumber(oNum)
+    const r1 = ws['A1'] || ws['B1']
+    let oNum = ''
+    if (r1) {
+      const m = String(r1.v || '').match(/(\d+)/)
+      if (m) oNum = m[1]
+    }
 
-        // Date from I6 or prompt user
-        const dateCell = ws['I6']
-        let dateStr = ''
-        if (dateCell) {
-          if (typeof dateCell.v === 'number') {
-            const d = XLSX.SSF.parse_date_code(dateCell.v)
-            dateStr = `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`
-          } else {
-            const raw = String(dateCell.v || '')
-            const parts = raw.split('/')
-            if (parts.length === 3) dateStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
-          }
-        }
-        if (dateStr) setOrderDate(dateStr)
-
-        // Parse items from row 7+
-        const parsed: ParsedItem[] = []
-        const zeros: string[] = []
-        let rowIdx = 7
-        while (true) {
-          const nameCell = ws[`B${rowIdx}`]
-          if (!nameCell || !nameCell.v || String(nameCell.v).trim() === '') break
-          const product_name = String(nameCell.v).trim()
-          const qty = Number(ws[`D${rowIdx}`]?.v || 0)
-          const price = Number(ws[`F${rowIdx}`]?.v || 0)
-          const total = Number(ws[`G${rowIdx}`]?.v || 0) || qty * price
-
-          if (qty === 0) {
-            zeros.push(product_name)
-          } else {
-            parsed.push({ product_name, department: 'אחר', quantity: qty, unit_price: price, total_price: total })
-          }
-          rowIdx++
-        }
-        setZeroItems(zeros)
-        if (parsed.length === 0) { setError('לא נמצאו מוצרים עם כמות גדולה מ-0'); return }
-
-        // Auto-map departments in priority order:
-        //   1. product_department_mapping  (manual / previously-tagged)
-        //   2. production_reports          (latest dept the factory tagged the product with)
-        //   3. fall back to 'אחר'           (user still sees it in preview and can fix)
-        // Step 2 prevents the historical pattern where products that never
-        // passed through the mapping table sat on 'אחר' forever — see
-        // sql/053 + sql/054 backfills.
-        const productNames = parsed.map(p => p.product_name)
-        Promise.all([
-          supabase.from('product_department_mapping').select('product_name, department'),
-          supabase
-            .from('production_reports')
-            .select('product_name, department, report_date')
-            .in('product_name', productNames)
-            .order('report_date', { ascending: false }),
-        ]).then(([mapRes, prodRes]) => {
-          const mainMap = new Map((mapRes.data || []).map((r: { product_name: string; department: string }) => [r.product_name, r.department]))
-          // Take the most recent non-'אחר' department per product from production_reports.
-          const prodMap = new Map<string, string>()
-          for (const row of (prodRes.data || []) as { product_name: string; department: string }[]) {
-            if (!prodMap.has(row.product_name) && row.department && row.department !== 'אחר') {
-              prodMap.set(row.product_name, row.department)
-            }
-          }
-          setItems(parsed.map(p => {
-            const fromMap = mainMap.get(p.product_name)
-            if (fromMap && fromMap !== 'אחר') return { ...p, department: fromMap }
-            const fromProd = prodMap.get(p.product_name)
-            if (fromProd) return { ...p, department: fromProd }
-            return p
-          }))
-        })
-        setStep('preview')
-      } catch (err) {
-        setError('שגיאה בקריאת הקובץ: ' + (err instanceof Error ? err.message : String(err)))
+    const dateCell = ws['I6']
+    let dateStr = ''
+    if (dateCell) {
+      if (typeof dateCell.v === 'number') {
+        const d = XLSX.SSF.parse_date_code(dateCell.v)
+        dateStr = `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`
+      } else {
+        const raw = String(dateCell.v || '')
+        const parts = raw.split('/')
+        if (parts.length === 3) dateStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
       }
     }
-    reader.readAsArrayBuffer(file)
+
+    const parsed: ParsedItem[] = []
+    const zeros: string[] = []
+    let rowIdx = 7
+    while (true) {
+      const nameCell = ws[`B${rowIdx}`]
+      if (!nameCell || !nameCell.v || String(nameCell.v).trim() === '') break
+      const product_name = String(nameCell.v).trim()
+      const qty = Number(ws[`D${rowIdx}`]?.v || 0)
+      const price = Number(ws[`F${rowIdx}`]?.v || 0)
+      const total = Number(ws[`G${rowIdx}`]?.v || 0) || qty * price
+
+      if (qty === 0) {
+        zeros.push(product_name)
+      } else {
+        parsed.push({ product_name, department: 'אחר', quantity: qty, unit_price: price, total_price: total })
+      }
+      rowIdx++
+    }
+
+    return { orderNumber: oNum, orderDate: dateStr, items: parsed, zeroItems: zeros }
+  }
+
+  // PDF: Fabios delivery-note format. Branch is auto-detected from the
+  // "לידי: מרטין - <branch>" line.
+  async function parsePdfToData(file: File): Promise<{ orderNumber: string; orderDate: string; items: ParsedItem[]; zeroItems: string[]; branchHint: string | null }> {
+    const parsed = await parseDeliveryNotePDF(file)
+    const items: ParsedItem[] = parsed.items.map(i => ({
+      product_name: i.product_name,
+      department: 'אחר',
+      quantity: i.quantity,
+      unit_price: i.unit_price,
+      total_price: i.total_price,
+    }))
+    return {
+      orderNumber: parsed.orderNumber || '',
+      orderDate: parsed.orderDate || '',
+      items,
+      zeroItems: parsed.zeroItems,
+      branchHint: parsed.branchHint,
+    }
+  }
+
+  // Build a QueueItem from any supported file. Throws on parse failure;
+  // the caller (handleFiles) catches and records the error per file.
+  async function buildQueueItem(file: File): Promise<QueueItem> {
+    const isPdf = /\.pdf$/i.test(file.name)
+    let orderNumber = '', orderDate = '', branchId = 0
+    let rawItems: ParsedItem[] = []
+    let zeros: string[] = []
+    if (isPdf) {
+      const p = await parsePdfToData(file)
+      orderNumber = p.orderNumber; orderDate = p.orderDate
+      rawItems = p.items; zeros = p.zeroItems
+      branchId = matchBranchByName(branches, p.branchHint)
+    } else {
+      const p = await parseExcelToData(file)
+      orderNumber = p.orderNumber; orderDate = p.orderDate
+      rawItems = p.items; zeros = p.zeroItems
+    }
+    if (rawItems.length === 0) {
+      throw new Error('לא נמצאו מוצרים עם כמות גדולה מ-0')
+    }
+    const enriched = await enrichDepartments(rawItems)
+    return {
+      fileName: file.name,
+      source: isPdf ? 'pdf' : 'excel',
+      orderNumber,
+      orderDate: orderDate || new Date().toISOString().split('T')[0],
+      branchId,
+      items: enriched,
+      zeroItems: zeros,
+      status: 'ready',
+    }
+  }
+
+  // Pre-flight duplicate detection. Marks queue rows whose order_number
+  // already exists in internal_sales OR is repeated within the same batch.
+  // The save flow still re-checks via persistOrder; this is purely UX so the
+  // user sees the conflict before clicking save.
+  async function flagDuplicates(items: QueueItem[]): Promise<QueueItem[]> {
+    const numbers = items
+      .filter(q => q.status === 'ready' && q.orderNumber)
+      .map(q => q.orderNumber)
+    let existingSet = new Set<string>()
+    if (numbers.length > 0) {
+      const { data } = await supabase.from('internal_sales')
+        .select('order_number').in('order_number', numbers)
+      existingSet = new Set((data || []).map((r: { order_number: string | null }) => r.order_number || ''))
+    }
+    const seenInBatch = new Set<string>()
+    return items.map(q => {
+      if (q.status !== 'ready' || !q.orderNumber) return q
+      if (existingSet.has(q.orderNumber)) {
+        return { ...q, status: 'duplicate', statusMsg: `תעודה ${q.orderNumber} כבר קיימת — פתח לעדכון` }
+      }
+      if (seenInBatch.has(q.orderNumber)) {
+        return { ...q, status: 'duplicate', statusMsg: `תעודה ${q.orderNumber} כפולה בתוך הבחירה` }
+      }
+      seenInBatch.add(q.orderNumber)
+      return q
+    })
+  }
+
+  // Top-level entry point from the file input. 1 file → straight to preview.
+  // N files → batch into queue list with per-row review + "save all".
+  async function handleFiles(files: File[]) {
+    setError(''); setZeroItems([])
+    if (files.length === 0) return
+    setParsing(true)
+    const built: QueueItem[] = []
+    for (const f of files) {
+      try {
+        built.push(await buildQueueItem(f))
+      } catch (err) {
+        built.push({
+          fileName: f.name,
+          source: /\.pdf$/i.test(f.name) ? 'pdf' : 'excel',
+          orderNumber: '', orderDate: '', branchId: 0,
+          items: [], zeroItems: [],
+          status: 'error',
+          statusMsg: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+    const checked = await flagDuplicates(built)
+    setParsing(false)
+    setQueue(checked)
+    if (checked.length === 1) {
+      // Same UX as before — straight to single preview (duplicate banner shown there).
+      openFromQueue(0, checked)
+    } else {
+      setStep('queue')
+    }
+  }
+
+  // Load a queue row into the single-preview state for review/edit.
+  function openFromQueue(idx: number, source?: QueueItem[]) {
+    const arr = source || queue
+    const q = arr[idx]
+    if (!q || q.status === 'error') return
+    setQueueIdx(idx)
+    setOrderNumber(q.orderNumber)
+    setOrderDate(q.orderDate)
+    setSelectedBranch(q.branchId)
+    setItems(q.items)
+    setZeroItems(q.zeroItems)
+    setError('')
+    setStep('preview')
+  }
+
+  // Push the current single-preview edits back into the queue row before
+  // returning to the queue view.
+  function commitPreviewToQueue() {
+    if (queueIdx == null) return
+    setQueue(prev => prev.map((q, i) => i === queueIdx ? {
+      ...q,
+      orderNumber, orderDate, branchId: selectedBranch, items, zeroItems,
+    } : q))
   }
 
   function updateItem(idx: number, field: string, value: string | number) {
@@ -203,78 +355,112 @@ export default function InternalSalesUpload({ onBack }: Props) {
     }))
   }
 
-  async function handleSave(overwriteId?: number) {
-    if (!selectedBranch) { setError('יש לבחור סניף'); return }
-    if (!orderDate) { setError('יש להזין תאריך'); return }
+  // Pure save: no state mutation beyond DB. Used by both the single-preview
+  // save and the batch "save all" so the persist logic stays in one place.
+  type PersistInput = { orderNumber: string; orderDate: string; branchId: number; items: ParsedItem[] }
+  type PersistResult =
+    | { kind: 'ok'; saleId: number }
+    | { kind: 'duplicate'; existing: SaleRow }
+    | { kind: 'error'; message: string }
 
-    // Check duplicate
-    if (!overwriteId && orderNumber) {
+  async function persistOrder(data: PersistInput, opts: { overwriteId?: number; skipDuplicateCheck?: boolean } = {}): Promise<PersistResult> {
+    if (!data.branchId) return { kind: 'error', message: 'יש לבחור סניף' }
+    if (!data.orderDate) return { kind: 'error', message: 'יש להזין תאריך' }
+
+    if (!opts.overwriteId && !opts.skipDuplicateCheck && data.orderNumber) {
       const { data: existing } = await supabase.from('internal_sales')
-        .select('*').eq('order_number', orderNumber).maybeSingle()
-      if (existing) { setDuplicateOrder(existing); return }
+        .select('*').eq('order_number', data.orderNumber).maybeSingle()
+      if (existing) return { kind: 'duplicate', existing: existing as SaleRow }
     }
 
-    setStep('saving')
-    setDuplicateOrder(null)
-
-    // If overwriting, delete old. Abort on failure so we don't end up with
-    // both old and new sale rows for the same order_number.
-    if (overwriteId) {
-      const { error: delErr } = await supabase.from('internal_sales').delete().eq('id', overwriteId)
+    if (opts.overwriteId) {
+      const { error: delErr } = await supabase.from('internal_sales').delete().eq('id', opts.overwriteId)
       if (delErr) {
         console.error('[InternalSalesUpload overwrite delete] error:', delErr)
-        setError(`מחיקת ההזמנה הקודמת נכשלה: ${delErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
-        setStep('preview')
-        return
+        return { kind: 'error', message: `מחיקת ההזמנה הקודמת נכשלה: ${delErr.message || 'שגיאת מסד נתונים'}` }
       }
     }
 
-    const totalAmount = items.reduce((s, i) => s + i.total_price, 0)
+    const totalAmount = data.items.reduce((s, i) => s + i.total_price, 0)
     const { data: sale, error: saleErr } = await supabase.from('internal_sales').insert({
-      order_number: orderNumber || null,
-      order_date: orderDate,
-      branch_id: selectedBranch,
+      order_number: data.orderNumber || null,
+      order_date: data.orderDate,
+      branch_id: data.branchId,
       status: 'pending',
       total_amount: totalAmount,
       uploaded_by: appUser?.name || null,
     }).select().single()
+    if (saleErr || !sale) return { kind: 'error', message: 'שמירת ההזמנה נכשלה: ' + (saleErr?.message || 'שגיאת מסד נתונים') }
 
-    if (saleErr || !sale) { setError('שמירת ההזמנה נכשלה: ' + (saleErr?.message || 'שגיאת מסד נתונים') + '. נסה שוב.'); setStep('preview'); return }
-
-    // Save items — if this fails the parent sale row already exists; report
-    // clearly so the user knows to retry from the history list.
-    const itemPayload = items.map(i => ({
-      sale_id: sale.id,
-      product_name: i.product_name,
-      department: i.department,
-      quantity_supplied: i.quantity,
-      unit_price: i.unit_price,
-      total_price: i.total_price,
+    const itemPayload = data.items.map(i => ({
+      sale_id: sale.id, product_name: i.product_name, department: i.department,
+      quantity_supplied: i.quantity, unit_price: i.unit_price, total_price: i.total_price,
     }))
     const { error: itemsErr } = await supabase.from('internal_sale_items').insert(itemPayload)
     if (itemsErr) {
       console.error('[InternalSalesUpload items insert] error:', itemsErr)
-      setError(`שמירת פריטי ההזמנה נכשלה: ${itemsErr.message || 'שגיאת מסד נתונים'}. ההזמנה ${sale.order_number || sale.id} נשמרה ריקה — נסה לערוך אותה מההיסטוריה.`)
-      setStep('preview')
-      return
+      return { kind: 'error', message: `שמירת פריטים נכשלה: ${itemsErr.message || 'שגיאת מסד נתונים'}. ההזמנה ${sale.order_number || sale.id} נשמרה ריקה — ערוך מההיסטוריה.` }
     }
 
-    // Save department mappings (best-effort — non-fatal)
-    const mappings = items.filter(i => i.department !== 'אחר').map(i => ({
-      product_name: i.product_name,
-      department: i.department,
+    // Best-effort department mapping upsert (non-fatal)
+    const mappings = data.items.filter(i => i.department !== 'אחר').map(i => ({
+      product_name: i.product_name, department: i.department,
     }))
     if (mappings.length > 0) {
       const { error: mapErr } = await supabase.from('product_department_mapping').upsert(mappings, { onConflict: 'product_name' })
       if (mapErr) console.warn('[InternalSalesUpload department mappings] non-fatal:', mapErr)
     }
 
-    setStep('done')
+    return { kind: 'ok', saleId: sale.id }
+  }
+
+  async function handleSave(overwriteId?: number) {
+    setStep('saving')
+    setDuplicateOrder(null)
+    const r = await persistOrder(
+      { orderNumber, orderDate, branchId: selectedBranch, items },
+      { overwriteId },
+    )
+    if (r.kind === 'duplicate') { setDuplicateOrder(r.existing); setStep('preview'); return }
+    if (r.kind === 'error') { setError(r.message + '. נסה שוב.'); setStep('preview'); return }
+
+    // Success — in queue mode, mark this queue row saved and return to the queue list.
+    if (queueIdx != null) {
+      const savedIdx = queueIdx
+      setQueue(prev => prev.map((q, i) => i === savedIdx ? { ...q, status: 'saved', statusMsg: undefined } : q))
+      setQueueIdx(null)
+      // If anything else still needs saving, return to queue; otherwise show "done".
+      const hasMore = queue.some((q, i) => i !== savedIdx && q.status === 'ready')
+      setStep(hasMore ? 'queue' : 'done')
+    } else {
+      setStep('done')
+    }
+  }
+
+  async function saveAllQueue() {
+    setBulkSaving(true)
+    for (let i = 0; i < queue.length; i++) {
+      const q = queue[i]
+      if (q.status !== 'ready') continue
+      const r = await persistOrder(
+        { orderNumber: q.orderNumber, orderDate: q.orderDate, branchId: q.branchId, items: q.items },
+        {},
+      )
+      setQueue(prev => prev.map((x, idx) => {
+        if (idx !== i) return x
+        if (r.kind === 'ok') return { ...x, status: 'saved', statusMsg: undefined }
+        if (r.kind === 'duplicate') return { ...x, status: 'duplicate', statusMsg: 'תעודה קיימת — פתח לעדכון ידני' }
+        return { ...x, status: 'error', statusMsg: r.message }
+      }))
+    }
+    setBulkSaving(false)
+    loadModifiedCount()
   }
 
   function resetUpload() {
     setStep('upload'); setItems([]); setOrderNumber(''); setOrderDate(new Date().toISOString().split('T')[0])
     setSelectedBranch(0); setError(''); setZeroItems([]); setDuplicateOrder(null)
+    setQueue([]); setQueueIdx(null)
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -554,16 +740,20 @@ export default function InternalSalesUpload({ onBack }: Props) {
         {tab === 'upload' && step === 'upload' && (
           <div style={S.card}>
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <FileSpreadsheet size={48} color="#94a3b8" style={{ marginBottom: 16 }} />
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+                <FileSpreadsheet size={42} color="#94a3b8" />
+                <span style={{ color: '#cbd5e1', fontSize: 22 }}>·</span>
+                <FileText size={42} color="#94a3b8" />
+              </div>
               <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>העלאת תעודת משלוח</h3>
-              <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 24px', maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
-                בחר קובץ Excel עם מספר הזמנה בשורה 1, כותרות בשורה 6, נתונים מהשורה 7
+              <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 24px', maxWidth: 480, marginLeft: 'auto', marginRight: 'auto' }}>
+                Excel (כותרות שורה 6, נתונים משורה 7) או PDF של תעודת משלוח מהמפעל. אפשר לבחור כמה קבצים יחד.
               </p>
-              <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) parseExcel(f) }} />
-              <button onClick={() => fileRef.current?.click()}
-                style={{ ...S.btn, background: '#0f172a', color: 'white', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <Upload size={16} /> בחר קובץ
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.pdf" multiple style={{ display: 'none' }}
+                onChange={(e) => { const fs = Array.from(e.target.files || []); if (fs.length > 0) handleFiles(fs) }} />
+              <button onClick={() => fileRef.current?.click()} disabled={parsing}
+                style={{ ...S.btn, background: parsing ? '#94a3b8' : '#0f172a', color: 'white', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <Upload size={16} /> {parsing ? 'מנתח קבצים...' : 'בחר קבצים'}
               </button>
             </div>
             {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginTop: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -572,13 +762,113 @@ export default function InternalSalesUpload({ onBack }: Props) {
           </div>
         )}
 
+        {/* ═══ QUEUE LIST (multi-file batch) ═══ */}
+        {tab === 'upload' && step === 'queue' && (
+          <div style={S.card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                  תעודות שהועלו ({queue.filter(q => q.status === 'ready' || q.status === 'saved').length}/{queue.length})
+                </h3>
+                <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
+                  בדוק כל תעודה, ערוך לפי הצורך, ולחץ "שמור הכל".
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={resetUpload} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>ביטול</button>
+                <button onClick={saveAllQueue} disabled={bulkSaving || queue.every(q => q.status !== 'ready')}
+                  style={{ ...S.btn, background: bulkSaving ? '#94a3b8' : '#0f172a', color: 'white', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <CheckCircle size={16} /> {bulkSaving ? 'שומר...' : 'שמור הכל'}
+                </button>
+              </div>
+            </div>
+
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <th style={{ ...S.th, width: 36 }}>#</th>
+                <th style={S.th}>קובץ</th>
+                <th style={S.th}>תעודה</th>
+                <th style={S.th}>תאריך</th>
+                <th style={S.th}>סניף</th>
+                <th style={S.th}>פריטים</th>
+                <th style={S.th}>סה"כ</th>
+                <th style={S.th}>סטטוס</th>
+                <th style={{ ...S.th, width: 90 }}></th>
+              </tr></thead>
+              <tbody>
+                {queue.map((q, i) => {
+                  const total = q.items.reduce((s, it) => s + it.total_price, 0)
+                  const branchName = q.branchId ? (branches.find(b => b.id === q.branchId)?.name || `סניף ${q.branchId}`) : '—'
+                  const statusBg = q.status === 'error' ? '#fef2f2'
+                    : q.status === 'saved' ? '#f0fdf4'
+                    : q.status === 'duplicate' ? '#fefce8'
+                    : i % 2 === 0 ? 'white' : '#fafbfc'
+                  const statusColor = q.status === 'error' ? '#dc2626'
+                    : q.status === 'saved' ? '#166534'
+                    : q.status === 'duplicate' ? '#a16207'
+                    : '#64748b'
+                  const statusLabel = q.status === 'error' ? 'שגיאה'
+                    : q.status === 'saved' ? 'נשמר'
+                    : q.status === 'duplicate' ? 'כפול'
+                    : q.branchId ? 'מוכן' : 'בחר סניף'
+                  return (
+                    <tr key={i} style={{ background: statusBg }}>
+                      <td style={{ ...S.td, color: '#94a3b8', fontSize: 12 }}>{i + 1}</td>
+                      <td style={S.td}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {q.source === 'pdf' ? <FileText size={14} color="#94a3b8" /> : <FileSpreadsheet size={14} color="#94a3b8" />}
+                          <span style={{ fontSize: 12 }}>{q.fileName}</span>
+                        </div>
+                      </td>
+                      <td style={S.td}>{q.orderNumber || '—'}</td>
+                      <td style={S.td}>{q.orderDate ? fmtDate(q.orderDate) : '—'}</td>
+                      <td style={S.td}>{branchName}</td>
+                      <td style={S.td}>{q.items.length}</td>
+                      <td style={{ ...S.td, fontWeight: 600 }}>{q.status === 'error' ? '—' : fmtMoney(total)}</td>
+                      <td style={{ ...S.td }}>
+                        <span style={{ color: statusColor, fontSize: 11, fontWeight: 700 }}>{statusLabel}</span>
+                        {q.statusMsg && (
+                          <div style={{ fontSize: 11, color: statusColor, marginTop: 2 }}>{q.statusMsg}</div>
+                        )}
+                      </td>
+                      <td style={S.td}>
+                        {q.status !== 'error' && (
+                          <button onClick={() => openFromQueue(i)}
+                            style={{ ...S.btn, padding: '4px 10px', fontSize: 11, background: '#f1f5f9', color: '#374151' }}>
+                            פתח
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {tab === 'upload' && step === 'preview' && (
           <div style={S.card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                תצוגה מקדימה {orderNumber && `— תעודה ${orderNumber}`}
-              </h3>
-              <button onClick={resetUpload} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>ביטול</button>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                  תצוגה מקדימה {orderNumber && `— תעודה ${orderNumber}`}
+                </h3>
+                {queueIdx != null && (
+                  <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>
+                    תעודה {queueIdx + 1} מתוך {queue.length}
+                  </p>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {queueIdx != null && (
+                  <button onClick={() => { commitPreviewToQueue(); setQueueIdx(null); setStep('queue') }}
+                    style={{ ...S.btn, background: '#f1f5f9', color: '#374151', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ChevronLeft size={14} /> חזרה לרשימה
+                  </button>
+                )}
+                <button onClick={resetUpload} style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0' }}>ביטול</button>
+              </div>
             </div>
 
             {/* Branch + Date */}
@@ -598,6 +888,12 @@ export default function InternalSalesUpload({ onBack }: Props) {
               </div>
             </div>
 
+            {queueIdx != null && queue[queueIdx]?.status === 'duplicate' && (
+              <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#c2410c', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertTriangle size={16} />
+                {queue[queueIdx]?.statusMsg || `תעודה ${orderNumber} כבר קיימת במערכת`}. בלחיצה על "שמור הזמנה" תוצע אפשרות עדכון.
+              </div>
+            )}
             {zeroItems.length > 0 && (
               <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#a16207' }}>
                 ⚠ {zeroItems.length} מוצרים בכמות 0 ולא יחושבו: {zeroItems.slice(0, 5).join(', ')}{zeroItems.length > 5 ? '...' : ''}
