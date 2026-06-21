@@ -20,10 +20,14 @@ interface Props {
 }
 
 export function TransferEmployeeDialog({ employee, onClose, onTransferred }: Props) {
-  // Default destination is the opposite of current kind — that's the only valid
-  // direction for transfer (within-kind reassignment uses the existing dropdown).
-  const oppositeKind: Kind = employee.kind === 'branch' ? 'factory' : 'branch'
-  const [dstKind, setDstKind] = useState<Kind>(oppositeKind)
+  // Default destination: pick a sensible "other" — anything that isn't the
+  // current kind. Within-kind reassignment uses the existing dropdown.
+  const defaultDst: Kind = employee.kind === 'branch'
+    ? 'factory'
+    : employee.kind === 'factory'
+      ? 'branch'
+      : 'branch'
+  const [dstKind, setDstKind] = useState<Kind>(defaultDst)
   const [branches, setBranches] = useState<{ id: number; name: string }[]>([])
   const [dstBranchId, setDstBranchId] = useState<string>('')
   const [dstDepartment, setDstDepartment] = useState<string>('creams')
@@ -40,9 +44,12 @@ export function TransferEmployeeDialog({ employee, onClose, onTransferred }: Pro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const isValid = dstKind === 'branch'
-    ? Boolean(dstBranchId)
-    : Boolean(dstDepartment)
+  const isValid =
+    dstKind !== employee.kind && (
+      dstKind === 'branch' ? Boolean(dstBranchId)
+      : dstKind === 'factory' ? Boolean(dstDepartment)
+      : true  // hq: no sub-selection required
+    )
 
   async function submit() {
     if (!isValid) return
@@ -89,7 +96,7 @@ export function TransferEmployeeDialog({ employee, onClose, onTransferred }: Pro
             <div>
               <div className="font-bold mb-1">פעולה רגישה — אין החזרה אוטומטית</div>
               <div>
-                תיווצר רשומה חדשה ב{dstKind === 'factory' ? 'מפעל' : 'סניף'}. כל המסמכים,
+                תיווצר רשומה חדשה ב{dstKind === 'factory' ? 'מפעל' : dstKind === 'hq' ? 'מטה' : 'סניף'}. כל המסמכים,
                 יומן השינויים וקליטה יועברו לרשומה החדשה. הרשומה הנוכחית תסומן כלא-פעילה
                 עם תאריך סיום היום.
               </div>
@@ -107,7 +114,11 @@ export function TransferEmployeeDialog({ employee, onClose, onTransferred }: Pro
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-1">מאת</div>
                 <div className="text-sm text-slate-700">
-                  {employee.name} — {employee.kind === 'branch' ? `סניף ${employee.location_name || ''}` : `מפעל · ${employee.department || ''}`}
+                  {employee.name} — {
+                    employee.kind === 'branch' ? `סניף ${employee.location_name || ''}`
+                    : employee.kind === 'factory' ? `מפעל · ${employee.department || ''}`
+                    : 'מטה'
+                  }
                 </div>
               </div>
 
@@ -119,12 +130,13 @@ export function TransferEmployeeDialog({ employee, onClose, onTransferred }: Pro
                   className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
                   disabled={submitting}
                 >
-                  <option value="branch">סניף</option>
-                  <option value="factory">מפעל</option>
+                  {employee.kind !== 'branch'  && <option value="branch">סניף</option>}
+                  {employee.kind !== 'factory' && <option value="factory">מפעל</option>}
+                  {employee.kind !== 'hq'      && <option value="hq">מטה</option>}
                 </select>
               </div>
 
-              {dstKind === 'branch' ? (
+              {dstKind === 'branch' && (
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">סניף יעד</label>
                   <select
@@ -139,7 +151,8 @@ export function TransferEmployeeDialog({ employee, onClose, onTransferred }: Pro
                     ))}
                   </select>
                 </div>
-              ) : (
+              )}
+              {dstKind === 'factory' && (
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">מחלקת יעד</label>
                   <select
@@ -152,6 +165,11 @@ export function TransferEmployeeDialog({ employee, onClose, onTransferred }: Pro
                       <option key={d.value} value={d.value}>{d.label}</option>
                     ))}
                   </select>
+                </div>
+              )}
+              {dstKind === 'hq' && (
+                <div className="text-xs text-slate-500">
+                  עובדי מטה אינם משוייכים לסניף או מחלקה — אין בחירת משנה.
                 </div>
               )}
             </CardContent>

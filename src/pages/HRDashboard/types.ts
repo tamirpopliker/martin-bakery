@@ -1,4 +1,4 @@
-export type Kind = 'branch' | 'factory'
+export type Kind = 'branch' | 'factory' | 'hq'
 export type TabKey = 'profile' | 'documents' | 'events' | 'salary' | 'onboarding' | 'audit'
 
 export interface UnifiedEmployee {

@@ -170,9 +170,10 @@ export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
                 onChange={e => setKindFilter(e.target.value as 'all' | Kind)}
                 className="border rounded-lg px-3 py-2 text-sm bg-white"
               >
-                <option value="all">סניף + מפעל</option>
+                <option value="all">הכל</option>
                 <option value="branch">סניפים בלבד</option>
                 <option value="factory">מפעל בלבד</option>
+                <option value="hq">מטה בלבד</option>
               </select>
             )}
             <select
@@ -215,7 +216,9 @@ export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
                         <div className="flex items-center gap-2">
                           {emp.kind === 'branch'
                             ? <Building2 className="size-4 text-indigo-500" />
-                            : <Factory className="size-4 text-purple-500" />}
+                            : emp.kind === 'factory'
+                              ? <Factory className="size-4 text-purple-500" />
+                              : <Building2 className="size-4 text-emerald-500" />}
                           <span className="font-medium">{emp.name}</span>
                         </div>
                       </td>

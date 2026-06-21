@@ -198,10 +198,10 @@ export function ProfileTab({
                 variant="outline"
                 size="sm"
                 onClick={() => setTransferOpen(true)}
-                title="העברת עובד בין סניף למפעל"
+                title="העברת עובד בין סניף / מפעל / מטה"
               >
                 <ArrowRightLeft className="size-4 ml-1" />
-                מעבר ל{employee.kind === 'branch' ? 'מפעל' : 'סניף'}
+                שינוי סוג עובד
               </Button>
             )}
           </div>
@@ -210,21 +210,27 @@ export function ProfileTab({
               label="סוג עובד"
               icon={employee.kind === 'branch'
                 ? <Building2 className="size-4 text-indigo-500" />
-                : <Factory className="size-4 text-purple-500" />}
-              value={employee.kind === 'branch' ? 'סניף' : 'מפעל'}
+                : employee.kind === 'factory'
+                  ? <Factory className="size-4 text-purple-500" />
+                  : <Building2 className="size-4 text-emerald-500" />}
+              value={employee.kind === 'branch' ? 'סניף' : employee.kind === 'factory' ? 'מפעל' : 'מטה'}
             />
-            {employee.kind === 'branch' ? (
+            {employee.kind === 'branch' && (
               <SelectField
                 label="סניף"
                 value={form.branch_id}
                 onChange={v => update('branch_id', v)}
                 options={branches.map(b => ({ value: String(b.id), label: b.name }))}
               />
-            ) : (
+            )}
+            {employee.kind === 'factory' && (
               <ReadOnlyField
                 label="מחלקה"
                 value={DEPARTMENT_LABELS[employee.department || ''] || employee.department || '—'}
               />
+            )}
+            {employee.kind === 'hq' && (
+              <ReadOnlyField label="שיוך" value="מטה" />
             )}
             <ReadOnlyField
               label="סטטוס"

@@ -76,12 +76,15 @@ export function NewEmployeeWizard({
 
   // File is optional; if missing, employee is created with a yellow warning
   // in HR Dashboard until the document is uploaded from the Documents tab.
+  // HQ has no sub-classification — only the common required fields.
   const isValid =
     name.trim().length > 0 &&
     Number(hourlyRate) > 0 &&
     !!startDate &&
     bankAccount.trim().length > 0 &&
-    (kind === 'branch' ? branchId !== null : department !== '')
+    (kind === 'branch' ? branchId !== null
+     : kind === 'factory' ? department !== ''
+     : true)
 
   async function submit() {
     if (!isValid) return
@@ -100,10 +103,12 @@ export function NewEmployeeWizard({
     }
     if (kind === 'branch') {
       empPayload.branch_id = branchId
-    } else {
+    } else if (kind === 'factory') {
       empPayload.department = department
       empPayload.wage_type = 'hourly' // safe default
     }
+    // For HQ: no extra fields — name, hourly_rate, start_date, bank_account
+    // already populated above; kind='hq' is implicit via the target table.
 
     const insertRes = await safeDbOperation(
       () => supabase.from(tableName).insert(empPayload).select().single(),
@@ -228,10 +233,11 @@ export function NewEmployeeWizard({
                   >
                     <option value="branch">סניף</option>
                     <option value="factory">מפעל</option>
+                    <option value="hq">מטה</option>
                   </select>
                 </div>
 
-                {kind === 'branch' ? (
+                {kind === 'branch' && (
                   <div>
                     <label className="block text-sm font-medium text-slate-600 mb-1">סניף <span className="text-red-500">*</span></label>
                     <select
@@ -246,7 +252,8 @@ export function NewEmployeeWizard({
                       ))}
                     </select>
                   </div>
-                ) : (
+                )}
+                {kind === 'factory' && (
                   <div>
                     <label className="block text-sm font-medium text-slate-600 mb-1">מחלקה <span className="text-red-500">*</span></label>
                     <select
@@ -259,6 +266,11 @@ export function NewEmployeeWizard({
                         <option key={d.value} value={d.value}>{d.label}</option>
                       ))}
                     </select>
+                  </div>
+                )}
+                {kind === 'hq' && (
+                  <div className="text-xs text-slate-500 flex items-end pb-2">
+                    עובדי מטה אינם משוייכים לסניף או מחלקה.
                   </div>
                 )}
               </div>

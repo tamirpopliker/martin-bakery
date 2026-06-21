@@ -71,14 +71,19 @@ export function buildDocumentPath(
   typeKey: string,
   fileName: string
 ): string {
+  // HQ has no branch/department sub-folder — single bucket per employee.
   const folder2 = kind === 'branch'
     ? String(branchId ?? 'unknown')
-    : (department || 'unknown')
+    : kind === 'factory'
+      ? (department || 'unknown')
+      : 'hq'
   return `${kind}/${folder2}/${employeeId}/${typeKey}/${crypto.randomUUID()}_${safeFileName(fileName)}`
 }
 
-export function tableSourceFor(kind: Kind): 'branch_employees' | 'employees' {
-  return kind === 'branch' ? 'branch_employees' : 'employees'
+export function tableSourceFor(kind: Kind): 'branch_employees' | 'employees' | 'hq_employees' {
+  if (kind === 'branch') return 'branch_employees'
+  if (kind === 'factory') return 'employees'
+  return 'hq_employees'
 }
 
 export async function loadDocumentTypes(): Promise<DocumentType[]> {
