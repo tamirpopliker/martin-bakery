@@ -42,6 +42,11 @@ export function NewEmployeeWizard({
   const [position, setPosition] = useState('')
   const [hourlyRate, setHourlyRate] = useState('')
   const [startDate, setStartDate] = useState('')
+  // Bank details are optional. If the user fills them, they're saved as
+  // three separate columns (bank_name / bank_branch / bank_account_number)
+  // matching the schema used in ProfileTab.
+  const [bankName, setBankName] = useState('')
+  const [bankBranch, setBankBranch] = useState('')
   const [bankAccount, setBankAccount] = useState('')
   const [docTypeId, setDocTypeId] = useState<number | null>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -76,12 +81,12 @@ export function NewEmployeeWizard({
 
   // File is optional; if missing, employee is created with a yellow warning
   // in HR Dashboard until the document is uploaded from the Documents tab.
+  // Bank details are also optional — can be added later from the Profile tab.
   // HQ has no sub-classification — only the common required fields.
   const isValid =
     name.trim().length > 0 &&
     Number(hourlyRate) > 0 &&
     !!startDate &&
-    bankAccount.trim().length > 0 &&
     (kind === 'branch' ? branchId !== null
      : kind === 'factory' ? department !== ''
      : true)
@@ -97,7 +102,9 @@ export function NewEmployeeWizard({
       name: name.trim(),
       hourly_rate: Number(hourlyRate),
       start_date: startDate,
-      bank_account_number: bankAccount.trim(),
+      bank_name: bankName.trim() || null,
+      bank_branch: bankBranch.trim() || null,
+      bank_account_number: bankAccount.trim() || null,
       position: position.trim() || null,
       active: true,
     }
@@ -156,8 +163,12 @@ export function NewEmployeeWizard({
     }
 
     // Step 3: auto-mark onboarding tasks
-    // - Bank task: always (we got bank_account_number)
-    // - kit_klita/form_101 task: only if file was uploaded
+    // - Bank task: only if any bank field was filled (bank is now optional).
+    // - kit_klita/form_101 task: only if file was uploaded.
+    const bankProvided =
+      bankName.trim().length > 0 ||
+      bankBranch.trim().length > 0 ||
+      bankAccount.trim().length > 0
     const { data: templates } = await supabase
       .from('onboarding_task_templates')
       .select('*')
@@ -176,7 +187,7 @@ export function NewEmployeeWizard({
             completed_at: now, completed_by: by,
           })
         }
-        if (lbl.includes('בנק')) {
+        if (bankProvided && lbl.includes('בנק')) {
           onboardingRows.push({
             employee_kind: kind, employee_id: empId,
             task_template_id: tplId, task_label: lbl,
@@ -295,17 +306,28 @@ export function NewEmployeeWizard({
 
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1">
-                  חשבון בנק <span className="text-red-500">*</span>
+                  פרטי בנק <span className="text-slate-400 font-normal">(אופציונלי — אפשר להשלים אחר כך בטאב פרופיל)</span>
                 </label>
-                <input
-                  value={bankAccount}
-                  onChange={e => setBankAccount(e.target.value)}
-                  placeholder="פרטי חשבון, או טקסט חופשי"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
-                <p className="text-xs text-slate-400 mt-1 m-0">
-                  טקסט חופשי. אם אין חשבון — אפשר לכתוב למשל: אין חשבון, שכר בצ׳ק
-                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    value={bankName}
+                    onChange={e => setBankName(e.target.value)}
+                    placeholder="שם בנק"
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <input
+                    value={bankBranch}
+                    onChange={e => setBankBranch(e.target.value)}
+                    placeholder="מספר סניף"
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <input
+                    value={bankAccount}
+                    onChange={e => setBankAccount(e.target.value)}
+                    placeholder="מספר חשבון"
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
               </div>
 
               <div>

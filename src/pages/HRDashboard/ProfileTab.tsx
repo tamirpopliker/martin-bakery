@@ -152,11 +152,11 @@ export function ProfileTab({
     setForm(f => ({ ...f, [key]: value }))
   }
 
-  // Yellow warning: incomplete employee per the HR plan
+  // Yellow warning: incomplete employee per the HR plan. Bank details are
+  // optional and intentionally excluded from this check.
   const missing: string[] = []
   if (!form.hourly_rate) missing.push('תעריף שעתי')
   if (!form.start_date) missing.push('תאריך תחילת עבודה')
-  if (!form.bank_account_number) missing.push('חשבון בנק')
 
   return (
     <>
