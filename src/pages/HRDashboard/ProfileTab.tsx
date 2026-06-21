@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { safeDbOperation } from '../../lib/dbHelpers'
+import { useAppUser } from '../../lib/UserContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle, Building2, Factory } from 'lucide-react'
+import { AlertTriangle, Building2, Factory, ArrowRightLeft } from 'lucide-react'
 import { Field } from './Field'
 import { tableSourceFor } from './utils'
-import type { UnifiedEmployee } from './types'
+import { TransferEmployeeDialog } from './TransferEmployeeDialog'
+import type { UnifiedEmployee, Kind } from './types'
 
 interface ProfileFormData {
   position: string
@@ -56,11 +58,20 @@ const POSITION_OPTIONS = [
 ]
 const CUSTOM_POSITION = '__custom__'
 
-export function ProfileTab({ employee }: { employee: UnifiedEmployee }) {
+export function ProfileTab({
+  employee,
+  onTransferred,
+}: {
+  employee: UnifiedEmployee
+  onTransferred?: (key: { kind: Kind; id: number }) => void
+}) {
+  const { appUser } = useAppUser()
+  const isAdmin = appUser?.role === 'admin'
   const [form, setForm] = useState<ProfileFormData>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [branches, setBranches] = useState<{ id: number; name: string }[]>([])
+  const [transferOpen, setTransferOpen] = useState(false)
 
   useEffect(() => {
     // Branches for the reassignment dropdown — admin sees all (page is admin-only).
@@ -177,7 +188,23 @@ export function ProfileTab({ employee }: { employee: UnifiedEmployee }) {
 
       <Card className="mb-4 border-indigo-100 bg-gradient-to-l from-indigo-50/40 to-white">
         <CardContent className="p-6">
-          <h3 className="text-sm font-bold text-slate-700 mb-4 m-0">שיוך ותפקיד</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-slate-700 m-0">שיוך ותפקיד</h3>
+            {/* Cross-kind reclassification (branch ↔ factory). Admin only because
+                the RPC moves documents, onboarding and audit lineage. Within-kind
+                reassignment (branch X → branch Y) stays in the dropdown below. */}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTransferOpen(true)}
+                title="העברת עובד בין סניף למפעל"
+              >
+                <ArrowRightLeft className="size-4 ml-1" />
+                מעבר ל{employee.kind === 'branch' ? 'מפעל' : 'סניף'}
+              </Button>
+            )}
+          </div>
           <div className="grid grid-cols-3 gap-4 mb-4">
             <ReadOnlyField
               label="סוג עובד"
@@ -222,6 +249,17 @@ export function ProfileTab({ employee }: { employee: UnifiedEmployee }) {
           </div>
         </CardContent>
       </Card>
+
+      {transferOpen && (
+        <TransferEmployeeDialog
+          employee={employee}
+          onClose={() => setTransferOpen(false)}
+          onTransferred={(key) => {
+            setTransferOpen(false)
+            onTransferred?.(key)
+          }}
+        />
+      )}
 
       <Card>
         <CardContent className="p-6">

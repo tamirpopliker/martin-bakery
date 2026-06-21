@@ -103,12 +103,31 @@ export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
     URL.revokeObjectURL(url)
   }
 
+  // After a cross-kind transfer, refresh the list and open the newly-created
+  // employee in the same EmployeeDetail view. Treat it like an organic
+  // selection (not autoOpened) so "back" returns to the HR list as expected.
+  async function handleTransferred(key: { kind: Kind; id: number }) {
+    setLoading(true)
+    const { data } = await supabase.from('hr_employees_unified').select('*').order('name')
+    const rows = (data as UnifiedEmployee[]) || []
+    setEmployees(rows)
+    setLoading(false)
+    const match = rows.find(e => e.kind === key.kind && e.id === key.id)
+    if (match) {
+      setSelected(match)
+      setAutoOpened(false)
+    } else {
+      setSelected(null)
+    }
+  }
+
   if (selected) {
     return <EmployeeDetail
       employee={selected}
       onBack={autoOpened
         ? onBack                              // came from another page → return there
         : () => { setSelected(null); load() }} // organic click → back to HR list
+      onTransferred={handleTransferred}
     />
   }
 
@@ -235,7 +254,13 @@ export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
   )
 }
 
-function EmployeeDetail({ employee, onBack }: { employee: UnifiedEmployee; onBack: () => void }) {
+function EmployeeDetail({
+  employee, onBack, onTransferred,
+}: {
+  employee: UnifiedEmployee
+  onBack: () => void
+  onTransferred?: (key: { kind: Kind; id: number }) => void
+}) {
   const [tab, setTab] = useState<TabKey>('profile')
 
   return (
@@ -266,7 +291,7 @@ function EmployeeDetail({ employee, onBack }: { employee: UnifiedEmployee; onBac
       </div>
 
       <div className="max-w-[800px] mx-auto px-6 py-6">
-        {tab === 'profile'    && <ProfileTab       employee={employee} />}
+        {tab === 'profile'    && <ProfileTab       employee={employee} onTransferred={onTransferred} />}
         {tab === 'documents'  && <DocumentsTab     employee={employee} />}
         {tab === 'events'     && <MonthlyEventsTab employee={employee} />}
         {tab === 'salary'     && <SalaryTab        employee={employee} />}
