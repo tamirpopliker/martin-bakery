@@ -118,6 +118,10 @@ export default function BranchHome({ branch, onBack }: Props) {
   const isAdmin = appUser?.role === 'admin'
   const [page, setPage] = useState<BranchPage | null>(null)
   const [pageData, setPageData] = useState<any>(null)
+  // When BranchTeam's edit button hands off to HR Dashboard, we stash the key
+  // here and switch to hr_dashboard so the EmployeeDetail opens straight away.
+  const [hrInitialKey, setHrInitialKey] = useState<{ kind: 'branch'; id: number } | null>(null)
+  const [hrOriginPage, setHrOriginPage] = useState<BranchPage | null>(null)
   const [hovCard, setHovCard] = useState<BranchPage | null>(null)
   const [pendingOrders, setPendingOrders] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
@@ -231,13 +235,18 @@ export default function BranchHome({ branch, onBack }: Props) {
   if (page === 'cake_print_editor') return (
     <CakePrintEditor branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
   )
-  if (page === 'hr_dashboard') return <HRDashboard onBack={() => setPage(null)} />
+  if (page === 'hr_dashboard') return <HRDashboard
+    initialEmployeeKey={hrInitialKey}
+    onBack={() => { const origin = hrOriginPage; setHrInitialKey(null); setHrOriginPage(null); setPage(origin) }}
+  />
   if (page === 'changes_report') return <MonthlyChangesReport onBack={() => setPage(null)} />
   if (page === 'change_password') return (
     <ChangePassword onBack={() => setPage(null)} />
   )
   if (page === 'branch-team') return (
-    <BranchTeam branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} onNavigate={(p) => setPage(p as BranchPage)} />
+    <BranchTeam branchId={branch.id} branchName={branch.name} branchColor={branch.color}
+      onBack={() => setPage(null)} onNavigate={(p) => setPage(p as BranchPage)}
+      onEditEmployee={(id) => { setHrInitialKey({ kind: 'branch', id }); setHrOriginPage('branch-team'); setPage('hr_dashboard') }} />
   )
   if (page === 'manager-constraints') return (
     <ManagerConstraintsView branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage('branch-team')} />

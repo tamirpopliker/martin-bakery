@@ -13,6 +13,10 @@ interface Props {
   branchColor: string
   onBack: () => void
   onNavigate?: (page: string) => void
+  // When provided, the row pencil button hands the employee off to the parent
+  // (BranchHome) which navigates to HR Dashboard's EmployeeDetail. Without it
+  // the inline Sheet editor is used.
+  onEditEmployee?: (empId: number) => void
 }
 
 interface Employee {
@@ -33,7 +37,7 @@ const S = {
   input: { width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '10px', padding: '10px 14px', fontSize: '14px', boxSizing: 'border-box' as const, fontFamily: 'inherit' },
 }
 
-export default function BranchEmployees({ branchId, branchName, branchColor, onBack, onNavigate = () => {} }: Props) {
+export default function BranchEmployees({ branchId, branchName, branchColor, onBack, onEditEmployee }: Props) {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -63,8 +67,10 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   const [connectEmail, setConnectEmail] = useState('')
 
   async function fetchEmployees() {
+    // Active-only list. Inactive employees live under TeamManagement's
+    // "לא פעילים" tab via EmployeeArchive.
     const { data, error } = await supabase.from('branch_employees').select('*')
-      .eq('branch_id', branchId).order('name')
+      .eq('branch_id', branchId).eq('active', true).order('name')
     console.log('[BranchEmployees] fetch:', { branchId, data, error })
     if (data) setEmployees(data)
 
@@ -267,12 +273,6 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
             style={{ display: 'flex', alignItems: 'center', gap: '6px', background: branchColor, color: 'white', border: 'none', borderRadius: '10px', padding: '10px 18px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
             <Plus size={16} /> הוסף עובד
           </button>
-          {onNavigate && (
-            <button onClick={() => onNavigate?.('employee-archive')}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'white', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px 18px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-              📦 ארכיון
-            </button>
-          )}
         </div>
       </div>
 
@@ -310,8 +310,9 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
                     {emp.active ? <ToggleRight size={18} color="#34d399" /> : <ToggleLeft size={18} color="#94a3b8" />}
                     {emp.active ? 'פעיל' : 'מושבת'}
                   </button>
-                  <button onClick={() => openEdit(emp)}
-                    style={{ background: '#f1f5f9', color: branchColor, border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
+                  <button onClick={() => onEditEmployee ? onEditEmployee(emp.id) : openEdit(emp)}
+                    style={{ background: '#f1f5f9', color: branchColor, border: 'none', borderRadius: '6px', padding: '5px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}
+                    title={onEditEmployee ? 'פתח פרופיל מלא (HR)' : 'עריכה מהירה'}>
                     <Pencil size={13} />
                   </button>
                   <button onClick={() => setInviteModal({ empId: emp.id, name: emp.name, email: emp.email || '' })}

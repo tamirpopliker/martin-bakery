@@ -120,11 +120,13 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
       if (user.role === 'factory') return true
       return false
     }
-    // ─── Branch team management: restricted cashiers only ───
-    // Managers (non-restricted branch) use HR Dashboard instead — branch-team
-    // is the shift/team page that cashiers still need. Restricted users get
-    // it via the earlier whitelist; everyone else is blocked here.
+    // ─── Branch team management hub: branch manager + admin (factory blocked) ───
+    // The hub menu (BranchTeam) holds three cards: team / schedule / constraints.
+    // Restricted cashiers see only schedule + constraints (the team card itself
+    // is hidden inside BranchTeam for them). Non-restricted branch managers
+    // see all three and use the team card to manage their employees.
     if (pageKey === 'branch-team') {
+      if (user.role === 'branch') return true
       return false
     }
 

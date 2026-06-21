@@ -5,6 +5,7 @@ import PageHeader from '../components/PageHeader'
 import TeamManagement from './TeamManagement'
 import WorkSchedule from './WorkSchedule'
 import ManagerConstraintsView from './ManagerConstraintsView'
+import { useAppUser, isRestrictedBranchUser } from '../lib/UserContext'
 
 const fadeUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } } }
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }
@@ -15,6 +16,7 @@ interface Props {
   branchColor: string
   onBack: () => void
   onNavigate?: (page: string) => void
+  onEditEmployee?: (empId: number) => void
 }
 
 const CARDS = [
@@ -23,12 +25,19 @@ const CARDS = [
   { key: 'constraints', label: 'זמינות הצוות', subtitle: 'אילוצים · שבועי', Icon: ClipboardList },
 ]
 
-export default function BranchTeam({ branchId, branchName, branchColor, onBack, onNavigate = () => {} }: Props) {
+export default function BranchTeam({ branchId, branchName, branchColor, onBack, onEditEmployee }: Props) {
+  const { appUser } = useAppUser()
+  const isRestricted = appUser ? isRestrictedBranchUser(appUser) : false
   const [subPage, setSubPage] = useState<string | null>(null)
   const [hovCard, setHovCard] = useState<string | null>(null)
+  // Restricted cashiers don't manage employees — the "team" card is for the
+  // branch manager + admin only. UserContext.canAccessPage gates the route
+  // itself; this filter hides the entry point from the menu.
+  const visibleCards = CARDS.filter(c => !isRestricted || c.key !== 'team')
 
   if (subPage === 'team') {
-    return <TeamManagement branchId={branchId} branchName={branchName} branchColor={branchColor} onBack={() => setSubPage(null)} />
+    return <TeamManagement branchId={branchId} branchName={branchName} branchColor={branchColor}
+      onBack={() => setSubPage(null)} onEditEmployee={onEditEmployee} />
   }
   if (subPage === 'schedule') {
     return <WorkSchedule branchId={branchId} branchName={branchName} branchColor={branchColor} onBack={() => setSubPage(null)} />
@@ -45,7 +54,7 @@ export default function BranchTeam({ branchId, branchName, branchColor, onBack, 
         <motion.div
           style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}
           variants={stagger} initial="hidden" animate="visible">
-          {CARDS.map(card => {
+          {visibleCards.map(card => {
             const Icon = card.Icon
             const isHov = hovCard === card.key
             return (
