@@ -96,6 +96,66 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
     setEditingInternal(false)
   }
 
+  // Branch-side completion records the matching factory_sales (income) +
+  // branch_expenses (cost) so the P&L on both sides reflects the deal.
+  // Mirror of completeModified() in InternalSalesUpload.tsx; without this the
+  // sale gets stamped completed but no money moves anywhere in the books.
+  async function recordCompletedInternalSale(saleId: number) {
+    const { data: sale } = await supabase.from('internal_sales')
+      .select('id, order_number, order_date, branch_id, total_amount').eq('id', saleId).maybeSingle()
+    if (!sale) return
+    const branchName = (await supabase.from('branches').select('name').eq('id', sale.branch_id).maybeSingle()).data?.name || ''
+
+    // Dominant department for the sale (item with the highest total).
+    const { data: items } = await supabase.from('internal_sale_items')
+      .select('department, total_price').eq('sale_id', saleId)
+    const deptTotals = new Map<string, number>()
+    for (const it of (items || []) as any[]) {
+      const d = it.department || 'creams'
+      deptTotals.set(d, (deptTotals.get(d) || 0) + Number(it.total_price || 0))
+    }
+    const department = [...deptTotals.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'creams'
+
+    // Skip if already recorded (idempotent — covers re-clicks / network retries).
+    const { data: existingFs } = await supabase.from('factory_sales').select('id')
+      .eq('doc_number', sale.order_number).eq('is_internal', true).maybeSingle()
+    if (!existingFs) {
+      const { error: fsErr } = await supabase.from('factory_sales').insert({
+        date: sale.order_date,
+        department,
+        customer: branchName,
+        amount: sale.total_amount,
+        doc_number: sale.order_number,
+        is_internal: true,
+        target_branch_id: sale.branch_id,
+        branch_status: 'approved',
+      })
+      if (fsErr) {
+        console.error('[BranchOrders recordCompletedInternalSale factory_sales] error:', fsErr)
+        alert(`רישום ההכנסה למפעל נכשל: ${fsErr.message || 'שגיאת מסד נתונים'}. ההזמנה אושרה אך לא נספרה — פנה למנהל המערכת.`)
+      }
+    }
+
+    const { data: existingBe } = await supabase.from('branch_expenses').select('id')
+      .eq('branch_id', sale.branch_id).eq('doc_number', sale.order_number).eq('from_factory', true).maybeSingle()
+    if (!existingBe) {
+      const { error: beErr } = await supabase.from('branch_expenses').insert({
+        branch_id: sale.branch_id,
+        date: sale.order_date,
+        expense_type: 'suppliers',
+        supplier: 'מפעל ייצור',
+        amount: sale.total_amount,
+        doc_number: sale.order_number,
+        from_factory: true,
+        notes: `הזמנה ${sale.order_number || ''} מהמפעל`,
+      })
+      if (beErr) {
+        console.error('[BranchOrders recordCompletedInternalSale branch_expenses] error:', beErr)
+        alert(`רישום ההוצאה בסניף נכשל: ${beErr.message || 'שגיאת מסד נתונים'}. הסניף לא יראה את הרכישה ב-P&L — פנה למנהל המערכת.`)
+      }
+    }
+  }
+
   async function confirmInternalOrder(noChanges: boolean) {
     if (!viewInternal) return
     if (noChanges) {
@@ -121,6 +181,7 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
         alert(`אישור ההזמנה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
         return
       }
+      await recordCompletedInternalSale(viewInternal.id)
     } else {
       // Save with modifications
       let hasChanges = false
@@ -149,6 +210,10 @@ export default function BranchOrders({ branchId, branchName, branchColor, onBack
         alert(`עדכון סטטוס ההזמנה נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
         return
       }
+      // Only stamp the books when the branch completed without changes; if the
+      // sale flipped to "modified", factory needs to re-approve via
+      // InternalSalesUpload.completeModified before any money moves.
+      if (!hasChanges) await recordCompletedInternalSale(viewInternal.id)
     }
     setViewInternal(null)
     setViewInternalItems([])

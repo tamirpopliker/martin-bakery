@@ -1139,7 +1139,11 @@ export default function CEODashboard({ onBack }: Props) {
               const rows: PLRow[] = [
                 { label: 'הכנסות', factory: fRev, getBr: br => br.revenue, bold: false, color: '' },
                 ...(isSegment ? [
-                  { label: 'רכישות פנימיות', factory: factoryInternalSales, getBr: (br: BranchData) => br.expInternal, bold: false, color: '' as const },
+                  // Factory is the SELLER on internal trade, not the buyer — its
+                  // internal sales are already counted in the income row above.
+                  // Showing factoryInternalSales as a cost here misled readers
+                  // into thinking the factory paid 338K for purchases.
+                  { label: 'רכישות פנימיות', factory: 0, getBr: (br: BranchData) => br.expInternal, bold: false, color: '' as const },
                 ] : []),
                 { label: isSegment ? 'ספקים חיצוניים' : 'חומרי גלם / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => br.expExternal, bold: false, color: '' },
                 { label: 'לייבור עובדים', factory: factoryLabor, getBr: br => br.labor, bold: false, color: '', kpiKey: 'labor' },
