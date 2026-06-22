@@ -590,7 +590,7 @@ export default function InternalSalesUpload({ onBack }: Props) {
       }
       const { error: beErr } = await supabase.from('branch_expenses').delete()
         .eq('branch_id', sale.branch_id).eq('from_factory', true)
-        .ilike('description', `%${sale.order_number}%`)
+        .eq('doc_number', sale.order_number)
       if (beErr) {
         console.error('[InternalSalesUpload handleDelete branch_expenses] error:', beErr)
         alert(`מחיקת רישומי הוצאות הסניף נכשלה: ${beErr.message || 'שגיאת מסד נתונים'}. ההזמנה לא נמחקה.`)
@@ -638,14 +638,17 @@ export default function InternalSalesUpload({ onBack }: Props) {
       return
     }
 
-    // Add to branch_expenses
+    // Add to branch_expenses — same column shape as BranchOrders.tsx
+    // (expense_type / supplier / doc_number / notes), not category/description.
     const { error: beErr } = await supabase.from('branch_expenses').insert({
       branch_id: sale.branch_id,
       date: sale.order_date,
-      category: 'factory_purchase',
-      description: `הזמנה ${sale.order_number || ''} מהמפעל`,
+      expense_type: 'suppliers',
+      supplier: 'מפעל ייצור',
       amount: finalTotal,
+      doc_number: sale.order_number,
       from_factory: true,
+      notes: `הזמנה ${sale.order_number || ''} מהמפעל`,
     })
     if (beErr) {
       console.error('[InternalSalesUpload completeModified branch_expenses] error:', beErr)
