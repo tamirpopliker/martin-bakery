@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound, ImagePlus, IdCard, FileSignature } from 'lucide-react'
+import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound, ImagePlus, IdCard, FileSignature, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PageHeader from '../components/PageHeader'
 import { useAppUser, isRestrictedBranchUser } from '../lib/UserContext'
@@ -33,6 +33,8 @@ import CakePrintEditor from './CakePrintEditor'
 import ChangePassword from './ChangePassword'
 import HRDashboard from './HRDashboard'
 import MonthlyChangesReport from './MonthlyChangesReport'
+import QualityHub from './QualityHub'
+import CustomerComplaints from './CustomerComplaints'
 // calculateBranchPL moved to BranchManagerDashboard
 
 // ─── אנימציות ─────────────────────────────────────────────────────────────────
@@ -79,6 +81,8 @@ type BranchPage =
   | 'change_password'
   | 'hr_dashboard'
   | 'changes_report'
+  | 'quality_hub'
+  | 'customer_complaints'
 
 interface MenuItem {
   page: BranchPage
@@ -108,6 +112,7 @@ const MENU_ITEMS: MenuItem[] = [
   // BranchPL removed — P&L now integrated in BranchDashboard
   { page: 'hr_dashboard', label: 'מחלקת HR',       subtitle: 'עובדים · מסמכים · קליטה',     Icon: IdCard,      ready: true },
   { page: 'changes_report', label: 'דוח שינויים',    subtitle: 'קליטות · עזיבות · שכר · בנק', Icon: FileSignature, ready: true },
+  { page: 'quality_hub',  label: 'איכות ובקרה',    subtitle: 'תלונות · משרד הבריאות · תחזוקה', Icon: ShieldCheck, ready: true },
   { page: 'settings',     label: 'הגדרות סניף',    subtitle: 'KPI · עלויות קבועות · עובדים', Icon: Settings,    ready: true },
   { page: 'data_import',  label: 'ייבוא נתונים',   subtitle: 'CSV מ-Base44 · העלאה',         Icon: Upload,      ready: true },
   { page: 'change_password', label: 'שינוי סיסמה',  subtitle: 'עדכון סיסמת הכניסה',          Icon: KeyRound,    ready: true },
@@ -240,6 +245,17 @@ export default function BranchHome({ branch, onBack }: Props) {
     onBack={() => { const origin = hrOriginPage; setHrInitialKey(null); setHrOriginPage(null); setPage(origin) }}
   />
   if (page === 'changes_report') return <MonthlyChangesReport onBack={() => setPage(null)} />
+  if (page === 'quality_hub') return (
+    <QualityHub
+      scope="branch"
+      branchName={branch.name}
+      onBack={() => setPage(null)}
+      onNavigate={(p) => setPage(p as BranchPage)}
+    />
+  )
+  if (page === 'customer_complaints') return (
+    <CustomerComplaints onBack={() => setPage('quality_hub')} />
+  )
   if (page === 'change_password') return (
     <ChangePassword onBack={() => setPage(null)} />
   )
@@ -360,7 +376,7 @@ export default function BranchHome({ branch, onBack }: Props) {
           {MENU_ITEMS.filter(item => {
             // Username-auth branch users: restricted to scheduling + special orders + cake editor + password change
             if (appUser && isRestrictedBranchUser(appUser)) {
-              return ['branch-team', 'special_orders', 'cake_print_editor', 'change_password'].includes(item.page)
+              return ['branch-team', 'special_orders', 'cake_print_editor', 'change_password', 'quality_hub'].includes(item.page)
             }
             // Hide settings, data_import, HR dashboard and changes report for non-admin users
             if (!isAdmin && (item.page === 'settings' || item.page === 'data_import' || item.page === 'hr_dashboard' || item.page === 'changes_report')) return false

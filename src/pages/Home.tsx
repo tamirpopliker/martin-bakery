@@ -45,13 +45,15 @@ import ManagementReports from './ManagementReports'
 import HRDashboard from './HRDashboard'
 import BonusKPI from './BonusKPI'
 import MonthlyChangesReport from './MonthlyChangesReport'
+import QualityHub from './QualityHub'
+import CustomerComplaints from './CustomerComplaints'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
   AlertTriangle, ClipboardList, Truck, UserCog, Activity,
   Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
   LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft, ShoppingCart, Wrench, Building2, CreditCard, Briefcase, Cake,
-  IdCard, FileSignature, Globe, BookOpen,
+  IdCard, FileSignature, Globe, BookOpen, ShieldCheck,
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
@@ -69,6 +71,7 @@ const PANEL_FACTORY = [
   { label: 'דשבורד מפעל',      subtitle: 'KPI · רווח · גרפים',                  Icon: ProfitIcon,      color: '#6366f1', page: 'factory_dashboard' },
   { label: 'קטלוג מוצרים',     subtitle: 'מחירים · מחלקות · היסטוריה',          Icon: ShoppingCart,     color: '#8b5cf6', page: 'product_catalog' },
   { label: 'עובדים',            subtitle: 'ניהול עובדי מפעל',                    Icon: Users,           color: '#8b5cf6', page: 'factory_employees' },
+  { label: 'איכות ובקרה',      subtitle: 'תלונות · משרד הבריאות · תחזוקה',       Icon: ShieldCheck,     color: '#dc2626', page: 'quality_hub' },
   { label: 'הגדרות מפעל',      subtitle: 'יעדים · עלויות קבועות',               Icon: Settings,        color: '#64748b', page: 'settings' },
 ]
 
@@ -440,6 +443,8 @@ export default function Home() {
     if (page === 'user_management')      return <UserManagement onBack={() => setPage(null)} />
     if (page === 'system_settings')      return <UserManagement onBack={() => setPage(null)} initialTab="settings" />
     if (page === 'reports_alerts')       return <ReportsAlerts onBack={() => setPage(null)} />
+    if (page === 'quality_hub')          return <QualityHub scope="factory" onBack={() => setPage(null)} onNavigate={(p) => setPage(p)} />
+    if (page === 'customer_complaints')  return <CustomerComplaints onBack={() => setPage('quality_hub')} />
 
     if (page === 'hr_dashboard') return <HRDashboard onBack={() => { const origin = hrOriginPage; setHrInitialKey(null); setHrOriginPage(null); setPage(origin) }} initialEmployeeKey={hrInitialKey} />
     if (page === 'changes_report') return <MonthlyChangesReport onBack={() => setPage(null)} />

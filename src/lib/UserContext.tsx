@@ -93,6 +93,7 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
         'branch-team', 'weekly-schedule', 'schedule-history',
         'manager-constraints', 'shift-settings',
         'special_orders', 'cake_print_editor', 'change_password',
+        'quality_hub', 'customer_complaints',
       ]
       if (allowed.includes(pageKey)) return true
       // Allow routing to their own branch home
@@ -105,6 +106,9 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
     if (user.role === 'employee') {
       return ['employee-home', 'employee-schedule', 'employee-constraints', 'employee-tasks'].includes(pageKey)
     }
+
+    // ─── Quality Hub + Customer Complaints: open to all roles ───
+    if (pageKey === 'quality_hub' || pageKey === 'customer_complaints') return true
 
     // ─── HR Dashboard: factory + non-restricted branch managers ───
     // (Restricted @martin.local cashiers are blocked in the earlier restricted
