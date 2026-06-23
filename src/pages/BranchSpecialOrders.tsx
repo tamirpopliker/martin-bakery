@@ -70,6 +70,8 @@ const PRESET_CAKES: Record<CakeType, string[]> = {
   'פרווה': ['קרם שוקולד', 'שוקו שוקו', 'קרמל', 'אוכמניות'],
 }
 const COATINGS = ['מזרה סוכריות', 'קוקוס קלוי', 'אגוזי מלך טחונים', 'קרם חלק', 'שתי וערב']
+const SPRINKLE_COLOR = 'מזרה סוכריות'
+const SPRINKLE_COLORS = ['צבעוניות', 'לבנות', 'חומות', 'ורודות', 'תכלת']
 const CROWNS = ['ללא', 'לבן', 'חום', 'ורוד', 'תכלת', 'תכלת-לבן', 'ורוד-לבן', 'חום-לבן']
 const EXTRAS = ['דובדבנים', 'דובדבנים אקסטרה', 'כדורי שוקולד', 'אגוזי מלך (בתוך העוגה)']
 
@@ -830,6 +832,8 @@ function OrderForm({ branchId, branchName, branchColor, userId, onClose, onSaved
   const [filling, setFilling] = useState('')
   const [presetCake, setPresetCake] = useState('')
   const [coating, setCoating] = useState('')
+  // Secondary picker — only meaningful when coating is "מזרה סוכריות".
+  const [sprinkleColor, setSprinkleColor] = useState('')
   const [crown, setCrown] = useState('')
   const [extras, setExtras] = useState<string[]>([])
   const [notes, setNotes] = useState('')
@@ -874,9 +878,16 @@ function OrderForm({ branchId, branchName, branchColor, userId, onClose, onSaved
       if (!filling) return setError('מילוי חובה')
     }
     if (!coating) return setError('ציפוי חובה')
+    if (coating === SPRINKLE_COLOR && !sprinkleColor) return setError('יש לבחור גוון סוכריות')
     if (!crown) return setError('כתר עליון חובה')
 
     setSaving(true)
+    // When "מזרה סוכריות" was picked, fold the chosen color into the saved
+    // string so the kitchen + history display the full instruction without
+    // needing an extra column.
+    const coatingForSave = coating === SPRINKLE_COLOR
+      ? `${SPRINKLE_COLOR} - ${sprinkleColor}`
+      : coating
 
     const systemOrderNumber = generateOrderNumber(branchId)
     const manualNumber = orderNumberManual.trim()
@@ -899,7 +910,7 @@ function OrderForm({ branchId, branchName, branchColor, userId, onClose, onSaved
       cream_between: creamForSave,
       filling: fillingForSave,
       preset_cake_name: isPresetMode ? presetCake : null,
-      coating,
+      coating: coatingForSave,
       crown,
       extras: extras.length > 0 ? extras : null,
       notes: notes.trim() || null,
@@ -992,7 +1003,22 @@ function OrderForm({ branchId, branchName, branchColor, userId, onClose, onSaved
           </>
         )}
 
-        <SelectGroup label="ציפוי *" value={coating} onChange={setCoating} options={COATINGS} color={branchColor} />
+        <SelectGroup
+          label="ציפוי *"
+          value={coating}
+          onChange={(v) => { setCoating(v); if (v !== SPRINKLE_COLOR) setSprinkleColor('') }}
+          options={COATINGS}
+          color={branchColor}
+        />
+        {coating === SPRINKLE_COLOR && (
+          <SelectGroup
+            label="גוון סוכריות *"
+            value={sprinkleColor}
+            onChange={setSprinkleColor}
+            options={SPRINKLE_COLORS}
+            color={branchColor}
+          />
+        )}
         <SelectGroup label="כתר עליון *" value={crown} onChange={setCrown} options={CROWNS} color={branchColor} />
 
         {/* Extras multi-select */}
