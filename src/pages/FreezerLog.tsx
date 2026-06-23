@@ -255,66 +255,73 @@ function DailyTab({ units, userId, userName }: { units: Unit[]; userId: string |
                 transition={{ delay: idx * 0.03 }}
                 style={{
                   background: 'white', border: `2px solid ${borderColor}`, borderRadius: 14,
-                  padding: 14, display: 'flex', flexDirection: 'column', gap: 10,
+                  padding: 12, display: 'flex', flexDirection: 'column', gap: 10,
                 }}
               >
-                {/* Header row */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {/* Header row — name + inline status badge, subtitle below */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                   <div style={{
-                    width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
                     background: unit.unit_type === 'fridge' ? '#dbeafe' : '#cffafe',
                     color: unit.unit_type === 'fridge' ? '#1e40af' : '#0e7490',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    {unit.unit_type === 'fridge' ? <Thermometer size={20} /> : <Snowflake size={20} />}
+                    {unit.unit_type === 'fridge' ? <Thermometer size={18} /> : <Snowflake size={18} />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{unit.label_he}</div>
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                      {unit.unit_type === 'fridge' ? 'מקרר' : 'מקפיא'} · תקין עד {unit.max_c}°C
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', rowGap: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>{unit.label_he}</span>
+                      <span style={{
+                        background: statusBg, color: statusColor, fontSize: 11, fontWeight: 700,
+                        padding: '2px 7px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 3,
+                      }}>
+                        {StatusIcon && <StatusIcon size={11} />}
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                      תקין עד {unit.max_c}°C
                     </div>
                   </div>
-                  <span style={{
-                    background: statusBg, color: statusColor, fontSize: 12, fontWeight: 700,
-                    padding: '4px 10px', borderRadius: 999, display: 'flex', alignItems: 'center', gap: 4,
-                  }}>
-                    {StatusIcon && <StatusIcon size={12} />}
-                    {statusLabel}
-                  </span>
                 </div>
 
-                {/* Temperature input */}
-                <div style={{ background: bgAccent, borderRadius: 10, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', minWidth: 70 }}>טמפרטורה:</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      inputMode="decimal"
-                      value={draft.temp}
-                      onChange={e => updateDraft(unit.id, { temp: e.target.value })}
-                      placeholder={unit.unit_type === 'fridge' ? '4' : '-18'}
-                      style={{
-                        flex: 1, padding: '10px 14px', borderRadius: 10,
-                        border: '1px solid #e2e8f0', fontSize: 22, fontWeight: 700,
-                        textAlign: 'center', fontFamily: 'inherit', color: '#0f172a',
-                        background: 'white',
-                      }}
-                    />
-                    <span style={{ fontSize: 16, fontWeight: 700, color: '#475569' }}>°C</span>
-                  </div>
+                {/* Temperature input — °C as inline suffix via absolute positioning */}
+                <div style={{ position: 'relative' }}>
                   <input
-                    type="text"
-                    value={draft.notes}
-                    onChange={e => updateDraft(unit.id, { notes: e.target.value })}
-                    placeholder="הערה (אופציונלי)"
+                    type="number"
+                    step="0.1"
+                    inputMode="decimal"
+                    value={draft.temp}
+                    onChange={e => updateDraft(unit.id, { temp: e.target.value })}
+                    placeholder={unit.unit_type === 'fridge' ? '4' : '-18'}
+                    className="freezer-temp-input"
                     style={{
-                      padding: '8px 12px', borderRadius: 8,
-                      border: '1px solid #e2e8f0', fontSize: 13, fontFamily: 'inherit',
-                      background: 'white',
+                      width: '100%', boxSizing: 'border-box',
+                      padding: '12px 48px 12px 16px', borderRadius: 10,
+                      border: '1px solid #e2e8f0', fontSize: 22, fontWeight: 700,
+                      textAlign: 'center', fontFamily: 'inherit', color: '#0f172a',
+                      background: bgAccent,
+                      MozAppearance: 'textfield' as any,
                     }}
                   />
+                  <span style={{
+                    position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
+                    fontSize: 14, fontWeight: 700, color: '#94a3b8', pointerEvents: 'none',
+                  }}>°C</span>
                 </div>
+
+                <input
+                  type="text"
+                  value={draft.notes}
+                  onChange={e => updateDraft(unit.id, { notes: e.target.value })}
+                  placeholder="הערה (אופציונלי)"
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    padding: '9px 12px', borderRadius: 8,
+                    border: '1px solid #e2e8f0', fontSize: 14, fontFamily: 'inherit',
+                    background: 'white',
+                  }}
+                />
 
                 {reading && (
                   <div style={{ fontSize: 11, color: '#94a3b8' }}>
