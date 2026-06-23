@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { CheckCircle2, AlertTriangle, Thermometer, Snowflake, X } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import PageHeader from '../components/PageHeader'
+
+// 7 distinct colors — assigned by unit display_order at render time
+const UNIT_COLORS = ['#3b82f6', '#6366f1', '#06b6d4', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b']
 
 interface Props { onBack: () => void }
 type Tab = 'daily' | 'history'
@@ -471,67 +475,13 @@ function HistoryTab({ units, userId, userName }: { units: Unit[]; userId: string
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {groups.map(([d, items]) => {
-            const itemsByUnit = new Map(items.map(r => [r.unit_id, r]))
-            const dayOver = items.some(r => {
-              const u = unitsById.get(r.unit_id)
-              return u && isOverSpec(r.temperature_c, u.max_c)
-            })
-            return (
-              <div key={d} style={{
-                background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: 14,
-              }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid #f1f5f9',
-                }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                    {new Date(d + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
-                  </div>
-                  {dayOver && (
-                    <span style={{
-                      background: '#fee2e2', color: '#991b1b', fontSize: 11, fontWeight: 700,
-                      padding: '3px 8px', borderRadius: 999, display: 'flex', alignItems: 'center', gap: 4,
-                    }}>
-                      <AlertTriangle size={11} /> חריגה
-                    </span>
-                  )}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
-                  {units.map(u => {
-                    const r = itemsByUnit.get(u.id)
-                    if (!r) {
-                      return (
-                        <button key={u.id} onClick={() => setEditing({ unit: u, date: d, reading: null })} style={{
-                          background: '#f8fafc', border: '1px dashed #e2e8f0', borderRadius: 8,
-                          padding: '8px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          fontFamily: 'inherit', cursor: 'pointer', textAlign: 'right',
-                        }}>
-                          <span style={{ fontSize: 12, color: '#64748b' }}>{u.label_he}</span>
-                          <span style={{ fontSize: 12, color: '#94a3b8' }}>—</span>
-                        </button>
-                      )
-                    }
-                    const over = isOverSpec(r.temperature_c, u.max_c)
-                    return (
-                      <button key={u.id} onClick={() => setEditing({ unit: u, date: d, reading: r })} style={{
-                        background: over ? '#fef2f2' : '#f0fdf4',
-                        border: '1px solid ' + (over ? '#fecaca' : '#bbf7d0'),
-                        borderRadius: 8, padding: '8px 10px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        fontFamily: 'inherit', cursor: 'pointer', textAlign: 'right',
-                      }}>
-                        <span style={{ fontSize: 12, color: '#475569' }}>{u.label_he}</span>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: over ? '#991b1b' : '#166534' }}>
-                          {r.temperature_c}°
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
+          <TrendCharts units={units} rows={rows} month={month} />
+          <HistoryTable
+            units={units}
+            groups={groups}
+            unitsById={unitsById}
+            onEdit={(unit, date, reading) => setEditing({ unit, date, reading })}
+          />
         </div>
       )}
 
@@ -661,6 +611,261 @@ function EditReadingModal({
             opacity: saving ? 0.6 : 1,
           }}>{saving ? 'שומר...' : 'שמור'}</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── History Table ─────────────────────────────────────────────────────────
+
+function HistoryTable({
+  units, groups, unitsById, onEdit,
+}: {
+  units: Unit[]
+  groups: [string, Reading[]][]
+  unitsById: Map<number, Unit>
+  onEdit: (unit: Unit, date: string, reading: Reading | null) => void
+}) {
+  const cellW = 96
+  const dateW = 120
+
+  return (
+    <div style={{
+      background: 'white', border: '1px solid #f1f5f9', borderRadius: 12,
+      overflow: 'hidden',
+    }}>
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+        <table style={{
+          borderCollapse: 'separate', borderSpacing: 0,
+          width: '100%', minWidth: dateW + cellW * units.length,
+          fontSize: 12, fontFamily: 'inherit',
+        }}>
+          <thead>
+            <tr>
+              <th style={{
+                position: 'sticky', right: 0, zIndex: 2,
+                background: '#f8fafc', borderBottom: '1px solid #e2e8f0',
+                padding: '10px 12px', textAlign: 'right',
+                fontWeight: 700, color: '#475569',
+                width: dateW, minWidth: dateW,
+                boxShadow: '-2px 0 0 #f1f5f9',
+              }}>תאריך</th>
+              {units.map(u => (
+                <th key={u.id} style={{
+                  background: '#f8fafc', borderBottom: '1px solid #e2e8f0',
+                  padding: '10px 8px', textAlign: 'center',
+                  fontWeight: 700, color: '#475569',
+                  width: cellW, minWidth: cellW,
+                }}>
+                  <div style={{ fontSize: 11, lineHeight: 1.2 }}>{u.label_he}</div>
+                  <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500, marginTop: 2 }}>
+                    {u.unit_type === 'fridge' ? 'מקרר' : 'מקפיא'} · ≤{u.max_c}°
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map(([d, items], rowIdx) => {
+              const itemsByUnit = new Map(items.map(r => [r.unit_id, r]))
+              const dayOver = items.some(r => {
+                const u = unitsById.get(r.unit_id)
+                return u && isOverSpec(r.temperature_c, u.max_c)
+              })
+              const dateObj = new Date(d + 'T12:00:00')
+              const weekday = dateObj.toLocaleDateString('he-IL', { weekday: 'short' })
+              const dayMonth = dateObj.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })
+              const rowBg = rowIdx % 2 === 0 ? 'white' : '#fafbfc'
+              return (
+                <tr key={d}>
+                  <td style={{
+                    position: 'sticky', right: 0, zIndex: 1,
+                    background: rowBg, borderBottom: '1px solid #f1f5f9',
+                    padding: '10px 12px', textAlign: 'right',
+                    width: dateW, minWidth: dateW,
+                    boxShadow: '-2px 0 0 #f1f5f9',
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{dayMonth}</div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span>{weekday}</span>
+                      {dayOver && <AlertTriangle size={11} color="#dc2626" />}
+                    </div>
+                  </td>
+                  {units.map(u => {
+                    const r = itemsByUnit.get(u.id)
+                    if (!r) {
+                      return (
+                        <td key={u.id} style={{
+                          background: rowBg, borderBottom: '1px solid #f1f5f9',
+                          padding: 0, width: cellW, minWidth: cellW,
+                        }}>
+                          <button
+                            onClick={() => onEdit(u, d, null)}
+                            style={{
+                              width: '100%', height: '100%', background: 'transparent', border: 'none',
+                              padding: '12px 8px', cursor: 'pointer', color: '#cbd5e1', fontSize: 16, fontFamily: 'inherit',
+                            }}
+                          >—</button>
+                        </td>
+                      )
+                    }
+                    const over = isOverSpec(r.temperature_c, u.max_c)
+                    const cellBg = over ? '#fef2f2' : '#f0fdf4'
+                    const textColor = over ? '#991b1b' : '#166534'
+                    return (
+                      <td key={u.id} style={{
+                        background: rowBg, borderBottom: '1px solid #f1f5f9',
+                        padding: 4, width: cellW, minWidth: cellW,
+                      }}>
+                        <button
+                          onClick={() => onEdit(u, d, r)}
+                          style={{
+                            width: '100%', background: cellBg, border: 'none', borderRadius: 6,
+                            padding: '8px 6px', cursor: 'pointer', fontFamily: 'inherit',
+                            fontSize: 14, fontWeight: 700, color: textColor,
+                          }}
+                          title={r.notes || undefined}
+                        >
+                          {r.temperature_c}°
+                        </button>
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ─── Trend Charts (history tab) ────────────────────────────────────────────
+
+function TrendCharts({ units, rows, month }: { units: Unit[]; rows: Reading[]; month: string }) {
+  const fridges = useMemo(() => units.filter(u => u.unit_type === 'fridge'), [units])
+  const freezers = useMemo(() => units.filter(u => u.unit_type === 'freezer'), [units])
+
+  // Color map keyed by unit id, stable by display_order across the 7 unit slots
+  const colorByUnit = useMemo(() => {
+    const m = new Map<number, string>()
+    const sorted = [...units].sort((a, b) => a.display_order - b.display_order)
+    sorted.forEach((u, i) => m.set(u.id, UNIT_COLORS[i % UNIT_COLORS.length]))
+    return m
+  }, [units])
+
+  // Build chart data: one row per day-of-month with each unit's temp as a key
+  function buildSeries(subset: Unit[]) {
+    const [y, m] = month.split('-').map(Number)
+    const daysInMonth = new Date(y, m, 0).getDate()
+    const rowsByDate = new Map<string, Reading[]>()
+    for (const r of rows) {
+      if (!subset.find(u => u.id === r.unit_id)) continue
+      if (!rowsByDate.has(r.reading_date)) rowsByDate.set(r.reading_date, [])
+      rowsByDate.get(r.reading_date)!.push(r)
+    }
+    const out: any[] = []
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const dayRows = rowsByDate.get(dateStr) || []
+      const row: any = { day: String(d) }
+      for (const u of subset) {
+        const r = dayRows.find(rr => rr.unit_id === u.id)
+        if (r) row[u.key] = Number(r.temperature_c)
+      }
+      out.push(row)
+    }
+    return out
+  }
+
+  const fridgeData = useMemo(() => buildSeries(fridges), [fridges, rows, month])
+  const freezerData = useMemo(() => buildSeries(freezers), [freezers, rows, month])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <ChartCard
+        title="מקררים"
+        subtitle="קו אדום: סף תקין 5°C"
+        data={fridgeData}
+        subset={fridges}
+        colorByUnit={colorByUnit}
+        threshold={5}
+        yDomain={[-2, 10]}
+      />
+      <ChartCard
+        title="מקפיאים"
+        subtitle="קו אדום: סף תקין -13°C"
+        data={freezerData}
+        subset={freezers}
+        colorByUnit={colorByUnit}
+        threshold={-13}
+        yDomain={[-25, -5]}
+      />
+    </div>
+  )
+}
+
+function ChartCard({
+  title, subtitle, data, subset, colorByUnit, threshold, yDomain,
+}: {
+  title: string; subtitle: string
+  data: any[]; subset: Unit[]
+  colorByUnit: Map<number, string>
+  threshold: number
+  yDomain: [number, number]
+}) {
+  // Hide entirely if no data points for any unit in this group
+  const hasAny = useMemo(() => data.some(row => subset.some(u => row[u.key] !== undefined)), [data, subset])
+  if (!hasAny) return null
+
+  return (
+    <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: 14 }}>
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{title}</div>
+        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{subtitle}</div>
+      </div>
+      <div style={{ width: '100%', height: 240, direction: 'ltr' }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+            <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#64748b' }} />
+            <YAxis
+              domain={yDomain}
+              tick={{ fontSize: 11, fill: '#64748b' }}
+              tickFormatter={(v) => `${v}°`}
+              width={42}
+            />
+            <Tooltip
+              contentStyle={{ fontSize: 12, direction: 'rtl', textAlign: 'right' }}
+              formatter={(value: any, name: any) => {
+                const unit = subset.find(u => u.key === name)
+                return [`${value}°C`, unit?.label_he || name]
+              }}
+              labelFormatter={(label) => `יום ${label}`}
+            />
+            <Legend
+              wrapperStyle={{ fontSize: 11, direction: 'rtl', paddingTop: 6 }}
+              formatter={(value) => {
+                const unit = subset.find(u => u.key === value)
+                return unit?.label_he || value
+              }}
+            />
+            <ReferenceLine y={threshold} stroke="#ef4444" strokeDasharray="4 4" />
+            {subset.map(u => (
+              <Line
+                key={u.id}
+                type="monotone"
+                dataKey={u.key}
+                stroke={colorByUnit.get(u.id) || '#94a3b8'}
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                connectNulls
+                isAnimationActive={false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </div>
   )
