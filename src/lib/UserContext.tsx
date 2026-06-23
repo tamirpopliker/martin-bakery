@@ -110,6 +110,9 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
     // ─── Quality Hub + Customer Complaints: open to all roles ───
     if (pageKey === 'quality_hub' || pageKey === 'customer_complaints') return true
 
+    // ─── Factory-only quality forms ───
+    if (pageKey === 'factory_freezer_log') return user.role === 'factory'
+
     // ─── HR Dashboard: factory + non-restricted branch managers ───
     // (Restricted @martin.local cashiers are blocked in the earlier restricted
     // gate above. Branch managers see HR scoped to their branch by the page.)

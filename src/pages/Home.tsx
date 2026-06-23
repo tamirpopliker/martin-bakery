@@ -47,6 +47,7 @@ import BonusKPI from './BonusKPI'
 import MonthlyChangesReport from './MonthlyChangesReport'
 import QualityHub from './QualityHub'
 import CustomerComplaints from './CustomerComplaints'
+import FreezerLog from './FreezerLog'
 import {
   FlaskConical, Croissant, Package, HardHat, BarChart3,
   Store, Settings, LogOut, TrendingUp, TrendingDown, Mail,
@@ -445,6 +446,7 @@ export default function Home() {
     if (page === 'reports_alerts')       return <ReportsAlerts onBack={() => setPage(null)} />
     if (page === 'quality_hub')          return <QualityHub scope="factory" onBack={() => setPage(null)} onNavigate={(p) => setPage(p)} />
     if (page === 'customer_complaints')  return <CustomerComplaints onBack={() => setPage('quality_hub')} />
+    if (page === 'factory_freezer_log')  return <FreezerLog onBack={() => setPage('quality_hub')} />
 
     if (page === 'hr_dashboard') return <HRDashboard onBack={() => { const origin = hrOriginPage; setHrInitialKey(null); setHrOriginPage(null); setPage(origin) }} initialEmployeeKey={hrInitialKey} />
     if (page === 'changes_report') return <MonthlyChangesReport onBack={() => setPage(null)} />

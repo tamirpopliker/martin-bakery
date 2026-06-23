@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { MessageSquareWarning, ShieldCheck } from 'lucide-react'
+import { MessageSquareWarning, ShieldCheck, Thermometer } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 
 interface Props {
@@ -10,6 +10,8 @@ interface Props {
   branchName?: string
 }
 
+type Scope = 'branch' | 'factory'
+
 interface QualityForm {
   page: string
   label: string
@@ -17,10 +19,12 @@ interface QualityForm {
   Icon: any
   color: string
   ready: boolean
+  scopes?: Scope[]
 }
 
 const QUALITY_FORMS: QualityForm[] = [
-  { page: 'customer_complaints', label: 'תלונות לקוח', subtitle: 'טופס 0701 · מעקב פתוח/סגור', Icon: MessageSquareWarning, color: '#dc2626', ready: true },
+  { page: 'customer_complaints',  label: 'תלונות לקוח',           subtitle: 'טופס 0701 · מעקב פתוח/סגור',     Icon: MessageSquareWarning, color: '#dc2626', ready: true, scopes: ['branch', 'factory'] },
+  { page: 'factory_freezer_log',  label: 'בקרת מקפיאים ומקררים', subtitle: 'מעקב טמפרטורות יומי · 7 יחידות', Icon: Thermometer,          color: '#0ea5e9', ready: true, scopes: ['factory'] },
 ]
 
 const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }
@@ -44,7 +48,7 @@ export default function QualityHub({ onBack, onNavigate, scope, branchName }: Pr
           initial="hidden"
           animate="visible"
         >
-          {QUALITY_FORMS.map(form => {
+          {QUALITY_FORMS.filter(f => !f.scopes || !scope || f.scopes.includes(scope)).map(form => {
             const Icon = form.Icon
             const isHov = hovCard === form.page
             return (
