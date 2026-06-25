@@ -1145,7 +1145,13 @@ export default function CEODashboard({ onBack }: Props) {
                   // into thinking the factory paid 338K for purchases.
                   { label: 'רכישות פנימיות', factory: 0, getBr: (br: BranchData) => br.expInternal, bold: false, color: '' as const },
                 ] : []),
-                { label: isSegment ? 'ספקים חיצוניים' : 'חומרי גלם / ספקים', factory: factorySuppliers, getBr: (br: BranchData) => br.expExternal, bold: false, color: '' },
+                ...(isSegment
+                  ? [{ label: 'ספקים חיצוניים', factory: factorySuppliers, getBr: (br: BranchData) => br.expExternal, bold: false, color: '' as const }]
+                  : [
+                      { label: 'חומרי גלם', factory: factorySuppliers, getBr: (_br: BranchData) => 0,                 bold: false, color: '' as const },
+                      { label: 'ספקים',     factory: 0,                 getBr: (br: BranchData) => br.expExternal,    bold: false, color: '' as const },
+                    ]
+                ),
                 { label: 'לייבור עובדים', factory: factoryLabor, getBr: br => br.labor, bold: false, color: '', kpiKey: 'labor' },
                 { label: 'שכר מנהלים' + (branches.every(b => b.managerIsActual) && factoryManagerIsActual ? ' ✓' : ' ~'), factory: factoryManagerSalary, getBr: (br: BranchData) => br.managerSalary, bold: false, color: '' as const },
                 { label: 'סה"כ לייבור', factory: factoryLabor + factoryManagerSalary, getBr: (br: BranchData) => br.labor + br.managerSalary, bold: true, color: '' as const },
