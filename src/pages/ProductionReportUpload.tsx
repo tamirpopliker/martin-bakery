@@ -72,6 +72,8 @@ export default function ProductionReportUpload({ onBack }: Props) {
   const [error, setError] = useState('')
   const [savedCount, setSavedCount] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
+  // Shown when the parser can't find a date in the file — lets the user pick manually.
+  const [manualDatePrompt, setManualDatePrompt] = useState<{ rows: ReportRow[]; pickedDate: string } | null>(null)
 
   // ─── History state ───
   const [historyGroups, setHistoryGroups] = useState<HistoryGroup[]>([])
@@ -229,7 +231,7 @@ export default function ProductionReportUpload({ onBack }: Props) {
         const wb = XLSX.read(data, { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
 
-        // Date header: try I6 first (older template), then H6 (newer template).
+        // Date header: try H6 first (current template), fall back to I6 (older template).
         const readDate = (addr: string): string => {
           const cell = ws[addr]
           if (!cell) return ''
@@ -239,9 +241,7 @@ export default function ProductionReportUpload({ onBack }: Props) {
           }
           return String(cell.v || '').trim()
         }
-        const dateStr = readDate('I6') || readDate('H6')
-        if (!dateStr) { setError('לא נמצא תאריך בתא I6 או H6'); return }
-        setReportDate(dateStr)
+        const dateStr = readDate('H6') || readDate('I6')
 
         const parsed: ReportRow[] = []
         let rowIdx = 7
@@ -269,6 +269,13 @@ export default function ProductionReportUpload({ onBack }: Props) {
         }
 
         if (parsed.length === 0) { setError('לא נמצאו שורות נתונים בקובץ'); return }
+
+        // If no date found in file, prompt the user to pick one before continuing.
+        if (!dateStr) {
+          setManualDatePrompt({ rows: parsed, pickedDate: new Date().toISOString().slice(0, 10) })
+          return
+        }
+        setReportDate(dateStr)
         setRows(parsed)
         setStep('preview')
       } catch (err) {
@@ -586,6 +593,43 @@ export default function ProductionReportUpload({ onBack }: Props) {
           </div>
         )}
       </div>
+
+      {/* ═══════════════ MANUAL DATE PROMPT ═══════════════ */}
+      {manualDatePrompt && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => setManualDatePrompt(null)}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 420, width: '100%', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', direction: 'rtl' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', margin: '0 0 6px' }}>בחר תאריך לדוח</h3>
+            <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 16px', lineHeight: 1.5 }}>
+              לא נמצא תאריך בקובץ ({manualDatePrompt.rows.length} מוצרים נטענו). בחר את התאריך של הדוח:
+            </p>
+            <input
+              type="date"
+              value={manualDatePrompt.pickedDate}
+              onChange={e => setManualDatePrompt(p => p ? { ...p, pickedDate: e.target.value } : p)}
+              max={new Date().toISOString().slice(0, 10)}
+              style={{
+                width: '100%', padding: '10px 14px', borderRadius: 10,
+                border: '1px solid #e2e8f0', fontSize: 16, fontFamily: 'inherit',
+                boxSizing: 'border-box', marginBottom: 18,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
+              <button onClick={() => {
+                if (!manualDatePrompt.pickedDate) return
+                const [y, m, d] = manualDatePrompt.pickedDate.split('-')
+                setReportDate(`${d}/${m}/${y}`)
+                setRows(manualDatePrompt.rows)
+                setStep('preview')
+                setManualDatePrompt(null)
+              }} style={{ ...S.btn, background: '#0f172a', color: 'white', padding: '8px 22px' }}>אישור</button>
+              <button onClick={() => setManualDatePrompt(null)}
+                style={{ ...S.btn, background: 'white', color: '#64748b', border: '1px solid #e2e8f0', padding: '8px 20px' }}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══════════════ DELETE CONFIRM DIALOG ═══════════════ */}
       {deleteConfirm && (
