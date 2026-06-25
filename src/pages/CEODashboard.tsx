@@ -310,28 +310,36 @@ export default function CEODashboard({ onBack }: Props) {
     revBd[2].factory += (extSalesData || []).reduce((s: number, r: any) => s + Number(r.total_before_vat), 0)
     setRevBreakdown(revBd)
 
-    // Fetch production report costs for the period
-    const { data: prodReportData } = await supabase.from('production_reports')
-      .select('total_cost').gte('report_date', from).lt('report_date', to)
-    const totalProdReportCost = (prodReportData || []).reduce((s: number, r: any) => s + Number(r.total_cost), 0)
-
-    // Build expense breakdown from PL data
+    // Build consolidated expense breakdown — factory + branches, no
+    // intercompany double-count. Each bucket mirrors the matching row in the
+    // consolidated P&L table, so totals here align with the table.
     const totalExpByType: Record<string, number> = {}
-    if (totalProdReportCost > 0) totalExpByType['production'] = totalProdReportCost
     for (const pl of branchPLs) {
-      totalExpByType['supplier'] = (totalExpByType['supplier'] || 0) + pl.factoryPurchases + pl.externalSuppliers
+      // External suppliers only — branches' intercompany purchases from the
+      // factory are already represented inside the factory's raw materials below.
+      totalExpByType['supplier'] = (totalExpByType['supplier'] || 0) + pl.externalSuppliers
       totalExpByType['repair'] = (totalExpByType['repair'] || 0) + pl.repairs
       totalExpByType['infrastructure'] = (totalExpByType['infrastructure'] || 0) + pl.infrastructure
       totalExpByType['delivery'] = (totalExpByType['delivery'] || 0) + pl.deliveries
       totalExpByType['other'] = (totalExpByType['other'] || 0) + pl.otherExpenses
-      totalExpByType['labor'] = (totalExpByType['labor'] || 0) + pl.labor
+      // Labor includes manager salary — matches "סה"כ לייבור" in the P&L table.
+      totalExpByType['labor'] = (totalExpByType['labor'] || 0) + pl.labor + (pl.managerSalary || 0)
       totalExpByType['waste'] = (totalExpByType['waste'] || 0) + pl.waste
       totalExpByType['fixed'] = (totalExpByType['fixed'] || 0) + pl.fixedCosts
     }
+    // Factory side — was completely missing for labor/waste/repairs/fixed,
+    // and supplier/raw materials were sourced from production_reports (which
+    // double-counted intercompany trade with branches).
+    totalExpByType['supplier'] = (totalExpByType['supplier'] || 0) + factoryPL.suppliers
+    totalExpByType['labor']    = (totalExpByType['labor'] || 0)    + factoryPL.labor + (factoryPL.managerSalary || 0)
+    totalExpByType['waste']    = (totalExpByType['waste'] || 0)    + factoryPL.waste
+    totalExpByType['repair']   = (totalExpByType['repair'] || 0)   + (factoryPL.repairs || 0)
+    totalExpByType['fixed']    = (totalExpByType['fixed'] || 0)    + (factoryPL.fixedCosts || 0)
+
     const typeLabels: Record<string, string> = {
-      supplier: 'ספקים/מלאי', inventory: 'ספקים/מלאי', repair: 'תיקונים',
+      supplier: 'חומרי גלם / ספקים', repair: 'תיקונים',
       infrastructure: 'תשתיות', delivery: 'משלוחים', other: 'אחר',
-      labor: 'לייבור', waste: 'פחת', fixed: 'עלויות קבועות', production: 'עלות ייצור',
+      labor: 'לייבור', waste: 'פחת', fixed: 'עלויות קבועות',
     }
     const merged: Record<string, number> = {}
     for (const [k, v] of Object.entries(totalExpByType)) {
