@@ -231,28 +231,69 @@ export default function ProductionReportUpload({ onBack }: Props) {
         const wb = XLSX.read(data, { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
 
-        // Date header: try H6 first (current template), fall back to I6 (older template).
-        const readDate = (addr: string): string => {
-          const cell = ws[addr]
-          if (!cell) return ''
-          if (typeof cell.v === 'number') {
+        // ─── Detect column layout from row 6 headers ───
+        // The source template has shifted columns more than once — instead of
+        // hardcoding positions we scan row 6 for known Hebrew header names
+        // and for a date-typed cell (which doubles as the report date header).
+        const HEADER_ROW = 6
+        const SCAN_COLS = ['A','B','C','D','E','F','G','H','I','J','K','L','M']
+        const headerText: Record<string, string> = {}
+        let dateCol = ''
+        let dateStr = ''
+        for (const col of SCAN_COLS) {
+          const cell = ws[`${col}${HEADER_ROW}`]
+          if (!cell) continue
+          // Excel stores dates as numeric serials; treat any number-typed
+          // header cell as the date column.
+          if (typeof cell.v === 'number' && cell.v > 40000 && cell.v < 80000) {
             const d = XLSX.SSF.parse_date_code(cell.v)
-            return `${String(d.d).padStart(2, '0')}/${String(d.m).padStart(2, '0')}/${d.y}`
+            dateStr = `${String(d.d).padStart(2, '0')}/${String(d.m).padStart(2, '0')}/${d.y}`
+            dateCol = col
+            continue
           }
-          return String(cell.v || '').trim()
+          const text = String(cell.v || '').trim()
+          headerText[col] = text
+          // A textual header that itself looks like a date.
+          if (!dateStr && /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(text)) {
+            dateStr = text
+            dateCol = col
+          }
         }
-        const dateStr = readDate('H6') || readDate('I6')
+
+        const findCol = (match: (text: string) => boolean): string | null => {
+          for (const col of SCAN_COLS) {
+            if (col === dateCol) continue
+            const t = headerText[col]
+            if (t && match(t)) return col
+          }
+          return null
+        }
+        const productCol = findCol(t => t.includes('שם') && t.includes('מוצר'))
+        const deptCol    = findCol(t => t.includes('מחלקה'))
+        const qtyCol     = findCol(t => t.includes('כמות') && (t.includes('ייצור') || t.includes('יוצרה')))
+        const priceCol   = findCol(t => t === 'מחיר' || t.startsWith('מחיר'))
+
+        if (!productCol || !deptCol || !qtyCol || !priceCol) {
+          const missing = [
+            !productCol && 'שם מוצר',
+            !deptCol && 'מחלקה',
+            !qtyCol && 'כמות ייצור',
+            !priceCol && 'מחיר',
+          ].filter(Boolean).join(', ')
+          setError(`לא נמצאו עמודות חובה בכותרת השורה 6: ${missing}`)
+          return
+        }
 
         const parsed: ReportRow[] = []
         let rowIdx = 7
         while (true) {
-          const productCell = ws[`C${rowIdx}`]
+          const productCell = ws[`${productCol}${rowIdx}`]
           if (!productCell || !productCell.v || String(productCell.v).trim() === '') break
 
           const product_name = String(productCell.v).trim()
-          const deptCell = ws[`E${rowIdx}`]
-          const qtyCell = ws[`G${rowIdx}`]
-          const priceCell = ws[`H${rowIdx}`]
+          const deptCell = ws[`${deptCol}${rowIdx}`]
+          const qtyCell = ws[`${qtyCol}${rowIdx}`]
+          const priceCell = ws[`${priceCol}${rowIdx}`]
 
           const department = deptCell ? String(deptCell.v || '').trim() : 'אחר'
           const quantity = qtyCell ? Number(qtyCell.v) || 0 : 0
