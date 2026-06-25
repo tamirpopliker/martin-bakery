@@ -7,7 +7,7 @@ export interface AppUser {
   id: string
   email: string
   name: string
-  role: 'admin' | 'factory' | 'branch' | 'employee'
+  role: 'admin' | 'factory' | 'branch' | 'employee' | 'quality_only'
   branch_id: number | null
   excluded_departments: string[]
   can_settings: boolean
@@ -105,6 +105,11 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
     // Employee can only access employee pages
     if (user.role === 'employee') {
       return ['employee-home', 'employee-schedule', 'employee-constraints', 'employee-tasks'].includes(pageKey)
+    }
+
+    // Quality-only users see ONLY the quality hub + its forms (nothing else)
+    if (user.role === 'quality_only') {
+      return ['quality_hub', 'customer_complaints', 'factory_freezer_log'].includes(pageKey)
     }
 
     // ─── Quality Hub + Customer Complaints: open to all roles ───
