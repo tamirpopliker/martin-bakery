@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, getOverheadPct } from '../lib/supabase'
 import { calculateBranchPL, calculateFactoryPL, getHQAllocationContext, type PLResult, type FactoryPLResult } from '../lib/calculatePL'
-import { TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck, Building2, Layers } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck, Building2, Layers, Lightbulb, ChevronDown, ChevronUp } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon, TrophyIcon } from '@/components/icons'
 import { BarChart, Bar, AreaChart, Area, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts'
@@ -153,6 +153,7 @@ export default function CEODashboard({ onBack }: Props) {
   const [branchInternalExpenses, setBranchInternalExpenses] = useState(0)
 
   const [insightsSummary, setInsightsSummary] = useState<InsightsSummary | null>(null)
+  const [insightsExpanded, setInsightsExpanded] = useState(false)
   const [priceAlerts, setPriceAlerts] = useState<{ product_name: string; current_price: number; last_price: number; pct: number }[]>([])
   const [hqCost, setHqCost] = useState(0)
   const [hasEmployerReport, setHasEmployerReport] = useState(false)
@@ -882,12 +883,50 @@ export default function CEODashboard({ onBack }: Props) {
 
       <div className="page-container" style={{ padding: '24px 32px', maxWidth: '1100px', margin: '0 auto' }}>
 
-        {insightsSummary && <InsightsPanel summary={insightsSummary} />}
+        {/* Insights — collapsed by default; click the button to expand. */}
+        {(() => {
+          const severe = insightsSummary?.counts.severe ?? 0
+          const warn = insightsSummary?.counts.warn ?? 0
+          const total = severe + warn
+          const badgeBg = severe > 0 ? '#fee2e2' : warn > 0 ? '#fef3c7' : '#f1f5f9'
+          const badgeColor = severe > 0 ? '#991b1b' : warn > 0 ? '#92400e' : '#94a3b8'
+          return (
+            <button
+              onClick={() => setInsightsExpanded(v => !v)}
+              style={{
+                width: '100%', background: 'white', border: '1px solid #f1f5f9',
+                borderRadius: 12, padding: '12px 16px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                fontFamily: 'inherit', fontSize: 14, fontWeight: 700, color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Lightbulb size={18} color="#7C3AED" />
+                <span>תובנות שבועיות</span>
+                {total > 0 && (
+                  <span style={{
+                    background: badgeBg, color: badgeColor, fontSize: 12, fontWeight: 700,
+                    padding: '2px 9px', borderRadius: 999,
+                  }}>
+                    {total} {severe > 0 ? 'התראות חמורות' : 'התראות'}
+                  </span>
+                )}
+              </span>
+              {insightsExpanded ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
+            </button>
+          )
+        })()}
 
-        {/* Weekly AI advisor — runs every Monday at 10:00 IST on the prior Sun-Sat */}
-        <div style={{ marginTop: 10 }}>
-          <WeeklyInsightsSelector branches={BRANCHES} />
-        </div>
+        {insightsExpanded && (
+          <div style={{ marginTop: 10 }}>
+            {insightsSummary && <InsightsPanel summary={insightsSummary} />}
+            {/* Weekly AI advisor — runs every Monday at 10:00 IST on the prior Sun-Sat */}
+            <div style={{ marginTop: 10 }}>
+              <WeeklyInsightsSelector branches={BRANCHES} />
+            </div>
+          </div>
+        )}
 
         {/* Data freshness — surfaces branches that stopped entering data */}
         {dataFreshness.some(b => b.worstDaysBehind >= 2) && (
