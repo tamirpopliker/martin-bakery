@@ -134,6 +134,9 @@ export default function Home() {
   const showFactory = filteredPanelFactory.length > 0
   const showBranches = appUser?.role === 'admin' || (appUser?.role === 'branch' && filteredBranches.length > 0)
   const showManage = managePanelItems.length > 0
+  // KPI strip + drill-down sheets are admin-only. Factory/scheduler/quality_only
+  // do not get consolidated branch+factory financials on the home page.
+  const isAdmin = appUser?.role === 'admin'
 
   // Modified internal sales badge (internal_sales only)
   const [modifiedCount, setModifiedCount] = useState(0)
@@ -243,6 +246,8 @@ export default function Home() {
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
   useEffect(() => {
+    // KPIs are admin-only — don't fetch consolidated financials for other roles.
+    if (!isAdmin) return
     // Wait for the async branch list from BranchContext — otherwise .in('branch_id', []) returns 0 rows.
     if (branchList.length === 0) return
     async function loadKpi() {
@@ -387,7 +392,7 @@ export default function Home() {
      }
     }
     loadKpi()
-  }, [from, to, branchList.length])
+  }, [from, to, branchList.length, isAdmin])
 
   // Employee role gets their own dedicated home page (after all hooks)
   if (appUser?.role === 'employee') return <EmployeeHome onNavigate={(p: string) => setPage(p)} />
@@ -574,7 +579,8 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* ─── KPI Strip ──────────────────────────────────────────────────── */}
+        {/* ─── KPI Strip (admin only — others get nav cards without consolidated KPIs) ──────────────────────────────────────────────── */}
+        {isAdmin && (<>
         <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.1 }}>
           <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: 12, border: '1px solid #f1f5f9', marginBottom: 20, padding: 0 }}>
             <div className="kpi-grid flex items-center gap-0 flex-wrap" style={{ padding: '14px 24px' }}>
@@ -710,6 +716,7 @@ export default function Home() {
             </div>
           </div>
         </motion.div>
+        </>)}
 
         {/* ═══ 4-Card Grid Navigation ═══════════════════════════════════════ */}
         <motion.div
