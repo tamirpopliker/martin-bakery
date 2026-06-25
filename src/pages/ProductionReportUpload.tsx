@@ -229,17 +229,18 @@ export default function ProductionReportUpload({ onBack }: Props) {
         const wb = XLSX.read(data, { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
 
-        const dateCell = ws['I6']
-        let dateStr = ''
-        if (dateCell) {
-          if (typeof dateCell.v === 'number') {
-            const d = XLSX.SSF.parse_date_code(dateCell.v)
-            dateStr = `${String(d.d).padStart(2, '0')}/${String(d.m).padStart(2, '0')}/${d.y}`
-          } else {
-            dateStr = String(dateCell.v || '')
+        // Date header: try I6 first (older template), then H6 (newer template).
+        const readDate = (addr: string): string => {
+          const cell = ws[addr]
+          if (!cell) return ''
+          if (typeof cell.v === 'number') {
+            const d = XLSX.SSF.parse_date_code(cell.v)
+            return `${String(d.d).padStart(2, '0')}/${String(d.m).padStart(2, '0')}/${d.y}`
           }
+          return String(cell.v || '').trim()
         }
-        if (!dateStr) { setError('לא נמצא תאריך בתא I6'); return }
+        const dateStr = readDate('I6') || readDate('H6')
+        if (!dateStr) { setError('לא נמצא תאריך בתא I6 או H6'); return }
         setReportDate(dateStr)
 
         const parsed: ReportRow[] = []
