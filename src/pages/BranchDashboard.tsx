@@ -121,6 +121,10 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
 
   // Trend
   const [trendData, setTrendData] = useState<any[]>([])
+  // Daily revenue for the selected month (with comparison to same day-of-month
+  // average over the previous 3 months). Only populated when a single month is
+  // selected; quarter/year periods leave it empty and hide the chart.
+  const [dailyChart, setDailyChart] = useState<{ day: string; current: number | null; avg: number | null }[]>([])
 
   // Revenue split by source (קופות / אתר / הקפה) for this branch
   const [posRevenue, setPosRevenue] = useState(0)
@@ -180,6 +184,59 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
     return data
   }
 
+  async function fetchDailyChart() {
+    const mk = monthKey || from.slice(0, 7)
+    const [y, m] = mk.split('-').map(Number)
+    const daysInMonth = new Date(y, m, 0).getDate()
+    const today = new Date()
+    const isCurrentMonth = today.getFullYear() === y && today.getMonth() + 1 === m
+    const lastFilledDay = isCurrentMonth ? today.getDate() : daysInMonth
+
+    // Pull 4 months of revenue (current + 3 prior) in one round-trip per table.
+    const rangeStart = `${y}-${String(m).padStart(2, '0')}-01`
+    const startObj = new Date(y, m - 4, 1)
+    const startDate = `${startObj.getFullYear()}-${String(startObj.getMonth() + 1).padStart(2, '0')}-01`
+    const endObj = new Date(y, m, 1)
+    const endDate = `${endObj.getFullYear()}-${String(endObj.getMonth() + 1).padStart(2, '0')}-01`
+
+    const [{ data: closings }, { data: revenues }] = await Promise.all([
+      supabase.from('register_closings').select('date, cash_sales, credit_sales')
+        .eq('branch_id', branchId).gte('date', startDate).lt('date', endDate),
+      supabase.from('branch_revenue').select('date, amount')
+        .eq('branch_id', branchId).gte('date', startDate).lt('date', endDate),
+    ])
+
+    const totalByDate: Record<string, number> = {}
+    for (const c of (closings || [])) {
+      totalByDate[c.date] = (totalByDate[c.date] || 0) + Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
+    }
+    for (const r of (revenues || [])) {
+      totalByDate[r.date] = (totalByDate[r.date] || 0) + Number(r.amount || 0)
+    }
+
+    const chart: { day: string; current: number | null; avg: number | null }[] = []
+    for (let d = 1; d <= daysInMonth; d++) {
+      const curISO = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const current = curISO < rangeStart ? null : d > lastFilledDay ? null : (totalByDate[curISO] || 0)
+
+      let sum = 0, count = 0
+      for (let back = 1; back <= 3; back++) {
+        const prev = new Date(y, m - 1 - back, d)
+        const prevLastDay = new Date(prev.getFullYear(), prev.getMonth() + 1, 0).getDate()
+        if (d > prevLastDay) continue
+        const prevISO = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+        if (totalByDate[prevISO] !== undefined) {
+          sum += totalByDate[prevISO]
+          count++
+        }
+      }
+      const avg = count > 0 ? Math.round(sum / count) : null
+
+      chart.push({ day: String(d), current: current === null ? null : Math.round(current), avg })
+    }
+    setDailyChart(chart)
+  }
+
   async function fetchData() {
     setLoading(true)
     try {
@@ -195,6 +252,8 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
         supabase.from('branch_kpi_targets').select('labor_pct, waste_pct').eq('branch_id', branchId).maybeSingle(),
         fetchRevenueBySource([branchId], from, to),
       ])
+      // Daily chart runs alongside but uses its own raw queries.
+      fetchDailyChart().catch(err => console.error('BranchDashboard daily chart:', err))
 
       setPosRevenue(sources.pos[branchId] ?? 0)
       setWebsiteRevenue(sources.website[branchId] ?? 0)
@@ -446,6 +505,33 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                 lowerIsBetter={false}
               />
             </motion.div>
+
+            {/* ROW 3.5 — Daily revenue for the selected month vs same-day average of last 3 months */}
+            {dailyChart.length > 0 && (
+              <motion.div variants={fadeIn(0.25)} initial="hidden" animate="visible">
+                <Card className="bg-white border-[0.5px] border-slate-200 rounded-xl p-4">
+                  <CardHeader className="p-0 mb-3">
+                    <CardTitle className="text-[15px] font-bold text-slate-700">
+                      הכנסות יומיות — {new Date((monthKey || from.slice(0, 7)) + '-01T12:00:00').toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
+                    </CardTitle>
+                    <p className="text-[11px] text-slate-400 mt-1">קו רציף: החודש הנוכחי · קו מקווקו: ממוצע באותו תאריך ב-3 חודשים האחרונים</p>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <ResponsiveContainer width="100%" height={250}>
+                      <LineChart data={dailyChart} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                        <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v) => '₪' + (v / 1000).toFixed(0) + 'K'} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        <Line type="monotone" dataKey="current" name="החודש" stroke="#378ADD" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls={false} />
+                        <Line type="monotone" dataKey="avg" name="ממוצע 3 חודשים" stroke="#94a3b8" strokeWidth={2} strokeDasharray="6 4" dot={false} connectNulls />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
             {/* ROW 4 — 6-Month Trend Chart */}
             <motion.div variants={fadeIn(0.3)} initial="hidden" animate="visible">
