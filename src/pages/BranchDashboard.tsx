@@ -192,10 +192,14 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
     const isCurrentMonth = today.getFullYear() === y && today.getMonth() + 1 === m
     const lastFilledDay = isCurrentMonth ? today.getDate() : daysInMonth
 
-    // Pull 4 months of revenue (current + 3 prior) in one round-trip per table.
+    // Comparison window: 8 weeks immediately before the selected month — that's
+    // the source for the per-weekday average. Bakery revenue is weekday-shaped
+    // (Friday vs Shabbat vs midweek), so averaging by date-of-month would
+    // compare e.g. a Friday to a Tuesday and produce noise.
     const rangeStart = `${y}-${String(m).padStart(2, '0')}-01`
-    const startObj = new Date(y, m - 4, 1)
-    const startDate = `${startObj.getFullYear()}-${String(startObj.getMonth() + 1).padStart(2, '0')}-01`
+    const compareStart = new Date(y, m - 1, 1)
+    compareStart.setDate(compareStart.getDate() - 56)
+    const startDate = `${compareStart.getFullYear()}-${String(compareStart.getMonth() + 1).padStart(2, '0')}-${String(compareStart.getDate()).padStart(2, '0')}`
     const endObj = new Date(y, m, 1)
     const endDate = `${endObj.getFullYear()}-${String(endObj.getMonth() + 1).padStart(2, '0')}-01`
 
@@ -214,24 +218,26 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
       totalByDate[r.date] = (totalByDate[r.date] || 0) + Number(r.amount || 0)
     }
 
+    // Average per weekday from the 8-week comparison window only.
+    const wdSum: Record<number, number> = {}
+    const wdCount: Record<number, number> = {}
+    for (const [dateStr, amount] of Object.entries(totalByDate)) {
+      if (dateStr >= rangeStart) continue
+      const wd = new Date(dateStr + 'T12:00:00').getDay()
+      wdSum[wd] = (wdSum[wd] || 0) + amount
+      wdCount[wd] = (wdCount[wd] || 0) + 1
+    }
+    const wdAvg: Record<number, number> = {}
+    for (let wd = 0; wd < 7; wd++) {
+      if (wdCount[wd] && wdCount[wd] > 0) wdAvg[wd] = wdSum[wd] / wdCount[wd]
+    }
+
     const chart: { day: string; current: number | null; avg: number | null }[] = []
     for (let d = 1; d <= daysInMonth; d++) {
       const curISO = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-      const current = curISO < rangeStart ? null : d > lastFilledDay ? null : (totalByDate[curISO] || 0)
-
-      let sum = 0, count = 0
-      for (let back = 1; back <= 3; back++) {
-        const prev = new Date(y, m - 1 - back, d)
-        const prevLastDay = new Date(prev.getFullYear(), prev.getMonth() + 1, 0).getDate()
-        if (d > prevLastDay) continue
-        const prevISO = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-        if (totalByDate[prevISO] !== undefined) {
-          sum += totalByDate[prevISO]
-          count++
-        }
-      }
-      const avg = count > 0 ? Math.round(sum / count) : null
-
+      const current = d > lastFilledDay ? null : (totalByDate[curISO] || 0)
+      const wd = new Date(curISO + 'T12:00:00').getDay()
+      const avg = wdAvg[wd] !== undefined ? Math.round(wdAvg[wd]) : null
       chart.push({ day: String(d), current: current === null ? null : Math.round(current), avg })
     }
     setDailyChart(chart)
@@ -514,7 +520,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                     <CardTitle className="text-[15px] font-bold text-slate-700">
                       הכנסות יומיות — {new Date((monthKey || from.slice(0, 7)) + '-01T12:00:00').toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
                     </CardTitle>
-                    <p className="text-[11px] text-slate-400 mt-1">קו רציף: החודש הנוכחי · קו מקווקו: ממוצע באותו תאריך ב-3 חודשים האחרונים</p>
+                    <p className="text-[11px] text-slate-400 mt-1">קו רציף: החודש הנוכחי · קו מקווקו: ממוצע אותו יום בשבוע ב-8 השבועות שלפני החודש</p>
                   </CardHeader>
                   <CardContent className="p-0">
                     <ResponsiveContainer width="100%" height={250}>
@@ -525,7 +531,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
                         <Tooltip content={<ChartTooltip />} />
                         <Legend wrapperStyle={{ fontSize: 12 }} />
                         <Line type="monotone" dataKey="current" name="החודש" stroke="#378ADD" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} connectNulls={false} />
-                        <Line type="monotone" dataKey="avg" name="ממוצע 3 חודשים" stroke="#94a3b8" strokeWidth={2} strokeDasharray="6 4" dot={false} connectNulls />
+                        <Line type="monotone" dataKey="avg" name="ממוצע יום בשבוע" stroke="#94a3b8" strokeWidth={2} strokeDasharray="6 4" dot={false} connectNulls />
                       </LineChart>
                     </ResponsiveContainer>
                   </CardContent>
