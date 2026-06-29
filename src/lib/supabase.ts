@@ -413,6 +413,8 @@ export interface GlobalEmployee {
   global_daily_rate: number   // monthly salary (field name is legacy)
   bonus: number
   active: boolean
+  is_manager: boolean         // factory department managers — excluded from
+                              // estimate-mode labor so they don't double with managerSalary
 }
 
 /** Fetch working days count for a given month from fixed_costs (entity_type='working_days') */
@@ -523,10 +525,10 @@ export function countWorkingDaysInRange(from: string, to: string): number {
 export async function fetchGlobalEmployees(): Promise<GlobalEmployee[]> {
   const { data } = await supabase
     .from('employees')
-    .select('id, name, department, global_daily_rate, bonus, active')
+    .select('id, name, department, global_daily_rate, bonus, active, is_manager')
     .eq('wage_type', 'global')
     .eq('active', true)
-  return (data || []) as GlobalEmployee[]
+  return (data || []).map((r: any) => ({ ...r, is_manager: !!r.is_manager })) as GlobalEmployee[]
 }
 
 /**

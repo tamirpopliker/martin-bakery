@@ -369,12 +369,21 @@ export async function calculateFactoryPL(
   } else {
     const globalEmps = await fetchGlobalEmployees()
     const globalNames = new Set(globalEmps.map(e => e.name))
+    // Managers are billed via managerSalary (fetched separately below from prior
+    // employer_costs) — exclude them from globalLabor + hourlyLabor here so we
+    // don't double-count their cost in estimate mode. Pull the full manager
+    // list from employees (not just globals) so hourly-rate managers — if any —
+    // are caught too.
+    const globalEmpsNonMgr = globalEmps.filter(e => !e.is_manager)
+    const { data: allMgrs } = await supabase
+      .from('employees').select('name').eq('is_manager', true).eq('active', true)
+    const mgrNames = new Set<string>((allMgrs || []).map((r: any) => r.name))
     const workingDaysInMonth = await getWorkingDays(mk)
     const globalLabor =
-      calcGlobalLaborForDept(globalEmps, 'creams', workingDaysInMonth)
-      + calcGlobalLaborForDept(globalEmps, 'dough', workingDaysInMonth)
+      calcGlobalLaborForDept(globalEmpsNonMgr, 'creams', workingDaysInMonth)
+      + calcGlobalLaborForDept(globalEmpsNonMgr, 'dough', workingDaysInMonth)
     const hourlyLabor = (fLab.data || [])
-      .filter((r: any) => !globalNames.has(r.employee_name))
+      .filter((r: any) => !globalNames.has(r.employee_name) && !mgrNames.has(r.employee_name))
       .reduce((s: number, r: any) => s + Number(r.employer_cost || 0), 0)
     labor = globalLabor + hourlyLabor
     // Estimate path: fall back to the most-recent month's manager amount if any.
