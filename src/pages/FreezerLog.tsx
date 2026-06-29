@@ -289,7 +289,8 @@ function DailyTab({ units, userId, userName }: { units: Unit[]; userId: string |
                   </div>
                 </div>
 
-                {/* Temperature input — °C as inline suffix via absolute positioning */}
+                {/* Temperature input. Mobile numeric keyboards (esp. iOS) often
+                    omit the minus key, so the ± button below toggles sign in code. */}
                 <div style={{ position: 'relative' }}>
                   <input
                     type="number"
@@ -301,13 +302,30 @@ function DailyTab({ units, userId, userName }: { units: Unit[]; userId: string |
                     className="freezer-temp-input"
                     style={{
                       width: '100%', boxSizing: 'border-box',
-                      padding: '12px 48px 12px 16px', borderRadius: 10,
+                      padding: '12px 92px 12px 16px', borderRadius: 10,
                       border: '1px solid #e2e8f0', fontSize: 22, fontWeight: 700,
                       textAlign: 'center', fontFamily: 'inherit', color: '#0f172a',
                       background: bgAccent,
                       MozAppearance: 'textfield' as any,
                     }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const v = draft.temp.trim()
+                      const next = !v ? '-' : v === '-' ? '' : v.startsWith('-') ? v.slice(1) : '-' + v
+                      updateDraft(unit.id, { temp: next })
+                    }}
+                    aria-label="הפוך סימן +/-"
+                    style={{
+                      position: 'absolute', left: 44, top: '50%', transform: 'translateY(-50%)',
+                      width: 44, height: 36, borderRadius: 8,
+                      border: '1px solid #e2e8f0', background: 'white',
+                      cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: 18,
+                      color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      lineHeight: 1, padding: 0,
+                    }}
+                  >{draft.temp.trim().startsWith('-') ? '+' : '−'}</button>
                   <span style={{
                     position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
                     fontSize: 14, fontWeight: 700, color: '#94a3b8', pointerEvents: 'none',
@@ -573,11 +591,27 @@ function EditReadingModal({
               onChange={e => setTemp(e.target.value)}
               autoFocus
               style={{
-                flex: 1, padding: '10px 14px', borderRadius: 10,
+                flex: 1, minWidth: 0, padding: '10px 14px', borderRadius: 10,
                 border: '1px solid #e2e8f0', fontSize: 20, fontWeight: 700,
                 textAlign: 'center', fontFamily: 'inherit',
               }}
             />
+            <button
+              type="button"
+              onClick={() => {
+                const v = temp.trim()
+                const next = !v ? '-' : v === '-' ? '' : v.startsWith('-') ? v.slice(1) : '-' + v
+                setTemp(next)
+              }}
+              aria-label="הפוך סימן +/-"
+              style={{
+                width: 40, height: 36, borderRadius: 8,
+                border: '1px solid #e2e8f0', background: 'white',
+                cursor: 'pointer', fontFamily: 'inherit', fontWeight: 800, fontSize: 18,
+                color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                lineHeight: 1, padding: 0, flexShrink: 0,
+              }}
+            >{temp.trim().startsWith('-') ? '+' : '−'}</button>
             <span style={{ fontSize: 16, fontWeight: 700, color: '#475569' }}>°C</span>
           </div>
           <input
