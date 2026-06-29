@@ -474,7 +474,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ background: '#f8fafc' }}>
-                        {['תאריך', 'קופה', 'מזומן', 'אשראי', 'עסקאות'].map(h => (
+                        {['תאריך', 'קופה', 'מזומן', 'אשראי', 'סה"כ', 'עסקאות'].map(h => (
                           <th key={h} style={{ padding: '9px 14px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
@@ -491,6 +491,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                           <td style={{ padding: '9px 14px', fontWeight: 700, color: '#0f172a' }}>{c.register_number}</td>
                           <td style={{ padding: '9px 14px', color: '#10b981', fontWeight: 700 }}>₪{Number(c.cash_sales).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                           <td style={{ padding: '9px 14px', color: '#3b82f6', fontWeight: 700 }}>₪{Number(c.credit_sales).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '9px 14px', color: '#0f172a', fontWeight: 800 }}>₪{(Number(c.cash_sales) + Number(c.credit_sales)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                           <td style={{ padding: '9px 14px', color: '#64748b' }}>{c.transaction_count || '—'}</td>
                         </tr>
                       ))}
