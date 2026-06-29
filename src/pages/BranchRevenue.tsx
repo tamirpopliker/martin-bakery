@@ -482,7 +482,12 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                     <tbody>
                       {[...closingsInPeriod].sort((a, b) => b.date.localeCompare(a.date)).map((c, i) => (
                         <tr key={`${c.date}-${c.register_number}-${i}`} style={{ borderBottom: '1px solid #f8fafc' }}>
-                          <td style={{ padding: '9px 14px', fontSize: 13, color: '#64748b' }}>{new Date(c.date + 'T12:00:00').toLocaleDateString('he-IL')}</td>
+                          <td style={{ padding: '9px 14px', fontSize: 13, color: '#64748b', whiteSpace: 'nowrap' }}>
+                            {new Date(c.date + 'T12:00:00').toLocaleDateString('he-IL')}
+                            <span style={{ marginInlineStart: 8, color: '#94a3b8', fontSize: 11 }}>
+                              {new Date(c.date + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'short' })}
+                            </span>
+                          </td>
                           <td style={{ padding: '9px 14px', fontWeight: 700, color: '#0f172a' }}>{c.register_number}</td>
                           <td style={{ padding: '9px 14px', color: '#10b981', fontWeight: 700 }}>₪{Number(c.cash_sales).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                           <td style={{ padding: '9px 14px', color: '#3b82f6', fontWeight: 700 }}>₪{Number(c.credit_sales).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
