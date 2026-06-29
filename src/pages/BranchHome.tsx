@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound, ImagePlus, IdCard, FileSignature, ShieldCheck } from 'lucide-react'
+import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound, ImagePlus, IdCard, FileSignature, ShieldCheck, Lightbulb, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PageHeader from '../components/PageHeader'
 import { useAppUser, isRestrictedBranchUser } from '../lib/UserContext'
@@ -128,6 +128,7 @@ export default function BranchHome({ branch, onBack }: Props) {
   const [hrInitialKey, setHrInitialKey] = useState<{ kind: 'branch'; id: number } | null>(null)
   const [hrOriginPage, setHrOriginPage] = useState<BranchPage | null>(null)
   const [hovCard, setHovCard] = useState<BranchPage | null>(null)
+  const [insightsExpanded, setInsightsExpanded] = useState(false)
   const [pendingOrders, setPendingOrders] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [unreadSpecialOrders, setUnreadSpecialOrders] = useState(0)
@@ -356,14 +357,35 @@ export default function BranchHome({ branch, onBack }: Props) {
         )}
 
         {/* Weekly AI advisor — branch managers only (admin/factory see it on CEODashboard).
+            Collapsed by default; the card only loads its data when expanded.
             Hidden from restricted @martin.local users (permanent staff who shouldn't see P&L commentary). */}
         {appUser && !isRestrictedBranchUser(appUser) && (
           <div style={{ marginBottom: 16 }}>
-            <WeeklyInsightsCard
-              entityType="branch"
-              entityId={branch.id}
-              title={`תובנות שבועיות — ${branch.name}`}
-            />
+            <button
+              onClick={() => setInsightsExpanded(v => !v)}
+              style={{
+                width: '100%', background: 'white', border: '1px solid #f1f5f9',
+                borderRadius: 12, padding: '12px 16px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                fontFamily: 'inherit', fontSize: 14, fontWeight: 700, color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Lightbulb size={18} color="#7C3AED" />
+                <span>תובנות שבועיות — {branch.name}</span>
+              </span>
+              {insightsExpanded ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
+            </button>
+            {insightsExpanded && (
+              <div style={{ marginTop: 10 }}>
+                <WeeklyInsightsCard
+                  entityType="branch"
+                  entityId={branch.id}
+                  title={`תובנות שבועיות — ${branch.name}`}
+                />
+              </div>
+            )}
           </div>
         )}
 

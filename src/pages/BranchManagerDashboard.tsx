@@ -6,7 +6,7 @@ import { calculateBranchPL, getHQAllocationContext, type PLResult } from '../lib
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
 import PeriodPicker from '../components/PeriodPicker'
-import { TrendingUp, TrendingDown, Presentation, EyeOff } from 'lucide-react'
+import { TrendingUp, TrendingDown, Presentation, EyeOff, Lightbulb, ChevronDown, ChevronUp } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts'
 import InsightsPanel from '../components/InsightsPanel'
@@ -82,6 +82,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
   const [sourceChartData, setSourceChartData] = useState<{ month: string; קופות: number; אתר: number; הקפה: number }[]>([])
   const [kpiTargets, setKpiTargets] = useState<Record<number, { labor_pct: number; waste_pct: number; revenue_target: number; basket_target: number; transaction_target: number }>>({})
   const [insightsSummary, setInsightsSummary] = useState<InsightsSummary | null>(null)
+  const [insightsExpanded, setInsightsExpanded] = useState(false)
 
   const brOH = (br: BranchData) => br.totalRevenue * overheadPct / 100
   const brGross = (br: BranchData) => br.grossProfit
@@ -334,7 +335,41 @@ export default function BranchManagerDashboard({ onBack }: Props) {
       {!loading && (
         <div style={{ padding: '20px', maxWidth: 1200, margin: '0 auto' }}>
 
-          {insightsSummary && <InsightsPanel summary={insightsSummary} />}
+          {/* Insights — collapsed by default; click the button to expand. */}
+          {(() => {
+            const severe = insightsSummary?.counts.severe ?? 0
+            const warn = insightsSummary?.counts.warn ?? 0
+            const total = severe + warn
+            const badgeBg = severe > 0 ? '#fee2e2' : warn > 0 ? '#fef3c7' : '#f1f5f9'
+            const badgeColor = severe > 0 ? '#991b1b' : warn > 0 ? '#92400e' : '#94a3b8'
+            return (
+              <button
+                onClick={() => setInsightsExpanded(v => !v)}
+                style={{
+                  width: '100%', background: 'white', border: '1px solid #f1f5f9',
+                  borderRadius: 12, padding: '12px 16px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  fontFamily: 'inherit', fontSize: 14, fontWeight: 700, color: '#0f172a',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginBottom: 12,
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Lightbulb size={18} color="#7C3AED" />
+                  <span>תובנות שבועיות</span>
+                  {total > 0 && (
+                    <span style={{
+                      background: badgeBg, color: badgeColor, fontSize: 12, fontWeight: 700,
+                      padding: '2px 9px', borderRadius: 999,
+                    }}>
+                      {total} {severe > 0 ? 'התראות חמורות' : 'התראות'}
+                    </span>
+                  )}
+                </span>
+                {insightsExpanded ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
+              </button>
+            )
+          })()}
+          {insightsExpanded && insightsSummary && <InsightsPanel summary={insightsSummary} />}
 
           {/* Hero KPI Card */}
           {branches.length > 0 && (() => {
