@@ -8,7 +8,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle2, Save, History } from 'lucide-react'
+import { CheckCircle2, Save, Download, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import PageHeader from '../components/PageHeader'
@@ -146,8 +147,11 @@ interface FreezerReading {
 const todayISO = () => new Date().toISOString().slice(0, 10)
 const itemKey = (sectionId: string, itemId: string) => `${sectionId}__${itemId}`
 
+type Tab = 'daily' | 'history'
+
 export default function FactoryClosing({ onBack }: Props) {
   const { appUser } = useAppUser()
+  const [tab, setTab] = useState<Tab>('daily')
   const [closingDate, setClosingDate] = useState(todayISO())
   const [units, setUnits] = useState<FreezerUnit[]>([])
   const [items, setItems] = useState<Record<string, boolean>>({})
@@ -157,7 +161,6 @@ export default function FactoryClosing({ onBack }: Props) {
   const [saving, setSaving] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [error, setError] = useState('')
-  const [history, setHistory] = useState<Array<{ closing_date: string; signed_by_name: string; checked: number; total: number }>>([])
 
   const allItemKeys = useMemo(
     () => CHECKLIST_SECTIONS.flatMap(s => s.items.map(it => itemKey(s.id, it.id))),
@@ -211,21 +214,6 @@ export default function FactoryClosing({ onBack }: Props) {
     return () => { cancelled = true }
   }, [closingDate, units])
 
-  // Load history list (last 30 closings)
-  useEffect(() => {
-    supabase.from('factory_closing_checklists')
-      .select('closing_date, signed_by_name, checklist_data')
-      .order('closing_date', { ascending: false })
-      .limit(30)
-      .then(({ data }) => {
-        const rows = (data || []).map((r: any) => {
-          const m: Record<string, boolean> = r.checklist_data?.items || {}
-          const checked = Object.values(m).filter(Boolean).length
-          return { closing_date: r.closing_date, signed_by_name: r.signed_by_name, checked, total: totalCount }
-        })
-        setHistory(rows)
-      })
-  }, [savedFlash, totalCount])
 
   function toggleItem(k: string) {
     setItems(prev => ({ ...prev, [k]: !prev[k] }))
@@ -301,9 +289,30 @@ export default function FactoryClosing({ onBack }: Props) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl', paddingBottom: 100 }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl', paddingBottom: tab === 'daily' ? 100 : 24 }}>
       <PageHeader title="סגירת מפעל יומי" subtitle="צ׳ק-ליסט סגירה + טמפרטורות מקררים ומקפיאים" onBack={onBack} />
 
+      {/* Tabs */}
+      <div style={{
+        background: 'white', borderBottom: '1px solid #f1f5f9',
+        padding: '10px 16px', display: 'flex', gap: 8, justifyContent: 'center',
+      }}>
+        {(['daily', 'history'] as Tab[]).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            background: tab === t ? '#0f172a' : 'transparent',
+            color: tab === t ? 'white' : '#475569',
+            border: '1px solid ' + (tab === t ? '#0f172a' : '#e2e8f0'),
+            borderRadius: 999, padding: '7px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}>
+            {t === 'daily' ? 'מילוי יומי' : 'היסטוריה'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'history' ? (
+        <HistoryTab totalCount={totalCount} onPickDate={(d) => { setClosingDate(d); setTab('daily') }} />
+      ) : (
       <div style={{ padding: '16px', maxWidth: 900, margin: '0 auto' }}>
         {/* Top bar: date + counter */}
         <div style={{
@@ -443,73 +452,312 @@ export default function FactoryClosing({ onBack }: Props) {
               />
             </div>
 
-            {/* History */}
-            {history.length > 0 && (
-              <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 12, padding: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <History size={16} color="#64748b" />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>סגירות אחרונות</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {history.map(h => (
-                    <button
-                      key={h.closing_date}
-                      onClick={() => setClosingDate(h.closing_date)}
-                      style={{
-                        background: h.closing_date === closingDate ? '#eef2ff' : 'transparent',
-                        border: '1px solid ' + (h.closing_date === closingDate ? '#c7d2fe' : 'transparent'),
-                        padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
-                      }}
-                    >
-                      <span style={{ fontSize: 13, color: '#475569' }}>
-                        {new Date(h.closing_date + 'T12:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}
-                      </span>
-                      <span style={{ fontSize: 11, color: '#94a3b8' }}>{h.signed_by_name}</span>
-                      <span style={{
-                        fontSize: 11, fontWeight: 700,
-                        color: h.checked === h.total ? '#166534' : '#92400e',
-                      }}>
-                        {h.checked}/{h.total}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
+      )}
 
-      {/* Sticky save */}
-      <div style={{
-        position: 'fixed', bottom: 0, right: 0, left: 0,
-        background: 'white', borderTop: '1px solid #e2e8f0',
-        padding: '12px 16px', boxShadow: '0 -4px 12px rgba(0,0,0,0.05)', zIndex: 50,
-        display: 'flex', justifyContent: 'center',
-      }}>
-        <div style={{ maxWidth: 900, width: '100%', display: 'flex', gap: 10, alignItems: 'center' }}>
-          {savedFlash && (
-            <span style={{
-              background: '#dcfce7', color: '#166534', fontSize: 13, fontWeight: 600,
-              padding: '8px 14px', borderRadius: 999, display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-              <CheckCircle2 size={14} /> נשמר
-            </span>
-          )}
-          <button
-            onClick={save}
-            disabled={saving || loading}
-            style={{
-              flex: 1, background: '#0f766e', color: 'white', border: 'none', borderRadius: 12,
-              padding: '14px 20px', fontSize: 15, fontWeight: 700, cursor: saving ? 'wait' : 'pointer',
-              opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}
-          >
-            <Save size={16} /> {saving ? 'שומר...' : 'שמור סגירה'}
-          </button>
+      {/* Sticky save — only on daily tab */}
+      {tab === 'daily' && (
+        <div style={{
+          position: 'fixed', bottom: 0, right: 0, left: 0,
+          background: 'white', borderTop: '1px solid #e2e8f0',
+          padding: '12px 16px', boxShadow: '0 -4px 12px rgba(0,0,0,0.05)', zIndex: 50,
+          display: 'flex', justifyContent: 'center',
+        }}>
+          <div style={{ maxWidth: 900, width: '100%', display: 'flex', gap: 10, alignItems: 'center' }}>
+            {savedFlash && (
+              <span style={{
+                background: '#dcfce7', color: '#166534', fontSize: 13, fontWeight: 600,
+                padding: '8px 14px', borderRadius: 999, display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                <CheckCircle2 size={14} /> נשמר
+              </span>
+            )}
+            <button
+              onClick={save}
+              disabled={saving || loading}
+              style={{
+                flex: 1, background: '#0f766e', color: 'white', border: 'none', borderRadius: 12,
+                padding: '14px 20px', fontSize: 15, fontWeight: 700, cursor: saving ? 'wait' : 'pointer',
+                opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              <Save size={16} /> {saving ? 'שומר...' : 'שמור סגירה'}
+            </button>
+          </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ─── HistoryTab ──────────────────────────────────────────────────────────
+
+interface HistoryRow {
+  closing_date: string
+  signed_by_name: string
+  notes: string | null
+  created_at: string
+  checklist_data: { items?: Record<string, boolean> }
+}
+
+function monthISO() { return new Date().toISOString().slice(0, 7) }
+
+function HistoryTab({ totalCount, onPickDate }: { totalCount: number; onPickDate: (date: string) => void }) {
+  const [month, setMonth] = useState(monthISO())
+  const [rows, setRows] = useState<HistoryRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    const [y, m] = month.split('-').map(Number)
+    const from = `${y}-${String(m).padStart(2, '0')}-01`
+    const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+    supabase.from('factory_closing_checklists')
+      .select('closing_date, signed_by_name, notes, created_at, checklist_data')
+      .gte('closing_date', from)
+      .lt('closing_date', nextMonth)
+      .order('closing_date', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) console.error(error)
+        setRows((data || []) as HistoryRow[])
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [month])
+
+  // Build a day-by-day picture for the selected month — including days WITHOUT
+  // a closing, so the manager sees gaps explicitly.
+  const days = useMemo(() => {
+    const [y, m] = month.split('-').map(Number)
+    const today = new Date()
+    const isCurrentMonth = today.getFullYear() === y && today.getMonth() + 1 === m
+    const daysInMonth = new Date(y, m, 0).getDate()
+    const lastDay = isCurrentMonth ? today.getDate() : daysInMonth
+    const rowsByDate = new Map(rows.map(r => [r.closing_date, r]))
+    const out: Array<{ date: string; weekday: number; row: HistoryRow | null; checked: number }> = []
+    for (let d = lastDay; d >= 1; d--) {
+      const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const row = rowsByDate.get(dateStr) || null
+      const checked = row ? Object.values(row.checklist_data?.items || {}).filter(Boolean).length : 0
+      const weekday = new Date(dateStr + 'T12:00:00').getDay()
+      out.push({ date: dateStr, weekday, row, checked })
+    }
+    return out
+  }, [rows, month])
+
+  const summary = useMemo(() => {
+    const closedDays = days.filter(d => d.row).length
+    const totalDays = days.length
+    const fullyDone = days.filter(d => d.row && d.checked === totalCount).length
+    const partial = days.filter(d => d.row && d.checked < totalCount).length
+    const missing = days.filter(d => !d.row).length
+    return { closedDays, totalDays, fullyDone, partial, missing }
+  }, [days, totalCount])
+
+  function exportExcel() {
+    if (rows.length === 0) return
+    const data = days.map(d => {
+      const wd = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'][d.weekday]
+      if (!d.row) {
+        return {
+          'תאריך': new Date(d.date + 'T12:00:00').toLocaleDateString('he-IL'),
+          'יום': wd,
+          'סטטוס': 'לא נסגרה',
+          'חתם': '',
+          'סומנו': '',
+          'הערות': '',
+        }
+      }
+      return {
+        'תאריך': new Date(d.date + 'T12:00:00').toLocaleDateString('he-IL'),
+        'יום': wd,
+        'סטטוס': d.checked === totalCount ? 'הושלם' : `חלקי (${d.checked}/${totalCount})`,
+        'חתם': d.row.signed_by_name,
+        'סומנו': `${d.checked}/${totalCount}`,
+        'הערות': d.row.notes || '',
+      }
+    })
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'סגירות מפעל')
+    XLSX.writeFile(wb, `סגירות-מפעל_${month}.xlsx`)
+  }
+
+  return (
+    <div style={{ padding: '16px', maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Month picker + summary */}
+      <div style={{
+        background: 'white', borderRadius: 12, border: '1px solid #f1f5f9',
+        padding: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+      }}>
+        <label style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>חודש:</label>
+        <input
+          type="month"
+          value={month}
+          onChange={e => setMonth(e.target.value)}
+          max={monthISO()}
+          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, fontFamily: 'inherit' }}
+        />
+        <button onClick={exportExcel} disabled={rows.length === 0} style={{
+          marginRight: 'auto', background: 'white', color: '#0f172a', border: '1px solid #e2e8f0',
+          borderRadius: 8, padding: '7px 12px', fontSize: 13, fontWeight: 600,
+          cursor: rows.length ? 'pointer' : 'not-allowed', opacity: rows.length ? 1 : 0.5,
+          display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
+        }}>
+          <Download size={14} /> ייצא לאקסל
+        </button>
+      </div>
+
+      {/* Summary chips */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Chip label="ימים בחודש" value={summary.totalDays} bg="#f1f5f9" color="#0f172a" />
+        <Chip label="הושלמו" value={summary.fullyDone} bg="#dcfce7" color="#166534" />
+        <Chip label="חלקיים" value={summary.partial} bg="#fef3c7" color="#92400e" />
+        <Chip label="לא נסגרו" value={summary.missing} bg="#fee2e2" color="#991b1b" />
+      </div>
+
+      {/* Daily list */}
+      {loading ? (
+        <div style={{ background: 'white', borderRadius: 12, padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>טוען...</div>
+      ) : (
+        <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
+          {days.map(d => {
+            const wd = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'][d.weekday]
+            const isClosed = !!d.row
+            const isFully = isClosed && d.checked === totalCount
+            const isShabbat = d.weekday === 6
+            const statusBg = isFully ? '#dcfce7' : isClosed ? '#fef3c7' : isShabbat ? '#f1f5f9' : '#fee2e2'
+            const statusColor = isFully ? '#166534' : isClosed ? '#92400e' : isShabbat ? '#64748b' : '#991b1b'
+            const statusLabel = isFully ? '✓ הושלם' : isClosed ? `חלקי ${d.checked}/${totalCount}` : isShabbat ? 'שבת' : '✗ לא נסגרה'
+            const isExpanded = expanded === d.date
+            return (
+              <div key={d.date} style={{ borderBottom: '1px solid #f8fafc' }}>
+                <div
+                  onClick={() => isClosed && setExpanded(isExpanded ? null : d.date)}
+                  style={{
+                    padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12,
+                    cursor: isClosed ? 'pointer' : 'default', flexWrap: 'wrap',
+                  }}
+                >
+                  <div style={{ minWidth: 110 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                      {new Date(d.date + 'T12:00:00').toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{wd}</div>
+                  </div>
+                  <span style={{
+                    background: statusBg, color: statusColor, fontSize: 12, fontWeight: 700,
+                    padding: '4px 12px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 6,
+                    minWidth: 110, justifyContent: 'center',
+                  }}>
+                    {!isClosed && !isShabbat && <AlertTriangle size={12} />}
+                    {statusLabel}
+                  </span>
+                  {d.row && (
+                    <span style={{ fontSize: 13, color: '#475569' }}>חתם: {d.row.signed_by_name}</span>
+                  )}
+                  {d.row?.notes && (
+                    <span style={{ fontSize: 12, color: '#64748b', flex: 1, minWidth: 100 }}>
+                      💬 {d.row.notes.length > 50 ? d.row.notes.slice(0, 50) + '...' : d.row.notes}
+                    </span>
+                  )}
+                  <div style={{ marginRight: 'auto', display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onPickDate(d.date) }}
+                      style={{
+                        background: '#0f172a', color: 'white', border: 'none', borderRadius: 6,
+                        padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >{isClosed ? 'ערוך' : 'מלא'}</button>
+                    {isClosed && (isExpanded ? <ChevronUp size={16} color="#94a3b8" /> : <ChevronDown size={16} color="#94a3b8" />)}
+                  </div>
+                </div>
+                {isExpanded && d.row && (
+                  <ExpandedDetail row={d.row} />
+                )}
+              </div>
+            )
+          })}
+          {days.length === 0 && (
+            <div style={{ padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>אין נתונים לחודש זה</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ExpandedDetail({ row }: { row: HistoryRow }) {
+  const itemsMap = row.checklist_data?.items || {}
+  // Build a quick per-section summary of which items were/weren't checked
+  const bySection = useMemo(() => {
+    return CHECKLIST_SECTIONS.map(section => {
+      const sectionItems = section.items.map(it => ({
+        label: it.label,
+        checked: !!itemsMap[`${section.id}__${it.id}`],
+      }))
+      const checked = sectionItems.filter(s => s.checked).length
+      return { id: section.id, title: section.title, items: sectionItems, checked, total: sectionItems.length }
+    })
+  }, [itemsMap])
+
+  return (
+    <div style={{ background: '#fafbfc', padding: '16px 20px', borderTop: '1px solid #f1f5f9' }}>
+      {row.notes && (
+        <div style={{
+          background: 'white', border: '1px solid #fde68a', borderRadius: 8,
+          padding: '10px 12px', marginBottom: 12, fontSize: 13, color: '#92400e',
+        }}>
+          <strong>הערה:</strong> {row.notes}
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8 }}>
+        {bySection.map(s => (
+          <div key={s.id} style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 8, padding: 10 }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              fontSize: 12, fontWeight: 700, color: '#0f172a', marginBottom: 6,
+              paddingBottom: 6, borderBottom: '1px solid #f1f5f9',
+            }}>
+              <span>{s.title}</span>
+              <span style={{
+                fontSize: 11, color: s.checked === s.total ? '#166534' : '#92400e',
+              }}>{s.checked}/{s.total}</span>
+            </div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {s.items.map((it, i) => (
+                <li key={i} style={{
+                  fontSize: 12, color: it.checked ? '#166534' : '#dc2626',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span style={{ width: 14, textAlign: 'center' }}>{it.checked ? '✓' : '✗'}</span>
+                  <span>{it.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 10 }}>
+        נשמר ב-{new Date(row.created_at).toLocaleString('he-IL')}
       </div>
     </div>
+  )
+}
+
+function Chip({ label, value, bg, color }: { label: string; value: number; bg: string; color: string }) {
+  return (
+    <span style={{
+      background: bg, color, padding: '6px 14px', borderRadius: 999,
+      fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 8,
+    }}>
+      <span>{label}</span>
+      <span style={{ fontSize: 15, fontWeight: 800 }}>{value}</span>
+    </span>
   )
 }
