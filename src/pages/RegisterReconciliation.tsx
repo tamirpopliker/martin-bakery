@@ -146,6 +146,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
       'תאריך': fmtDate(r.date),
       'יום': WEEKDAY_SHORT[new Date(r.date + 'T12:00:00').getDay()],
       'קופה': r.register_number,
+      'מס׳ Z': r.z_number ?? '',
       'סטטוס': STATUS_LABEL[r.status],
       'POS — מזומן': r.posCash,
       'אפליקציה — מזומן': r.appCash,
@@ -254,7 +255,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
             <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
               {posRows.length > 0
                 ? `${posRows.length} שורות מהקובץ · בתקופה ${from} – ${to}: ${posInPeriod.length}`
-                : 'עמודות צפויות: D=קוד קופה · H=תאריך · K=סה״כ · L=מזומן · N=אשראי. הסכומים בקובץ ברוטו, מומרים לנטו אוטומטית.'}
+                : 'עמודות צפויות: D=קוד קופה · H=תאריך · J=מס׳ Z · K=סה״כ · L=מזומן · N=אשראי. הסכומים בקובץ ברוטו, מומרים לנטו אוטומטית.'}
             </div>
           </div>
           <input
@@ -314,7 +315,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                     {[
-                      'תאריך','יום','קופה','סטטוס',
+                      'תאריך','יום','קופה','מס׳ Z','סטטוס',
                       'POS — מזומן','App — מזומן','Δ מזומן',
                       'POS — אשראי','App — אשראי','Δ אשראי',
                       'POS — סה״כ','App — סה״כ','Δ סה״כ',
@@ -337,6 +338,9 @@ export default function RegisterReconciliation({ onBack }: Props) {
                         <td style={{ padding: '8px 10px', color: '#475569', whiteSpace: 'nowrap' }}>{fmtDate(row.date)}</td>
                         <td style={{ padding: '8px 10px', color: '#94a3b8' }}>{wd}</td>
                         <td style={{ padding: '8px 10px', color: '#0f172a', fontWeight: 700 }}>#{row.register_number}</td>
+                        <td style={{ padding: '8px 10px', color: row.z_number !== null ? '#475569' : '#cbd5e1', fontFamily: 'monospace' }}>
+                          {row.z_number ?? '—'}
+                        </td>
                         <td style={{ padding: '8px 10px' }}>
                           <span style={{
                             background: st.bg, color: st.color, fontSize: 11, fontWeight: 700,

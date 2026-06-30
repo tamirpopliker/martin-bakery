@@ -27,6 +27,7 @@ export interface AppClosing {
 export interface DiffRow {
   date: string
   register_number: number
+  z_number: number | null     // CashOnTab Z report id (POS-side only)
   status: ReconStatus
   // NET values for comparison
   posCash: number | null
@@ -90,6 +91,7 @@ export function reconcile(
     rows.push({
       date,
       register_number,
+      z_number: pos ? pos.z_number : null,
       status: classify(posCash, posCredit, appCash, appCredit),
       posCash, posCredit, posTotal,
       appCash: appCash === null ? null : round2(appCash),

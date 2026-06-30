@@ -4,6 +4,7 @@
 // Expected columns in the CashOnTab .xlsx export:
 //   D — קוד קופה          (register_number)
 //   H — תאריך סגירה       (date — Excel serial or DD/MM/YYYY string)
+//   J — מספר Z             (Z report number, for cross-referencing the paper Z)
 //   K — סה"כ תקבולים      (total receipts, GROSS, with VAT)
 //   L — סה"כ מזומן         (cash total, GROSS)
 //   N — סה"כ אשראי         (credit total, GROSS)
@@ -20,6 +21,7 @@ const VAT_DIVIDER = 1 + VAT_RATE
 export interface PosClosingRow {
   date: string             // YYYY-MM-DD
   register_number: number
+  z_number: number | null  // CashOnTab Z report number (column J)
   total: number            // NET
   cash: number             // NET
   credit: number           // NET
@@ -84,6 +86,7 @@ export async function parseCashOnTabExcel(file: File): Promise<PosClosingRow[]> 
   for (let r = range.s.r; r <= range.e.r; r++) {
     const dCell = ws[XLSX.utils.encode_cell({ c: 3, r })]   // D
     const hCell = ws[XLSX.utils.encode_cell({ c: 7, r })]   // H
+    const jCell = ws[XLSX.utils.encode_cell({ c: 9, r })]   // J — Z number
     const kCell = ws[XLSX.utils.encode_cell({ c: 10, r })]  // K
     const lCell = ws[XLSX.utils.encode_cell({ c: 11, r })]  // L
     const nCell = ws[XLSX.utils.encode_cell({ c: 13, r })]  // N
@@ -92,6 +95,7 @@ export async function parseCashOnTabExcel(file: File): Promise<PosClosingRow[]> 
     const date = cellDate(hCell)
     if (reg === null || !date) continue
 
+    const z_number = cellRegister(jCell)  // same heuristic — integer-leading value
     const totalGross = cellNumber(kCell)
     const cashGross = cellNumber(lCell)
     const creditGross = cellNumber(nCell)
@@ -103,6 +107,7 @@ export async function parseCashOnTabExcel(file: File): Promise<PosClosingRow[]> 
     out.push({
       date,
       register_number: reg,
+      z_number,
       total: Math.round((totalGross / VAT_DIVIDER) * 100) / 100,
       cash: Math.round((cashGross / VAT_DIVIDER) * 100) / 100,
       credit: Math.round((creditGross / VAT_DIVIDER) * 100) / 100,
