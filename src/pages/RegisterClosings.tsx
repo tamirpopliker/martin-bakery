@@ -59,6 +59,7 @@ interface Closing {
   opening_balance: number
   cash_sales: number
   credit_sales: number
+  check_sales: number
   transaction_count: number | null
   actual_cash: number
   deposit_amount: number
@@ -1189,6 +1190,7 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
       'יתרת פתיחה': Number(c.opening_balance),
       'מכירות מזומן': Number(c.cash_sales),
       'מכירות אשראי': Number(c.credit_sales),
+      'מכירות שיקים': Number(c.check_sales || 0),
       'עסקאות': c.transaction_count || 0,
       'מזומן בקופה': Number(c.actual_cash),
       'הפקדה': Number(c.deposit_amount),
@@ -1380,14 +1382,14 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: '#f8fafc' }}>
-                      {['תאריך', 'קופה', 'פתיחה', 'מזומן', 'אשראי', 'עסקאות', 'נספר', 'פער', 'פעולה', 'פתיחה מחר', ''].map(h => (
+                      {['תאריך', 'קופה', 'פתיחה', 'מזומן', 'אשראי', 'שיקים', 'עסקאות', 'נספר', 'פער', 'פעולה', 'פתיחה מחר', ''].map(h => (
                         <th key={h} style={{ padding: '10px 10px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: '#94a3b8', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {history.length === 0 ? (
-                      <tr><td colSpan={11} style={{ padding: 28, textAlign: 'center', color: '#94a3b8' }}>אין רשומות</td></tr>
+                      <tr><td colSpan={12} style={{ padding: 28, textAlign: 'center', color: '#94a3b8' }}>אין רשומות</td></tr>
                     ) : history.map(c => (
                       <tr key={c.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                         <td style={{ padding: '10px 10px', whiteSpace: 'nowrap' }}>{new Date(c.date + 'T12:00:00').toLocaleDateString('he-IL')}</td>
@@ -1395,6 +1397,7 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
                         <td style={{ padding: '10px 10px' }}>{fmtDec(Number(c.opening_balance))}</td>
                         <td style={{ padding: '10px 10px', color: '#10b981', fontWeight: 700 }}>{fmtDec(Number(c.cash_sales))}</td>
                         <td style={{ padding: '10px 10px', color: '#3b82f6', fontWeight: 700 }}>{fmtDec(Number(c.credit_sales))}</td>
+                        <td style={{ padding: '10px 10px', color: Number(c.check_sales || 0) > 0 ? '#7c3aed' : '#cbd5e1', fontWeight: 700 }}>{Number(c.check_sales || 0) > 0 ? fmtDec(Number(c.check_sales)) : '—'}</td>
                         <td style={{ padding: '10px 10px', color: '#64748b' }}>{c.transaction_count || '—'}</td>
                         <td style={{ padding: '10px 10px' }}>{fmtDec(Number(c.actual_cash))}</td>
                         <td style={{ padding: '10px 10px', color: Math.abs(Number(c.variance)) < 0.01 ? '#059669' : Number(c.variance) > 0 ? '#f59e0b' : '#dc2626', fontWeight: 800 }}>
