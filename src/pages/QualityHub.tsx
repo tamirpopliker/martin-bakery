@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { MessageSquareWarning, ShieldCheck, Thermometer } from 'lucide-react'
+import { MessageSquareWarning, ShieldCheck, Thermometer, ClipboardCheck } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 
 interface Props {
@@ -25,6 +25,7 @@ interface QualityForm {
 const QUALITY_FORMS: QualityForm[] = [
   { page: 'customer_complaints',  label: 'תלונות לקוח',           subtitle: 'טופס 0701 · מעקב פתוח/סגור',     Icon: MessageSquareWarning, color: '#dc2626', ready: true, scopes: ['branch', 'factory'] },
   { page: 'factory_freezer_log',  label: 'בקרת מקפיאים ומקררים', subtitle: 'מעקב טמפרטורות יומי · 7 יחידות', Icon: Thermometer,          color: '#0ea5e9', ready: true, scopes: ['factory'] },
+  { page: 'factory_closing',      label: 'סגירת מפעל יומי',        subtitle: 'צ׳ק-ליסט סגירה · 60 פריטים + טמפרטורות', Icon: ClipboardCheck, color: '#0f766e', ready: true, scopes: ['factory'] },
 ]
 
 const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }

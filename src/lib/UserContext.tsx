@@ -117,6 +117,7 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
 
     // ─── Factory-only quality forms ───
     if (pageKey === 'factory_freezer_log') return user.role === 'factory'
+    if (pageKey === 'factory_closing') return user.role === 'factory'
 
     // ─── HR Dashboard: factory + non-restricted branch managers ───
     // (Restricted @martin.local cashiers are blocked in the earlier restricted
