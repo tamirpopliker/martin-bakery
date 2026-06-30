@@ -64,7 +64,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
     let cancelled = false
     setLoading(true)
     supabase.from('register_closings')
-      .select('date, register_number, cash_sales, credit_sales, transaction_count')
+      .select('date, register_number, cash_sales, credit_sales, check_sales, transaction_count')
       .eq('branch_id', branchId)
       .gte('date', from).lt('date', to)
       .order('date', { ascending: false })
@@ -80,6 +80,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
             register_number: Number(r.register_number),
             cash_sales: Number(r.cash_sales || 0),
             credit_sales: Number(r.credit_sales || 0),
+            check_sales: Number(r.check_sales || 0),
             transaction_count: Number(r.transaction_count || 0),
           })))
         }
@@ -128,7 +129,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
 
   const counters = useMemo(() => {
     const c: Record<ReconStatus, number> = {
-      match: 0, cash_diff: 0, credit_diff: 0, both_diff: 0,
+      match: 0, cash_diff: 0, credit_diff: 0, check_diff: 0, multi_diff: 0,
       check_unaccounted: 0, missing_app: 0, missing_pos: 0,
     }
     for (const r of diff) c[r.status]++
@@ -152,6 +153,8 @@ export default function RegisterReconciliation({ onBack }: Props) {
       'אפליקציה — מזומן': r.appCash,
       'Δ מזומן': r.cashDelta,
       'POS — שיק': r.posCheck,
+      'אפליקציה — שיק': r.appCheck,
+      'Δ שיק': r.checkDelta,
       'POS — אשראי': r.posCredit,
       'אפליקציה — אשראי': r.appCredit,
       'Δ אשראי': r.creditDelta,
@@ -280,7 +283,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
         {posRows.length > 0 && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <CounterChip label="תואם"        value={counters.match}       style={STATUS_STYLE.match} />
-            <CounterChip label="פערים"       value={counters.cash_diff + counters.credit_diff + counters.both_diff} style={STATUS_STYLE.cash_diff} />
+            <CounterChip label="פערים"       value={counters.cash_diff + counters.credit_diff + counters.check_diff + counters.multi_diff} style={STATUS_STYLE.cash_diff} />
             <CounterChip label="שיק לא מתועד" value={counters.check_unaccounted} style={STATUS_STYLE.check_unaccounted} />
             <CounterChip label="חסר באפליקציה" value={counters.missing_app} style={STATUS_STYLE.missing_app} />
             <CounterChip label="חסר בקובץ"  value={counters.missing_pos} style={STATUS_STYLE.missing_pos} />
@@ -319,7 +322,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
                     {[
                       'תאריך','יום','קופה','מס׳ Z','סטטוס',
                       'POS — מזומן','App — מזומן','Δ מזומן',
-                      'POS — שיק',
+                      'POS — שיק','App — שיק','Δ שיק',
                       'POS — אשראי','App — אשראי','Δ אשראי',
                       'POS — סה״כ','App — סה״כ','Δ סה״כ',
                     ].map((h, i) => (
@@ -354,6 +357,8 @@ export default function RegisterReconciliation({ onBack }: Props) {
                         <td style={{ padding: '8px 10px', color: '#10b981', fontWeight: 600 }}>{fmtN(row.appCash)}</td>
                         <td style={{ padding: '8px 10px', fontWeight: 700, color: deltaColor(row.cashDelta) }}>{fmtDelta(row.cashDelta)}</td>
                         <td style={{ padding: '8px 10px', color: (row.posCheck || 0) > 1 ? '#7c3aed' : '#cbd5e1', fontWeight: 600 }}>{fmtN(row.posCheck)}</td>
+                        <td style={{ padding: '8px 10px', color: (row.appCheck || 0) > 1 ? '#7c3aed' : '#cbd5e1', fontWeight: 600 }}>{fmtN(row.appCheck)}</td>
+                        <td style={{ padding: '8px 10px', fontWeight: 700, color: deltaColor(row.checkDelta) }}>{fmtDelta(row.checkDelta)}</td>
                         <td style={{ padding: '8px 10px', color: '#3b82f6', fontWeight: 600 }}>{fmtN(row.posCredit)}</td>
                         <td style={{ padding: '8px 10px', color: '#3b82f6', fontWeight: 600 }}>{fmtN(row.appCredit)}</td>
                         <td style={{ padding: '8px 10px', fontWeight: 700, color: deltaColor(row.creditDelta) }}>{fmtDelta(row.creditDelta)}</td>

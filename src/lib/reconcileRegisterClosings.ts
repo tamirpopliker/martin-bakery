@@ -9,11 +9,12 @@
 import type { PosClosingRow } from './parseCashOnTabExcel'
 
 export type ReconStatus =
-  | 'match'              // cash + credit both within tolerance, no unaccounted check
+  | 'match'              // cash + credit + check all within tolerance
   | 'cash_diff'          // cash differs
   | 'credit_diff'        // credit differs
-  | 'both_diff'          // both differ
-  | 'check_unaccounted'  // cash + credit match but POS reports a check the app doesn't track
+  | 'check_diff'         // check differs (both sides have values, they don't match)
+  | 'multi_diff'         // more than one of cash/credit/check differs
+  | 'check_unaccounted'  // app didn't record a check at all; POS has one — legacy gap
   | 'missing_app'        // POS has row, app has no closing for (date, register)
   | 'missing_pos'        // app has closing, POS file has no matching row
 
@@ -22,6 +23,7 @@ export interface AppClosing {
   register_number: number
   cash_sales: number   // NET
   credit_sales: number // NET
+  check_sales: number  // NET — added 2026-06-30; older rows default to 0
   transaction_count: number
 }
 
@@ -32,13 +34,15 @@ export interface DiffRow {
   status: ReconStatus
   // NET values for comparison
   posCash: number | null
-  posCheck: number | null     // POS-only — app has no check field
+  posCheck: number | null
   posCredit: number | null
   posTotal: number | null
   appCash: number | null
+  appCheck: number | null     // NET, from register_closings.check_sales
   appCredit: number | null
   appTotal: number | null
   cashDelta: number | null    // app - pos
+  checkDelta: number | null
   creditDelta: number | null
   totalDelta: number | null
   // Extras
@@ -50,22 +54,23 @@ const AMOUNT_TOLERANCE = 1  // ₪1 absorbs rounding from VAT division
 
 function classify(
   posCash: number | null, posCredit: number | null, posCheck: number | null,
-  appCash: number | null, appCredit: number | null,
+  appCash: number | null, appCredit: number | null, appCheck: number | null,
 ): ReconStatus {
   if (posCash === null && posCredit === null && appCash !== null) return 'missing_pos'
   if (appCash === null && appCredit === null && posCash !== null) return 'missing_app'
   const cashOk = Math.abs((posCash || 0) - (appCash || 0)) <= AMOUNT_TOLERANCE
   const credOk = Math.abs((posCredit || 0) - (appCredit || 0)) <= AMOUNT_TOLERANCE
-  if (cashOk && credOk) {
-    // Cash + credit reconcile, but POS still has a check the app has no place
-    // to record. Surface it so the manager knows that revenue is real and
-    // accounted for in the POS even though the app's total looks short.
-    if ((posCheck || 0) > AMOUNT_TOLERANCE) return 'check_unaccounted'
-    return 'match'
-  }
-  if (!cashOk && !credOk) return 'both_diff'
+  const checkOk = Math.abs((posCheck || 0) - (appCheck || 0)) <= AMOUNT_TOLERANCE
+  if (cashOk && credOk && checkOk) return 'match'
+  // Legacy case: app hasn't been updated yet to record checks; POS has one.
+  // Cash + credit reconcile, app check = 0 — surface as a distinct status so
+  // the manager understands it's an "未tracked yet" gap, not a cashier error.
+  if (cashOk && credOk && (appCheck || 0) === 0 && (posCheck || 0) > AMOUNT_TOLERANCE) return 'check_unaccounted'
+  const diffs = [!cashOk, !credOk, !checkOk].filter(Boolean).length
+  if (diffs > 1) return 'multi_diff'
   if (!cashOk) return 'cash_diff'
-  return 'credit_diff'
+  if (!credOk) return 'credit_diff'
+  return 'check_diff'
 }
 
 function round2(n: number) { return Math.round(n * 100) / 100 }
@@ -94,19 +99,22 @@ export function reconcile(
     const posCredit = pos ? pos.credit : null
     const posTotal = pos ? pos.total : null
     const appCash = app ? Number(app.cash_sales) : null
+    const appCheck = app ? Number(app.check_sales || 0) : null
     const appCredit = app ? Number(app.credit_sales) : null
-    const appTotal = app ? Number(app.cash_sales) + Number(app.credit_sales) : null
+    const appTotal = app ? Number(app.cash_sales) + Number(app.credit_sales) + Number(app.check_sales || 0) : null
 
     rows.push({
       date,
       register_number,
       z_number: pos ? pos.z_number : null,
-      status: classify(posCash, posCredit, posCheck, appCash, appCredit),
+      status: classify(posCash, posCredit, posCheck, appCash, appCredit, appCheck),
       posCash, posCheck, posCredit, posTotal,
       appCash: appCash === null ? null : round2(appCash),
+      appCheck: appCheck === null ? null : round2(appCheck),
       appCredit: appCredit === null ? null : round2(appCredit),
       appTotal: appTotal === null ? null : round2(appTotal),
       cashDelta: posCash !== null && appCash !== null ? round2(appCash - posCash) : null,
+      checkDelta: posCheck !== null && appCheck !== null ? round2(appCheck - posCheck) : null,
       creditDelta: posCredit !== null && appCredit !== null ? round2(appCredit - posCredit) : null,
       totalDelta: posTotal !== null && appTotal !== null ? round2(appTotal - posTotal) : null,
       appTransactions: app ? app.transaction_count : null,
@@ -122,7 +130,8 @@ export const STATUS_LABEL: Record<ReconStatus, string> = {
   match: 'תואם',
   cash_diff: 'פער מזומן',
   credit_diff: 'פער אשראי',
-  both_diff: 'פער מזומן + אשראי',
+  check_diff: 'פער שיק',
+  multi_diff: 'פערים מרובים',
   check_unaccounted: 'שיק לא מתועד',
   missing_app: 'לא הוזן באפליקציה',
   missing_pos: 'אין בקובץ',
@@ -132,7 +141,8 @@ export const STATUS_STYLE: Record<ReconStatus, { bg: string; color: string }> = 
   match:             { bg: '#dcfce7', color: '#166534' },
   cash_diff:         { bg: '#fef3c7', color: '#92400e' },
   credit_diff:       { bg: '#fef3c7', color: '#92400e' },
-  both_diff:         { bg: '#fef3c7', color: '#92400e' },
+  check_diff:        { bg: '#fef3c7', color: '#92400e' },
+  multi_diff:        { bg: '#fef3c7', color: '#92400e' },
   check_unaccounted: { bg: '#ede9fe', color: '#6d28d9' },
   missing_app:       { bg: '#fee2e2', color: '#991b1b' },
   missing_pos:       { bg: '#ffedd5', color: '#9a3412' },

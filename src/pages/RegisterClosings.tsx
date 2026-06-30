@@ -5,7 +5,7 @@ import PageHeader from '../components/PageHeader'
 import {
   DollarSign, CreditCard, Wallet, CheckCircle2, AlertCircle,
   Camera, X, ArrowRight, ArrowLeft, FileSpreadsheet, History, Calculator, Pencil, Home as HomeIcon,
-  Zap, Archive, Trash2
+  Zap, Archive, Trash2, Receipt
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -173,6 +173,11 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
   const [creditSales, setCreditSales] = useState(
     existing ? String(Math.round(Number(existing.credit_sales) * VAT_DIVIDER * 100) / 100) : ''
   )
+  const [checkSales, setCheckSales] = useState(
+    existing && Number(existing.check_sales) > 0
+      ? String(Math.round(Number(existing.check_sales) * VAT_DIVIDER * 100) / 100)
+      : ''
+  )
   const [txCount, setTxCount] = useState(existing?.transaction_count ? String(existing.transaction_count) : '')
   const [zPhotoParsing, setZPhotoParsing] = useState(false)
   const [zPhotoError, setZPhotoError] = useState('')
@@ -222,6 +227,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
   const opening = parseFloat(openingBalance) || 0
   const cash = parseFloat(cashSales) || 0
   const credit = parseFloat(creditSales) || 0
+  const check = parseFloat(checkSales) || 0
   const expectedCash = opening + cash
   const depositToBag = cash
   const variance = countedCash - expectedCash
@@ -284,8 +290,10 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
       // המרה רק כאן, בנקודת הקצה — כל שאר ה-state ב-wizard נשאר ברוטו.
       const cashGross = cash       // ערך הברוטו מה-state (parseFloat(cashSales))
       const creditGross = credit
+      const checkGross = check
       const cashNet = Math.round((cashGross / VAT_DIVIDER) * 100) / 100
       const creditNet = Math.round((creditGross / VAT_DIVIDER) * 100) / 100
+      const checkNet = Math.round((checkGross / VAT_DIVIDER) * 100) / 100
       const deposit = cashGross    // הברוטו = מה שמופקד פיזית (מזומן בקופה)
 
       const row = {
@@ -295,6 +303,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
         opening_balance: opening,         // ברוטו פיזי
         cash_sales: cashNet,              // ← נטו (לדוחות P&L)
         credit_sales: creditNet,          // ← נטו (לדוחות P&L)
+        check_sales: checkNet,            // ← נטו (לדוחות P&L) — שיקים שהתקבלו בקופה
         transaction_count: txCount ? parseInt(txCount) : 0,
         actual_cash: countedCash,         // ברוטו פיזי (ספירה)
         deposit_amount: deposit,          // ברוטו פיזי (לשקית הפקדה)
@@ -457,13 +466,20 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                     </label>
                     <input type="number" inputMode="decimal" value={creditSales} onChange={e => setCreditSales(e.target.value)} style={S.input} placeholder="0" />
                   </div>
+                  <div>
+                    <label style={S.label}>
+                      <Receipt size={14} style={{ display: 'inline', marginLeft: 4 }} />
+                      מכירות שיקים (₪)
+                    </label>
+                    <input type="number" inputMode="decimal" value={checkSales} onChange={e => setCheckSales(e.target.value)} style={S.input} placeholder="0" />
+                  </div>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={S.label}>מספר עסקאות *</label>
                     <input type="number" inputMode="numeric" value={txCount} onChange={e => setTxCount(e.target.value)} style={S.input} placeholder="0" />
                   </div>
                 </div>
 
-                {(parseFloat(cashSales) > 0 || parseFloat(creditSales) > 0) && (
+                {(parseFloat(cashSales) > 0 || parseFloat(creditSales) > 0 || parseFloat(checkSales) > 0) && (
                   <div style={{
                     marginTop: 12, padding: 12, background: '#f0f9ff',
                     border: '1px solid #bae6fd', borderRadius: 8, fontSize: 13
@@ -471,7 +487,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                     <div style={{ fontWeight: 700, color: '#0369a1', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                       💡 הסכומים שהזנת כוללים מע"מ — יישמרו במערכת ללא מע"מ
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                       <div>
                         <div style={{ color: '#64748b', fontSize: 11 }}>מזומן (נטו):</div>
                         <div style={{ fontWeight: 800, color: '#0369a1' }}>₪{((parseFloat(cashSales) || 0) / VAT_DIVIDER).toFixed(2)}</div>
@@ -480,9 +496,13 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                         <div style={{ color: '#64748b', fontSize: 11 }}>אשראי (נטו):</div>
                         <div style={{ fontWeight: 800, color: '#0369a1' }}>₪{((parseFloat(creditSales) || 0) / VAT_DIVIDER).toFixed(2)}</div>
                       </div>
+                      <div>
+                        <div style={{ color: '#64748b', fontSize: 11 }}>שיקים (נטו):</div>
+                        <div style={{ fontWeight: 800, color: '#0369a1' }}>₪{((parseFloat(checkSales) || 0) / VAT_DIVIDER).toFixed(2)}</div>
+                      </div>
                     </div>
                     <div style={{ marginTop: 6, color: '#64748b', fontSize: 11 }}>
-                      סה"כ נטו: ₪{(((parseFloat(cashSales) || 0) + (parseFloat(creditSales) || 0)) / VAT_DIVIDER).toFixed(2)}
+                      סה"כ נטו: ₪{(((parseFloat(cashSales) || 0) + (parseFloat(creditSales) || 0) + (parseFloat(checkSales) || 0)) / VAT_DIVIDER).toFixed(2)}
                     </div>
                   </div>
                 )}
@@ -593,6 +613,8 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                   <Kpi label="יתרת פתיחה" value={opening} color="#64748b" />
                   <Kpi label="מזומן" value={cash} color="#10b981" />
                   <Kpi label="אשראי" value={credit} color="#3b82f6" />
+                  {check > 0 && <Kpi label="שיקים" value={check} color="#7c3aed" />}
+                  <Kpi label="סה״כ הכנסות" value={cash + credit + check} color="#0f172a" emphasis />
                   <Kpi label="נספר" value={countedCash} color="#0f172a" />
                   <Kpi label="לשים בשקית" value={depositToBag} color="#059669" emphasis />
                   <VarianceDisplay value={variance} />

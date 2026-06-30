@@ -43,7 +43,7 @@ export async function getHQAllocationContext(
           .in('branch_id', branchIds).gte('date', periodStart).lt('date', periodEnd).range(0, 99999)
       : Promise.resolve({ data: [] }),
     branchIds.length
-      ? supabase.from('register_closings').select('branch_id, cash_sales, credit_sales')
+      ? supabase.from('register_closings').select('branch_id, cash_sales, credit_sales, check_sales')
           .in('branch_id', branchIds).gte('date', periodStart).lt('date', periodEnd).range(0, 99999)
       : Promise.resolve({ data: [] }),
     supabase.from('factory_sales').select('amount').eq('is_internal', false)
@@ -62,9 +62,9 @@ export async function getHQAllocationContext(
   for (const r of (revRes.data || []) as { branch_id: number; amount: number }[]) {
     branchExternalRev[r.branch_id] = (branchExternalRev[r.branch_id] || 0) + Number(r.amount)
   }
-  for (const c of (closeRes.data || []) as { branch_id: number; cash_sales: number; credit_sales: number }[]) {
+  for (const c of (closeRes.data || []) as { branch_id: number; cash_sales: number; credit_sales: number; check_sales?: number }[]) {
     branchExternalRev[c.branch_id] = (branchExternalRev[c.branch_id] || 0)
-      + Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
+      + Number(c.cash_sales || 0) + Number(c.credit_sales || 0) + Number(c.check_sales || 0)
   }
 
   const factoryExternalRev =
@@ -166,14 +166,17 @@ export async function calculateBranchPL(
     supabase.from('internal_sales').select('total_amount')
       .eq('branch_id', branchId).eq('status', 'completed')
       .gte('order_date', periodStart).lt('order_date', periodEnd).range(0, 99999),
-    // Register closings (cash + credit) merge into the cashier bucket for current-period revenue.
-    supabase.from('register_closings').select('cash_sales, credit_sales')
+    // Register closings (cash + credit + check) merge into the cashier bucket
+    // for current-period revenue. check_sales is added 2026-06-30; legacy rows
+    // default to 0 so the sum stays identical for historical periods.
+    supabase.from('register_closings').select('cash_sales, credit_sales, check_sales')
       .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
   ])
 
   // Revenue (legacy branch_revenue + newer register_closings)
   const legacyRevenue = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
-  const closingsRevenue = (closingsRes.data || []).reduce((s, c) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0)
+  const closingsRevenue = (closingsRes.data || []).reduce((s, c) =>
+    s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0) + Number(c.check_sales || 0), 0)
   const revenue = legacyRevenue + closingsRevenue
 
   // Factory purchases: prefer internal_sales (completed), fallback to branch_expenses from_factory

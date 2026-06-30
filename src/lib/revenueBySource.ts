@@ -32,7 +32,7 @@ export async function fetchRevenueBySource(
       .lt('date', to),
     supabase
       .from('register_closings')
-      .select('branch_id, cash_sales, credit_sales')
+      .select('branch_id, cash_sales, credit_sales, check_sales')
       .in('branch_id', branchIds)
       .gte('date', from)
       .lt('date', to),
@@ -57,7 +57,10 @@ export async function fetchRevenueBySource(
 
   for (const row of closeRes.data || []) {
     const bid = Number(row.branch_id)
-    pos[bid] = (pos[bid] || 0) + (Number(row.cash_sales) || 0) + (Number(row.credit_sales) || 0)
+    pos[bid] = (pos[bid] || 0)
+      + (Number(row.cash_sales) || 0)
+      + (Number(row.credit_sales) || 0)
+      + (Number((row as any).check_sales) || 0)
   }
 
   return { pos, website, credit }

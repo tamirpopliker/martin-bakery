@@ -107,7 +107,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [trendData, setTrendData] = useState<BranchRevenueTrend[]>([])
-  const [closingsInPeriod, setClosingsInPeriod] = useState<Array<{ date: string; register_number: number; cash_sales: number; credit_sales: number; transaction_count: number | null }>>([])
+  const [closingsInPeriod, setClosingsInPeriod] = useState<Array<{ date: string; register_number: number; cash_sales: number; credit_sales: number; check_sales: number; transaction_count: number | null }>>([])
 
   async function handlePdfFile(file: File) {
     setPdfParsing(true)
@@ -220,7 +220,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   useEffect(() => {
     async function loadClosings() {
       const { data } = await supabase.from('register_closings')
-        .select('date, register_number, cash_sales, credit_sales, transaction_count')
+        .select('date, register_number, cash_sales, credit_sales, check_sales, transaction_count')
         .eq('branch_id', branchId)
         .gte('date', from).lt('date', to)
         .order('date')
@@ -291,8 +291,9 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   // חישובים — קופה משלבת נתונים היסטוריים מ-branch_revenue ונתונים חדשים מ-register_closings
   const closingsCash = closingsInPeriod.reduce((s, c) => s + Number(c.cash_sales), 0)
   const closingsCredit = closingsInPeriod.reduce((s, c) => s + Number(c.credit_sales), 0)
+  const closingsCheck = closingsInPeriod.reduce((s, c) => s + Number(c.check_sales || 0), 0)
   const closingsTx = closingsInPeriod.reduce((s, c) => s + (Number(c.transaction_count) || 0), 0)
-  const closingsTotal = closingsCash + closingsCredit
+  const closingsTotal = closingsCash + closingsCredit + closingsCheck
 
   const legacyCashierEntries = entries.filter(e => e.source === 'cashier')
   const legacyCashierTotal = legacyCashierEntries.reduce((s, e) => s + Number(e.amount), 0)
@@ -326,10 +327,10 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
           if (bucket === 'cashier') acc[e.date].transactions += Number(e.transaction_count || 0)
         }
       }
-      // קופה — מטבלת register_closings (מזומן + אשראי) — מתווסף למקור "קופה"
+      // קופה — מטבלת register_closings (מזומן + אשראי + שיק) — מתווסף למקור "קופה"
       for (const c of closingsInPeriod) {
         if (!acc[c.date]) acc[c.date] = { date: c.date, cashier: 0, website: 0, credit: 0, total: 0, transactions: 0 }
-        const sum = Number(c.cash_sales) + Number(c.credit_sales)
+        const sum = Number(c.cash_sales) + Number(c.credit_sales) + Number(c.check_sales || 0)
         acc[c.date].cashier += sum
         acc[c.date].total += sum
         acc[c.date].transactions += Number(c.transaction_count || 0)
@@ -474,7 +475,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ background: '#f8fafc' }}>
-                        {['תאריך', 'קופה', 'מזומן', 'אשראי', 'סה"כ', 'עסקאות'].map(h => (
+                        {['תאריך', 'קופה', 'מזומן', 'אשראי', 'שיקים', 'סה"כ', 'עסקאות'].map(h => (
                           <th key={h} style={{ padding: '9px 14px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
@@ -491,7 +492,8 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                           <td style={{ padding: '9px 14px', fontWeight: 700, color: '#0f172a' }}>{c.register_number}</td>
                           <td style={{ padding: '9px 14px', color: '#10b981', fontWeight: 700 }}>₪{Number(c.cash_sales).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                           <td style={{ padding: '9px 14px', color: '#3b82f6', fontWeight: 700 }}>₪{Number(c.credit_sales).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                          <td style={{ padding: '9px 14px', color: '#0f172a', fontWeight: 800 }}>₪{(Number(c.cash_sales) + Number(c.credit_sales)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '9px 14px', color: Number(c.check_sales || 0) > 0 ? '#7c3aed' : '#cbd5e1', fontWeight: 600 }}>{Number(c.check_sales || 0) > 0 ? '₪' + Number(c.check_sales).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</td>
+                          <td style={{ padding: '9px 14px', color: '#0f172a', fontWeight: 800 }}>₪{(Number(c.cash_sales) + Number(c.credit_sales) + Number(c.check_sales || 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                           <td style={{ padding: '9px 14px', color: '#64748b' }}>{c.transaction_count || '—'}</td>
                         </tr>
                       ))}
