@@ -1,14 +1,14 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// RegisterReconciliation — verify register_closings entries against CashOnTab PDF
+// RegisterReconciliation — verify register_closings entries against CashOnTab
 // ═══════════════════════════════════════════════════════════════════════════
 // Admin sees a branch picker; branch managers are locked to their own branch.
-// Reads register_closings for the selected period + branch, accepts a CashOnTab
-// "השוואת מכירות — יומי" PDF, and renders a per-day diff table.
+// Reads register_closings for the selected period + branch, accepts a
+// CashOnTab .xlsx export, and renders a per-(date,register) diff table.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Upload, FileText, ChevronDown, ChevronUp, Download } from 'lucide-react'
+import { Upload, FileSpreadsheet, Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useAppUser, isRestrictedBranchUser } from '../lib/UserContext'
@@ -16,7 +16,7 @@ import { useBranches } from '../lib/BranchContext'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
 import PageHeader from '../components/PageHeader'
-import { parseCashOnTabPDF, type CashOnTabRow } from '../lib/parseCashOnTab'
+import { parseCashOnTabExcel, type PosClosingRow } from '../lib/parseCashOnTabExcel'
 import {
   reconcile, STATUS_LABEL, STATUS_STYLE,
   type AppClosing, type DiffRow, type ReconStatus,
@@ -26,36 +26,38 @@ interface Props { onBack: () => void }
 
 const WEEKDAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
 const fmtN = (n: number | null) => n === null ? '—' : '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
+const fmtDelta = (n: number | null) => {
+  if (n === null) return '—'
+  if (Math.abs(n) <= 1) return '—'
+  return (n > 0 ? '+' : '') + '₪' + Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
+}
 const fmtDate = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+const deltaColor = (n: number | null) => n === null || Math.abs(n) <= 1 ? '#94a3b8' : n > 0 ? '#0284c7' : '#dc2626'
 
 export default function RegisterReconciliation({ onBack }: Props) {
   const { appUser } = useAppUser()
   const { branches } = useBranches()
   const { period, setPeriod, from, to } = usePeriod()
 
-  // Branch lock for branch users; admin can switch.
   const isBranchUser = appUser?.role === 'branch' && !!appUser.branch_id
   const [branchId, setBranchId] = useState<number | null>(
     isBranchUser ? appUser!.branch_id! : null
   )
   useEffect(() => {
-    // When the branch list arrives (admin), default to the first branch.
     if (branchId === null && !isBranchUser && branches.length > 0) {
       setBranchId(branches[0].id)
     }
   }, [branches, branchId, isBranchUser])
 
-  const [posRows, setPosRows] = useState<CashOnTabRow[]>([])
+  const [posRows, setPosRows] = useState<PosClosingRow[]>([])
   const [posFileName, setPosFileName] = useState('')
   const [appRows, setAppRows] = useState<AppClosing[]>([])
   const [loading, setLoading] = useState(false)
   const [parsing, setParsing] = useState(false)
   const [error, setError] = useState('')
   const [filterOnlyDiffs, setFilterOnlyDiffs] = useState(false)
-  const [expandedDate, setExpandedDate] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Load app rows whenever branch/period changes.
   useEffect(() => {
     if (!branchId) return
     let cancelled = false
@@ -89,9 +91,9 @@ export default function RegisterReconciliation({ onBack }: Props) {
     setError('')
     setParsing(true)
     try {
-      const rows = await parseCashOnTabPDF(file)
+      const rows = await parseCashOnTabExcel(file)
       if (rows.length === 0) {
-        setError('לא נמצאו שורות בקובץ. ודאי שזה דוח "השוואת מכירות — יומי" של CashOnTab.')
+        setError('לא נמצאו שורות בקובץ. ודאי שזה דוח סגירות מ-CashOnTab בפורמט Excel (טור D=קופה, H=תאריך, K=סה״כ, L=מזומן, N=אשראי).')
         setPosRows([])
         setPosFileName('')
       } else {
@@ -99,34 +101,41 @@ export default function RegisterReconciliation({ onBack }: Props) {
         setPosFileName(file.name)
       }
     } catch (err: any) {
-      console.error('Parse CashOnTab failed:', err)
+      console.error('Parse CashOnTab Excel failed:', err)
       setError('שגיאה בקריאת הקובץ: ' + (err?.message || String(err)))
     } finally {
       setParsing(false)
     }
   }
 
+  // Filter app rows by the selected branch (already done in query) and POS by
+  // the period dates — the file might include days outside the picker.
+  const posInPeriod = useMemo(
+    () => posRows.filter(r => r.date >= from && r.date < to),
+    [posRows, from, to]
+  )
+
   const diff = useMemo<DiffRow[]>(() => {
     if (!branchId) return []
-    return reconcile(posRows, appRows, from, to)
-  }, [posRows, appRows, branchId, from, to])
+    return reconcile(posInPeriod, appRows)
+  }, [posInPeriod, appRows, branchId])
 
   const visible = useMemo(() => {
     if (!filterOnlyDiffs) return diff
-    return diff.filter(r => r.status !== 'match' && r.status !== 'shabbat')
+    return diff.filter(r => r.status !== 'match')
   }, [diff, filterOnlyDiffs])
 
   const counters = useMemo(() => {
     const c: Record<ReconStatus, number> = {
-      match: 0, amount_diff: 0, count_diff: 0, both_diff: 0,
-      missing_app: 0, missing_pos: 0, shabbat: 0,
+      match: 0, cash_diff: 0, credit_diff: 0, both_diff: 0,
+      missing_app: 0, missing_pos: 0,
     }
     for (const r of diff) c[r.status]++
     return c
   }, [diff])
 
   function exportDiffsToExcel() {
-    const rows = diff.filter(r => r.status !== 'match' && r.status !== 'shabbat')
+    const rows = diff.filter(r => r.status !== 'match')
     if (rows.length === 0) {
       setError('אין פערים לייצוא')
       return
@@ -135,13 +144,17 @@ export default function RegisterReconciliation({ onBack }: Props) {
     const data = rows.map(r => ({
       'תאריך': fmtDate(r.date),
       'יום': WEEKDAY_SHORT[new Date(r.date + 'T12:00:00').getDay()],
+      'קופה': r.register_number,
       'סטטוס': STATUS_LABEL[r.status],
-      'POS — נטו': r.posAmount,
-      'אפליקציה — נטו': r.appAmount,
-      'הפרש סכום': r.amountDelta,
-      'POS — עסקאות': r.posTransactions,
-      'אפליקציה — עסקאות': r.appTransactions,
-      'הפרש עסקאות': r.txDelta,
+      'POS — מזומן': r.posCash,
+      'אפליקציה — מזומן': r.appCash,
+      'Δ מזומן': r.cashDelta,
+      'POS — אשראי': r.posCredit,
+      'אפליקציה — אשראי': r.appCredit,
+      'Δ אשראי': r.creditDelta,
+      'POS — סה״כ': r.posTotal,
+      'אפליקציה — סה״כ': r.appTotal,
+      'Δ סה״כ': r.totalDelta,
     }))
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
@@ -151,9 +164,9 @@ export default function RegisterReconciliation({ onBack }: Props) {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
-      <PageHeader title="בקרת סגירות קופה" subtitle="השוואת קובץ CashOnTab מול האפליקציה" onBack={onBack} />
+      <PageHeader title="בקרת סגירות קופה" subtitle="השוואת קובץ CashOnTab (Excel) מול האפליקציה" onBack={onBack} />
 
-      <div style={{ padding: '20px', maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ padding: '20px', maxWidth: 1400, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* Filters bar */}
         <div style={{
           background: 'white', borderRadius: 12, border: '1px solid #f1f5f9',
@@ -202,30 +215,30 @@ export default function RegisterReconciliation({ onBack }: Props) {
           padding: 18, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
         }}>
           <div style={{
-            width: 44, height: 44, borderRadius: 10, background: '#eef2ff', color: '#4338ca',
+            width: 44, height: 44, borderRadius: 10, background: '#ecfdf5', color: '#047857',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <FileText size={22} />
+            <FileSpreadsheet size={22} />
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-              {posFileName || 'העלה דוח "השוואת מכירות — יומי" מ-CashOnTab (PDF)'}
+              {posFileName || 'העלי קובץ Excel של סגירות CashOnTab'}
             </div>
             <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
               {posRows.length > 0
-                ? `${posRows.length} ימים מהקובץ · בתקופה ${from} – ${to}`
-                : 'הקובץ נשלף ישירות מ-CashOnTab. כל הסניפים מאוחדים ליום אחד.'}
+                ? `${posRows.length} שורות מהקובץ · בתקופה ${from} – ${to}: ${posInPeriod.length}`
+                : 'עמודות צפויות: D=קוד קופה · H=תאריך · K=סה״כ · L=מזומן · N=אשראי. הסכומים בקובץ ברוטו, מומרים לנטו אוטומטית.'}
             </div>
           </div>
           <input
             ref={fileRef}
             type="file"
-            accept=".pdf"
+            accept=".xlsx,.xls"
             style={{ display: 'none' }}
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
           />
           <button onClick={() => fileRef.current?.click()} disabled={parsing} style={{
-            background: '#4338ca', color: 'white', border: 'none', borderRadius: 10,
+            background: '#047857', color: 'white', border: 'none', borderRadius: 10,
             padding: '10px 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
             opacity: parsing ? 0.6 : 1, fontFamily: 'inherit',
             display: 'flex', alignItems: 'center', gap: 8,
@@ -238,10 +251,9 @@ export default function RegisterReconciliation({ onBack }: Props) {
         {posRows.length > 0 && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <CounterChip label="תואם"        value={counters.match}       style={STATUS_STYLE.match} />
-            <CounterChip label="פערים"       value={counters.amount_diff + counters.count_diff + counters.both_diff} style={STATUS_STYLE.amount_diff} />
+            <CounterChip label="פערים"       value={counters.cash_diff + counters.credit_diff + counters.both_diff} style={STATUS_STYLE.cash_diff} />
             <CounterChip label="חסר באפליקציה" value={counters.missing_app} style={STATUS_STYLE.missing_app} />
             <CounterChip label="חסר בקובץ"  value={counters.missing_pos} style={STATUS_STYLE.missing_pos} />
-            <CounterChip label="שבת"         value={counters.shabbat}     style={STATUS_STYLE.shabbat} />
           </div>
         )}
 
@@ -271,11 +283,16 @@ export default function RegisterReconciliation({ onBack }: Props) {
         ) : (
           <div style={{ background: 'white', borderRadius: 12, border: '1px solid #f1f5f9', overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 720 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 1100 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                    {['תאריך','יום','סטטוס','POS — נטו','אפליקציה — נטו','Δ','POS — עסקאות','אפליקציה — עסקאות','Δ','פירוט'].map((h, i) => (
-                      <th key={i} style={{ padding: '10px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap' }}>{h}</th>
+                    {[
+                      'תאריך','יום','קופה','סטטוס',
+                      'POS — מזומן','App — מזומן','Δ מזומן',
+                      'POS — אשראי','App — אשראי','Δ אשראי',
+                      'POS — סה״כ','App — סה״כ','Δ סה״כ',
+                    ].map((h, i) => (
+                      <th key={i} style={{ padding: '10px 10px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#64748b', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -283,87 +300,32 @@ export default function RegisterReconciliation({ onBack }: Props) {
                   {visible.map((row) => {
                     const wd = WEEKDAY_SHORT[new Date(row.date + 'T12:00:00').getDay()]
                     const st = STATUS_STYLE[row.status]
-                    const expanded = expandedDate === row.date
                     return (
-                      <>
-                        <motion.tr
-                          key={row.date}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          style={{ borderBottom: '1px solid #f8fafc', cursor: row.appRegisters.length > 0 ? 'pointer' : 'default' }}
-                          onClick={() => row.appRegisters.length > 0 && setExpandedDate(expanded ? null : row.date)}
-                        >
-                          <td style={{ padding: '10px 12px', color: '#475569', whiteSpace: 'nowrap' }}>{fmtDate(row.date)}</td>
-                          <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{wd}</td>
-                          <td style={{ padding: '10px 12px' }}>
-                            <span style={{
-                              background: st.bg, color: st.color, fontSize: 11, fontWeight: 700,
-                              padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap',
-                            }}>{STATUS_LABEL[row.status]}</span>
-                          </td>
-                          <td style={{ padding: '10px 12px', color: '#0f172a', fontWeight: 600 }}>{fmtN(row.posAmount)}</td>
-                          <td style={{ padding: '10px 12px', color: '#0f172a', fontWeight: 600 }}>{fmtN(row.appAmount)}</td>
-                          <td style={{
-                            padding: '10px 12px', fontWeight: 700,
-                            color: row.amountDelta === null ? '#94a3b8'
-                              : Math.abs(row.amountDelta) <= 1 ? '#94a3b8'
-                              : row.amountDelta > 0 ? '#0284c7' : '#dc2626',
-                          }}>
-                            {row.amountDelta === null ? '—'
-                              : Math.abs(row.amountDelta) <= 1 ? '—'
-                              : (row.amountDelta > 0 ? '+' : '') + fmtN(row.amountDelta).replace('₪', '₪')}
-                          </td>
-                          <td style={{ padding: '10px 12px', color: '#0f172a' }}>{row.posTransactions ?? '—'}</td>
-                          <td style={{ padding: '10px 12px', color: '#0f172a' }}>{row.appTransactions ?? '—'}</td>
-                          <td style={{
-                            padding: '10px 12px', fontWeight: 700,
-                            color: row.txDelta === null ? '#94a3b8'
-                              : row.txDelta === 0 ? '#94a3b8'
-                              : row.txDelta > 0 ? '#0284c7' : '#dc2626',
-                          }}>
-                            {row.txDelta === null ? '—'
-                              : row.txDelta === 0 ? '—'
-                              : (row.txDelta > 0 ? '+' : '') + row.txDelta}
-                          </td>
-                          <td style={{ padding: '10px 12px', color: '#94a3b8' }}>
-                            {row.appRegisters.length > 0 ? (
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                {row.appRegisters.length} קופות
-                                {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                              </span>
-                            ) : '—'}
-                          </td>
-                        </motion.tr>
-                        {expanded && row.appRegisters.length > 0 && (
-                          <tr style={{ background: '#fafbfc', borderBottom: '1px solid #f8fafc' }}>
-                            <td colSpan={10} style={{ padding: '10px 28px' }}>
-                              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6, fontWeight: 700 }}>פירוט לפי קופה (נתוני האפליקציה, נטו):</div>
-                              <table style={{ width: '100%', fontSize: 12 }}>
-                                <thead>
-                                  <tr style={{ color: '#94a3b8' }}>
-                                    <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 600 }}>קופה</th>
-                                    <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 600 }}>מזומן</th>
-                                    <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 600 }}>אשראי</th>
-                                    <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 600 }}>סה״כ</th>
-                                    <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 600 }}>עסקאות</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {row.appRegisters.map(reg => (
-                                    <tr key={reg.register_number} style={{ color: '#475569' }}>
-                                      <td style={{ padding: '4px 8px', fontWeight: 700, color: '#0f172a' }}>#{reg.register_number}</td>
-                                      <td style={{ padding: '4px 8px' }}>{fmtN(reg.cash_sales)}</td>
-                                      <td style={{ padding: '4px 8px' }}>{fmtN(reg.credit_sales)}</td>
-                                      <td style={{ padding: '4px 8px', fontWeight: 600 }}>{fmtN(reg.cash_sales + reg.credit_sales)}</td>
-                                      <td style={{ padding: '4px 8px' }}>{reg.transaction_count}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </td>
-                          </tr>
-                        )}
-                      </>
+                      <motion.tr
+                        key={`${row.date}-${row.register_number}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        style={{ borderBottom: '1px solid #f8fafc' }}
+                      >
+                        <td style={{ padding: '8px 10px', color: '#475569', whiteSpace: 'nowrap' }}>{fmtDate(row.date)}</td>
+                        <td style={{ padding: '8px 10px', color: '#94a3b8' }}>{wd}</td>
+                        <td style={{ padding: '8px 10px', color: '#0f172a', fontWeight: 700 }}>#{row.register_number}</td>
+                        <td style={{ padding: '8px 10px' }}>
+                          <span style={{
+                            background: st.bg, color: st.color, fontSize: 11, fontWeight: 700,
+                            padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap',
+                          }}>{STATUS_LABEL[row.status]}</span>
+                        </td>
+                        <td style={{ padding: '8px 10px', color: '#10b981', fontWeight: 600 }}>{fmtN(row.posCash)}</td>
+                        <td style={{ padding: '8px 10px', color: '#10b981', fontWeight: 600 }}>{fmtN(row.appCash)}</td>
+                        <td style={{ padding: '8px 10px', fontWeight: 700, color: deltaColor(row.cashDelta) }}>{fmtDelta(row.cashDelta)}</td>
+                        <td style={{ padding: '8px 10px', color: '#3b82f6', fontWeight: 600 }}>{fmtN(row.posCredit)}</td>
+                        <td style={{ padding: '8px 10px', color: '#3b82f6', fontWeight: 600 }}>{fmtN(row.appCredit)}</td>
+                        <td style={{ padding: '8px 10px', fontWeight: 700, color: deltaColor(row.creditDelta) }}>{fmtDelta(row.creditDelta)}</td>
+                        <td style={{ padding: '8px 10px', color: '#0f172a', fontWeight: 700 }}>{fmtN(row.posTotal)}</td>
+                        <td style={{ padding: '8px 10px', color: '#0f172a', fontWeight: 700 }}>{fmtN(row.appTotal)}</td>
+                        <td style={{ padding: '8px 10px', fontWeight: 700, color: deltaColor(row.totalDelta) }}>{fmtDelta(row.totalDelta)}</td>
+                      </motion.tr>
                     )
                   })}
                 </tbody>
