@@ -9,12 +9,13 @@
 import type { PosClosingRow } from './parseCashOnTabExcel'
 
 export type ReconStatus =
-  | 'match'         // cash + credit both within tolerance
-  | 'cash_diff'     // cash differs
-  | 'credit_diff'   // credit differs
-  | 'both_diff'     // both differ
-  | 'missing_app'   // POS has row, app has no closing for (date, register)
-  | 'missing_pos'   // app has closing, POS file has no matching row
+  | 'match'              // cash + credit both within tolerance, no unaccounted check
+  | 'cash_diff'          // cash differs
+  | 'credit_diff'        // credit differs
+  | 'both_diff'          // both differ
+  | 'check_unaccounted'  // cash + credit match but POS reports a check the app doesn't track
+  | 'missing_app'        // POS has row, app has no closing for (date, register)
+  | 'missing_pos'        // app has closing, POS file has no matching row
 
 export interface AppClosing {
   date: string         // YYYY-MM-DD
@@ -31,6 +32,7 @@ export interface DiffRow {
   status: ReconStatus
   // NET values for comparison
   posCash: number | null
+  posCheck: number | null     // POS-only — app has no check field
   posCredit: number | null
   posTotal: number | null
   appCash: number | null
@@ -47,14 +49,20 @@ export interface DiffRow {
 const AMOUNT_TOLERANCE = 1  // ₪1 absorbs rounding from VAT division
 
 function classify(
-  posCash: number | null, posCredit: number | null,
+  posCash: number | null, posCredit: number | null, posCheck: number | null,
   appCash: number | null, appCredit: number | null,
 ): ReconStatus {
   if (posCash === null && posCredit === null && appCash !== null) return 'missing_pos'
   if (appCash === null && appCredit === null && posCash !== null) return 'missing_app'
   const cashOk = Math.abs((posCash || 0) - (appCash || 0)) <= AMOUNT_TOLERANCE
   const credOk = Math.abs((posCredit || 0) - (appCredit || 0)) <= AMOUNT_TOLERANCE
-  if (cashOk && credOk) return 'match'
+  if (cashOk && credOk) {
+    // Cash + credit reconcile, but POS still has a check the app has no place
+    // to record. Surface it so the manager knows that revenue is real and
+    // accounted for in the POS even though the app's total looks short.
+    if ((posCheck || 0) > AMOUNT_TOLERANCE) return 'check_unaccounted'
+    return 'match'
+  }
   if (!cashOk && !credOk) return 'both_diff'
   if (!cashOk) return 'cash_diff'
   return 'credit_diff'
@@ -82,6 +90,7 @@ export function reconcile(
     const app = appByKey.get(key) || null
 
     const posCash = pos ? pos.cash : null
+    const posCheck = pos ? pos.check : null
     const posCredit = pos ? pos.credit : null
     const posTotal = pos ? pos.total : null
     const appCash = app ? Number(app.cash_sales) : null
@@ -92,8 +101,8 @@ export function reconcile(
       date,
       register_number,
       z_number: pos ? pos.z_number : null,
-      status: classify(posCash, posCredit, appCash, appCredit),
-      posCash, posCredit, posTotal,
+      status: classify(posCash, posCredit, posCheck, appCash, appCredit),
+      posCash, posCheck, posCredit, posTotal,
       appCash: appCash === null ? null : round2(appCash),
       appCredit: appCredit === null ? null : round2(appCredit),
       appTotal: appTotal === null ? null : round2(appTotal),
@@ -114,15 +123,17 @@ export const STATUS_LABEL: Record<ReconStatus, string> = {
   cash_diff: 'פער מזומן',
   credit_diff: 'פער אשראי',
   both_diff: 'פער מזומן + אשראי',
+  check_unaccounted: 'שיק לא מתועד',
   missing_app: 'לא הוזן באפליקציה',
   missing_pos: 'אין בקובץ',
 }
 
 export const STATUS_STYLE: Record<ReconStatus, { bg: string; color: string }> = {
-  match:       { bg: '#dcfce7', color: '#166534' },
-  cash_diff:   { bg: '#fef3c7', color: '#92400e' },
-  credit_diff: { bg: '#fef3c7', color: '#92400e' },
-  both_diff:   { bg: '#fef3c7', color: '#92400e' },
-  missing_app: { bg: '#fee2e2', color: '#991b1b' },
-  missing_pos: { bg: '#ffedd5', color: '#9a3412' },
+  match:             { bg: '#dcfce7', color: '#166534' },
+  cash_diff:         { bg: '#fef3c7', color: '#92400e' },
+  credit_diff:       { bg: '#fef3c7', color: '#92400e' },
+  both_diff:         { bg: '#fef3c7', color: '#92400e' },
+  check_unaccounted: { bg: '#ede9fe', color: '#6d28d9' },
+  missing_app:       { bg: '#fee2e2', color: '#991b1b' },
+  missing_pos:       { bg: '#ffedd5', color: '#9a3412' },
 }

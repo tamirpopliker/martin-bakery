@@ -129,7 +129,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
   const counters = useMemo(() => {
     const c: Record<ReconStatus, number> = {
       match: 0, cash_diff: 0, credit_diff: 0, both_diff: 0,
-      missing_app: 0, missing_pos: 0,
+      check_unaccounted: 0, missing_app: 0, missing_pos: 0,
     }
     for (const r of diff) c[r.status]++
     return c
@@ -151,6 +151,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
       'POS — מזומן': r.posCash,
       'אפליקציה — מזומן': r.appCash,
       'Δ מזומן': r.cashDelta,
+      'POS — שיק': r.posCheck,
       'POS — אשראי': r.posCredit,
       'אפליקציה — אשראי': r.appCredit,
       'Δ אשראי': r.creditDelta,
@@ -255,7 +256,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
             <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
               {posRows.length > 0
                 ? `${posRows.length} שורות מהקובץ · בתקופה ${from} – ${to}: ${posInPeriod.length}`
-                : 'עמודות צפויות: D=קוד קופה · H=תאריך · J=מס׳ Z · K=סה״כ · L=מזומן · N=אשראי. הסכומים בקובץ ברוטו, מומרים לנטו אוטומטית.'}
+                : 'עמודות צפויות: D=קוד קופה · H=תאריך · J=מס׳ Z · K=סה״כ · L=מזומן · M=שיק · N=אשראי. הסכומים בקובץ ברוטו, מומרים לנטו אוטומטית.'}
             </div>
           </div>
           <input
@@ -280,6 +281,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <CounterChip label="תואם"        value={counters.match}       style={STATUS_STYLE.match} />
             <CounterChip label="פערים"       value={counters.cash_diff + counters.credit_diff + counters.both_diff} style={STATUS_STYLE.cash_diff} />
+            <CounterChip label="שיק לא מתועד" value={counters.check_unaccounted} style={STATUS_STYLE.check_unaccounted} />
             <CounterChip label="חסר באפליקציה" value={counters.missing_app} style={STATUS_STYLE.missing_app} />
             <CounterChip label="חסר בקובץ"  value={counters.missing_pos} style={STATUS_STYLE.missing_pos} />
           </div>
@@ -317,6 +319,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
                     {[
                       'תאריך','יום','קופה','מס׳ Z','סטטוס',
                       'POS — מזומן','App — מזומן','Δ מזומן',
+                      'POS — שיק',
                       'POS — אשראי','App — אשראי','Δ אשראי',
                       'POS — סה״כ','App — סה״כ','Δ סה״כ',
                     ].map((h, i) => (
@@ -350,6 +353,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
                         <td style={{ padding: '8px 10px', color: '#10b981', fontWeight: 600 }}>{fmtN(row.posCash)}</td>
                         <td style={{ padding: '8px 10px', color: '#10b981', fontWeight: 600 }}>{fmtN(row.appCash)}</td>
                         <td style={{ padding: '8px 10px', fontWeight: 700, color: deltaColor(row.cashDelta) }}>{fmtDelta(row.cashDelta)}</td>
+                        <td style={{ padding: '8px 10px', color: (row.posCheck || 0) > 1 ? '#7c3aed' : '#cbd5e1', fontWeight: 600 }}>{fmtN(row.posCheck)}</td>
                         <td style={{ padding: '8px 10px', color: '#3b82f6', fontWeight: 600 }}>{fmtN(row.posCredit)}</td>
                         <td style={{ padding: '8px 10px', color: '#3b82f6', fontWeight: 600 }}>{fmtN(row.appCredit)}</td>
                         <td style={{ padding: '8px 10px', fontWeight: 700, color: deltaColor(row.creditDelta) }}>{fmtDelta(row.creditDelta)}</td>

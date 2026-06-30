@@ -7,7 +7,9 @@
 //   J — מספר Z             (Z report number, for cross-referencing the paper Z)
 //   K — סה"כ תקבולים      (total receipts, GROSS, with VAT)
 //   L — סה"כ מזומן         (cash total, GROSS)
+//   M — סה"כ שיקים        (check total, GROSS) — אופציונלי, ייתכן שהקופאי לא רושם אותו
 //   N — סה"כ אשראי         (credit total, GROSS)
+// Relationship: K (total) = L (cash) + M (check) + N (credit)
 //
 // Returns rows in NET (no VAT) so they match register_closings storage.
 // Conversion: net = gross / (1 + VAT_RATE)
@@ -24,9 +26,11 @@ export interface PosClosingRow {
   z_number: number | null  // CashOnTab Z report number (column J)
   total: number            // NET
   cash: number             // NET
+  check: number            // NET — checks; app currently has no parallel field
   credit: number           // NET
   totalGross: number       // GROSS — preserved for user transparency
   cashGross: number
+  checkGross: number
   creditGross: number
 }
 
@@ -87,9 +91,10 @@ export async function parseCashOnTabExcel(file: File): Promise<PosClosingRow[]> 
     const dCell = ws[XLSX.utils.encode_cell({ c: 3, r })]   // D
     const hCell = ws[XLSX.utils.encode_cell({ c: 7, r })]   // H
     const jCell = ws[XLSX.utils.encode_cell({ c: 9, r })]   // J — Z number
-    const kCell = ws[XLSX.utils.encode_cell({ c: 10, r })]  // K
-    const lCell = ws[XLSX.utils.encode_cell({ c: 11, r })]  // L
-    const nCell = ws[XLSX.utils.encode_cell({ c: 13, r })]  // N
+    const kCell = ws[XLSX.utils.encode_cell({ c: 10, r })]  // K — total
+    const lCell = ws[XLSX.utils.encode_cell({ c: 11, r })]  // L — cash
+    const mCell = ws[XLSX.utils.encode_cell({ c: 12, r })]  // M — checks
+    const nCell = ws[XLSX.utils.encode_cell({ c: 13, r })]  // N — credit
 
     const reg = cellRegister(dCell)
     const date = cellDate(hCell)
@@ -98,11 +103,12 @@ export async function parseCashOnTabExcel(file: File): Promise<PosClosingRow[]> 
     const z_number = cellRegister(jCell)  // same heuristic — integer-leading value
     const totalGross = cellNumber(kCell)
     const cashGross = cellNumber(lCell)
+    const checkGross = cellNumber(mCell)
     const creditGross = cellNumber(nCell)
 
     // Skip rows where everything is 0 — likely subtotal/footer noise that
     // happened to have a date and register but no monetary values.
-    if (totalGross === 0 && cashGross === 0 && creditGross === 0) continue
+    if (totalGross === 0 && cashGross === 0 && checkGross === 0 && creditGross === 0) continue
 
     out.push({
       date,
@@ -110,9 +116,11 @@ export async function parseCashOnTabExcel(file: File): Promise<PosClosingRow[]> 
       z_number,
       total: Math.round((totalGross / VAT_DIVIDER) * 100) / 100,
       cash: Math.round((cashGross / VAT_DIVIDER) * 100) / 100,
+      check: Math.round((checkGross / VAT_DIVIDER) * 100) / 100,
       credit: Math.round((creditGross / VAT_DIVIDER) * 100) / 100,
       totalGross,
       cashGross,
+      checkGross,
       creditGross,
     })
   }
