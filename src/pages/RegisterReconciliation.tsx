@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Upload, FileSpreadsheet, Download } from 'lucide-react'
+import { Upload, FileSpreadsheet, Download, Info, ChevronDown, ChevronUp } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useAppUser, isRestrictedBranchUser } from '../lib/UserContext'
@@ -56,6 +56,7 @@ export default function RegisterReconciliation({ onBack }: Props) {
   const [parsing, setParsing] = useState(false)
   const [error, setError] = useState('')
   const [filterOnlyDiffs, setFilterOnlyDiffs] = useState(false)
+  const [howToOpen, setHowToOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -207,6 +208,32 @@ export default function RegisterReconciliation({ onBack }: Props) {
               <Download size={14} /> ייצא פערים
             </button>
           </div>
+        </div>
+
+        {/* How-to: where to get the right file from CashOnTab */}
+        <div style={{ background: '#eff6ff', borderRadius: 12, border: '1px solid #bfdbfe' }}>
+          <button onClick={() => setHowToOpen(v => !v)} style={{
+            width: '100%', background: 'transparent', border: 'none', cursor: 'pointer',
+            padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10,
+            justifyContent: 'space-between', fontFamily: 'inherit', textAlign: 'right',
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#1e40af' }}>
+              <Info size={16} />
+              איך להוריד את הקובץ הנכון מ-CashOnTab?
+            </span>
+            {howToOpen ? <ChevronUp size={16} color="#1e40af" /> : <ChevronDown size={16} color="#1e40af" />}
+          </button>
+          {howToOpen && (
+            <div style={{ padding: '4px 18px 16px', fontSize: 13, color: '#1e3a8a', lineHeight: 1.8 }}>
+              <ol style={{ margin: 0, paddingInlineStart: 22 }}>
+                <li>נכנסים ל-CashOnTab → עמוד <strong>סיכום תקבולים לפי דוח Z</strong></li>
+                <li>בוחרים <strong>דו"ח מפורט לפי תקבול</strong></li>
+                <li>בוחרים את <strong>התאריך</strong> הרצוי</li>
+                <li>בוחרים את <strong>כל הקופות של הסניף</strong></li>
+                <li>מייצאים ל<strong>גיליון אקסל</strong> ומעלים כאן</li>
+              </ol>
+            </div>
+          )}
         </div>
 
         {/* Upload */}
