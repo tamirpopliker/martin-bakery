@@ -42,6 +42,7 @@ import EmployerCostsUpload from './EmployerCostsUpload'
 import FactorySpecialOrders from './FactorySpecialOrders'
 import SuppliersReport from './SuppliersReport'
 import ManagementReports from './ManagementReports'
+import RegisterReconciliation from './RegisterReconciliation'
 import HRDashboard from './HRDashboard'
 import BonusKPI from './BonusKPI'
 import MonthlyChangesReport from './MonthlyChangesReport'
@@ -54,7 +55,7 @@ import {
   AlertTriangle, ClipboardList, Truck, UserCog, Activity,
   Factory, ChevronDown, ChevronLeft, Database, Monitor, Home as HomeIcon,
   LayoutDashboard, X, Users, FileSpreadsheet, ArrowRightLeft, ShoppingCart, Wrench, Building2, CreditCard, Briefcase, Cake,
-  IdCard, FileSignature, Globe, BookOpen, ShieldCheck,
+  IdCard, FileSignature, Globe, BookOpen, ShieldCheck, Calculator,
 } from 'lucide-react'
 import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/icons'
 
@@ -81,6 +82,7 @@ const PANEL_MANAGE = [
   { label: 'לקוחות הקפה (B2B)', subtitle: 'חשבוניות · תשלומים · מעקב חובות', Icon: CreditCard, color: '#dc2626', page: 'b2b_customers' },
   { label: 'דשבורד מנכ"ל', subtitle: 'מבט רשתי · כל הסניפים', Icon: TrophyIcon,   color: '#f59e0b', page: 'ceo_dashboard' },
   { label: 'דוחות ניהול', subtitle: 'בקרת הכנסות · לייבור · קופות · שלמות נתונים', Icon: ClipboardList, color: '#6366f1', page: 'management_reports' },
+  { label: 'בקרת סגירות קופה', subtitle: 'השוואת קובץ CashOnTab מול האפליקציה', Icon: Calculator, color: '#0ea5e9', page: 'register_reconciliation' },
   { label: 'בונוס KPI', subtitle: 'חישוב ואישור בונוס חודשי למנהלי סניף', Icon: TrophyIcon, color: '#f59e0b', page: 'bonus_kpi' },
   { label: 'דוח ספקים מאוחד', subtitle: 'איחוד שמות ספקים · סיכום לפי סניף', Icon: Briefcase, color: '#6366f1', page: 'suppliers_report' },
   { label: 'דוחות והתראות', subtitle: 'לוג דוחות · כללי התראה', Icon: Mail,         color: '#f59e0b', page: 'reports_alerts' },
@@ -458,6 +460,7 @@ export default function Home() {
     if (page === 'b2b_customers') return <B2BCustomers onBack={() => setPage(null)} />
     if (page === 'suppliers_report') return <SuppliersReport onBack={() => setPage(null)} />
     if (page === 'management_reports') return <ManagementReports onBack={() => setPage(null)} />
+    if (page === 'register_reconciliation') return <RegisterReconciliation onBack={() => setPage(null)} />
     if (page === 'bonus_kpi') return <BonusKPI onBack={() => setPage(null)} />
     if (page === 'employer_costs') return <EmployerCostsUpload onBack={() => setPage(null)} onNavigate={(p) => setPage(p)} />
     if (page === 'factory_departments') return <FactoryDepartments onBack={() => setPage(null)} />
@@ -1029,6 +1032,7 @@ export default function Home() {
                     { label: 'דוח שינויים חודשי', subtitle: 'קליטות · עזיבות · שכר · בנק', Icon: FileSignature, color: '#7c3aed', page: 'changes_report' },
                     { label: 'דוח מעסיק', subtitle: 'עלות שכר אמיתית · חודשי', Icon: Briefcase, color: '#0ea5e9', page: 'employer_costs' },
                     { label: 'דוחות ניהול', subtitle: 'בקרת הכנסות · לייבור · קופות · שלמות נתונים', Icon: ClipboardList, color: '#6366f1', page: 'management_reports' },
+  { label: 'בקרת סגירות קופה', subtitle: 'השוואת קובץ CashOnTab מול האפליקציה', Icon: Calculator, color: '#0ea5e9', page: 'register_reconciliation' },
                     { label: 'בונוס KPI', subtitle: 'חישוב ואישור בונוס חודשי למנהלי סניף', Icon: TrophyIcon, color: '#f59e0b', page: 'bonus_kpi' },
                     { label: 'דוח ספקים מאוחד', subtitle: 'איחוד שמות ספקים · סיכום לפי סניף', Icon: Briefcase, color: '#6366f1', page: 'suppliers_report' },
                     { label: 'ניהול משתמשים', subtitle: 'הרשאות · משתמשים · סניפים', Icon: UserCog, color: '#8b5cf6', page: 'user_management' },

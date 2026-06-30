@@ -142,6 +142,14 @@ function buildCanAccessPage(user: AppUser): (pageKey: string) => boolean {
       return false
     }
 
+    // ─── Register reconciliation: admin + non-restricted branch managers ───
+    // Compares manually entered register_closings against a CashOnTab PDF.
+    // Restricted cashiers and factory roles have no business with this audit.
+    if (pageKey === 'register_reconciliation') {
+      if (user.role === 'branch') return true
+      return false
+    }
+
     // ─── Admin-only pages ───
     if (pageKey === 'user_management' || pageKey === 'data_import' ||
         pageKey === 'ceo_dashboard' || pageKey === 'reports_alerts' ||

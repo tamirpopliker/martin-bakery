@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
-import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound, ImagePlus, IdCard, FileSignature, ShieldCheck, Lightbulb, ChevronDown, ChevronUp } from 'lucide-react'
+import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound, ImagePlus, IdCard, FileSignature, ShieldCheck, Lightbulb, ChevronDown, ChevronUp, ClipboardCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PageHeader from '../components/PageHeader'
 import { useAppUser, isRestrictedBranchUser } from '../lib/UserContext'
@@ -26,6 +26,7 @@ import BranchDashboard from './BranchDashboard'
 import DataImport from './DataImport'
 import BranchCommunication from './BranchCommunication'
 import RegisterClosings from './RegisterClosings'
+import RegisterReconciliation from './RegisterReconciliation'
 import ChangeFund from './ChangeFund'
 import BranchSpecialOrders from './BranchSpecialOrders'
 import WeeklyInsightsCard from '../components/WeeklyInsightsCard'
@@ -83,6 +84,7 @@ type BranchPage =
   | 'changes_report'
   | 'quality_hub'
   | 'customer_complaints'
+  | 'register_reconciliation'
 
 interface MenuItem {
   page: BranchPage
@@ -98,6 +100,7 @@ const MENU_ITEMS: MenuItem[] = [
   { page: 'dashboard', label: 'דשבורד סניף',   subtitle: 'KPI · הכנסות · הוצאות · גרפים', Icon: BarChart2, ready: true },
   { page: 'revenue',   label: 'הכנסות',        subtitle: 'קופה · אתר · הקפה',        Icon: ShoppingBag, ready: true },
   { page: 'register_closings', label: 'סגירת קופות', subtitle: 'ספירה · הפקדה · פערים', Icon: Calculator, ready: true },
+  { page: 'register_reconciliation', label: 'בקרת סגירות קופה', subtitle: 'השוואה לקובץ CashOnTab', Icon: ClipboardCheck, ready: true },
   { page: 'change_fund', label: 'קופת עודף',     subtitle: 'יתרה · תנועות · קרן בסיס',  Icon: Wallet,      ready: true },
   { page: 'expenses',  label: 'הוצאות',         subtitle: 'ספקים · תיקונים · תשתיות', Icon: Receipt,     ready: true },
   { page: 'labor',     label: 'לייבור',          subtitle: 'שעות · עלות מעסיק',         Icon: Users,       ready: true },
@@ -203,6 +206,9 @@ export default function BranchHome({ branch, onBack }: Props) {
   )
   if (page === 'revenue') return (
     <BranchRevenue branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} onNavigate={(p) => setPage(p as BranchPage)} />
+  )
+  if (page === 'register_reconciliation') return (
+    <RegisterReconciliation onBack={() => setPage(null)} />
   )
   if (page === 'register_closings') return (
     <RegisterClosings branchId={branch.id} branchName={branch.name} branchColor={branch.color} onBack={() => setPage(null)} />
