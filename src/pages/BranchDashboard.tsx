@@ -219,13 +219,21 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
     }
 
     // Average per weekday from the 8-week comparison window only.
+    // Iterate EVERY day in the window (not just dates with revenue records) so
+    // closed days like Shabbat contribute 0 to the average instead of being
+    // treated as missing data — which would otherwise leave the dashed line
+    // null on Saturdays and recharts would draw a straight interpolated line
+    // across the gap, giving the visual impression of Shabbat revenue.
     const wdSum: Record<number, number> = {}
     const wdCount: Record<number, number> = {}
-    for (const [dateStr, amount] of Object.entries(totalByDate)) {
-      if (dateStr >= rangeStart) continue
-      const wd = new Date(dateStr + 'T12:00:00').getDay()
+    const iter = new Date(compareStart)
+    while (iter < endObj) {
+      const iso = `${iter.getFullYear()}-${String(iter.getMonth() + 1).padStart(2, '0')}-${String(iter.getDate()).padStart(2, '0')}`
+      const amount = totalByDate[iso] || 0
+      const wd = iter.getDay()
       wdSum[wd] = (wdSum[wd] || 0) + amount
       wdCount[wd] = (wdCount[wd] || 0) + 1
+      iter.setDate(iter.getDate() + 1)
     }
     const wdAvg: Record<number, number> = {}
     for (let wd = 0; wd < 7; wd++) {
