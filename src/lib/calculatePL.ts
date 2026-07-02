@@ -3,7 +3,7 @@
  * Uses actual DB schema: branch_revenue, branch_expenses (expense_type, from_factory),
  * branch_labor, branch_waste, fixed_costs (entity_type, entity_id).
  */
-import { supabase, fetchGlobalEmployees, calcGlobalLaborForDept, getWorkingDays } from './supabase'
+import { supabase, fetchGlobalEmployees, calcGlobalLaborForDept, getWorkingDays, countWorkingDaysInRange } from './supabase'
 
 const HQ_ESTIMATE_PCT_DEFAULT = 10
 
