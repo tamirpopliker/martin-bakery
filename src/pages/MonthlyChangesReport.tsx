@@ -64,20 +64,21 @@ const HEBREW_MONTHS = [
 ]
 
 const SALARY_FIELDS = new Set(['hourly_rate', 'monthly_salary', 'retention_bonus', 'bonus', 'global_daily_rate'])
-const BANK_FIELDS = new Set(['bank_name', 'bank_branch', 'bank_account_number'])
+const BANK_FIELDS = new Set(['bank_name', 'bank_branch', 'bank_account_number', 'payment_method'])
 const ROLE_FIELDS = new Set(['position', 'department'])
 
 // Display order for the Excel sheets — drives the column order of the row-
 // per-entry export. Each list must contain only keys that appear in the
 // matching *_FIELDS Set above.
 const SALARY_FIELDS_ORDER = ['hourly_rate', 'monthly_salary', 'global_daily_rate', 'bonus', 'retention_bonus'] as const
-const BANK_FIELDS_ORDER = ['bank_name', 'bank_branch', 'bank_account_number'] as const
+const BANK_FIELDS_ORDER = ['payment_method', 'bank_name', 'bank_branch', 'bank_account_number'] as const
 const ROLE_FIELDS_ORDER = ['position', 'department'] as const
 
 const FIELD_LABELS: Record<string, string> = {
   hourly_rate: 'תעריף שעתי', monthly_salary: 'שכר חודשי', retention_bonus: 'בונוס התמדה',
   bonus: 'בונוס', global_daily_rate: 'תעריף יומי', bank_name: 'בנק',
-  bank_branch: 'סניף בנק', bank_account_number: 'חשבון', position: 'תפקיד',
+  bank_branch: 'סניף בנק', bank_account_number: 'חשבון',
+  payment_method: 'אמצעי תשלום', position: 'תפקיד',
   department: 'מחלקה', start_date: 'תחילת עבודה', end_date: 'סיום עבודה',
   active: 'פעיל', id_number: 'ת.ז', birth_date: 'ת. לידה', address: 'כתובת',
   email: 'אימייל', phone: 'טלפון', name: 'שם',
@@ -88,6 +89,8 @@ function fieldLabel(k: string) { return FIELD_LABELS[k] || k }
 function formatValue(v: unknown): string {
   if (v === null || v === undefined || v === '') return '—'
   if (typeof v === 'boolean') return v ? 'כן' : 'לא'
+  if (v === 'bank_transfer') return 'העברה לבנק'
+  if (v === 'check') return 'צ׳ק'
   return String(v)
 }
 

@@ -24,6 +24,7 @@ interface ProfileFormData {
   bank_name: string
   bank_branch: string
   bank_account_number: string
+  payment_method: 'bank_transfer' | 'check'
   // Only meaningful for branch employees — lets admin reassign the employee.
   branch_id: string
 }
@@ -33,6 +34,7 @@ const EMPTY_FORM: ProfileFormData = {
   monthly_salary: '', hourly_rate: '', retention_bonus: '',
   id_number: '', birth_date: '', address: '', email: '',
   bank_name: '', bank_branch: '', bank_account_number: '',
+  payment_method: 'bank_transfer',
   branch_id: '',
 }
 
@@ -99,6 +101,7 @@ export function ProfileTab({
           bank_name: data.bank_name ?? '',
           bank_branch: data.bank_branch ?? '',
           bank_account_number: data.bank_account_number ?? '',
+          payment_method: data.payment_method === 'check' ? 'check' : 'bank_transfer',
           branch_id: data.branch_id != null ? String(data.branch_id) : '',
         })
       }
@@ -120,9 +123,12 @@ export function ProfileTab({
       birth_date: form.birth_date || null,
       address: form.address || null,
       email: form.email || null,
-      bank_name: form.bank_name || null,
-      bank_branch: form.bank_branch || null,
-      bank_account_number: form.bank_account_number || null,
+      // When שכר משולם בצ'ק — נקה את פרטי הבנק כדי שלא ישמרו בטעות פרטים
+      // ישנים שכבר לא רלוונטיים.
+      bank_name: form.payment_method === 'check' ? null : (form.bank_name || null),
+      bank_branch: form.payment_method === 'check' ? null : (form.bank_branch || null),
+      bank_account_number: form.payment_method === 'check' ? null : (form.bank_account_number || null),
+      payment_method: form.payment_method,
     }
     // Branch reassignment — only meaningful for branch employees (factory has
     // a department instead). Always include so the dropdown is the source of
@@ -148,7 +154,7 @@ export function ProfileTab({
     }
   }
 
-  function update<K extends keyof ProfileFormData>(key: K, value: string) {
+  function update<K extends keyof ProfileFormData>(key: K, value: ProfileFormData[K]) {
     setForm(f => ({ ...f, [key]: value }))
   }
 
@@ -275,9 +281,40 @@ export function ProfileTab({
             <Field label="שכר חודשי (₪)" type="number" value={form.monthly_salary} onChange={v => update('monthly_salary', v)} />
             <Field label="בונוס התמדה (₪)" type="number" value={form.retention_bonus} onChange={v => update('retention_bonus', v)} />
             <div />
-            <Field label="שם בנק" value={form.bank_name} onChange={v => update('bank_name', v)} />
-            <Field label="סניף" value={form.bank_branch} onChange={v => update('bank_branch', v)} />
-            <Field label="חשבון" value={form.bank_account_number} onChange={v => update('bank_account_number', v)} />
+            <div className="col-span-2">
+              <label className="block text-xs font-bold text-slate-500 mb-2">אמצעי תשלום</label>
+              <div className="flex gap-2">
+                {[
+                  { key: 'bank_transfer', label: 'העברה לבנק' },
+                  { key: 'check',         label: 'צ׳ק' },
+                ].map(opt => {
+                  const active = form.payment_method === opt.key
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => update('payment_method', opt.key as 'bank_transfer' | 'check')}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                        active
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >{opt.label}</button>
+                  )
+                })}
+              </div>
+            </div>
+            {form.payment_method === 'check' ? (
+              <div className="col-span-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+                השכר משולם בצ׳ק — פרטי הבנק לא רלוונטיים ולא יישמרו.
+              </div>
+            ) : (
+              <>
+                <Field label="שם בנק" value={form.bank_name} onChange={v => update('bank_name', v)} />
+                <Field label="סניף" value={form.bank_branch} onChange={v => update('bank_branch', v)} />
+                <Field label="חשבון" value={form.bank_account_number} onChange={v => update('bank_account_number', v)} />
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
