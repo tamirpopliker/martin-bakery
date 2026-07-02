@@ -6,7 +6,7 @@ import { calculateBranchPL, calculateFactoryPL, getHQAllocationContext, type PLR
 import { TrendingUp, TrendingDown, Minus, Receipt, Globe, CreditCard, Truck, Building2, Layers, Lightbulb, ChevronDown, ChevronUp } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { RevenueIcon, ProfitIcon, LaborIcon, FixedCostIcon, TrophyIcon } from '@/components/icons'
-import { BarChart, Bar, AreaChart, Area, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts'
+import { BarChart, Bar, AreaChart, Area, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts'
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
 import PeriodPicker from '../components/PeriodPicker'
@@ -120,6 +120,7 @@ export default function CEODashboard({ onBack }: Props) {
   const [prevKpiTotalLabor, setPrevKpiTotalLabor] = useState(0)
   const [dailyRevenue, setDailyRevenue] = useState<{ date: string; [key: string]: string | number }[]>([])
   const [expenseBreakdown, setExpenseBreakdown] = useState<{ name: string; value: number }[]>([])
+  const [monthlyTrend, setMonthlyTrend] = useState<{ month: string; 'הכנסות': number; 'רווח תפעולי': number }[]>([])
   const [avgLaborTarget, setAvgLaborTarget] = useState(0)
   const [overheadPct, setOverheadPct] = useState(5)
   // Per-branch KPI targets: { branchId: { labor_pct, waste_pct } }
@@ -492,6 +493,56 @@ export default function CEODashboard({ onBack }: Props) {
   }
 
   useEffect(() => { if (BRANCHES.length > 0) fetchData() }, [from, to, BRANCHES.length])
+
+  // 6-month consolidated trend — revenue and operating profit per month.
+  // Runs alongside fetchData so the main dashboard doesn't wait for it.
+  useEffect(() => {
+    if (BRANCHES.length === 0) return
+    let cancelled = false
+    ;(async () => {
+      const branchIds = BRANCHES.map(b => b.id)
+      const anchor = new Date(from + 'T12:00:00')
+      const months: string[] = []
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(anchor.getFullYear(), anchor.getMonth() - i, 1)
+        months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+      }
+      const oh = await getOverheadPct().catch(() => 5)
+      const rows = await Promise.all(months.map(async mk => {
+        const [y, m] = mk.split('-').map(Number)
+        const mFrom = `${mk}-01`
+        const mTo = new Date(y, m, 1).toISOString().slice(0, 10)
+        const label = new Date(mFrom + 'T12:00:00').toLocaleDateString('he-IL', { month: 'short', year: '2-digit' })
+        try {
+          const hqCtx = await getHQAllocationContext(mFrom, mTo, mk)
+          const [brPLs, factPL] = await Promise.all([
+            Promise.all(branchIds.map(id => calculateBranchPL(id, mFrom, mTo, undefined, mk, hqCtx))),
+            calculateFactoryPL(mFrom, mTo, mk, hqCtx),
+          ])
+          // Consolidated revenue = branches revenue + factory external revenue
+          const branchRev = brPLs.reduce((s, p) => s + p.revenue, 0)
+          const consolidatedRevenue = branchRev + factPL.externalRevenue
+          // Consolidated OP — match the Home.tsx / CEO KPI formula so the
+          // trend line ends on the same number the current-month tile shows.
+          const factoryConsOp = factPL.operatingProfit - factPL.internalRevenue
+          const branchConsOp = brPLs.reduce((s, p) => s + p.operatingProfit + p.factoryPurchases, 0)
+          const consolidatedOp = factoryConsOp + branchConsOp
+          return {
+            month: label,
+            'הכנסות': Math.round(consolidatedRevenue),
+            'רווח תפעולי': Math.round(consolidatedOp),
+          }
+        } catch (err) {
+          console.error('[CEO monthlyTrend]', mk, err)
+          return { month: label, 'הכנסות': 0, 'רווח תפעולי': 0 }
+        }
+      }))
+      if (!cancelled) setMonthlyTrend(rows)
+      // overheadPct read only to warm the cache; ignore its value here.
+      void oh
+    })()
+    return () => { cancelled = true }
+  }, [from, BRANCHES.length])
 
   const totalRevenue    = branches.reduce((s, b) => s + b.revenue, 0)
   const totalExpenses   = branches.reduce((s, b) => s + b.expenses, 0)
@@ -1460,6 +1511,35 @@ export default function CEODashboard({ onBack }: Props) {
                 </div>
               </div>
             </motion.div>
+
+            {/* Monthly trend — consolidated revenue + operating profit, last 6 months */}
+            {monthlyTrend.length > 0 && (
+              <motion.div variants={fadeIn} initial="hidden" animate="visible">
+                <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '4px' }}>מגמת הכנסות ורווח תפעולי — 6 חודשים אחרונים</span>
+                  <span style={{ fontSize: 12, color: '#94a3b8', display: 'block', marginBottom: 12 }}>נתונים מאוחדים (כל הסניפים + מפעל, אחרי קיזוז intercompany)</span>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={monthlyTrend} margin={{ top: 8, right: 20, left: 20, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: '#94a3b8' }}
+                        tickFormatter={v => `₪${(v / 1000).toFixed(0)}K`}
+                        axisLine={false} tickLine={false}
+                      />
+                      <Tooltip
+                        formatter={(v: any, name: any) => [`₪${Math.round(Number(v)).toLocaleString()}`, String(name)]}
+                        contentStyle={{ fontSize: 12, direction: 'rtl' }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 12, direction: 'rtl' }} />
+                      <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="3 3" />
+                      <Line type="monotone" dataKey="הכנסות" stroke="#378ADD" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                      <Line type="monotone" dataKey="רווח תפעולי" stroke="#534AB7" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </motion.div>
+            )}
 
             {/* Daily revenue area chart */}
             {dailyRevenue.length > 0 && (
