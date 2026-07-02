@@ -24,6 +24,7 @@ export function MonthlyEventsTab({ employee }: { employee: UnifiedEmployee }) {
   const [loading, setLoading] = useState(true)
   const [selectedType, setSelectedType] = useState<number | null>(null)
   const [eventMonth, setEventMonth] = useState<string>(currentMonthValue())
+  const [numericValue, setNumericValue] = useState<string>('')
   const [uploading, setUploading] = useState(false)
   const [zipping, setZipping] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -48,6 +49,44 @@ export function MonthlyEventsTab({ employee }: { employee: UnifiedEmployee }) {
     setDocs((docsRes.data as EmployeeDocument[]) || [])
     if (eventTypes.length > 0 && selectedType === null) setSelectedType(eventTypes[0].id)
     setLoading(false)
+  }
+
+  async function handleNumericSave() {
+    setMsg(null)
+    if (!selectedType) { setMsg({ type: 'error', text: 'בחר סוג אירוע' }); return }
+    if (!eventMonth)  { setMsg({ type: 'error', text: 'בחר את חודש האירוע' }); return }
+    const n = parseFloat(numericValue)
+    if (!Number.isFinite(n) || n <= 0) {
+      setMsg({ type: 'error', text: 'הזן ערך חיובי' })
+      return
+    }
+    const docType = docTypes.find(t => t.id === selectedType)
+    if (!docType) return
+
+    setUploading(true)
+    const insertRes = await safeDbOperation(
+      () => supabase.from('employee_documents').insert({
+        employee_kind: employee.kind,
+        employee_id: employee.id,
+        document_type_id: docType.id,
+        document_type_label: docType.label_he,
+        file_name: null,
+        file_url: null,
+        file_size: null,
+        document_month: `${eventMonth}-01`,
+        numeric_value: n,
+      }),
+      'שמירת אירוע'
+    )
+    setUploading(false)
+    if (insertRes.ok) {
+      setMsg({ type: 'success', text: 'נשמר' })
+      setNumericValue('')
+      setTimeout(() => setMsg(null), 3000)
+      await loadAll()
+    } else {
+      setMsg({ type: 'error', text: insertRes.error })
+    }
   }
 
   async function handleFileUpload(file: File) {
@@ -112,6 +151,7 @@ export function MonthlyEventsTab({ employee }: { employee: UnifiedEmployee }) {
   }
 
   async function downloadDoc(doc: EmployeeDocument) {
+    if (!doc.file_url) return
     const signed = await supabase.storage.from('hr-documents').createSignedUrl(doc.file_url, 60 * 5)
     if (signed.error || !signed.data?.signedUrl) {
       setMsg({ type: 'error', text: 'יצירת קישור הורדה נכשלה' })
@@ -121,11 +161,14 @@ export function MonthlyEventsTab({ employee }: { employee: UnifiedEmployee }) {
   }
 
   async function deleteDoc(doc: EmployeeDocument) {
-    if (!confirm(`למחוק את "${doc.file_name}"?`)) return
-    const storageRes = await supabase.storage.from('hr-documents').remove([doc.file_url])
-    if (storageRes.error) {
-      setMsg({ type: 'error', text: `מחיקה נכשלה: ${storageRes.error.message}` })
-      return
+    const label = doc.file_name || `${doc.document_type_label} (${doc.numeric_value} ימים)`
+    if (!confirm(`למחוק את "${label}"?`)) return
+    if (doc.file_url) {
+      const storageRes = await supabase.storage.from('hr-documents').remove([doc.file_url])
+      if (storageRes.error) {
+        setMsg({ type: 'error', text: `מחיקה נכשלה: ${storageRes.error.message}` })
+        return
+      }
     }
     const dbRes = await safeDbOperation(
       () => supabase.from('employee_documents').delete().eq('id', doc.id),
@@ -150,6 +193,7 @@ export function MonthlyEventsTab({ employee }: { employee: UnifiedEmployee }) {
     try {
       const zip = new JSZip()
       for (const doc of docs) {
+        if (!doc.file_url) continue  // numeric-only events have no file
         const dl = await supabase.storage.from('hr-documents').download(doc.file_url)
         if (dl.error || !dl.data) continue
         const month = doc.document_month ? monthLabel(doc.document_month) : 'ללא חודש'
@@ -209,7 +253,7 @@ export function MonthlyEventsTab({ employee }: { employee: UnifiedEmployee }) {
           <div className="flex gap-3 flex-wrap items-center">
             <select
               value={selectedType ?? ''}
-              onChange={e => setSelectedType(Number(e.target.value))}
+              onChange={e => { setSelectedType(Number(e.target.value)); setNumericValue('') }}
               className="border rounded-lg px-3 py-2 text-sm bg-white min-w-[160px]"
               disabled={uploading}
             >
@@ -227,21 +271,55 @@ export function MonthlyEventsTab({ employee }: { employee: UnifiedEmployee }) {
                 disabled={uploading}
               />
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,image/*"
-              disabled={uploading || !selectedType || !eventMonth}
-              onChange={e => {
-                const f = e.target.files?.[0]
-                if (f) handleFileUpload(f)
-              }}
-              className="text-sm"
-            />
-            {uploading && <span className="text-sm text-slate-500">מעלה...</span>}
+            {(() => {
+              const t = docTypes.find(x => x.id === selectedType)
+              if (t?.requires_numeric_value) {
+                return (
+                  <>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step={0.5}
+                      value={numericValue}
+                      onChange={e => setNumericValue(e.target.value)}
+                      placeholder={t.numeric_value_label || 'כמות'}
+                      className="border rounded-lg px-3 py-2 text-sm bg-white w-32"
+                      disabled={uploading}
+                    />
+                    {t.numeric_value_label && (
+                      <span className="text-sm text-slate-500">{t.numeric_value_label}</span>
+                    )}
+                    <Button
+                      size="sm"
+                      onClick={handleNumericSave}
+                      disabled={uploading || !numericValue || !eventMonth}
+                    >
+                      {uploading ? 'שומר...' : 'שמור'}
+                    </Button>
+                  </>
+                )
+              }
+              return (
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,image/*"
+                  disabled={uploading || !selectedType || !eventMonth}
+                  onChange={e => {
+                    const f = e.target.files?.[0]
+                    if (f) handleFileUpload(f)
+                  }}
+                  className="text-sm"
+                />
+              )
+            })()}
+            {uploading && <span className="text-sm text-slate-500">שומר...</span>}
           </div>
           <p className="text-xs text-slate-400 mt-2 m-0">
-            PDF / JPG / PNG · עד 15MB · החודש קובע לאיזה דוח חשבונאי המסמך ישתייך
+            {docTypes.find(x => x.id === selectedType)?.requires_numeric_value
+              ? 'ללא קובץ · רק הזנת ערך מספרי לחודש הנבחר'
+              : 'PDF / JPG / PNG · עד 15MB · החודש קובע לאיזה דוח חשבונאי המסמך ישתייך'}
           </p>
         </CardContent>
       </Card>
@@ -262,36 +340,47 @@ export function MonthlyEventsTab({ employee }: { employee: UnifiedEmployee }) {
                   {month === 'unknown' ? 'ללא חודש' : monthLabel(month)} ({items.length})
                 </h4>
                 <div className="space-y-2">
-                  {items.map(d => (
-                    <div key={d.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded">
-                      <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded whitespace-nowrap shrink-0">
-                        {d.document_type_label}
-                      </span>
-                      <button
-                        onClick={() => downloadDoc(d)}
-                        className="flex-1 text-right text-sm text-indigo-700 hover:underline truncate"
-                      >
-                        {d.file_name}
-                      </button>
-                      <span className="text-xs text-slate-400 whitespace-nowrap">
-                        הועלה {new Date(d.uploaded_at).toLocaleDateString('he-IL')}
-                      </span>
-                      <button
-                        onClick={() => downloadDoc(d)}
-                        className="text-slate-400 hover:text-indigo-700 p-1"
-                        title="הורד"
-                      >
-                        <Download className="size-4" />
-                      </button>
-                      <button
-                        onClick={() => deleteDoc(d)}
-                        className="text-slate-400 hover:text-red-600 p-1"
-                        title="מחק"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    </div>
-                  ))}
+                  {items.map(d => {
+                    const isNumericOnly = d.numeric_value != null && !d.file_url
+                    return (
+                      <div key={d.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded">
+                        <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded whitespace-nowrap shrink-0">
+                          {d.document_type_label}
+                        </span>
+                        {isNumericOnly ? (
+                          <span className="flex-1 text-right text-sm text-slate-800 font-semibold">
+                            {d.numeric_value} ימים
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => downloadDoc(d)}
+                            className="flex-1 text-right text-sm text-indigo-700 hover:underline truncate"
+                          >
+                            {d.file_name}
+                          </button>
+                        )}
+                        <span className="text-xs text-slate-400 whitespace-nowrap">
+                          {isNumericOnly ? 'נרשם' : 'הועלה'} {new Date(d.uploaded_at).toLocaleDateString('he-IL')}
+                        </span>
+                        {!isNumericOnly && (
+                          <button
+                            onClick={() => downloadDoc(d)}
+                            className="text-slate-400 hover:text-indigo-700 p-1"
+                            title="הורד"
+                          >
+                            <Download className="size-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => deleteDoc(d)}
+                          className="text-slate-400 hover:text-red-600 p-1"
+                          title="מחק"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>

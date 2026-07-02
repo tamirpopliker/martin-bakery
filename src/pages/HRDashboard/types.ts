@@ -31,6 +31,10 @@ export interface DocumentType {
   is_default: boolean
   display_order: number
   is_monthly_event: boolean
+  // When true the event is a numeric data point (e.g. פדיון ימי חופש) instead
+  // of a file upload — the UI shows a number input and skips storage.
+  requires_numeric_value?: boolean
+  numeric_value_label?: string | null
 }
 
 export interface EmployeeDocument {
@@ -39,12 +43,13 @@ export interface EmployeeDocument {
   employee_id: number
   document_type_id: number | null
   document_type_label: string
-  file_name: string
-  file_url: string
+  file_name: string | null
+  file_url: string | null
   file_size: number | null
   uploaded_at: string
   uploaded_by: string | null
   document_month: string | null
+  numeric_value?: number | null
 }
 
 export interface AuditEntry {
