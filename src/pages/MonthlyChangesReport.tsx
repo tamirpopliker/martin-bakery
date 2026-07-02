@@ -368,7 +368,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
       { קטגוריה: 'שינויי שכר', 'מספר אירועים': salaryChanges.length },
       { קטגוריה: 'שינויי בנק', 'מספר אירועים': bankChanges.length },
       { קטגוריה: 'שינויי תפקיד/מחלקה', 'מספר אירועים': roleChanges.length },
-      { קטגוריה: 'מסמכים', 'מספר אירועים': documentEvents.length },
+      { קטגוריה: 'מסמכים ואירועים', 'מספר אירועים': documentEvents.length },
       { קטגוריה: 'שינויים אחרים', 'מספר אירועים': otherChanges.length },
       { קטגוריה: 'ייבוא נתונים (Bulk)', 'מספר אירועים': bulkBatches.reduce((s, b) => s + b.rows.length, 0) },
       { קטגוריה: 'בונוסי מנהלי סניף', 'מספר אירועים': bonuses.length },
@@ -425,26 +425,33 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     appendSheet(wb, 'שינויי בנק', buildFieldRows(bankChanges, BANK_FIELDS_ORDER))
     appendSheet(wb, 'שינויי תפקיד-מחלקה', buildFieldRows(roleChanges, ROLE_FIELDS_ORDER))
 
-    // ── Sheet 7: documents ──
+    // ── Sheet 7: documents + monthly events ──
+    // Both are audited via employee_documents. Numeric-only rows (e.g.
+    // פדיון ימי חופש) have no file — surface their numeric value in the
+    // 'כמות' column so the sheet doubles as an events log.
     const docRows = documentEvents
       .map(e => {
         const fields = e.changed_fields || {}
         const fileRaw = (fields.file_name as { new?: unknown })?.new ?? fields.file_name
         const dtypeRaw = (fields.document_type_label as { new?: unknown })?.new ?? fields.document_type_label
+        const numericRaw = (fields.numeric_value as { new?: unknown })?.new ?? fields.numeric_value
+        const monthRaw = (fields.document_month as { new?: unknown })?.new ?? fields.document_month
         const p = empParts(e)
         return {
           עובד: p.name,
           סניף: p.location,
           מחלקה: p.department,
-          'סוג מסמך': formatValue(dtypeRaw),
+          'סוג מסמך / אירוע': formatValue(dtypeRaw),
+          'חודש אירוע': monthRaw ? String(monthRaw).slice(0, 7) : '',
           'שם קובץ': formatValue(fileRaw),
-          פעולה: e.operation === 'INSERT' ? 'הועלה' : e.operation === 'DELETE' ? 'הוסר' : 'עודכן',
+          כמות: numericRaw != null && numericRaw !== '' ? Number(numericRaw) : '',
+          פעולה: e.operation === 'INSERT' ? 'הועלה / נרשם' : e.operation === 'DELETE' ? 'הוסר' : 'עודכן',
           תאריך: new Date(e.changed_at).toLocaleString('he-IL'),
           מבצע: e.changed_by_email || '',
         }
       })
       .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
-    appendSheet(wb, 'מסמכים', docRows)
+    appendSheet(wb, 'מסמכים ואירועים', docRows)
 
     // ── Sheet 8: other changes — skip rows with empty description ──
     const otherRows = otherChanges
@@ -756,15 +763,20 @@ export default function MonthlyChangesReport({ onBack }: Props) {
               </CategorySection>
 
               <CategorySection
-                title="מסמכים" count={documentEvents.length}
+                title="מסמכים ואירועים" count={documentEvents.length}
                 icon={<FileText className="size-5 text-indigo-600" />} color="indigo"
               >
                 {documentEvents.map(e => {
                   const fields = e.changed_fields || {}
-                  const file = (fields.file_name as { new?: unknown } | undefined)?.new ?? fields.file_name ?? '?'
+                  const file = (fields.file_name as { new?: unknown } | undefined)?.new ?? fields.file_name
                   const dtype = (fields.document_type_label as { new?: unknown } | undefined)?.new ?? fields.document_type_label ?? ''
-                  const action = e.operation === 'INSERT' ? 'הועלה' : 'הוסר'
-                  return <CategoryRow key={e.id} name={empName(e)} desc={`${action}: ${formatValue(dtype)} (${formatValue(file)})`} date={formatDate(e.changed_at)} by={e.changed_by_email} />
+                  const numeric = (fields.numeric_value as { new?: unknown } | undefined)?.new ?? fields.numeric_value
+                  const isNumericOnly = (numeric != null && numeric !== '') && !file
+                  const action = e.operation === 'INSERT' ? (isNumericOnly ? 'נרשם' : 'הועלה') : 'הוסר'
+                  const detail = isNumericOnly
+                    ? `${action}: ${formatValue(dtype)} (${numeric} ימים)`
+                    : `${action}: ${formatValue(dtype)} (${formatValue(file || '?')})`
+                  return <CategoryRow key={e.id} name={empName(e)} desc={detail} date={formatDate(e.changed_at)} by={e.changed_by_email} />
                 })}
               </CategorySection>
 
