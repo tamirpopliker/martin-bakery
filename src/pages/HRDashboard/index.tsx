@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button'
 import {
   ArrowRight, Search, Download, Building2, Factory,
   FileText, History, User, TrendingUp, ListChecks, UserPlus, CalendarDays,
+  Pencil, Check, X, Trash2,
 } from 'lucide-react'
+import { tableSourceFor } from './utils'
 import { ProfileTab } from './ProfileTab'
 import { DocumentsTab } from './DocumentsTab'
 import { MonthlyEventsTab } from './MonthlyEventsTab'
@@ -128,6 +130,7 @@ export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
         ? onBack                              // came from another page → return there
         : () => { setSelected(null); load() }} // organic click → back to HR list
       onTransferred={handleTransferred}
+      onNameChanged={load}
     />
   }
 
@@ -258,13 +261,67 @@ export default function HRDashboard({ onBack, initialEmployeeKey }: Props) {
 }
 
 function EmployeeDetail({
-  employee, onBack, onTransferred,
+  employee, onBack, onTransferred, onNameChanged,
 }: {
   employee: UnifiedEmployee
   onBack: () => void
   onTransferred?: (key: { kind: Kind; id: number }) => void
+  onNameChanged?: () => void
 }) {
+  const { appUser } = useAppUser()
+  const isAdmin = appUser?.role === 'admin'
   const [tab, setTab] = useState<TabKey>('profile')
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState(employee.name)
+  const [savingName, setSavingName] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleteConfirmName, setDeleteConfirmName] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+
+  async function saveName() {
+    const trimmed = nameDraft.trim()
+    if (!trimmed || trimmed === employee.name) { setEditingName(false); return }
+    setSavingName(true)
+    setErrorMsg('')
+    const source = tableSourceFor(employee.kind)
+    const { error } = await supabase.from(source).update({ name: trimmed }).eq('id', employee.id)
+    setSavingName(false)
+    if (error) {
+      setErrorMsg('עדכון השם נכשל: ' + error.message)
+      return
+    }
+    setEditingName(false)
+    // Locally reflect immediately; parent reloads on next fetch.
+    ;(employee as any).name = trimmed
+    onNameChanged?.()
+  }
+
+  async function performDelete() {
+    if (deleteConfirmName.trim() !== employee.name) {
+      setErrorMsg('שם העובד לאישור לא תואם')
+      return
+    }
+    if (deleteReason.trim().length < 3) {
+      setErrorMsg('יש להזין סיבת מחיקה')
+      return
+    }
+    setDeleting(true)
+    setErrorMsg('')
+    const source = tableSourceFor(employee.kind)
+    // Best-effort audit: prefix notes with the reason so hr_audit_log captures it.
+    await supabase.from(source).update({
+      notes: `[מחיקה: ${new Date().toISOString().slice(0, 10)} · ${appUser?.name || 'admin'}] ${deleteReason.trim()}`,
+    }).eq('id', employee.id)
+    const { error } = await supabase.from(source).delete().eq('id', employee.id)
+    setDeleting(false)
+    if (error) {
+      setErrorMsg('מחיקה נכשלה — ייתכן שיש רשומות מקושרות (מסמכים, אירועים, שכר). ' + error.message)
+      return
+    }
+    onBack()
+  }
 
   return (
     <div className="min-h-screen bg-slate-100" style={{ direction: 'rtl' }}>
@@ -273,7 +330,38 @@ function EmployeeDetail({
           <ArrowRight className="size-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-xl font-bold m-0">{employee.name}</h1>
+          {editingName ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={nameDraft}
+                onChange={e => setNameDraft(e.target.value)}
+                autoFocus
+                className="border rounded-lg px-3 py-1.5 text-lg font-bold min-w-[240px]"
+                onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setEditingName(false); setNameDraft(employee.name) } }}
+              />
+              <Button size="icon" variant="ghost" onClick={saveName} disabled={savingName} title="שמור">
+                <Check className="size-5 text-emerald-600" />
+              </Button>
+              <Button size="icon" variant="ghost" onClick={() => { setEditingName(false); setNameDraft(employee.name) }} title="ביטול">
+                <X className="size-5 text-slate-500" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold m-0">{employee.name}</h1>
+              {isAdmin && (
+                <>
+                  <Button size="icon" variant="ghost" onClick={() => { setNameDraft(employee.name); setEditingName(true) }} title="ערוך שם">
+                    <Pencil className="size-4 text-slate-400" />
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => { setDeleteReason(''); setDeleteConfirmName(''); setErrorMsg(''); setDeleteOpen(true) }} title="מחק עובד">
+                    <Trash2 className="size-4 text-rose-500" />
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
           <p className="text-sm text-slate-500 m-0">
             {employee.location_name}
             {employee.department ? ` · ${employee.department}` : ''}
@@ -281,6 +369,71 @@ function EmployeeDetail({
           </p>
         </div>
       </div>
+
+      {errorMsg && !deleteOpen && (
+        <div className="bg-rose-50 border-b border-rose-200 px-6 py-2 text-sm text-rose-700">
+          {errorMsg}
+        </div>
+      )}
+
+      {deleteOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+        }} onClick={() => !deleting && setDeleteOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'white', borderRadius: 14, padding: 22, maxWidth: 460, width: '100%',
+            direction: 'rtl', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 800, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Trash2 className="size-5" /> מחיקת עובד
+            </h3>
+            <p style={{ margin: '0 0 14px', fontSize: 13, color: '#475569', lineHeight: 1.6 }}>
+              עומדים למחוק את <strong>{employee.name}</strong>. פעולה זו <strong>לא ניתנת לביטול</strong>.
+              מסמכים, אירועים ורשומות מקושרות עלולים לחסום את המחיקה.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>סיבת המחיקה *</label>
+                <input
+                  type="text"
+                  value={deleteReason}
+                  onChange={e => setDeleteReason(e.target.value)}
+                  placeholder="לדוגמה: כפילות ברישום, בקשת העובד..."
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, fontFamily: 'inherit' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>הקלד את שם העובד לאישור *</label>
+                <input
+                  type="text"
+                  value={deleteConfirmName}
+                  onChange={e => setDeleteConfirmName(e.target.value)}
+                  placeholder={employee.name}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, fontFamily: 'inherit' }}
+                />
+              </div>
+              {errorMsg && (
+                <div style={{ background: '#fef2f2', color: '#991b1b', fontSize: 13, padding: '8px 12px', borderRadius: 8, border: '1px solid #fecaca' }}>
+                  {errorMsg}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start', marginTop: 4 }}>
+                <button
+                  onClick={performDelete}
+                  disabled={deleting}
+                  style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 14, fontWeight: 700, cursor: deleting ? 'wait' : 'pointer', opacity: deleting ? 0.7 : 1, fontFamily: 'inherit' }}
+                >{deleting ? 'מוחק...' : 'מחק לצמיתות'}</button>
+                <button
+                  onClick={() => setDeleteOpen(false)}
+                  disabled={deleting}
+                  style={{ background: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 8, padding: '9px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                >ביטול</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white border-b px-6">
         <div className="max-w-[800px] mx-auto flex gap-1 overflow-x-auto">
