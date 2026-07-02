@@ -157,7 +157,7 @@ export async function calculateBranchPL(
       .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
     supabase.from('branch_expenses').select('expense_type, amount, from_factory')
       .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
-    supabase.from('branch_labor').select('employer_cost')
+    supabase.from('branch_labor').select('employer_cost, employee_name')
       .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
     supabase.from('branch_waste').select('amount')
       .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
@@ -207,14 +207,47 @@ export async function calculateBranchPL(
   // Labor + Manager salary — check employer_costs first to prevent double-counting
   const [mYear, mMonth] = mk.split('-').map(Number)
   const { data: actualLabAll } = await supabase.from('employer_costs')
-    .select('actual_employer_cost, is_manager').eq('branch_id', branchId).eq('month', mMonth).eq('year', mYear)
+    .select('actual_employer_cost, is_manager, employee_name').eq('branch_id', branchId).eq('month', mMonth).eq('year', mYear)
   const laborIsActual = (actualLabAll && actualLabAll.length > 0) ? true : false
+
+  // ── Global-salary branch employees ─────────────────────────────────────
+  // Branch employees with monthly_salary set are paid a fixed amount every
+  // month regardless of clocked hours (e.g. branch manager on a global salary).
+  // They don't necessarily appear in branch_labor and — if they were added mid
+  // month after payroll upload — may not appear in employer_costs either. So
+  // we always compute their expected contribution here and fold it into
+  // labor / managerSalary if the primary source is missing them.
+  const { data: brGlobals } = await supabase.from('branch_employees')
+    .select('name, monthly_salary, is_manager')
+    .eq('branch_id', branchId).eq('active', true)
+    .not('monthly_salary', 'is', null).gt('monthly_salary', 0)
+  const workingDaysInMonth = await getWorkingDays(mk)
+  const workingDaysInPeriod = countWorkingDaysInRange(periodStart, periodEnd)
+  const monthFrac = workingDaysInMonth > 0 ? workingDaysInPeriod / workingDaysInMonth : 1
+  const brGlobalNames = new Set((brGlobals || []).map(e => e.name))
+  const empCostNames = new Set((actualLabAll || []).map(r => r.employee_name).filter(Boolean))
+  const globalsNotInEmpCosts = (brGlobals || []).filter(e => !empCostNames.has(e.name))
+  const globalMgrFromBranchEmps = globalsNotInEmpCosts
+    .filter(e => e.is_manager)
+    .reduce((s, e) => s + Number(e.monthly_salary) * 1.3 * monthFrac, 0)
+  const globalNonMgrFromBranchEmps = globalsNotInEmpCosts
+    .filter(e => !e.is_manager)
+    .reduce((s, e) => s + Number(e.monthly_salary) * 1.3 * monthFrac, 0)
 
   let labor: number
   if (laborIsActual) {
+    // employer_costs already includes any global employee that was in payroll.
+    // Add globals that were NOT uploaded (empCostNames doesn't cover them).
     labor = actualLabAll!.filter(r => !r.is_manager).reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+      + globalNonMgrFromBranchEmps
   } else {
-    labor = (labRes.data || []).reduce((s, r) => s + Number(r.employer_cost), 0)
+    // Estimate: branch_labor for hourly, plus fixed globals. Exclude globals
+    // from the hourly sum by name so we don't double-count when a global
+    // employee also happens to have clocked hours.
+    const hourlyLabor = (labRes.data || [])
+      .filter((r: any) => !brGlobalNames.has(r.employee_name))
+      .reduce((s: number, r: any) => s + Number(r.employer_cost), 0)
+    labor = hourlyLabor + globalNonMgrFromBranchEmps
   }
 
   // Manager salary: prefer current-month employer_costs is_manager=true; otherwise the latest
@@ -257,6 +290,10 @@ export async function calculateBranchPL(
   if (managerSalary === 0) {
     if (mgmtFromFixed > 0) {
       managerSalary = mgmtFromFixed
+    } else if (globalMgrFromBranchEmps > 0) {
+      // New: branch employees flagged is_manager with a monthly_salary but
+      // not represented in employer_costs / fixed_costs yet (e.g. new hire).
+      managerSalary = globalMgrFromBranchEmps
     } else {
       const { data: prevMgmt } = await supabase.from('fixed_costs')
         .select('amount').eq('entity_type', `branch_${branchId}`).eq('entity_id', 'mgmt')
@@ -265,6 +302,10 @@ export async function calculateBranchPL(
         managerSalary = Number(prevMgmt[0].amount)
       }
     }
+  } else if (globalMgrFromBranchEmps > 0) {
+    // A global-salary manager exists that wasn't in the primary payroll upload
+    // for this month — still add them so their salary isn't lost.
+    managerSalary += globalMgrFromBranchEmps
   }
 
   // Controllable profit = revenue - all variable costs.
