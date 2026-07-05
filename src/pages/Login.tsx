@@ -150,7 +150,7 @@ export default function Login() {
 
             {mode === 'username' && (
               <div className="space-y-4">
-                <p className="text-[12px] text-slate-400 text-center">כניסה למשתמשי סניף</p>
+                <p className="text-[12px] text-slate-400 text-center">כניסה לעובדים ולמשתמשי סניף</p>
                 <input
                   type="text"
                   placeholder="שם משתמש"

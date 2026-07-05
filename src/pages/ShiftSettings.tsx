@@ -42,6 +42,7 @@ interface BranchEmployee {
   active: boolean
   priority: number | null
   min_shifts_per_week: number | null
+  max_shifts_per_week: number | null
   training_status: string | null
 }
 
@@ -551,7 +552,7 @@ function EmployeesTab({ branchId }: { branchId: number }) {
   useEffect(() => {
     async function load() {
       const [empRes, rolesRes, assignRes] = await Promise.all([
-        supabase.from('branch_employees').select('id, name, active, priority, min_shifts_per_week, training_status, is_manager').eq('branch_id', branchId).eq('active', true).eq('is_manager', false).order('name'),
+        supabase.from('branch_employees').select('id, name, active, priority, min_shifts_per_week, max_shifts_per_week, training_status, is_manager').eq('branch_id', branchId).eq('active', true).eq('is_manager', false).order('name'),
         supabase.from('shift_roles').select('*').eq('branch_id', branchId).eq('is_active', true).order('name'),
         supabase.from('employee_role_assignments').select('*'),
       ])
@@ -619,7 +620,15 @@ function EmployeesTab({ branchId }: { branchId: number }) {
         ? supabase.from('employee_role_assignments').insert(roleAddsData).select()
         : Promise.resolve({ data: [] })
 
-      await Promise.all([...empUpdates, ...roleDeletes, roleAddPromise])
+      // Supabase queries resolve (don't throw) on RLS/constraint errors — inspect
+      // each result so a denied write isn't silently reported as success.
+      const results = await Promise.all([...empUpdates, ...roleDeletes, roleAddPromise])
+      const failed = results.find((r: any) => r && r.error)
+      if (failed) {
+        alert('שגיאה בשמירה: ' + ((failed as any).error?.message || 'שגיאת מסד נתונים'))
+        setIsSaving(false)
+        return
+      }
 
       // Reload assignments to get real IDs
       const { data: freshAssignments } = await supabase.from('employee_role_assignments').select('*')
@@ -670,6 +679,7 @@ function EmployeesTab({ branchId }: { branchId: number }) {
                 <th style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '12px' }}>עדיפות</th>
                 <th style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '12px' }}>הכשרה</th>
                 <th style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '12px' }}>מינ׳ משמרות</th>
+                <th style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f1f5f9', fontWeight: '600', color: '#64748b', fontSize: '12px' }}>מקס׳ משמרות</th>
                 {roles.map(role => (
                   <th key={role.id} style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f1f5f9' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
@@ -734,6 +744,18 @@ function EmployeesTab({ branchId }: { branchId: number }) {
                         value={emp.min_shifts_per_week || 0}
                         onChange={(e) => {
                           updateEmpField(emp.id, 'min_shifts_per_week', Number(e.target.value))
+                        }}
+                        style={{ width: '56px', textAlign: 'center', fontSize: '13px', padding: '4px 6px', borderRadius: '6px', border: '1px solid #e2e8f0', fontFamily: 'inherit', background: '#fff' }}
+                      />
+                    </td>
+                    <td style={{ textAlign: 'center', padding: '10px 6px', borderBottom: '1px solid #f8fafc' }}>
+                      <input
+                        type="number"
+                        min={0}
+                        max={7}
+                        value={emp.max_shifts_per_week ?? 6}
+                        onChange={(e) => {
+                          updateEmpField(emp.id, 'max_shifts_per_week', Number(e.target.value))
                         }}
                         style={{ width: '56px', textAlign: 'center', fontSize: '13px', padding: '4px 6px', borderRadius: '6px', border: '1px solid #e2e8f0', fontFamily: 'inherit', background: '#fff' }}
                       />

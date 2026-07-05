@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { supabase } from './supabase'
 import type { Session } from '@supabase/supabase-js'
+import ForcePasswordChange from '../pages/ForcePasswordChange'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export interface AppUser {
@@ -14,6 +15,8 @@ export interface AppUser {
   auth_uid: string | null
   managed_department: string | null // 'creams' | 'dough' | 'packaging' | 'cleaning' | null
   employee_id?: number | null
+  username?: string | null
+  must_change_password?: boolean
 }
 
 interface UserContextValue {
@@ -389,6 +392,16 @@ export function UserProvider({ session, children }: { session: Session; children
           </div>
         </div>
       </div>
+    )
+  }
+
+  // First-login gate: employees provisioned with a temporary PIN must set their
+  // own password before reaching the app.
+  if (appUser?.must_change_password) {
+    return (
+      <ForcePasswordChange
+        onDone={() => setAppUser(prev => (prev ? { ...prev, must_change_password: false } : prev))}
+      />
     )
   }
 

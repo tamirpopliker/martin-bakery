@@ -4,8 +4,21 @@ import { supabase } from '../lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { ArrowRight, Plus, Pencil, Users, Save, ToggleLeft, ToggleRight, Send, Mail, Upload } from 'lucide-react'
+import { ArrowRight, Plus, Pencil, Users, Save, ToggleLeft, ToggleRight, Send, Mail, Upload, KeyRound } from 'lucide-react'
 import { NewEmployeeWizard } from './HRDashboard/NewEmployeeWizard'
+
+// Suggest a username from an employee name (transliteration-free: keep latin/digits
+// from any email prefix, else fall back to the employee id).
+function suggestUsername(emp: { name: string; email: string | null; id: number }): string {
+  const fromEmail = (emp.email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9._-]/g, '')
+  if (fromEmail.length >= 3) return fromEmail
+  return `emp${emp.id}`
+}
+
+function genPin(): string {
+  // 4-digit numeric PIN, avoids leading-zero ambiguity for staff
+  return String(1000 + Math.floor(Math.random() * 9000))
+}
 
 interface Props {
   branchId: number
@@ -65,6 +78,14 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
   // Email input for connect dialog
   const [connectDialog, setConnectDialog] = useState<{ empId: number; name: string; email: string } | null>(null)
   const [connectEmail, setConnectEmail] = useState('')
+  // Username-login provisioning: employee_id → existing username
+  const [loginMap, setLoginMap] = useState<Map<number, string>>(new Map())
+  const [loginModal, setLoginModal] = useState<{ empId: number; name: string; mode: 'create' | 'reset' } | null>(null)
+  const [loginUsername, setLoginUsername] = useState('')
+  const [loginPin, setLoginPin] = useState('')
+  const [loginBusy, setLoginBusy] = useState(false)
+  const [loginError, setLoginError] = useState('')
+  const [loginResult, setLoginResult] = useState<{ username: string; pin: string } | null>(null)
 
   async function fetchEmployees() {
     // Active-only list. Inactive employees live under TeamManagement's
@@ -75,16 +96,58 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
     if (data) setEmployees(data)
 
     // Load app_users for this branch to determine connection status
-    const { data: appUsers } = await supabase.from('app_users').select('email, auth_uid')
+    const { data: appUsers } = await supabase.from('app_users').select('email, auth_uid, employee_id, username')
       .eq('branch_id', branchId)
     const statusMap = new Map<string, string>()
+    const logins = new Map<number, string>()
     appUsers?.forEach((au: any) => {
       const email = au.email?.toLowerCase()
       if (email) statusMap.set(email, au.auth_uid ? 'connected' : 'pending')
+      if (au.username && au.employee_id) logins.set(au.employee_id, au.username)
     })
     setAppStatus(statusMap)
+    setLoginMap(logins)
 
     setLoading(false)
+  }
+
+  function openLoginModal(emp: Employee) {
+    const existing = loginMap.get(emp.id)
+    setLoginModal({ empId: emp.id, name: emp.name, mode: existing ? 'reset' : 'create' })
+    setLoginUsername(existing || suggestUsername(emp))
+    setLoginPin(genPin())
+    setLoginError('')
+    setLoginResult(null)
+  }
+
+  async function submitLogin() {
+    if (!loginModal) return
+    setLoginBusy(true)
+    setLoginError('')
+    try {
+      const { data, error } = await supabase.functions.invoke('provision-employee-login', {
+        body: {
+          action: loginModal.mode,
+          employee_id: loginModal.empId,
+          username: loginUsername.trim().toLowerCase(),
+          pin: loginPin,
+        },
+      })
+      // Non-2xx responses surface as FunctionsHttpError — pull the JSON message out.
+      if (error) {
+        let msg = 'הפעולה נכשלה'
+        try { const j = await (error as any).context?.json?.(); if (j?.error) msg = j.error } catch { /* keep default */ }
+        setLoginError(msg)
+        return
+      }
+      if (data?.error) { setLoginError(data.error); return }
+      setLoginResult({ username: loginUsername.trim().toLowerCase(), pin: loginPin })
+      setLoginMap(prev => new Map(prev).set(loginModal.empId, loginUsername.trim().toLowerCase()))
+    } catch (err: any) {
+      setLoginError(err?.message || 'שגיאה לא צפויה')
+    } finally {
+      setLoginBusy(false)
+    }
   }
 
   function getEmpStatus(emp: Employee): 'connected' | 'pending' | 'none' {
@@ -282,8 +345,8 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
         ) : (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
             <Card className="shadow-sm" style={{ overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 60px 60px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
-                <span>שם</span><span>אפליקציה</span><span>סטטוס</span><span>עריכה</span><span>הזמנה</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 90px 55px 55px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '700', color: '#64748b' }}>
+                <span>שם</span><span>אפליקציה</span><span>סטטוס</span><span>כניסת עובד</span><span>עריכה</span><span>הזמנה</span>
               </div>
               {employees.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8' }}>
@@ -291,7 +354,7 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
                   <div>אין עובדים. לחץ "הוסף עובד" כדי להתחיל.</div>
                 </div>
               ) : employees.map(emp => (
-                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 60px 60px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: emp.active ? 1 : 0.5 }}>
+                <div key={emp.id} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 80px 90px 55px 55px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '13px', opacity: emp.active ? 1 : 0.5 }}>
                   <span style={{ fontWeight: '600', color: '#0f172a' }}>{emp.name}</span>
                   {/* App connection status */}
                   {(() => {
@@ -302,6 +365,17 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
                       <button onClick={() => { setConnectDialog({ empId: emp.id, name: emp.name, email: emp.email || '' }); setConnectEmail(emp.email || '') }}
                         style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 8px', fontSize: 11, color: '#6366f1', cursor: 'pointer', fontWeight: 600 }}>
                         📱 חבר
+                      </button>
+                    )
+                  })()}
+                  {/* Username login (create / reset) */}
+                  {(() => {
+                    const uname = loginMap.get(emp.id)
+                    return (
+                      <button onClick={() => openLoginModal(emp)}
+                        title={uname ? `שם משתמש: ${uname} — לחץ לאיפוס סיסמה` : 'צור שם משתמש וסיסמה לעובד'}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, background: uname ? '#f0fdf4' : '#eef2ff', color: uname ? '#16a34a' : '#6366f1', border: 'none', borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer', justifySelf: 'start' }}>
+                        <KeyRound size={12} /> {uname ? uname : 'צור כניסה'}
                       </button>
                     )
                   })()}
@@ -401,6 +475,67 @@ export default function BranchEmployees({ branchId, branchName, branchColor, onB
                 {inviteSending ? 'שולח...' : 'שלח הזמנה 📱'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Username-login modal (create / reset PIN) */}
+      {loginModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setLoginModal(null)}>
+          <div style={{ background: 'white', borderRadius: 16, padding: 28, width: 400, direction: 'rtl' }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+              {loginModal.mode === 'reset' ? 'איפוס סיסמה' : 'כניסה לעובד'} — {loginModal.name}
+            </h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b' }}>
+              העובד ייכנס עם שם משתמש וסיסמה (ללא צורך במייל), דרך לשונית "שם משתמש" במסך הכניסה.
+            </p>
+
+            {loginResult ? (
+              <div>
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+                  <p style={{ margin: '0 0 8px', fontSize: 13, color: '#16a34a', fontWeight: 700 }}>✓ הכניסה מוכנה — מסרו לעובד:</p>
+                  <div style={{ fontSize: 15, color: '#0f172a', direction: 'ltr', textAlign: 'left' }}>
+                    <div>שם משתמש: <strong>{loginResult.username}</strong></div>
+                    <div>סיסמה: <strong>{loginResult.pin}</strong></div>
+                  </div>
+                  <p style={{ margin: '10px 0 0', fontSize: 11, color: '#64748b' }}>הסיסמה מוצגת פעם אחת בלבד. בכניסה הראשונה העובד יתבקש להחליף אותה.</p>
+                </div>
+                <button onClick={() => setLoginModal(null)}
+                  style={{ width: '100%', background: '#6366f1', color: 'white', border: 'none', borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                  סגור
+                </button>
+              </div>
+            ) : (
+              <>
+                <label style={S.label}>שם משתמש (אנגלית/ספרות)</label>
+                <input value={loginUsername} disabled={loginModal.mode === 'reset'}
+                  onChange={e => setLoginUsername(e.target.value.toLowerCase())}
+                  placeholder="לדוגמה: dana1" style={{ ...S.input, direction: 'ltr', textAlign: 'left', marginBottom: 12, background: loginModal.mode === 'reset' ? '#f8fafc' : 'white' }} />
+                <label style={S.label}>סיסמה / קוד כניסה</label>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                  <input value={loginPin} onChange={e => setLoginPin(e.target.value)}
+                    style={{ ...S.input, direction: 'ltr', textAlign: 'left', flex: 1 }} />
+                  <button onClick={() => setLoginPin(genPin())} type="button"
+                    style={{ background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 10, padding: '0 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    חדש
+                  </button>
+                </div>
+                {loginError && <div style={{ padding: 10, background: '#fef2f2', borderRadius: 8, color: '#dc2626', fontSize: 13, marginBottom: 12, textAlign: 'center' }}>{loginError}</div>}
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={submitLogin}
+                    disabled={loginBusy || loginUsername.trim().length < 3 || loginPin.length < 4}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: loginBusy || loginUsername.trim().length < 3 || loginPin.length < 4 ? '#e2e8f0' : '#6366f1', color: loginBusy || loginUsername.trim().length < 3 || loginPin.length < 4 ? '#94a3b8' : 'white', border: 'none', borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                    <KeyRound size={14} /> {loginBusy ? 'שומר...' : loginModal.mode === 'reset' ? 'אפס סיסמה' : 'צור כניסה'}
+                  </button>
+                  <button onClick={() => setLoginModal(null)}
+                    style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 10, padding: '12px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                    ביטול
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

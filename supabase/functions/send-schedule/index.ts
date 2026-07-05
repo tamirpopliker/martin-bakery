@@ -109,7 +109,10 @@ serve(async (req) => {
 
     for (const [employeeId, empAssignments] of grouped) {
       const employee = employeesMap.get(employeeId)
-      if (!employee || !employee.email) {
+      // Skip employees without a routable email. Username-based sellers use
+      // synthetic @martin.local addresses (unroutable) — they see the schedule
+      // in the "My Schedule" screen instead.
+      if (!employee || !employee.email || employee.email.toLowerCase().endsWith('@martin.local')) {
         skipped++
         continue
       }

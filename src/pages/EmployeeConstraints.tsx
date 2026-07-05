@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { safeDbOperation } from '../lib/dbHelpers'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
 import { Button } from '@/components/ui/button'
@@ -97,9 +98,11 @@ export default function EmployeeConstraints({ onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [resolvedEmpId, setResolvedEmpId] = useState<number | null>(null)
   const [noEmployee, setNoEmployee] = useState(false)
-  const [weekOffset, setWeekOffset] = useState(0)
+  // Default to the upcoming week — that's what the manager schedules.
+  const [weekOffset, setWeekOffset] = useState(1)
   const [constraintMap, setConstraintMap] = useState<Map<string, Availability>>(new Map())
   const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set())
+  const [saveError, setSaveError] = useState('')
   const [currentDayIndex, setCurrentDayIndex] = useState(0)
   const [direction, setDirection] = useState(0)
 
@@ -231,10 +234,12 @@ export default function EmployeeConstraints({ onBack }: Props) {
     setRolesLoading(false)
   }
 
-  // ─── Set availability (optimistic) ─────────────────────
+  // ─── Set availability (optimistic + atomic UPSERT) ─────
   async function setAvailability(dateStr: string, shiftId: number, availability: Availability) {
     if (!resolvedEmpId || shiftId === 0) return
     const key = `${dateStr}|${shiftId}`
+    const prevValue = constraintMap.get(key) ?? null
+    setSaveError('')
 
     // Optimistic update
     setConstraintMap(prev => {
@@ -243,34 +248,30 @@ export default function EmployeeConstraints({ onBack }: Props) {
       return next
     })
 
-    // Persist
-    const { error: delErr } = await supabase
-      .from('schedule_constraints')
-      .delete()
-      .eq('employee_id', resolvedEmpId)
-      .eq('date', dateStr)
-      .eq('shift_id', shiftId)
-
-    if (delErr) {
-      console.error('[EmployeeConstraints setAvailability delete] error:', delErr)
-      alert(`שמירת הזמינות נכשלה: ${delErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
-      return
-    }
-
-    const { error: insErr } = await supabase
-      .from('schedule_constraints')
-      .insert({
+    // Atomic UPSERT on the (employee_id, date, shift_id) unique index (migration 063).
+    // Replaces the old non-atomic DELETE→INSERT that failed silently under RLS.
+    const res = await safeDbOperation(
+      () => supabase.from('schedule_constraints').upsert({
         branch_id: appUser?.branch_id,
         employee_id: resolvedEmpId,
         date: dateStr,
         shift_id: shiftId,
         availability,
+        submitted_by_name: null,   // NULL = self-submission by the employee
         updated_at: new Date().toISOString(),
-      })
+      }, { onConflict: 'employee_id,date,shift_id' }),
+      'שמירת הזמינות'
+    )
 
-    if (insErr) {
-      console.error('[EmployeeConstraints setAvailability insert] error:', insErr)
-      alert(`שמירת הזמינות נכשלה: ${insErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
+    if (!res.ok) {
+      // Revert the optimistic change and surface the error inline
+      setConstraintMap(prev => {
+        const next = new Map(prev)
+        if (prevValue === null) next.delete(key)
+        else next.set(key, prevValue)
+        return next
+      })
+      setSaveError(res.error)
       return
     }
 
@@ -408,6 +409,17 @@ export default function EmployeeConstraints({ onBack }: Props) {
                 </span>
               ))}
             </motion.div>
+
+            <p className="text-center text-xs text-slate-400 mb-4">
+              כברירת מחדל אתה מסומן כפנוי — סמן רק ימים או משמרות שבהם אינך יכול.
+            </p>
+
+            {saveError && (
+              <div className="mb-4 px-4 py-2.5 rounded-lg text-sm text-center"
+                style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                {saveError}
+              </div>
+            )}
 
             {/* Week nav */}
             <motion.div variants={fadeIn(0.1)} initial="hidden" animate="visible"

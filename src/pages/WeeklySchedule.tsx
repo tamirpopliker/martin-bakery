@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { safeDbOperation } from '../lib/dbHelpers'
+import { generateDraft, type SchedSlot } from '../lib/scheduler'
 import PageHeader from '../components/PageHeader'
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } }
@@ -56,6 +58,7 @@ interface BranchEmployee {
   name: string
   priority: number
   min_shifts_per_week: number
+  max_shifts_per_week: number
   training_status: string
 }
 
@@ -151,6 +154,9 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
   const [showPublishDialog, setShowPublishDialog] = useState(false)
   const [popoverSearch, setPopoverSearch] = useState('')
   const popoverRef = useRef<HTMLDivElement>(null)
+  // Inline feedback (replaces alert()): auto-draft summary + action messages
+  const [draftResult, setDraftResult] = useState<{ assigned: number; unfilled: number; compromises: number; warnings: string[] } | null>(null)
+  const [actionMsg, setActionMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
   const currentWeekSunday = getSundayOfCurrentWeek()
   const canGoBack = weekStart.getTime() > currentWeekSunday.getTime()
@@ -173,7 +179,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
       supabase.from('shift_roles').select('id, name, color')
         .eq('branch_id', branchId).eq('is_active', true).order('name'),
       supabase.from('shift_staffing_requirements').select('shift_id, role_id, required_count'),
-      supabase.from('branch_employees').select('id, name, priority, min_shifts_per_week, training_status, is_manager')
+      supabase.from('branch_employees').select('id, name, priority, min_shifts_per_week, max_shifts_per_week, training_status, is_manager')
         .eq('branch_id', branchId).eq('active', true).eq('is_manager', false).order('name'),
       supabase.from('employee_role_assignments').select('employee_id, role_id'),
       supabase.from('schedule_constraints').select('employee_id, date, availability, shift_id')
@@ -422,170 +428,95 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
 
   async function runAutoSchedule() {
     setShowAutoDialog(false)
+    setActionMsg(null)
+    setDraftResult(null)
 
-    // Delete existing assignments for this week
-    const { error: delErr } = await supabase.from('shift_assignments').delete()
-      .eq('branch_id', branchId)
-      .gte('date', weekDates[0])
-      .lte('date', weekDates[5])
-    if (delErr) {
-      console.error('[WeeklySchedule runAutoSchedule delete] error:', delErr)
-      alert(`ניקוי הסידור הקיים נכשל: ${delErr.message || 'שגיאת מסד נתונים'}. הריצה האוטומטית בוטלה.`)
-      return
-    }
-
-    const newAssignments: { branch_id: number; shift_id: number; employee_id: number; role_id: number; date: string }[] = []
-    const empWeeklyHours: Record<number, number> = {}
-    employees.forEach(e => { empWeeklyHours[e.id] = 0 })
-    const empDayAssigned: Record<string, boolean> = {}
-    const compromiseSlots: { shift_id: number; role_id: number; date: string; employee_id: number }[] = []
-    // Track per-employee how often we used a 'prefer_not' slot to avoid concentrating compromises on one person
-    const empPreferNotUsed: Record<number, number> = {}
-
-    // Two-pass scheduler:
-    //   Pass 1: only employees who marked 'available'
-    //   Pass 2: fill remaining slots from 'prefer_not' (compromise — flagged visually)
-    function pickForSlot(opts: {
-      shiftId: number; roleId: number; date: string; allowPreferNot: boolean
-    }): number | null {
-      const { shiftId, roleId, date, allowPreferNot } = opts
-      const eligible = employees.filter(emp => {
-        if (!roleAssignments.some(ra => ra.employee_id === emp.id && ra.role_id === roleId)) return false
-        const avail = getEmployeeAvailability(emp.id, date, shiftId)
-        if (allowPreferNot) {
-          if (avail !== 'prefer_not') return false  // pass 2 picks ONLY prefer_not
-        } else {
-          if (avail !== 'available') return false  // pass 1 picks ONLY available
-        }
-        const alreadyInShift = newAssignments.some(a =>
-          a.employee_id === emp.id && a.shift_id === shiftId && a.date === date)
-        if (alreadyInShift) return false
-        if (empDayAssigned[`${emp.id}_${date}`]) return false
-        return true
-      })
-
-      eligible.sort((a, b) => {
-        // In compromise pass, spread the load: fewer prior compromises first
-        if (allowPreferNot) {
-          const aComp = empPreferNotUsed[a.id] || 0
-          const bComp = empPreferNotUsed[b.id] || 0
-          if (aComp !== bComp) return aComp - bComp
-        }
-        const aPriority = a.priority || 2
-        const bPriority = b.priority || 2
-        if (aPriority !== bPriority) return aPriority - bPriority
-        return (empWeeklyHours[a.id] || 0) - (empWeeklyHours[b.id] || 0)
-      })
-
-      // Trainee needs a mentor already in the shift
-      const filtered = eligible.filter(emp => {
-        if (emp.training_status !== 'trainee') return true
-        return newAssignments.some(a =>
-          a.shift_id === shiftId && a.date === date &&
-          employees.find(e => e.id === a.employee_id)?.training_status === 'mentor'
-        )
-      })
-
-      return filtered.length > 0 ? filtered[0].id : null
-    }
-
-    // PASS 1 — try to fill all slots with 'available' employees
-    type OpenSlot = { shift_id: number; role_id: number; date: string; shiftHours: number }
-    const openSlots: OpenSlot[] = []
-
+    // Build the flat slot list — special-day logic (closed/friday/multiplier)
+    // stays here; the pure engine only handles assignment.
+    const slots: SchedSlot[] = []
     for (let dayIdx = 0; dayIdx < 6; dayIdx++) {
       const date = weekDates[dayIdx]
-      const dayShifts = getEffectiveShiftsForDay(dayIdx, date)
-      for (const shift of dayShifts) {
-        const adjustedReqs = getAdjustedRequired(shift.id, date)
+      for (const shift of getEffectiveShiftsForDay(dayIdx, date)) {
         const shiftHours = getShiftHours(shift.id)
-        for (const req of adjustedReqs) {
-          for (let slot = 0; slot < req.count; slot++) {
-            const empId = pickForSlot({ shiftId: shift.id, roleId: req.roleId, date, allowPreferNot: false })
-            if (empId !== null) {
-              newAssignments.push({ branch_id: branchId, shift_id: shift.id, employee_id: empId, role_id: req.roleId, date })
-              empWeeklyHours[empId] = (empWeeklyHours[empId] || 0) + shiftHours
-              empDayAssigned[`${empId}_${date}`] = true
-            } else {
-              openSlots.push({ shift_id: shift.id, role_id: req.roleId, date, shiftHours })
-            }
+        for (const req of getAdjustedRequired(shift.id, date)) {
+          for (let i = 0; i < req.count; i++) {
+            slots.push({ shift_id: shift.id, role_id: req.roleId, date, shift_hours: shiftHours })
           }
         }
       }
     }
 
-    // PASS 2 — fill remaining slots from 'prefer_not' (compromise)
-    for (const s of openSlots) {
-      const empId = pickForSlot({ shiftId: s.shift_id, roleId: s.role_id, date: s.date, allowPreferNot: true })
-      if (empId !== null) {
-        newAssignments.push({ branch_id: branchId, shift_id: s.shift_id, employee_id: empId, role_id: s.role_id, date: s.date })
-        empWeeklyHours[empId] = (empWeeklyHours[empId] || 0) + s.shiftHours
-        empDayAssigned[`${empId}_${s.date}`] = true
-        empPreferNotUsed[empId] = (empPreferNotUsed[empId] || 0) + 1
-        compromiseSlots.push({ shift_id: s.shift_id, role_id: s.role_id, date: s.date, employee_id: empId })
-      }
-    }
+    const result = generateDraft({
+      employees: employees.map(e => ({
+        id: e.id,
+        name: e.name,
+        priority: e.priority ?? 2,
+        min_shifts_per_week: e.min_shifts_per_week ?? 0,
+        max_shifts_per_week: e.max_shifts_per_week ?? 0,
+        training_status: e.training_status || 'regular',
+      })),
+      roleAssignments,
+      slots,
+      constraints: constraints.map(c => ({
+        employee_id: c.employee_id, date: c.date, shift_id: c.shift_id, availability: c.availability,
+      })),
+    })
 
-    if (newAssignments.length > 0) {
-      const { error: insErr } = await supabase.from('shift_assignments').insert(newAssignments)
-      if (insErr) {
-        console.error('[WeeklySchedule runAutoSchedule insert] error:', insErr)
-        alert(`שמירת הסידור החדש נכשלה: ${insErr.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
-        await loadData()
-        return
-      }
+    // Replace this week's assignments with the fresh draft
+    const del = await safeDbOperation(
+      () => supabase.from('shift_assignments').delete()
+        .eq('branch_id', branchId).gte('date', weekDates[0]).lte('date', weekDates[5]),
+      'ניקוי הסידור הקיים'
+    )
+    if (!del.ok) { setActionMsg({ kind: 'err', text: del.error }); return }
+
+    const rows = result.assignments.map(a => ({
+      branch_id: branchId, shift_id: a.shift_id, employee_id: a.employee_id, role_id: a.role_id, date: a.date,
+    }))
+    if (rows.length > 0) {
+      const ins = await safeDbOperation(
+        () => supabase.from('shift_assignments').insert(rows),
+        'שמירת הסידור'
+      )
+      if (!ins.ok) { setActionMsg({ kind: 'err', text: ins.error }); await loadData(); return }
     }
 
     await loadData()
-
-    let unfilled = 0
-    for (let dayIdx = 0; dayIdx < 6; dayIdx++) {
-      const date = weekDates[dayIdx]
-      for (const shift of getEffectiveShiftsForDay(dayIdx, date)) {
-        const reqs = getAdjustedRequired(shift.id, date)
-        const totalReq = reqs.reduce((s, r) => s + r.count, 0)
-        const filled = newAssignments.filter(a => a.shift_id === shift.id && a.date === date).length
-        unfilled += Math.max(0, totalReq - filled)
-      }
-    }
-
-    const compromiseLine = compromiseSlots.length > 0
-      ? `\n\n\u05DE\u05EA\u05D5\u05DB\u05DD ${compromiseSlots.length} \u05E9\u05D9\u05D1\u05D5\u05E6\u05D9\u05DD \u05DE"\u05DE\u05E2\u05D3\u05D9\u05E3 \u05E9\u05DC\u05D0" (\u05E4\u05E9\u05E8\u05D4 \u2014 \u05DE\u05E1\u05D5\u05DE\u05E0\u05D9\u05DD \u05D1\u05E6\u05D4\u05D5\u05D1).`
-      : ''
-    if (unfilled > 0) {
-      alert(`\u26A0\uFE0F \u05DC\u05D0 \u05DE\u05E1\u05E4\u05D9\u05E7 \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05D6\u05DE\u05D9\u05E0\u05D9\u05DD\n\n\u05E9\u05D5\u05D1\u05E6\u05D5 ${newAssignments.length} \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u2192 \u05E0\u05D5\u05EA\u05E8\u05D5 ${unfilled} \u05EA\u05E4\u05E7\u05D9\u05D3\u05D9\u05DD \u05DC\u05DC\u05D0 \u05DB\u05D9\u05E1\u05D5\u05D9.${compromiseLine}\n\n\u05E8\u05E7 \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05E9\u05D4\u05D2\u05D9\u05E9\u05D5 \u05D1\u05DE\u05E4\u05D5\u05E8\u05E9 "\u05D6\u05DE\u05D9\u05DF" \u05D0\u05D5 "\u05DE\u05E2\u05D3\u05D9\u05E3 \u05E9\u05DC\u05D0" \u05DE\u05E9\u05D5\u05D1\u05E6\u05D9\u05DD.`)
-    } else {
-      alert(`\u2705 \u05E9\u05D5\u05D1\u05E6\u05D5 ${newAssignments.length} \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u2014 \u05DB\u05DC \u05D4\u05DE\u05E9\u05DE\u05E8\u05D5\u05EA \u05DE\u05DC\u05D0\u05D5\u05EA${compromiseLine}`)
-    }
+    setDraftResult({
+      assigned: result.assignments.length,
+      unfilled: result.unfilled.length,
+      compromises: result.compromises.length,
+      warnings: result.warnings,
+    })
   }
 
   async function clearWeekAssignments() {
     setShowClearDialog(false)
-    const { error } = await supabase.from('shift_assignments').delete()
-      .eq('branch_id', branchId)
-      .gte('date', weekDates[0])
-      .lte('date', weekDates[5])
-    if (error) {
-      console.error('[WeeklySchedule clearWeekAssignments] error:', error)
-      alert(`ניקוי הסידור נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
-      return
-    }
+    setActionMsg(null)
+    setDraftResult(null)
+    const res = await safeDbOperation(
+      () => supabase.from('shift_assignments').delete()
+        .eq('branch_id', branchId).gte('date', weekDates[0]).lte('date', weekDates[5]),
+      'ניקוי הסידור'
+    )
+    if (!res.ok) { setActionMsg({ kind: 'err', text: res.error }); return }
     setAssignments([])
+    setActionMsg({ kind: 'ok', text: 'הסידור נוקה' })
   }
 
   async function publishSchedule() {
     setShowPublishDialog(false)
+    setActionMsg(null)
     const { data: session } = await supabase.auth.getSession()
-    const { error } = await supabase.from('schedule_publications').upsert({
-      branch_id: branchId,
-      week_start: weekDates[0],
-      published_by: session?.session?.user?.id
-    }, { onConflict: 'branch_id,week_start' })
-    if (error) {
-      console.error('[WeeklySchedule publishSchedule] error:', error)
-      alert(`פרסום הסידור נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
-      return
-    }
+    const res = await safeDbOperation(
+      () => supabase.from('schedule_publications').upsert({
+        branch_id: branchId,
+        week_start: weekDates[0],
+        published_by: session?.session?.user?.id,
+      }, { onConflict: 'branch_id,week_start' }),
+      'פרסום הסידור'
+    )
+    if (!res.ok) { setActionMsg({ kind: 'err', text: res.error }); return }
     setIsPublished(true)
     setPublishedAt(new Date().toISOString())
     try {
@@ -595,7 +526,7 @@ export default function WeeklySchedule({ branchId, branchName, branchColor, onBa
     } catch (e) {
       console.warn('Email send failed:', e)
     }
-    alert('\u2705 \u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E4\u05D5\u05E8\u05E1\u05DD \u05D5\u05DE\u05D9\u05D9\u05DC\u05D9\u05DD \u05E0\u05E9\u05DC\u05D7\u05D5 \u05DC\u05E2\u05D5\u05D1\u05D3\u05D9\u05DD')
+    setActionMsg({ kind: 'ok', text: '\u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E4\u05D5\u05E8\u05E1\u05DD. \u05E2\u05D5\u05D1\u05D3\u05D9\u05DD \u05E2\u05DD \u05DE\u05D9\u05D9\u05DC \u05E7\u05D9\u05D1\u05DC\u05D5 \u05D4\u05D5\u05D3\u05E2\u05D4; \u05D4\u05E9\u05D0\u05E8 \u05E8\u05D5\u05D0\u05D9\u05DD \u05D1\u05DE\u05E1\u05DA "\u05D4\u05E1\u05D9\u05D3\u05D5\u05E8 \u05E9\u05DC\u05D9".' })
   }
 
   async function unpublishSchedule() {
@@ -843,6 +774,42 @@ ${shiftRows}
               </button>
             </div>
           )
+        )}
+
+        {/* ─── Action message (clear / publish / errors) ─── */}
+        {actionMsg && (
+          <div style={{
+            margin: '10px 0', padding: '10px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            background: actionMsg.kind === 'ok' ? '#f0fdf4' : '#fef2f2',
+            color: actionMsg.kind === 'ok' ? '#166534' : '#dc2626',
+            border: `1px solid ${actionMsg.kind === 'ok' ? '#bbf7d0' : '#fecaca'}`,
+          }}>
+            <span>{actionMsg.text}</span>
+            <button onClick={() => setActionMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 16, lineHeight: 1 }}>×</button>
+          </div>
+        )}
+
+        {/* ─── Auto-draft summary ─── */}
+        {draftResult && (
+          <div style={{ margin: '10px 0', padding: '12px 16px', borderRadius: 12, background: '#eef2ff', border: '1px solid #c7d2fe' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: draftResult.warnings.length ? 8 : 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#3730a3' }}>
+                טיוטה נוצרה: {draftResult.assigned} שיבוצים
+                {draftResult.compromises > 0 && ` · ${draftResult.compromises} פשרות (מעדיף שלא)`}
+                {draftResult.unfilled > 0 ? ` · ${draftResult.unfilled} משבצות ריקות` : ' · כל המשמרות מלאות'}
+              </span>
+              <button onClick={() => setDraftResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', fontSize: 16, lineHeight: 1 }}>×</button>
+            </div>
+            {draftResult.warnings.length > 0 && (
+              <ul style={{ margin: 0, paddingRight: 18, fontSize: 12, color: '#92400e' }}>
+                {draftResult.warnings.map((w, i) => <li key={i} style={{ marginTop: 2 }}>{w}</li>)}
+              </ul>
+            )}
+            <p style={{ margin: '8px 0 0', fontSize: 11, color: '#6366f1' }}>
+              זו טיוטה — אפשר לערוך ידנית כל משבצת לפני הפרסום.
+            </p>
+          </div>
         )}
 
         {loading ? (
@@ -1144,6 +1111,18 @@ ${shiftRows}
                     {emp.training_status === 'trainee' && '📚 '}
                     {emp.name}
                   </span>
+                  {(() => {
+                    // Weekly shift count vs min/max — helps the manager balance the roster
+                    const wk = assignments.filter(a => a.employee_id === emp.id).length
+                    const max = emp.max_shifts_per_week && emp.max_shifts_per_week > 0 ? emp.max_shifts_per_week : null
+                    const overMax = max !== null && wk >= max
+                    const underMin = emp.min_shifts_per_week > 0 && wk < emp.min_shifts_per_week
+                    return (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: overMax ? '#ef4444' : underMin ? '#3b82f6' : '#94a3b8' }}>
+                        {wk}{max !== null ? `/${max}` : ''}
+                      </span>
+                    )
+                  })()}
                   {alreadyAssigned && (
                     <span style={{ fontSize: 10, color: '#94a3b8' }}>משובץ</span>
                   )}
