@@ -190,6 +190,30 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
           if (byName) { emp.matched = true; emp.matched_employee_id = null }
         }
 
+        // Overlay saved matches from previous months, keyed by the stable
+        // payroll employee_number. These are the user's CONFIRMED assignments,
+        // so they take precedence over the fuzzy auto-match — and they're what
+        // makes factory workers (no other stable key) auto-resolve each month.
+        const { data: savedMatches } = await supabase
+          .from('employer_cost_matches')
+          .select('*')
+          .in('employee_number', parsed.map(p => p.employee_number))
+        if (savedMatches && savedMatches.length) {
+          const byNum = new Map<number, any>(savedMatches.map((m: any) => [m.employee_number, m]))
+          for (const emp of parsed) {
+            const m = byNum.get(emp.employee_number)
+            if (!m) continue
+            emp.matched = true
+            // Keep an existing auto-matched id (e.g. branch payroll_number match)
+            // if the saved record has none (factory / HQ / seeded-from-history).
+            if (m.matched_employee_id != null) emp.matched_employee_id = m.matched_employee_id
+            if (m.branch_id !== null && m.branch_id !== undefined) emp.branch_id = m.branch_id
+            emp.is_headquarters = !!m.is_headquarters
+            emp.is_manager = emp.is_manager || !!m.is_manager
+            if (m.assignment) emp.assignment = m.assignment
+          }
+        }
+
         setEmployees(parsed)
         setStep('confirm_month') // Step 1: confirm month first
       } catch (err) { setError('שגיאה בקריאת הקובץ: ' + (err instanceof Error ? err.message : String(err))) }
@@ -321,6 +345,30 @@ export default function EmployerCostsUpload({ onBack, onNavigate }: Props) {
         .in('employee_name', factoryMgrNames),
       'סנכרון is_manager — מנהלי מפעל',
     )
+
+    // Step C.6: Remember EVERY resolved row keyed by employee_number so future
+    // months auto-resolve — factory workers (no other stable key), HQ/מטה rows
+    // (is_headquarters, matched stays false), managers, and manual location
+    // changes alike. "Resolved" mirrors the render's !needsMatch condition.
+    // Non-fatal if it fails; the report itself is already saved.
+    const matchRows = employees
+      .filter(e => e.matched || e.is_headquarters || e.is_manager)
+      .map(e => ({
+        employee_number: e.employee_number,
+        employee_name: e.employee_name,
+        matched_employee_id: e.matched_employee_id,
+        branch_id: e.branch_id,
+        is_headquarters: e.is_headquarters,
+        is_manager: e.is_manager,
+        assignment: e.assignment,
+        updated_by: appUser?.name || null,
+      }))
+    if (matchRows.length > 0) {
+      await safeDbOperation(
+        () => supabase.from('employer_cost_matches').upsert(matchRows, { onConflict: 'employee_number' }),
+        'שמירת התאמות עובדים',
+      )
+    }
 
     // Step D: record a completed upload only after the INSERT succeeded.
     const logRes = await safeDbOperation(

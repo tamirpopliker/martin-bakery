@@ -154,14 +154,10 @@ export default function FactoryDashboard({ onBack }: Props) {
       supabase.from('production_reports').select('department, total_cost').gte('report_date', from).lt('report_date', to),
       supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', from).lt('order_date', to),
       supabase.from('external_sales').select('total_before_vat').gte('invoice_date', from).lt('invoice_date', to),
-      // Per-department breakdown of internal sales — joins items to their parent
-      // sale to filter by status='completed' + order_date in range.
-      supabase
-        .from('internal_sale_items')
-        .select('department, quantity_supplied, unit_price, sale_id, internal_sales!inner(order_date, status)')
-        .eq('internal_sales.status', 'completed')
-        .gte('internal_sales.order_date', from)
-        .lt('internal_sales.order_date', to),
+      // Per-department breakdown of internal sales via server-side aggregation.
+      // RPC (SUM grouped by department) avoids the 1000-row fetch cap that
+      // silently truncated the old item-level query and understated the rollup.
+      supabase.rpc('internal_sales_by_dept', { p_from: from, p_to: to }),
     ])
 
     // Global employees
@@ -189,16 +185,15 @@ export default function FactoryDashboard({ onBack }: Props) {
                          + b2b.filter((r: any) => r.is_internal).reduce((s: number, r: any) => s + Number(r.amount), 0)
     setSalesInternal(intSalesTotal > 0 ? intSalesTotal : legacyInternal)
 
-    // Per-department rollup of internal sales (from item-level data).
+    // Per-department rollup of internal sales (server-aggregated by RPC).
     // Departments are stored as Hebrew strings; anything not in the known set
     // (typo / NULL / new category) falls into 'אחר'.
-    const itemRows = intSaleItemsRes.data || []
+    const deptRows = (intSaleItemsRes.data || []) as { department: string | null; total: number }[]
     const KNOWN_DEPTS = ['קרמים', 'בצקים', 'אריזה', 'ניקיון', 'שונות', 'אחר']
     const intByDept: Record<string, number> = Object.fromEntries(KNOWN_DEPTS.map(k => [k, 0]))
-    itemRows.forEach((r: any) => {
-      const amt = Number(r.quantity_supplied || 0) * Number(r.unit_price || 0)
+    deptRows.forEach(r => {
       const d = r.department && KNOWN_DEPTS.includes(r.department) ? r.department : 'אחר'
-      intByDept[d] += amt
+      intByDept[d] += Number(r.total || 0)
     })
     setInternalByDept(intByDept)
     // Sanity check: rollup should reconcile to the parent total within ₪50
