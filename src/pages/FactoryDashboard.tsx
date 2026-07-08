@@ -100,10 +100,16 @@ export default function FactoryDashboard({ onBack }: Props) {
   // Repairs per dept
   const [repairsDept, setRepairsDept] = useState<Record<Dept, number>>({ creams: 0, dough: 0, packaging: 0, cleaning: 0 })
 
-  // Labor per dept
+  // Labor per dept (timeclock estimate — fallback source)
   const [laborDept, setLaborDept] = useState<Record<Dept, { hours: number; gross: number; employer: number }>>({
     creams: { hours: 0, gross: 0, employer: 0 }, dough: { hours: 0, gross: 0, employer: 0 },
     packaging: { hours: 0, gross: 0, employer: 0 }, cleaning: { hours: 0, gross: 0, employer: 0 },
+  })
+
+  // Actual labor from the employer report (employer_costs), by dept. Managers are
+  // INCLUDED in their department (option A). Preferred over the estimate above.
+  const [actualLabor, setActualLabor] = useState<{ byDept: Record<Dept, number>; total: number; isActual: boolean }>({
+    byDept: { creams: 0, dough: 0, packaging: 0, cleaning: 0 }, total: 0, isActual: false,
   })
 
   // Fixed costs
@@ -257,6 +263,39 @@ export default function FactoryDashboard({ onBack }: Props) {
     })
     setLaborDept(lDept)
 
+    // Actual factory labor from the employer report (employer_costs), by department.
+    // Option A: managers are INCLUDED in their department (dept heads; the factory
+    // dashboard has no separate manager line). HQ rows excluded — they arrive via
+    // the מטה allocation. Falls back to the labor-table estimate above when no
+    // employer report exists for the month.
+    // Month keys covered by the current period (handles month / quarter / year).
+    const monthKeys: string[] = []
+    {
+      const end = new Date(to + 'T12:00:00')
+      const cur = new Date(parseInt(from.slice(0, 4)), parseInt(from.slice(5, 7)) - 1, 1)
+      while (cur < end) {
+        monthKeys.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`)
+        cur.setMonth(cur.getMonth() + 1)
+      }
+    }
+    const years = [...new Set(monthKeys.map(k => parseInt(k.slice(0, 4))))]
+    const monthKeySet = new Set(monthKeys)
+    const { data: ecAll } = await supabase.from('employer_costs')
+      .select('department_number, actual_employer_cost, year, month')
+      .is('branch_id', null).eq('is_headquarters', false)
+      .in('year', years.length ? years : [-1]).range(0, 99999)
+    const ecFactory = (ecAll || []).filter((r: any) => monthKeySet.has(`${r.year}-${String(r.month).padStart(2, '0')}`))
+    const DEPT_NUM_TO_KEY: Record<number, Dept> = { 5: 'dough', 6: 'creams', 7: 'cleaning', 8: 'packaging' }
+    const actByDept: Record<Dept, number> = { creams: 0, dough: 0, packaging: 0, cleaning: 0 }
+    let actTotal = 0
+    ;(ecFactory || []).forEach((r: any) => {
+      const amt = Number(r.actual_employer_cost || 0)
+      actTotal += amt
+      const key = DEPT_NUM_TO_KEY[r.department_number]
+      if (key) actByDept[key] += amt   // dept 0 / 2 ("general") → total only, no specific dept
+    })
+    setActualLabor({ byDept: actByDept, total: actTotal, isActual: (ecFactory || []).length > 0 })
+
     // Fixed costs (fixedRes is already a number from getFixedCostTotal)
     setFixedCosts(fixedRes)
 
@@ -314,7 +353,8 @@ export default function FactoryDashboard({ onBack }: Props) {
   const globalLaborCreams = calcGlobalLaborForDept(globalEmps, 'creams', wdCount)
   const globalLaborDough  = calcGlobalLaborForDept(globalEmps, 'dough', wdCount)
   const totalGlobalLabor  = globalLaborCreams + globalLaborDough
-  const totalLabor        = hourlyLabor + totalGlobalLabor
+  // Prefer the actual employer report; fall back to timeclock estimate + globals.
+  const totalLabor        = actualLabor.isActual ? actualLabor.total : hourlyLabor + totalGlobalLabor
 
   // Approximate hours for global (monthly-salary) employees: each is paid for
   // wdCount × 9h / month. Used only as a denominator for the sales-per-hour KPI
@@ -359,7 +399,7 @@ export default function FactoryDashboard({ onBack }: Props) {
     const waste      = wasteDept[d] ?? 0
     const hourly     = laborDept[d]
     const globalCost = d === 'creams' ? globalLaborCreams : d === 'dough' ? globalLaborDough : 0
-    const laborCost  = hourly.employer + globalCost
+    const laborCost  = actualLabor.isActual ? (actualLabor.byDept[d] ?? 0) : hourly.employer + globalCost
     const globalHrs  = d === 'creams' ? globalHoursCreams : d === 'dough' ? globalHoursDough : 0
     const hours      = hourly.hours + globalHrs
     const salesPerHr = hours > 0 ? sales / hours : 0
