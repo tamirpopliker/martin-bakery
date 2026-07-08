@@ -401,7 +401,8 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
       {/* Underline tabs */}
       <div style={{ display: 'flex', padding: '0 20px', maxWidth: '1000px', margin: '0 auto', borderBottom: '1px solid #f1f5f9' }}>
-        {(Object.entries(SOURCE_CONFIG) as [Source, any][]).map(([key, c]) => (
+        {/* הקפה מנוהלת מרוכזת בעמוד B2B — מסתירים את טאב ההזנה הידנית בסניף */}
+        {(Object.entries(SOURCE_CONFIG) as [Source, any][]).filter(([key]) => key !== 'credit').map(([key, c]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{ padding: '12px 22px', background: 'none', border: 'none', borderBottom: tab === key ? '2px solid #0f172a' : '2px solid transparent', cursor: 'pointer', fontSize: '14px', fontWeight: tab === key ? '700' : '500', color: tab === key ? '#0f172a' : '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <c.Icon size={15} />{c.label}
