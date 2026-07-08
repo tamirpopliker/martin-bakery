@@ -169,14 +169,46 @@ export async function fetchSixMonthTrends(refMonth: string): Promise<MonthTrend[
 }
 
 /** Fetch 6-month trends for a single branch */
+/**
+ * Per-month branch labor cost with the canonical priority used by
+ * calculateBranchPL: employer_costs (actual employer report, non-manager rows)
+ * when the month has an upload, else branch_labor (timeclock estimate). This
+ * keeps the trend charts (labor page + dashboard) in sync with the P&L instead
+ * of showing the lower estimate once the real payroll file is uploaded.
+ * Manager salary is tracked separately, so is_manager rows are excluded here.
+ */
+async function fetchBranchLaborByMonth(branchId: number, months: string[]): Promise<Record<string, number>> {
+  const tFrom = months[0] + '-01'
+  const tTo = monthEnd(months[months.length - 1])
+  const [labRes, ecRes] = await Promise.all([
+    supabase.from('branch_labor').select('date, employer_cost')
+      .eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo).range(0, 99999),
+    supabase.from('employer_costs').select('year, month, actual_employer_cost, is_manager')
+      .eq('branch_id', branchId).range(0, 99999),
+  ])
+  const est: Record<string, number> = {}
+  ;(labRes.data || []).forEach((r: any) => {
+    const m = r.date?.slice(0, 7); if (m) est[m] = (est[m] || 0) + Number(r.employer_cost || 0)
+  })
+  const act: Record<string, number> = {}
+  ;(ecRes.data || []).forEach((r: any) => {
+    if (r.is_manager) return
+    const m = `${r.year}-${String(r.month).padStart(2, '0')}`
+    act[m] = (act[m] || 0) + Number(r.actual_employer_cost || 0)
+  })
+  const out: Record<string, number> = {}
+  for (const m of months) out[m] = (act[m] && act[m] > 0) ? act[m] : (est[m] || 0)
+  return out
+}
+
 export async function fetchBranchTrends(branchId: number, refMonth: string, overheadPct = 5): Promise<MonthTrend[]> {
   const months = getLast6Months(refMonth)
   const tFrom = months[0] + '-01'
   const tTo = monthEnd(months[5])
 
-  const [revRes, labRes, expRes, wasteRes, fcRes] = await Promise.all([
+  const [revRes, labByM, expRes, wasteRes, fcRes] = await Promise.all([
     supabase.from('branch_revenue').select('date, amount').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
-    supabase.from('branch_labor').select('date, employer_cost').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
+    fetchBranchLaborByMonth(branchId, months),
     supabase.from('branch_expenses').select('date, amount').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
     supabase.from('branch_waste').select('date, amount').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo),
     supabase.from('fixed_costs').select('month, amount').eq('entity_type', `branch_${branchId}`).in('month', months),
@@ -188,7 +220,6 @@ export async function fetchBranchTrends(branchId: number, refMonth: string, over
     return map
   }
   const revByM = grp(revRes.data, 'amount')
-  const labByM = grp(labRes.data, 'employer_cost')
   const expByM = grp(expRes.data, 'amount')
   const wasteByM = grp(wasteRes.data, 'amount')
   const rawFcByM: Record<string, number> = {}
@@ -333,8 +364,8 @@ export async function fetchBranchRevenueTrend(branchId: number, refMonth: string
 export async function fetchBranchLaborTrend(branchId: number, refMonth: string): Promise<BranchLaborTrend[]> {
   const months = getLast6Months(refMonth)
   const tFrom = months[0] + '-01', tTo = monthEnd(months[5])
-  const [labRes, revRes, closingsRes] = await Promise.all([
-    supabase.from('branch_labor').select('date, employer_cost').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo).range(0, 99999),
+  const [labByM, revRes, closingsRes] = await Promise.all([
+    fetchBranchLaborByMonth(branchId, months),
     supabase.from('branch_revenue').select('date, amount').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo).range(0, 99999),
     supabase.from('register_closings').select('date, cash_sales, credit_sales').eq('branch_id', branchId).gte('date', tFrom).lt('date', tTo).range(0, 99999),
   ])
@@ -343,7 +374,6 @@ export async function fetchBranchLaborTrend(branchId: number, refMonth: string):
     ;(data || []).forEach(r => { const m = r.date?.slice(0, 7); if (m) map[m] = (map[m] || 0) + Number(r[field] || 0) })
     return map
   }
-  const labByM = grp(labRes.data, 'employer_cost')
   const revByM = grp(revRes.data, 'amount')
   // Add register_closings revenue to the denominator so the labor % reflects the true register take.
   ;(closingsRes.data || []).forEach((c: any) => {

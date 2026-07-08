@@ -63,7 +63,7 @@ import { TrophyIcon, ProfitIcon, RevenueIcon, LaborIcon } from '@/components/ico
 // ─── קבועים ─────────────────────────────────────────────────────────────────
 
 const PANEL_FACTORY = [
-  { label: 'מחלקות',           subtitle: 'קרמים · בצקים · אריזה · ניקיון/נהג',  Icon: Building2,       color: '#6366f1', page: 'factory_departments' },
+  { label: 'דשבורד מפעל',      subtitle: 'KPI · רווח · גרפים',                  Icon: ProfitIcon,      color: '#6366f1', page: 'factory_dashboard' },
   { label: 'מכירות פנימיות',   subtitle: 'תעודות משלוח לסניפים',                Icon: ArrowRightLeft,  color: '#f59e0b', page: 'internal_sales' },
   { label: 'מכירות חיצוניות',  subtitle: 'לקוחות עסקיים · B2B',                 Icon: TrendingUp,      color: '#6366f1', page: 'factory_b2b' },
   { label: 'הזמנות עוגות מיוחדות', subtitle: 'עוגות מעוצבות · הדפסה · כל הסניפים',  Icon: Cake,             color: '#ec4899', page: 'factory_special_orders' },
@@ -71,7 +71,7 @@ const PANEL_FACTORY = [
   { label: 'דוח ייצור מרוכז',  subtitle: 'העלאת דוח ייצור מ-Excel',             Icon: FileSpreadsheet, color: '#10b981', page: 'production_report_upload' },
   { label: 'פחת / תיקונים / ציוד', subtitle: 'פחת · תיקונים · ציוד · כל המחלקות', Icon: Wrench,          color: '#64748b', page: 'factory_equipment' },
   { label: 'ספקים',             subtitle: 'חשבוניות · ניהול ספקים',              Icon: ClipboardList,   color: '#34d399', page: 'suppliers' },
-  { label: 'דשבורד מפעל',      subtitle: 'KPI · רווח · גרפים',                  Icon: ProfitIcon,      color: '#6366f1', page: 'factory_dashboard' },
+  { label: 'מחלקות',           subtitle: 'קרמים · בצקים · אריזה · ניקיון/נהג',  Icon: Building2,       color: '#6366f1', page: 'factory_departments' },
   { label: 'קטלוג מוצרים',     subtitle: 'מחירים · מחלקות · היסטוריה',          Icon: ShoppingCart,     color: '#8b5cf6', page: 'product_catalog' },
   { label: 'עובדים',            subtitle: 'ניהול עובדי מפעל',                    Icon: Users,           color: '#8b5cf6', page: 'factory_employees' },
   { label: 'איכות ובקרה',      subtitle: 'תלונות · משרד הבריאות · תחזוקה',       Icon: ShieldCheck,     color: '#dc2626', page: 'quality_hub' },
