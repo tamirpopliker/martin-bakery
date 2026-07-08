@@ -107,7 +107,7 @@ const MENU_ITEMS: MenuItem[] = [
   { page: 'branch-team', label: 'ניהול צוות',       subtitle: 'סידור עבודה · משימות · עובדים', Icon: Users,       ready: true },
   { page: 'waste',     label: 'פחת',             subtitle: 'סחורה · חומרי גלם',         Icon: Trash2,      ready: true },
   { page: 'suppliers', label: 'ספקים',           subtitle: 'ניהול · קטגוריות',           Icon: Building2,   ready: true },
-  { page: 'customers', label: 'לקוחות הקפה',    subtitle: 'חשבוניות · היסטוריה',        Icon: TrendingUp,  ready: true },
+  // לקוחות הקפה מנוהלים מרוכזים בעמוד B2B בדף הראשי — הוסתר מתפריט הסניף.
   { page: 'communication', label: 'מרכז תקשורת', subtitle: 'הודעות · משימות · עדכונים', Icon: MessageSquare, ready: true },
   { page: 'orders',    label: 'הזמנות מהמפעל',  subtitle: 'אישור · עריכה · חומרי גלם', Icon: Package,     ready: true },
   { page: 'special_orders', label: 'הזמנות עוגות מיוחדות', subtitle: 'עוגות מעוצבות · לפי הזמנה', Icon: Cake,     ready: true },
