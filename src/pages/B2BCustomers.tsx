@@ -697,7 +697,11 @@ export default function B2BCustomers({ onBack }: Props) {
                   {viewCust.credit_limit ? ` · מסגרת: ${fmtM(viewCust.credit_limit)}` : ''}
                 </p>
               </div>
-              <button onClick={() => setViewCust(null)} style={{ ...S.btn, background: '#f1f5f9', color: '#374151', display: 'flex', alignItems: 'center', gap: 6 }}><ChevronLeft size={14} /> חזרה</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => { const c = viewCust; setEditCustId(c.id); setCustForm({ name: c.name, company_number: c.company_number || '', phone: c.phone || '', address: c.address || '', branch_id: c.branch_id || 0, credit_limit: String(c.credit_limit || ''), payment_terms: c.payment_terms || 'שוטף + 30', notes: c.notes || '' }); setViewCust(null); setShowAddCust(true) }}
+                  style={{ ...S.btn, background: '#eef2ff', color: '#6366f1', display: 'flex', alignItems: 'center', gap: 6 }}><Pencil size={14} /> ערוך פרטים</button>
+                <button onClick={() => setViewCust(null)} style={{ ...S.btn, background: '#f1f5f9', color: '#374151', display: 'flex', alignItems: 'center', gap: 6 }}><ChevronLeft size={14} /> חזרה</button>
+              </div>
             </div>
 
             {/* Customer KPIs */}
