@@ -207,7 +207,7 @@ export async function calculateBranchPL(
   // Labor + Manager salary — check employer_costs first to prevent double-counting
   const [mYear, mMonth] = mk.split('-').map(Number)
   const { data: actualLabAll } = await supabase.from('employer_costs')
-    .select('actual_employer_cost, is_manager, employee_name').eq('branch_id', branchId).eq('month', mMonth).eq('year', mYear)
+    .select('actual_employer_cost, is_manager, employee_name, employee_number').eq('branch_id', branchId).eq('month', mMonth).eq('year', mYear)
   const laborIsActual = (actualLabAll && actualLabAll.length > 0) ? true : false
 
   // ── Global-salary branch employees ─────────────────────────────────────
@@ -218,7 +218,7 @@ export async function calculateBranchPL(
   // we always compute their expected contribution here and fold it into
   // labor / managerSalary if the primary source is missing them.
   const { data: brGlobals } = await supabase.from('branch_employees')
-    .select('name, monthly_salary, is_manager')
+    .select('name, monthly_salary, is_manager, payroll_number')
     .eq('branch_id', branchId).eq('active', true)
     .not('monthly_salary', 'is', null).gt('monthly_salary', 0)
   const workingDaysInMonth = await getWorkingDays(mk)
@@ -226,7 +226,14 @@ export async function calculateBranchPL(
   const monthFrac = workingDaysInMonth > 0 ? workingDaysInPeriod / workingDaysInMonth : 1
   const brGlobalNames = new Set((brGlobals || []).map(e => e.name))
   const empCostNames = new Set((actualLabAll || []).map(r => r.employee_name).filter(Boolean))
-  const globalsNotInEmpCosts = (brGlobals || []).filter(e => !empCostNames.has(e.name))
+  // Match against employer_costs by the STABLE payroll number (employee_number),
+  // not just by name — nicknames differ (e.g. branch "אבי חורב" vs payroll
+  // "אברהם אבי חנן חורב") and a name-only check double-counts a manager who IS
+  // already in the payroll upload.
+  const empCostNumbers = new Set((actualLabAll || []).map(r => Number(r.employee_number)).filter(n => !isNaN(n)))
+  const globalsNotInEmpCosts = (brGlobals || []).filter(e =>
+    !empCostNames.has(e.name) &&
+    !(e.payroll_number != null && empCostNumbers.has(Number(e.payroll_number))))
   const globalMgrFromBranchEmps = globalsNotInEmpCosts
     .filter(e => e.is_manager)
     .reduce((s, e) => s + Number(e.monthly_salary) * 1.3 * monthFrac, 0)
