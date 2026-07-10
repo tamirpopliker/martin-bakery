@@ -225,19 +225,13 @@ export default function CEODashboard({ onBack }: Props) {
       ]))
     )
 
-    // B2B invoices are the source of truth for הקפה, attributed by the invoice's
-    // branch_id (null = factory). Uses total_before_vat — הקפה is a net-of-VAT
-    // revenue channel (the manual entry form is "סכום ללא מע"מ"). This replaces
-    // the fragile branch_revenue source='credit_b2b' duplicate rows.
+    // Factory-level B2B (no branch) for the הקפה מפעל row — net of VAT. Branch-
+    // attributed B2B lives in branch_revenue (backfilled credit_b2b) and is
+    // counted in the branch loop below, so it is NOT read here.
     const { data: b2bInvAll } = await supabase.from('b2b_invoices')
-      .select('branch_id, total_before_vat').gte('invoice_date', from).lt('invoice_date', to)
-    const b2bByBranch: Record<number, number> = {}
+      .select('total_before_vat').is('branch_id', null).gte('invoice_date', from).lt('invoice_date', to)
     let b2bFactory = 0
-    for (const inv of (b2bInvAll || [])) {
-      const amt = Number(inv.total_before_vat) || 0
-      if (inv.branch_id) b2bByBranch[inv.branch_id] = (b2bByBranch[inv.branch_id] || 0) + amt
-      else b2bFactory += amt
-    }
+    for (const inv of (b2bInvAll || [])) b2bFactory += Number(inv.total_before_vat) || 0
     setFactoryB2b(b2bFactory)
 
     const branchResults: BranchData[] = branchPLs.map((pl, i) => {
@@ -248,9 +242,8 @@ export default function CEODashboard({ onBack }: Props) {
       for (const r of revData) {
         const amt = Number(r.amount)
         if (r.source === 'cashier') { totalCashier += amt; brCashier += amt }
-        // Legacy manual הקפה only; B2B comes from b2b_invoices below. credit_b2b
-        // duplicate rows are intentionally ignored to avoid double-counting.
-        else if (r.source === 'credit') { totalCredit += amt; brCredit += amt }
+        // Manual הקפה + B2B invoices (credit_b2b, backfilled for every branch invoice).
+        else if (r.source === 'credit' || r.source === 'credit_b2b') { totalCredit += amt; brCredit += amt }
         else if (r.source === 'website') { totalWebsite += amt; brWebsite += amt }
       }
       // register_closings: both cash and credit-card sales are POS revenue (cashier bucket).
@@ -259,9 +252,6 @@ export default function CEODashboard({ onBack }: Props) {
         const total = Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
         totalCashier += total; brCashier += total
       }
-      // B2B invoices attributed to this branch (net of VAT).
-      const b2bBranch = b2bByBranch[br.id] || 0
-      brCredit += b2bBranch; totalCredit += b2bBranch
       const expenses = pl.factoryPurchases + pl.externalSuppliers + pl.repairs + pl.deliveries + pl.infrastructure + pl.otherExpenses
       return {
         ...br,

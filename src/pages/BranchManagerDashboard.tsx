@@ -132,7 +132,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
     const closingsTx = closings.reduce((s, c) => s + (Number(c.transaction_count) || 0), 0)
     const revCashier = rows.filter(r => r.source === 'cashier').reduce((s, r) => s + Number(r.amount), 0) + closingsCashier
     const revWebsite = rows.filter(r => r.source === 'website').reduce((s, r) => s + Number(r.amount), 0)
-    const revCredit = rows.filter(r => r.source === 'credit').reduce((s, r) => s + Number(r.amount), 0)
+    const revCredit = rows.filter(r => r.source === 'credit' || r.source === 'credit_b2b').reduce((s, r) => s + Number(r.amount), 0)
     const laborGross = 0 // not needed from revenue query
     const totalTransactions = rows.filter(r => r.source === 'cashier').reduce((s, r) => s + (Number(r.transaction_count) || 0), 0) + closingsTx
     const uniqueDays = new Set([
@@ -249,7 +249,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
           const cashier = revAll.filter(r => r.source === 'cashier').reduce((s, r) => s + Number(r.amount), 0)
             + closeAll.reduce((s, c) => s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0), 0)
           const website = revAll.filter(r => r.source === 'website').reduce((s, r) => s + Number(r.amount), 0)
-          const credit  = revAll.filter(r => r.source === 'credit').reduce((s, r) => s + Number(r.amount), 0)
+          const credit  = revAll.filter(r => r.source === 'credit' || r.source === 'credit_b2b').reduce((s, r) => s + Number(r.amount), 0)
           sourceMonthly.push({ month: m.label, 'קופות': cashier, 'אתר': website, 'הקפה': credit })
           return row
         })

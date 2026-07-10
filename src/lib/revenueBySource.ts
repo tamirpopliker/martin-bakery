@@ -58,15 +58,14 @@ export async function fetchRevenueBySource(
     website[bid] = 0
     credit[bid] = 0
   }
-  const branchSet = new Set(branchIds)
 
   for (const row of revRes.data || []) {
     const bid = Number(row.branch_id)
     const amount = Number(row.amount) || 0
     if (row.source === 'cashier') pos[bid] = (pos[bid] || 0) + amount
     else if (row.source === 'website') website[bid] = (website[bid] || 0) + amount
-    // Legacy manual הקפה only; B2B comes from b2b_invoices below. credit_b2b is ignored.
-    else if (row.source === 'credit') credit[bid] = (credit[bid] || 0) + amount
+    // Manual הקפה + B2B invoices (credit_b2b, backfilled for every branch invoice).
+    else if (row.source === 'credit' || row.source === 'credit_b2b') credit[bid] = (credit[bid] || 0) + amount
   }
 
   for (const row of closeRes.data || []) {
@@ -77,15 +76,12 @@ export async function fetchRevenueBySource(
       + (Number((row as any).check_sales) || 0)
   }
 
-  // B2B invoices — attributed by branch (net of VAT); null branch = factory.
+  // Factory-level B2B (no branch) has no branch_revenue home, so read it straight
+  // from b2b_invoices. Branch-attributed B2B is already in credit above (backfilled
+  // credit_b2b rows), so it is NOT re-added here.
   let creditFactory = 0
   for (const row of b2bRes.data || []) {
-    const amount = Number(row.total_before_vat) || 0
-    if (row.branch_id == null) creditFactory += amount
-    else if (branchSet.has(Number(row.branch_id))) {
-      const bid = Number(row.branch_id)
-      credit[bid] = (credit[bid] || 0) + amount
-    }
+    if (row.branch_id == null) creditFactory += Number(row.total_before_vat) || 0
   }
 
   return { pos, website, credit, creditFactory }
