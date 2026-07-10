@@ -233,7 +233,8 @@ export default function CEODashboard({ onBack }: Props) {
       for (const r of revData) {
         const amt = Number(r.amount)
         if (r.source === 'cashier') { totalCashier += amt; brCashier += amt }
-        else if (r.source === 'credit') { totalCredit += amt; brCredit += amt }
+        // הקפה כוללת חשבוניות B2B (credit_b2b) — כמו בדשבורד הסניף.
+        else if (r.source === 'credit' || r.source === 'credit_b2b') { totalCredit += amt; brCredit += amt }
         else if (r.source === 'website') { totalWebsite += amt; brWebsite += amt }
       }
       // register_closings: both cash and credit-card sales are POS revenue (cashier bucket).
