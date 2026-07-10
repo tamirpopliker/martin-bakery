@@ -462,10 +462,10 @@ export async function getWorkingDays(month: string): Promise<number> {
  * Get fixed costs for a given entity and month.
  * If no data exists for the requested month, falls back to the closest month that has data (before or after).
  */
-export async function getFixedCostsForMonth(entityType: string, month: string): Promise<{ name: string; amount: number }[]> {
+export async function getFixedCostsForMonth(entityType: string, month: string): Promise<{ name: string; amount: number; entity_id?: string | null }[]> {
   const { data } = await supabase
     .from('fixed_costs')
-    .select('name, amount')
+    .select('name, amount, entity_id')
     .eq('entity_type', entityType)
     .eq('month', month)
   if (data && data.length > 0) return data
@@ -504,7 +504,7 @@ export async function getFixedCostsForMonth(entityType: string, month: string): 
 
   const { data: fallback } = await supabase
     .from('fixed_costs')
-    .select('name, amount')
+    .select('name, amount, entity_id')
     .eq('entity_type', entityType)
     .eq('month', closestMonth)
   return fallback || []

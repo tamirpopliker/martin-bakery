@@ -3,7 +3,7 @@
  * Uses actual DB schema: branch_revenue, branch_expenses (expense_type, from_factory),
  * branch_labor, branch_waste, fixed_costs (entity_type, entity_id).
  */
-import { supabase, fetchGlobalEmployees, calcGlobalLaborForDept, getWorkingDays, countWorkingDaysInRange, getFixedCostTotal } from './supabase'
+import { supabase, fetchGlobalEmployees, calcGlobalLaborForDept, getWorkingDays, countWorkingDaysInRange, getFixedCostTotal, getFixedCostsForMonth } from './supabase'
 
 const HQ_ESTIMATE_PCT_DEFAULT = 10
 
@@ -161,8 +161,10 @@ export async function calculateBranchPL(
       .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
     supabase.from('branch_waste').select('amount')
       .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
-    supabase.from('fixed_costs').select('amount, entity_id')
-      .eq('entity_type', `branch_${branchId}`).eq('month', mk),
+    // getFixedCostsForMonth falls back to the closest prior month when this
+    // month has no fixed_costs row (recurring amount), so a missing month no
+    // longer zeroes out branch fixed costs. Returns entity_id for the mgmt split.
+    getFixedCostsForMonth(`branch_${branchId}`, mk),
     supabase.from('internal_sales').select('total_amount')
       .eq('branch_id', branchId).eq('status', 'completed')
       .gte('order_date', periodStart).lt('order_date', periodEnd).range(0, 99999),
@@ -285,7 +287,7 @@ export async function calculateBranchPL(
   // Fixed costs: separate manager salary (entity_id='mgmt') from others
   let fixedCosts = 0
   let mgmtFromFixed = 0
-  for (const r of (fcRes.data || [])) {
+  for (const r of (fcRes || [])) {
     const amt = Number(r.amount)
     if (r.entity_id === 'mgmt') {
       mgmtFromFixed += amt
