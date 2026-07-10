@@ -3,7 +3,7 @@
  * Uses actual DB schema: branch_revenue, branch_expenses (expense_type, from_factory),
  * branch_labor, branch_waste, fixed_costs (entity_type, entity_id).
  */
-import { supabase, fetchGlobalEmployees, calcGlobalLaborForDept, getWorkingDays, countWorkingDaysInRange } from './supabase'
+import { supabase, fetchGlobalEmployees, calcGlobalLaborForDept, getWorkingDays, countWorkingDaysInRange, getFixedCostTotal } from './supabase'
 
 const HQ_ESTIMATE_PCT_DEFAULT = 10
 
@@ -373,7 +373,7 @@ export async function calculateFactoryPL(
   const mk = monthKey || periodStart.slice(0, 7)
   const hq = hqContext || await getHQAllocationContext(periodStart, periodEnd, mk)
 
-  const [fSalesExt, fSalesInt, fB2bExt, fB2bInt, fLab, fSupp, fWaste, fRepairs, fFixed, intSalesRes, extSalesRes] = await Promise.all([
+  const [fSalesExt, fSalesInt, fB2bExt, fB2bInt, fLab, fSupp, fWaste, fRepairs, intSalesRes, extSalesRes] = await Promise.all([
     supabase.from('factory_sales').select('amount').eq('is_internal', false).gte('date', periodStart).lt('date', periodEnd),
     supabase.from('factory_sales').select('amount').eq('is_internal', true).gte('date', periodStart).lt('date', periodEnd),
     supabase.from('factory_b2b_sales').select('amount').eq('is_internal', false).gte('date', periodStart).lt('date', periodEnd),
@@ -382,7 +382,6 @@ export async function calculateFactoryPL(
     supabase.from('supplier_invoices').select('amount').gte('date', periodStart).lt('date', periodEnd),
     supabase.from('factory_waste').select('amount').gte('date', periodStart).lt('date', periodEnd),
     supabase.from('factory_repairs').select('amount').gte('date', periodStart).lt('date', periodEnd),
-    supabase.from('fixed_costs').select('amount').eq('entity_type', 'factory').eq('month', mk),
     supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', periodStart).lt('order_date', periodEnd),
     supabase.from('external_sales').select('total_before_vat').gte('invoice_date', periodStart).lt('invoice_date', periodEnd),
   ])
@@ -452,7 +451,11 @@ export async function calculateFactoryPL(
   }
   const waste = sum(fWaste)
   const repairs = sum(fRepairs)
-  const fixedCosts = sum(fFixed)
+  // Fixed costs are a recurring monthly amount — use getFixedCostTotal, which
+  // falls back to the closest prior month when the current month wasn't entered
+  // (same source the factory dashboard uses). A direct .eq('month') returned 0
+  // whenever the month's fixed_costs row was missing.
+  const fixedCosts = await getFixedCostTotal('factory', mk)
 
   // Waste excluded — already counted in `suppliers` (raw materials). Kept on the result
   // as a KPI only. See calculateBranchPL for the same reasoning.
