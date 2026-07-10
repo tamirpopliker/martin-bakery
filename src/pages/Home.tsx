@@ -240,6 +240,7 @@ export default function Home() {
   const [posByBranch, setPosByBranch] = useState<Record<number, number>>({})
   const [websiteByBranch, setWebsiteByBranch] = useState<Record<number, number>>({})
   const [creditByBranch, setCreditByBranch] = useState<Record<number, number>>({})
+  const [creditFactory, setCreditFactory] = useState(0)
   const [prevPosTotal, setPrevPosTotal] = useState(0)
   const [prevWebsiteTotal, setPrevWebsiteTotal] = useState(0)
   const [prevCreditTotal, setPrevCreditTotal] = useState(0)
@@ -285,6 +286,7 @@ export default function Home() {
       setPosByBranch(sources.pos)
       setWebsiteByBranch(sources.website)
       setCreditByBranch(sources.credit)
+      setCreditFactory(sources.creditFactory)
 
       // ─── Consolidated KPI (intercompany-eliminated) — matches CEODashboard ──────
       // The KPI strip on the home page now reports consolidated figures (branches +
@@ -673,7 +675,7 @@ export default function Home() {
               {(() => {
                 const posTotal = Object.values(posByBranch).reduce((s, v) => s + v, 0)
                 const websiteTotal = Object.values(websiteByBranch).reduce((s, v) => s + v, 0)
-                const creditTotal = Object.values(creditByBranch).reduce((s, v) => s + v, 0)
+                const creditTotal = Object.values(creditByBranch).reduce((s, v) => s + v, 0) + creditFactory
                 return <>
                   {/* קופות */}
                   <button onClick={() => setPosSheetOpen(true)} className="flex-1 min-w-[140px] flex items-center gap-2.5 py-1 pe-4 border-e border-slate-200 bg-transparent border-0 cursor-pointer text-right hover:bg-slate-50 rounded-lg transition-colors" style={{ borderInlineEnd: '1px solid #e2e8f0' }}>
@@ -1358,14 +1360,16 @@ export default function Home() {
           setOpen: (v: boolean) => void
           title: string
           data: Record<number, number>
+          factory?: number   // extra "מפעל" row (B2B invoices with no branch)
         }
         const sheets: SourceSheet[] = [
           { open: posSheetOpen,     setOpen: setPosSheetOpen,     title: 'פירוט קופות',  data: posByBranch },
           { open: websiteSheetOpen, setOpen: setWebsiteSheetOpen, title: 'פירוט אתר',    data: websiteByBranch },
-          { open: creditSheetOpen,  setOpen: setCreditSheetOpen,  title: 'פירוט הקפה',   data: creditByBranch },
+          { open: creditSheetOpen,  setOpen: setCreditSheetOpen,  title: 'פירוט הקפה',   data: creditByBranch, factory: creditFactory },
         ]
-        return sheets.map(({ open, setOpen, title, data }) => {
+        return sheets.map(({ open, setOpen, title, data, factory }) => {
           const rows = BRANCHES.map(br => ({ name: br.name, amount: data[br.id] ?? 0 }))
+          if (factory != null) rows.push({ name: 'מפעל', amount: factory })
           const total = rows.reduce((s, r) => s + r.amount, 0)
           return (
             <Sheet key={title} open={open} onOpenChange={setOpen}>
