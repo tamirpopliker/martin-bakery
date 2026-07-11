@@ -123,7 +123,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
     const [revRes, closeRes] = await Promise.all([
       supabase.from('branch_revenue').select('source, amount, transaction_count, date')
         .eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
-      supabase.from('register_closings').select('cash_sales, credit_sales, transaction_count')
+      supabase.from('register_closings').select('date, cash_sales, credit_sales, transaction_count')
         .eq('branch_id', branchId).gte('date', dateFrom).lt('date', dateTo),
     ])
     const rows = revRes.data || []
@@ -135,10 +135,14 @@ export default function BranchManagerDashboard({ onBack }: Props) {
     const revCredit = rows.filter(r => r.source === 'credit' || r.source === 'credit_b2b').reduce((s, r) => s + Number(r.amount), 0)
     const laborGross = 0 // not needed from revenue query
     const totalTransactions = rows.filter(r => r.source === 'cashier').reduce((s, r) => s + (Number(r.transaction_count) || 0), 0) + closingsTx
+    // Working days = distinct DATES across both sources. Using closings.length
+    // over-counted branches with several registers per day (each register is a
+    // separate closing row), which halved the daily average.
     const uniqueDays = new Set([
       ...rows.filter(r => r.source === 'cashier' && Number(r.transaction_count) > 0).map(r => r.date),
+      ...closings.map((c: any) => c.date),
     ]).size
-    const workingDays = Math.max(uniqueDays, closings.length, 1)
+    const workingDays = Math.max(uniqueDays, 1)
     const avgBasket = totalTransactions > 0 ? revCashier / totalTransactions : 0
     const avgDailyTransactions = totalTransactions / workingDays
     return { revCashier, revWebsite, revCredit, laborGross, totalTransactions, workingDays, avgBasket, avgDailyTransactions }
