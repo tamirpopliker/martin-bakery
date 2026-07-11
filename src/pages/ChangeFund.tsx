@@ -6,7 +6,6 @@ import {
   Wallet, ArrowDownCircle, ArrowUpCircle, ArrowRightLeft,
   RefreshCw, FileSpreadsheet, X
 } from 'lucide-react'
-import * as XLSX from 'xlsx'
 
 const BRANCH_REGISTERS: Record<number, number[]> = {
   1: [1, 2, 3, 6],
@@ -226,7 +225,8 @@ export default function ChangeFund({ branchId, branchName, onBack }: Props) {
     setLoading(false)
   }
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const rows = movements.map(m => ({
       'תאריך': m.date,
       'סוג': TYPE_LABELS[m.type]?.label || m.type,

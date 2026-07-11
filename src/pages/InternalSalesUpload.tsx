@@ -5,7 +5,6 @@ import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
 import PageHeader from '../components/PageHeader'
-import * as XLSX from 'xlsx'
 import { parseDeliveryNotePDF } from '../lib/parseDeliveryNotePdf'
 
 const fadeIn = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' as const } } }
@@ -180,6 +179,7 @@ export default function InternalSalesUpload({ onBack }: Props) {
   // ─── Pure parsers — return parsed data, no state mutation ───
   // Excel: order_number in row 1, date in I6, items from row 7 onwards.
   async function parseExcelToData(file: File): Promise<{ orderNumber: string; orderDate: string; items: ParsedItem[]; zeroItems: string[] }> {
+    const XLSX = await import('xlsx')
     const buf = await file.arrayBuffer()
     const data = new Uint8Array(buf)
     const wb = XLSX.read(data, { type: 'array' })

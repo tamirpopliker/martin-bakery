@@ -9,7 +9,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { CheckCircle2, Save, Download, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useAppUser } from '../lib/UserContext'
 import PageHeader from '../components/PageHeader'
@@ -559,8 +558,9 @@ function HistoryTab({ totalCount, onPickDate }: { totalCount: number; onPickDate
     return { closedDays, totalDays, fullyDone, partial, missing }
   }, [days, totalCount])
 
-  function exportExcel() {
+  async function exportExcel() {
     if (rows.length === 0) return
+    const XLSX = await import('xlsx')
     const data = days.map(d => {
       const wd = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'][d.weekday]
       if (!d.row) {

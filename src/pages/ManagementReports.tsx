@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import * as XLSX from 'xlsx'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
@@ -194,7 +193,8 @@ function RevenueControlTab() {
     return out
   }, [byBranchDay, specialDays, branches, year, month])
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
     // sheet 1: missing days per branch
     const missRows = branches.map(b => ({ 'סניף': b.name, 'ימים חסרים': missingDays[b.id] || 0 }))
@@ -365,7 +365,8 @@ function LaborActualTab() {
     return '#dc2626'
   }
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const rowsForExcel = rows.map(r => ({
       'סניף': r.branchName, 'חודש': `${r.year}-${String(r.month).padStart(2, '0')}`,
       'לייבור משוער': Math.round(r.estLabor), 'לייבור בפועל': Math.round(r.actLabor),
@@ -530,7 +531,8 @@ function CashierControlTab() {
     return [...map.values()].sort((a, b) => a.total - b.total)
   }, [monthClosings, branches])
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
       unclosedToday.map(u => ({ 'סניף': u.branchName, 'קופה': u.registerNumber }))
@@ -695,7 +697,8 @@ function ComparisonTab() {
     return () => { cancelled = true }
   }, [mkA, mkB, branches.length])
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const data = branches.map((br, i) => {
       const a = rowsA[i], b = rowsB[i]
       if (!a || !b) return null
@@ -925,7 +928,8 @@ function DataIntegrityTab() {
     return '#fee2e2'
   }
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const rows = scores.map(s => ({
       'סניף': s.branchName,
       'הכנסות %': Math.round(s.revPct), 'לייבור %': Math.round(s.laborPct), 'פחת %': Math.round(s.wastePct),

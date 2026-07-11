@@ -15,10 +15,7 @@
 // Conversion: net = gross / (1 + VAT_RATE)
 // ═══════════════════════════════════════════════════════════════════════════
 
-import * as XLSX from 'xlsx'
-
-const VAT_RATE = 0.18
-const VAT_DIVIDER = 1 + VAT_RATE
+import { VAT_DIVIDER } from './vat'
 
 export interface PosClosingRow {
   date: string             // YYYY-MM-DD
@@ -52,8 +49,9 @@ function cellRegister(cell: any): number | null {
   return m ? Number(m[0]) : null
 }
 
-function cellDate(cell: any): string | null {
+async function cellDate(cell: any): Promise<string | null> {
   if (!cell) return null
+  const XLSX = await import('xlsx')
   // Excel serial date
   if (typeof cell.v === 'number') {
     const d = XLSX.SSF.parse_date_code(cell.v)
@@ -78,6 +76,7 @@ function cellDate(cell: any): string | null {
 // ─── main ─────────────────────────────────────────────────────────────────
 
 export async function parseCashOnTabExcel(file: File): Promise<PosClosingRow[]> {
+  const XLSX = await import('xlsx')
   const buf = await file.arrayBuffer()
   const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
   const ws = wb.Sheets[wb.SheetNames[0]]
@@ -97,7 +96,7 @@ export async function parseCashOnTabExcel(file: File): Promise<PosClosingRow[]> 
     const nCell = ws[XLSX.utils.encode_cell({ c: 13, r })]  // N — credit
 
     const reg = cellRegister(dCell)
-    const date = cellDate(hCell)
+    const date = await cellDate(hCell)
     if (reg === null || !date) continue
 
     const z_number = cellRegister(jCell)  // same heuristic — integer-leading value

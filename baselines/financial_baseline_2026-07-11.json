@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-07-11",
+  "source": "Supabase project nlklndgmtmwoacipjyek (live), read-only snapshot",
+  "purpose": "Regression baseline for P&L refactors. Re-run the SQL in README.md after any change to revenue/cost/P&L logic and diff against these numbers. A number that moves is a red flag to investigate before merging.",
+  "first_reliable_month": "2026-05",
+  "revenue_definition": "branch total_revenue = branch_revenue.amount (legacy) + register_closings (cash_sales + credit_sales + check_sales), matching calculateBranchPL.",
+  "waste_note": "Waste (פחת) is end-of-day leftover product. It is deliberately NOT deducted from profit because that product was already counted in purchases (raw materials). Deducting it would double-count. It is kept only as a standalone KPI. The unit tests in src/lib/__tests__/plFormulas.test.ts enforce this.",
+  "caveats": [
+    "MONTHS BEFORE 2026-05 ARE EXCLUDED: they were based on partial data (cashier-source migration overlap) and are not reliable. First reliable month = May 2026.",
+    "June 2026 fixed_costs are partially entered (105,960 vs ~195,260 in May).",
+    "July 2026 is a partial month (data through ~the 9th).",
+    "employer_cost_total includes HQ (hq_cost shown separately).",
+    "suppliers_ex_vat uses amount_without_vat when present, else amount.",
+    "branch_waste excludes one corrupt row (year 275760) automatically via month bucketing."
+  ],
+  "branch_revenue_by_month": [
+    {"branch": "אברהם אבינו", "month": "2026-05", "legacy": 64919.56, "closings": 564073.15, "total": 628992.71},
+    {"branch": "הפועלים",     "month": "2026-05", "legacy": 74947.94, "closings": 418623.20, "total": 493571.14},
+    {"branch": "יעקב כהן",     "month": "2026-05", "legacy": 982.21,   "closings": 303871.43, "total": 304853.64},
+    {"branch": "אברהם אבינו", "month": "2026-06", "legacy": 51845.33, "closings": 469150.73, "total": 520996.06},
+    {"branch": "הפועלים",     "month": "2026-06", "legacy": 53208.07, "closings": 373297.55, "total": 426505.62},
+    {"branch": "יעקב כהן",     "month": "2026-06", "legacy": 1190.51,  "closings": 261499.29, "total": 262689.80},
+    {"branch": "אברהם אבינו", "month": "2026-07", "legacy": 7302.00,  "closings": 120926.20, "total": 128228.20, "note": "partial month"},
+    {"branch": "הפועלים",     "month": "2026-07", "legacy": 4267.78,  "closings": 144095.96, "total": 148363.74, "note": "partial month"},
+    {"branch": "יעקב כהן",     "month": "2026-07", "legacy": 0.00,    "closings": 78049.32,  "total": 78049.32,  "note": "partial month"}
+  ],
+  "monthly_cost_components": [
+    {"month": "2026-05", "employer_cost_total": 541157.00, "hq_cost": 114246.00, "suppliers_ex_vat": 299875.12, "fixed_costs_total": 195260.00, "branch_waste_kpi": 82838.51, "factory_internal": 805203.91, "factory_external": 0},
+    {"month": "2026-06", "employer_cost_total": 566140.00, "hq_cost": 103945.00, "suppliers_ex_vat": 307847.01, "fixed_costs_total": 105960.00, "branch_waste_kpi": 95812.98, "factory_internal": 642301.07, "factory_external": 0, "note": "fixed_costs partial"},
+    {"month": "2026-07", "employer_cost_total": null, "hq_cost": null, "suppliers_ex_vat": 81081.43, "fixed_costs_total": 105960.00, "branch_waste_kpi": 4309.00, "factory_internal": 161973.20, "factory_external": 0, "note": "partial month"}
+  ]
+}

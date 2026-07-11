@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { VAT_DIVIDER } from '../lib/vat'
 import PageHeader from '../components/PageHeader'
 import {
   DollarSign, CreditCard, Wallet, CheckCircle2, AlertCircle,
   Camera, X, ArrowRight, ArrowLeft, FileSpreadsheet, History, Calculator, Pencil, Home as HomeIcon,
   Zap, Archive, Trash2, Receipt
 } from 'lucide-react'
-import * as XLSX from 'xlsx'
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const BRANCH_REGISTERS: Record<number, number[]> = {
@@ -21,8 +21,6 @@ const COIN_DENOMS = [10, 5, 2, 1, 0.5, 0.1]
 
 // VAT — המשתמש מזין ב-wizard ברוטו (כולל מע"מ). DB שומר רק נטו ב-cash_sales/credit_sales.
 // כל שאר השדות (actual_cash, deposit_amount, variance, opening, next_opening_balance) נשארים ברוטו פיזי.
-const VAT_RATE = 0.18
-const VAT_DIVIDER = 1 + VAT_RATE  // 1.18
 
 const BILL_IMAGES: Record<string, string> = {
   '200': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/INS-200-NIS-%282015%29-front.jpg/320px-INS-200-NIS-%282015%29-front.jpg',
@@ -1183,7 +1181,8 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
     return s.kind !== 'active-today' && s.kind !== 'inactive' && s.daysSince >= 1 && s.daysSince <= 7
   })
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const rows = history.map(c => ({
       'תאריך': c.date,
       'קופה': c.register_number,

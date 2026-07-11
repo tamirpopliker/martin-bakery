@@ -9,7 +9,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Upload, FileSpreadsheet, Download, Info, ChevronDown, ChevronUp } from 'lucide-react'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useAppUser, isRestrictedBranchUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
@@ -136,7 +135,8 @@ export default function RegisterReconciliation({ onBack }: Props) {
     return c
   }, [diff])
 
-  function exportDiffsToExcel() {
+  async function exportDiffsToExcel() {
+    const XLSX = await import('xlsx')
     const rows = diff.filter(r => r.status !== 'match')
     if (rows.length === 0) {
       setError('אין פערים לייצוא')

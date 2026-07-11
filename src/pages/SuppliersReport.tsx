@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
 import { useBranches } from '../lib/BranchContext'
@@ -389,7 +388,8 @@ export default function SuppliersReport({ onBack, hideHeader }: Props) {
   const unassignedGroups = useMemo(() => groups.filter(g => g.unifiedId === null), [groups])
 
   // ─── Excel export ───────────────────────────────────────────────────────────
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
 
     // Sheet 1: summary per unified supplier

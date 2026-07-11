@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react'
 // only needed when the user actually clicks "ייצוא להנה"ח". Keeping it out of
 // the page's static imports cuts the initial chunk and prevents a long parse
 // when the page mounts.
-import * as XLSX from 'xlsx'
+import type { WorkBook } from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -353,15 +353,17 @@ export default function MonthlyChangesReport({ onBack }: Props) {
     return rows.map(({ _sortName, _sortDate, ...rest }) => rest)
   }
 
-  function appendSheet(wb: XLSX.WorkBook, name: string, rows: Record<string, unknown>[]) {
+  async function appendSheet(wb: WorkBook, name: string, rows: Record<string, unknown>[]) {
     if (rows.length === 0) return
+    const XLSX = await import('xlsx')
     const ws = XLSX.utils.json_to_sheet(rows)
     // Mark the sheet RTL so Excel renders Hebrew columns right-to-left.
     ws['!sheetViews'] = [{ rightToLeft: true }]
     XLSX.utils.book_append_sheet(wb, ws, name)
   }
 
-  function buildWorkbook(): XLSX.WorkBook {
+  async function buildWorkbook(): Promise<WorkBook> {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
 
     // ── Sheet 1: summary ──
@@ -376,7 +378,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
       { קטגוריה: 'ייבוא נתונים (Bulk)', 'מספר אירועים': bulkBatches.reduce((s, b) => s + b.rows.length, 0) },
       { קטגוריה: 'בונוסי מנהלי סניף', 'מספר אירועים': bonuses.length },
     ]
-    appendSheet(wb, 'סיכום', summary)
+    await appendSheet(wb, 'סיכום', summary)
 
     // ── Sheet 2: hires ──
     // INSERT rows store the initial value either as a bare scalar OR as
@@ -402,7 +404,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         }
       })
       .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
-    appendSheet(wb, 'עובדים שנקלטו', hireRows)
+    await appendSheet(wb, 'עובדים שנקלטו', hireRows)
 
     // ── Sheet 3: departures ──
     const departRows = departures
@@ -419,14 +421,14 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         }
       })
       .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
-    appendSheet(wb, 'עובדים שעזבו', departRows)
+    await appendSheet(wb, 'עובדים שעזבו', departRows)
 
     // ── Sheets 4–6: salary / bank / role — one row per audit entry,
     // column per known field. Multiple field changes in the same UPDATE
     // collapse to a single row.
-    appendSheet(wb, 'שינויי שכר', buildFieldRows(salaryChanges, SALARY_FIELDS_ORDER))
-    appendSheet(wb, 'שינויי בנק', buildFieldRows(bankChanges, BANK_FIELDS_ORDER))
-    appendSheet(wb, 'שינויי תפקיד-מחלקה', buildFieldRows(roleChanges, ROLE_FIELDS_ORDER))
+    await appendSheet(wb, 'שינויי שכר', buildFieldRows(salaryChanges, SALARY_FIELDS_ORDER))
+    await appendSheet(wb, 'שינויי בנק', buildFieldRows(bankChanges, BANK_FIELDS_ORDER))
+    await appendSheet(wb, 'שינויי תפקיד-מחלקה', buildFieldRows(roleChanges, ROLE_FIELDS_ORDER))
 
     // ── Sheet 7: documents + monthly events ──
     // Both are audited via employee_documents. Numeric-only rows (e.g.
@@ -454,7 +456,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         }
       })
       .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
-    appendSheet(wb, 'מסמכים ואירועים', docRows)
+    await appendSheet(wb, 'מסמכים ואירועים', docRows)
 
     // ── Sheet 8: other changes — skip rows with empty description ──
     const otherRows = otherChanges
@@ -464,7 +466,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
       })
       .filter(r => r['תיאור שינוי'].trim() !== '')
       .sort((a, b) => a['עובד'].localeCompare(b['עובד'], 'he'))
-    appendSheet(wb, 'שינויים אחרים', otherRows)
+    await appendSheet(wb, 'שינויים אחרים', otherRows)
 
     // ── Sheet 9: bulk imports — one row per batch, not per row ──
     const tableLabels: Record<string, string> = {
@@ -481,7 +483,7 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         'מספר רשומות': b.rows.length,
       }))
       .sort((a, b) => b['תאריך'].localeCompare(a['תאריך']))
-    appendSheet(wb, 'ייבוא נתונים (Bulk)', bulkRows)
+    await appendSheet(wb, 'ייבוא נתונים (Bulk)', bulkRows)
 
     // ── Sheet 10: bonuses approved for this month ──
     const bonusRows = bonuses
@@ -504,13 +506,14 @@ export default function MonthlyChangesReport({ onBack }: Props) {
         }
       })
       .sort((a, b) => a['מנהל'].localeCompare(b['מנהל'], 'he'))
-    appendSheet(wb, 'בונוסי מנהלי סניף', bonusRows)
+    await appendSheet(wb, 'בונוסי מנהלי סניף', bonusRows)
 
     return wb
   }
 
-  function exportXlsx() {
-    const wb = buildWorkbook()
+  async function exportXlsx() {
+    const XLSX = await import('xlsx')
+    const wb = await buildWorkbook()
     XLSX.writeFile(wb, `monthly_changes_${year}_${String(month).padStart(2, '0')}.xlsx`)
   }
 
@@ -530,7 +533,8 @@ export default function MonthlyChangesReport({ onBack }: Props) {
       const zip = new JSZip()
 
       // 1. Summary XLSX (multi-sheet, organized for accountant)
-      const wb = buildWorkbook()
+      const XLSX = await import('xlsx')
+      const wb = await buildWorkbook()
       const xlsxBuf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
       zip.file(`סיכום שינויים ${HEBREW_MONTHS[month - 1]} ${year}.xlsx`, xlsxBuf)
 

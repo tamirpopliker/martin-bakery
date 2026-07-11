@@ -13,7 +13,7 @@ martin-bakery/
 │   ├── App.tsx                      # Auth check + UserProvider + PeriodProvider
 │   ├── main.tsx                     # React entry point
 │   ├── index.css                    # Tailwind + RTL + responsive breakpoints
-│   ├── pages/                       # 55 page components (כל המסכים)
+│   ├── pages/                       # 70 page components (כל המסכים)
 │   ├── components/
 │   │   ├── PeriodPicker.tsx         # בורר תקופות (חודש / שבוע / רבעון / שנה)
 │   │   ├── PageHeader.tsx           # כותרת עמוד אחידה
@@ -27,11 +27,11 @@ martin-bakery/
 │   │   ├── UserContext.tsx          # Auth context, AppUser, role-based access (canAccessPage)
 │   │   ├── BranchContext.tsx        # Dynamic branches from Supabase (useBranches hook)
 │   │   ├── PeriodContext.tsx        # Period state management (usePeriod hook)
-│   │   ├── NavigationContext.tsx    # ניהול ניווט state-based
 │   │   ├── period.ts               # Period computation, Hebrew month names, comparison periods
 │   │   ├── internalCustomers.ts    # מיפוי לקוחות פנימיים → סניפים (detectBranchId)
-│   │   ├── calculatePL.ts          # חישוב רווח והפסד
-│   │   ├── profitCalc.ts           # חישובי רווחיות
+│   │   ├── calculatePL.ts          # חישוב רווח והפסד (מקור אמת יחיד)
+│   │   ├── plFormulas.ts           # נוסחאות רווח טהורות (ללא DB, נבדקות ב-vitest)
+│   │   ├── vat.ts                  # קבוע מע"מ יחיד (VAT_RATE / VAT_DIVIDER)
 │   │   ├── generateInsights.ts     # יצירת תובנות AI
 │   │   ├── parseCashOnTab.ts       # פרסור דוח קופה רושמת
 │   │   ├── parseTimeWatch.ts       # פרסור דוח שעון נוכחות

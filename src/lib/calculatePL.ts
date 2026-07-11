@@ -4,17 +4,25 @@
  * branch_labor, branch_waste, fixed_costs (entity_type, entity_id).
  */
 import { supabase, fetchGlobalEmployees, calcGlobalLaborForDept, getWorkingDays, countWorkingDaysInRange, getFixedCostTotal, getFixedCostsForMonth } from './supabase'
+import type { HQContext } from './plFormulas'
+import {
+  computeHQAllocation,
+  marginPct,
+  branchControllableProfit,
+  branchOperatingProfit,
+  factoryControllableProfit,
+  factoryOperatingProfit,
+  consolidatedControllableProfit,
+  consolidatedOperatingProfit,
+} from './plFormulas'
+
+// Re-exported for backwards compatibility: existing modules import these from
+// './calculatePL' (e.g. supabase.ts dynamic import). Source of truth now lives
+// in ./plFormulas (pure, unit-tested).
+export type { HQContext } from './plFormulas'
+export { computeHQAllocation } from './plFormulas'
 
 const HQ_ESTIMATE_PCT_DEFAULT = 10
-
-export interface HQContext {
-  isActual: boolean              // true when employer_costs has is_headquarters=true rows for the month
-  hqCost: number                 // sum of those rows (₪)
-  totalExternalRevenue: number   // sum across all branches + factory
-  estimatePct: number            // % of revenue used when isActual=false
-  branchExternalRev: Record<number, number>
-  factoryExternalRev: number
-}
 
 /**
  * Headquarters-cost allocation context for a period. Mirrors the labor pattern:
@@ -77,27 +85,6 @@ export async function getHQAllocationContext(
   return {
     isActual, hqCost, totalExternalRevenue, estimatePct,
     branchExternalRev, factoryExternalRev,
-  }
-}
-
-/**
- * Allocate the period's HQ cost to a single entity by its external-revenue share.
- * - actual (employer_costs HQ rows uploaded): hqCost × (entityRev / totalRev)
- * - estimate: entityRev × estimatePct%
- */
-export function computeHQAllocation(
-  entityExternalRev: number,
-  ctx: HQContext
-): { allocation: number; isActual: boolean } {
-  if (ctx.isActual && ctx.totalExternalRevenue > 0) {
-    return {
-      allocation: ctx.hqCost * (entityExternalRev / ctx.totalExternalRevenue),
-      isActual: true,
-    }
-  }
-  return {
-    allocation: entityExternalRev * (ctx.estimatePct / 100),
-    isActual: false,
   }
 }
 
@@ -321,21 +308,21 @@ export async function calculateBranchPL(
   // Waste is intentionally NOT deducted here: thrown-away products are already counted
   // in factoryPurchases / externalSuppliers (raw materials). `waste` remains on the
   // result so dashboards can display it as a standalone management KPI.
-  const controllableProfit = revenue
-    - factoryPurchases - externalSuppliers
-    - labor - managerSalary
-    - repairs - deliveries - infrastructure - otherExpenses
+  const controllableProfit = branchControllableProfit({
+    revenue, factoryPurchases, externalSuppliers, labor, managerSalary,
+    repairs, deliveries, infrastructure, otherExpenses,
+  })
 
-  const controllableMargin = revenue > 0 ? (controllableProfit / revenue) * 100 : 0
+  const controllableMargin = marginPct(controllableProfit, revenue)
 
   // Headquarters allocation (estimate or actual share of HQ cost)
   const branchExtRev = hq.branchExternalRev[branchId] ?? revenue
   const { allocation: overhead, isActual: hqIsActual } = computeHQAllocation(branchExtRev, hq)
-  const effectivePct = revenue > 0 ? (overhead / revenue) * 100 : 0
+  const effectivePct = marginPct(overhead, revenue)
 
   // Operating profit
-  const operatingProfit = controllableProfit - fixedCosts - overhead
-  const operatingMargin = revenue > 0 ? (operatingProfit / revenue) * 100 : 0
+  const operatingProfit = branchOperatingProfit(controllableProfit, fixedCosts, overhead)
+  const operatingMargin = marginPct(operatingProfit, revenue)
 
   return {
     revenue, factoryPurchases, externalSuppliers, labor, managerSalary, managerIsActual,
@@ -461,13 +448,13 @@ export async function calculateFactoryPL(
 
   // Waste excluded — already counted in `suppliers` (raw materials). Kept on the result
   // as a KPI only. See calculateBranchPL for the same reasoning.
-  const controllableProfit = revenue - suppliers - labor - managerSalary - repairs
+  const controllableProfit = factoryControllableProfit({ revenue, suppliers, labor, managerSalary, repairs })
 
   // Headquarters allocation — factory pays its share of HQ cost based on external revenue.
   const { allocation: overhead, isActual: hqIsActual } = computeHQAllocation(hq.factoryExternalRev, hq)
-  const overheadPct = externalRevenue > 0 ? (overhead / externalRevenue) * 100 : 0
+  const overheadPct = marginPct(overhead, externalRevenue)
 
-  const operatingProfit = controllableProfit - fixedCosts - overhead
+  const operatingProfit = factoryOperatingProfit(controllableProfit, fixedCosts, overhead)
 
   return {
     revenue, internalRevenue, externalRevenue,
@@ -527,9 +514,9 @@ export async function calculateConsolidatedPL(
     operatingProfit: 0,
   }
 
-  consolidated.controllableProfit = consolidated.revenue - consolidated.suppliers - consolidated.labor - consolidated.managerSalary
+  consolidated.controllableProfit = consolidatedControllableProfit(consolidated)
   // Waste excluded from operating profit — already inside `suppliers`. See per-entity functions.
-  consolidated.operatingProfit = consolidated.controllableProfit - consolidated.repairs - consolidated.fixedCosts - consolidated.overhead
+  consolidated.operatingProfit = consolidatedOperatingProfit(consolidated)
 
   return {
     branches,

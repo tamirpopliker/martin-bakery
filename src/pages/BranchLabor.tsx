@@ -7,7 +7,6 @@ import PeriodPicker from '../components/PeriodPicker'
 import PageHeader from '../components/PageHeader'
 import { Plus, Pencil, Trash2, CheckCircle, AlertTriangle, FileText, Eye, HelpCircle, BarChart3 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, Legend, ReferenceLine } from 'recharts'
-import * as XLSX from 'xlsx'
 
 interface Props {
   branchId: number
@@ -48,8 +47,9 @@ function parseExcelCashOnTab(file: File): Promise<{ rows: ParsedRow[]; rawLines:
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onerror = () => reject(new Error('שגיאה בקריאת הקובץ'))
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await import('xlsx')
         const data = new Uint8Array(e.target?.result as ArrayBuffer)
         const wb = XLSX.read(data, { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
