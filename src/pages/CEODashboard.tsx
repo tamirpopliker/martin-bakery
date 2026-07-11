@@ -307,18 +307,17 @@ export default function CEODashboard({ onBack }: Props) {
         revBd[0].byBranch[br.id] = (revBd[0].byBranch[br.id] || 0) + total
       }
     }
-    // B2B invoices by branch
-    const { data: b2bInvData } = await supabase.from('b2b_invoices').select('branch_id, total_before_vat').gte('invoice_date', from).lt('invoice_date', to)
+    // B2B הקפה: branch invoices are already in branch_revenue (credit_b2b,
+    // counted above via source check). Only add factory-level B2B (no branch),
+    // which has no branch_revenue home. Adding branch invoices here again — or
+    // external_sales (the same factory invoices) — double-counted.
+    const { data: b2bInvData } = await supabase.from('b2b_invoices').select('branch_id, total_before_vat').is('branch_id', null).gte('invoice_date', from).lt('invoice_date', to)
     for (const inv of (b2bInvData || [])) {
-      if (inv.branch_id) { revBd[2].byBranch[inv.branch_id] = (revBd[2].byBranch[inv.branch_id] || 0) + Number(inv.total_before_vat) }
-      else { revBd[2].factory += Number(inv.total_before_vat) }
+      revBd[2].factory += Number(inv.total_before_vat)
     }
-    // Factory internal + external sales
+    // Factory internal sales
     const { data: intSalesData } = await supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', from).lt('order_date', to)
     revBd[3].factory = (intSalesData || []).reduce((s: number, r: any) => s + Number(r.total_amount), 0)
-    // External sales → merged into B2B הקפה (index 2)
-    const { data: extSalesData } = await supabase.from('external_sales').select('total_before_vat').gte('invoice_date', from).lt('invoice_date', to)
-    revBd[2].factory += (extSalesData || []).reduce((s: number, r: any) => s + Number(r.total_before_vat), 0)
     setRevBreakdown(revBd)
 
     // Build consolidated expense breakdown — factory + branches, no
