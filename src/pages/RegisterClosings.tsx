@@ -112,7 +112,7 @@ function DenomCounter({ denoms, counts, setCounts, label, kind }: {
   denoms: number[]; counts: Record<string, number>; setCounts: (c: Record<string, number>) => void; label: string; kind: 'bill' | 'coin'
 }) {
   return (
-    <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 14, marginBottom: 14 }}>
+    <div style={{ background: 'white', borderRadius: 14, border: '1px solid var(--m-border)', padding: 14, marginBottom: 14 }}>
       <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', marginBottom: 12 }}>{label}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {denoms.map(d => {
@@ -423,7 +423,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
           {/* Step 1 — Opening */}
           {step === 1 && (
             <motion.div variants={fadeIn} initial="hidden" animate="visible">
-              <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 18 }}>
+              <div style={{ background: 'white', borderRadius: 14, border: '1px solid var(--m-border)', padding: 18 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14 }}>
                   <div>
                     <label style={S.label}>תאריך</label>
@@ -450,7 +450,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
           {/* Step 2 — Sales */}
           {step === 2 && (
             <motion.div variants={fadeIn} initial="hidden" animate="visible">
-              <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 18 }}>
+              <div style={{ background: 'white', borderRadius: 14, border: '1px solid var(--m-border)', padding: 18 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14 }}>
                   <div>
                     <label style={S.label}>
@@ -551,7 +551,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
               <DenomCounter denoms={COIN_DENOMS} counts={coinCounts} setCounts={setCoinCounts} label="מטבעות" kind="coin" />
 
               {isEdit && !hasDenomEntries && (
-                <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 14, marginBottom: 14 }}>
+                <div style={{ background: 'white', borderRadius: 14, border: '1px solid var(--m-border)', padding: 14, marginBottom: 14 }}>
                   <label style={S.label}>או: הזן סכום נספר ישירות (₪)</label>
                   <input type="number" inputMode="decimal" value={actualCashManual} onChange={e => setActualCashManual(e.target.value)} style={S.input} placeholder="0" />
                   <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>
@@ -560,7 +560,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                 </div>
               )}
 
-              <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 14 }}>
+              <div style={{ background: 'white', borderRadius: 14, border: '1px solid var(--m-border)', padding: 14 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
                   <Kpi label="נספר" value={countedCash} color="#0f172a" />
                   <Kpi label="צפוי" value={expectedCash} color="var(--m-accent)" sub="פתיחה + מזומן" />
@@ -607,7 +607,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
           {/* Step 4 — Summary */}
           {step === 4 && (
             <motion.div variants={fadeIn} initial="hidden" animate="visible">
-              <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 18 }}>
+              <div style={{ background: 'white', borderRadius: 14, border: '1px solid var(--m-border)', padding: 18 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', marginBottom: 12 }}>סיכום סגירה</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 18 }}>
                   <Kpi label="יתרת פתיחה" value={opening} color="#64748b" />
@@ -694,9 +694,9 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setManualEntryOpen(false)}>
           <motion.div onClick={e => e.stopPropagation()}
             initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-            style={{ background: 'white', width: '100%', maxWidth: 460, borderRadius: 16, direction: 'rtl', overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+            style={{ background: 'var(--m-surface)', width: '100%', maxWidth: 460, borderRadius: 16, direction: 'rtl', overflow: 'hidden', fontFamily: 'var(--m-font)' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--m-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 17, fontWeight: 900, color: 'var(--m-text)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Pencil size={18} color="var(--m-accent)" /> הזנת סכום ידנית
               </div>
               <button onClick={() => setManualEntryOpen(false)}
@@ -719,7 +719,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                 style={{ border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '14px 16px', fontSize: 20, fontWeight: 800, outline: 'none', width: '100%', boxSizing: 'border-box', textAlign: 'right', color: '#0f172a', minHeight: 56 }}
                 placeholder="0" />
             </div>
-            <div style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--m-border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button onClick={() => setManualEntryOpen(false)}
                 style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '12px 20px', fontSize: 14, fontWeight: 800, color: '#475569', cursor: 'pointer' }}>
                 ביטול
@@ -786,7 +786,7 @@ function OverallCount({ totalExpectedCash, onClose }: { totalExpectedCash: numbe
       <motion.div onClick={e => e.stopPropagation()}
         initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
         style={{ background: '#f8fafc', width: '100%', maxWidth: 720, maxHeight: '96vh', overflow: 'auto', borderRadius: '20px 20px 0 0', direction: 'rtl' }}>
-        <div style={{ position: 'sticky', top: 0, background: 'white', padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ position: 'sticky', top: 0, background: 'white', padding: '16px 20px', borderBottom: '1px solid var(--m-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 900, color: '#0f172a' }}>ספירה כוללת</div>
             <div style={{ fontSize: 13, color: '#94a3b8', fontWeight: 600 }}>סכום צפוי: {fmtDec(totalExpectedCash)}</div>
@@ -800,7 +800,7 @@ function OverallCount({ totalExpectedCash, onClose }: { totalExpectedCash: numbe
           <DenomCounter denoms={BILL_DENOMS} counts={billCounts} setCounts={setBillCounts} label="שטרות" kind="bill" />
           <DenomCounter denoms={COIN_DENOMS} counts={coinCounts} setCounts={setCoinCounts} label="מטבעות" kind="coin" />
 
-          <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 14 }}>
+          <div style={{ background: 'white', borderRadius: 14, border: '1px solid var(--m-border)', padding: 14 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
               <Kpi label="נספר" value={counted} color="#0f172a" />
               <Kpi label="אמור להיות" value={totalExpectedCash} color="var(--m-accent)" />
@@ -813,7 +813,7 @@ function OverallCount({ totalExpectedCash, onClose }: { totalExpectedCash: numbe
             )}
           </div>
         </div>
-        <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid #f1f5f9', padding: '14px 16px', display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid var(--m-border)', padding: '14px 16px', display: 'flex', justifyContent: 'flex-end' }}>
           <button onClick={onClose}
             style={{ background: '#059669', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: 'pointer', minHeight: 56 }}>
             סגור
@@ -882,7 +882,7 @@ function ActivateDialog({ branchId, registerNumber, fundBalance, onClose, onSave
       <motion.div onClick={e => e.stopPropagation()}
         initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
         style={{ background: 'white', width: '100%', maxWidth: 520, borderRadius: '20px 20px 0 0', direction: 'rtl', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--m-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Zap size={20} color="var(--m-accent)" /> הפעלת קופה {registerNumber}
           </div>
@@ -907,7 +907,7 @@ function ActivateDialog({ branchId, registerNumber, fundBalance, onClose, onSave
             הסכום יירשם כמשיכה מקופת העודף וייקבע כיתרת פתיחה לקופה זו.
           </div>
         </div>
-        <div style={{ padding: '14px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <div style={{ padding: '14px 16px', borderTop: '1px solid var(--m-border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose}
             style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, color: '#475569', cursor: 'pointer', minHeight: 56 }}>
             ביטול
@@ -980,7 +980,7 @@ function EmptyDialog({ branchId, registerNumber, openingAmount, fundBalance, onC
       <motion.div onClick={e => e.stopPropagation()}
         initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
         style={{ background: 'white', width: '100%', maxWidth: 520, borderRadius: '20px 20px 0 0', direction: 'rtl', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--m-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Archive size={20} color="#7c3aed" /> ריקון קופה {registerNumber}
           </div>
@@ -1002,7 +1002,7 @@ function EmptyDialog({ branchId, registerNumber, openingAmount, fundBalance, onC
             ניתן יהיה להפעיל אותה מחדש בעתיד.
           </div>
         </div>
-        <div style={{ padding: '14px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <div style={{ padding: '14px 16px', borderTop: '1px solid var(--m-border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose}
             style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, color: '#475569', cursor: 'pointer', minHeight: 56 }}>
             ביטול
@@ -1048,7 +1048,7 @@ function DeleteDialog({ closing, onClose, onDeleted }: {
       <motion.div onClick={e => e.stopPropagation()}
         initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         style={{ background: 'white', width: '100%', maxWidth: 440, borderRadius: 16, direction: 'rtl', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--m-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
             <AlertCircle size={20} color="#dc2626" /> מחיקת סגירה
           </div>
@@ -1065,7 +1065,7 @@ function DeleteDialog({ closing, onClose, onDeleted }: {
             פעולה זו אינה ניתנת לביטול. כל תנועות קופת העודף הקשורות יימחקו גם הן.
           </div>
         </div>
-        <div style={{ padding: '12px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--m-border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose}
             style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '12px 20px', fontSize: 14, fontWeight: 800, color: '#475569', cursor: 'pointer' }}>
             ביטול
@@ -1381,7 +1381,7 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
                   <thead>
                     <tr style={{ background: '#f8fafc' }}>
                       {['תאריך', 'קופה', 'פתיחה', 'מזומן', 'אשראי', 'שיקים', 'עסקאות', 'נספר', 'פער', 'פעולה', 'פתיחה מחר', ''].map(h => (
-                        <th key={h} style={{ padding: '10px 10px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: '#94a3b8', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap' }}>{h}</th>
+                        <th key={h} style={{ padding: '10px 10px', textAlign: 'right', fontSize: 11, fontWeight: 800, color: '#94a3b8', borderBottom: '1px solid var(--m-border)', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1503,17 +1503,17 @@ function DepositCalculator({ totalCash, onClose }: { totalCash: number; onClose:
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onClose}>
       <motion.div onClick={e => e.stopPropagation()}
         initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-        style={{ background: '#f8fafc', width: '100%', maxWidth: 720, maxHeight: '96vh', overflowY: 'auto', borderRadius: '20px 20px 0 0', direction: 'rtl', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        style={{ background: 'var(--m-canvas)', width: '100%', maxWidth: 720, maxHeight: '96vh', overflowY: 'auto', borderRadius: '20px 20px 0 0', direction: 'rtl', display: 'flex', flexDirection: 'column', position: 'relative', fontFamily: 'var(--m-font)' }}>
 
         {/* Sticky purple header — totals, status, progress */}
         <div style={{
           position: 'sticky',
           top: 0,
           zIndex: 10,
-          background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+          background: 'var(--m-accent)',
           color: '#fff',
           padding: 16,
-          boxShadow: '0 4px 12px rgba(124,58,237,0.3)'
+          boxShadow: 'var(--m-shadow)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div>
@@ -1564,7 +1564,7 @@ function DepositCalculator({ totalCash, onClose }: { totalCash: number; onClose:
         </div>
 
         {/* Sticky bottom close */}
-        <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid #f1f5f9', padding: '14px 16px', display: 'flex', justifyContent: 'flex-end', zIndex: 10 }}>
+        <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid var(--m-border)', padding: '14px 16px', display: 'flex', justifyContent: 'flex-end', zIndex: 10 }}>
           <button onClick={onClose}
             style={{ background: 'var(--m-accent)', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: 'pointer', minHeight: 56 }}>
             סגור
