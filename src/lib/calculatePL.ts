@@ -256,15 +256,26 @@ export async function calculateBranchPL(
     managerIsActual = true
   } else {
     const { data: prevMgr } = await supabase.from('employer_costs')
-      .select('actual_employer_cost, month, year')
+      .select('actual_employer_cost, employee_number, month, year')
       .eq('branch_id', branchId).eq('is_manager', true)
       .or(`year.lt.${mYear},and(year.eq.${mYear},month.lt.${mMonth})`)
       .order('year', { ascending: false }).order('month', { ascending: false })
     if (prevMgr && prevMgr.length > 0) {
       const { year: lY, month: lM } = prevMgr[0]
-      managerSalary = prevMgr
-        .filter(r => r.year === lY && r.month === lM)
-        .reduce((s, r) => s + Number(r.actual_employer_cost), 0)
+      const latestRows = prevMgr.filter(r => r.year === lY && r.month === lM)
+      // Manager change: the currently-configured global manager(s) (branch_employees
+      // is_manager + monthly_salary) are different people (by payroll number) than
+      // last month's payroll manager(s). Show the current manager's estimated cost
+      // instead of carrying the departed manager's actual — otherwise a manager who
+      // left keeps appearing until the new payroll file is uploaded.
+      const priorMgrNumbers = new Set(
+        latestRows.map(r => Number((r as { employee_number?: number }).employee_number)).filter(n => !isNaN(n)))
+      const currentGlobalMgrs = (brGlobals || []).filter(e => e.is_manager && e.payroll_number != null)
+      const managerChanged = currentGlobalMgrs.length > 0 &&
+        currentGlobalMgrs.every(e => !priorMgrNumbers.has(Number(e.payroll_number)))
+      managerSalary = managerChanged
+        ? globalMgrFromBranchEmps
+        : latestRows.reduce((s, r) => s + Number(r.actual_employer_cost), 0)
     }
   }
 
@@ -298,9 +309,13 @@ export async function calculateBranchPL(
         managerSalary = Number(prevMgmt[0].amount)
       }
     }
-  } else if (globalMgrFromBranchEmps > 0) {
-    // A global-salary manager exists that wasn't in the primary payroll upload
-    // for this month — still add them so their salary isn't lost.
+  } else if (managerIsActual && globalMgrFromBranchEmps > 0) {
+    // A global-salary manager exists that wasn't in the CURRENT-month payroll
+    // upload — still add them so their salary isn't lost. Gated on managerIsActual:
+    // when managerSalary is a carry-forward of a PRIOR month's actual manager cost
+    // (fallback, managerIsActual=false), that amount already represents the manager,
+    // so adding the global salary on top double-counts the same person
+    // (e.g. אבי חורב / payroll 227: June actual 22,474 + global 12,000×1.3 → 38,674).
     managerSalary += globalMgrFromBranchEmps
   }
 
