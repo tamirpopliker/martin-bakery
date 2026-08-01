@@ -380,8 +380,8 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
   }
 
   const S = {
-    label: { fontSize: 14, fontWeight: 700, color: '#334155', marginBottom: 8, display: 'block' as const },
-    input: { border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '14px 16px', fontSize: 17, fontWeight: 600, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const, textAlign: 'right' as const, color: '#0f172a', minHeight: 56 },
+    label: { fontSize: 14, fontWeight: 700, color: 'var(--m-text-3)', marginBottom: 8, display: 'block' as const },
+    input: { border: '1.5px solid var(--m-border-strong)', borderRadius: 12, padding: '14px 16px', fontSize: 17, fontWeight: 600, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const, textAlign: 'right' as const, color: 'var(--m-text)', minHeight: 56 },
   }
 
   const steps = ['פתיחה', 'מכירות', 'ספירת מזומן', 'סיום']
@@ -390,14 +390,14 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 0 }} onClick={onClose}>
       <motion.div onClick={e => e.stopPropagation()}
         initial={{ y: '100%', opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-        style={{ background: '#f8fafc', width: '100%', maxWidth: 720, minHeight: 'min(90vh, 720px)', maxHeight: '96vh', overflow: 'auto', borderRadius: '20px 20px 0 0', direction: 'rtl', display: 'flex', flexDirection: 'column' }}>
+        style={{ background: 'var(--m-canvas)', width: '100%', maxWidth: 720, minHeight: 'min(90vh, 720px)', maxHeight: '96vh', overflow: 'auto', borderRadius: '20px 20px 0 0', direction: 'rtl', display: 'flex', flexDirection: 'column', fontFamily: 'var(--m-font)' }}>
 
         {/* Header + progress */}
-        <div style={{ position: 'sticky', top: 0, zIndex: 2, background: 'white', padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+        <div style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--m-surface)', padding: '16px 20px', borderBottom: '1px solid var(--m-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700 }}>שלב {step} מתוך 4</div>
-              <div style={{ fontSize: 18, fontWeight: 900, color: '#0f172a' }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--m-text)' }}>
                 {isEdit ? 'עריכת סגירה' : 'סגירת קופה'} {registerNumber}
               </div>
             </div>
@@ -664,9 +664,9 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
         </div>
 
         {/* Nav */}
-        <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid #f1f5f9', padding: '14px 16px', display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ position: 'sticky', bottom: 0, background: 'var(--m-surface)', borderTop: '1px solid var(--m-border)', padding: '14px 16px', display: 'flex', justifyContent: 'space-between', gap: 10 }}>
           <button disabled={step === 1} onClick={() => setStep(step - 1)}
-            style={{ background: step === 1 ? '#f1f5f9' : 'white', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, color: step === 1 ? '#cbd5e1' : '#475569', cursor: step === 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 56 }}>
+            style={{ background: step === 1 ? 'var(--m-surface-hover)' : 'var(--m-surface)', border: '1.5px solid var(--m-border-strong)', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, color: step === 1 ? 'var(--m-text-faint)' : 'var(--m-text-3)', cursor: step === 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 56 }}>
             <ArrowRight size={17} /> הקודם
           </button>
           {step < 4 ? (() => {
