@@ -392,14 +392,14 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
       <div style={{ padding: '0 20px', maxWidth: '1000px', margin: '0 auto 16px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
           {[
-            { label: 'קופה',  val: totalCashier, color: '#818cf8' },
-            { label: 'אתר',   val: totalWebsite, color: '#c084fc' },
-            { label: 'הקפה',  val: totalCredit,  color: '#fbbf24' },
-            { label: 'סה"כ',  val: totalRevenue, color: '#0f172a' },
+            { label: 'קופה',  val: totalCashier },
+            { label: 'אתר',   val: totalWebsite },
+            { label: 'הקפה',  val: totalCredit  },
+            { label: 'סה"כ',  val: totalRevenue },
           ].map(s => (
-            <div key={s.label} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, padding: '16px', textAlign: 'center' as const }}>
-              <div style={{ fontSize: '24px', fontWeight: '700', color: s.color }}>₪{Math.round(s.val).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-              <div style={{ fontSize: '12px', color: '#94a3b8' }}>{s.label}</div>
+            <div key={s.label} style={{ background: 'var(--m-surface)', border: '1px solid var(--m-border)', borderRadius: 12, padding: '16px', textAlign: 'center' as const }}>
+              <div className="m-num" style={{ fontSize: '24px', fontWeight: 800, color: 'var(--m-text)' }}>₪{Math.round(s.val).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+              <div style={{ fontSize: '12px', color: 'var(--m-text-muted)' }}>{s.label}</div>
             </div>
           ))}
         </div>
@@ -438,27 +438,27 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         {/* קופה — סיכום מסגירות קופה (קריאה בלבד) */}
         {tab === 'cashier' && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, padding: 20, marginBottom: 16 }}>
+            <div style={{ background: 'var(--m-surface)', border: '1px solid var(--m-border)', borderRadius: 12, padding: 20, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                <AlertCircle size={16} color="var(--m-accent)" />
-                <span style={{ fontSize: 13, color: 'var(--m-accent)', fontWeight: 700 }}>נתונים מסגירות קופה — לקריאה בלבד</span>
+                <AlertCircle size={16} color="var(--m-text-muted)" />
+                <span style={{ fontSize: 13, color: 'var(--m-text-muted)', fontWeight: 700 }}>נתונים מסגירות קופה — לקריאה בלבד</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-                <div style={{ padding: 14, background: '#ecfdf5', borderRadius: 12, border: '1px solid #a7f3d0' }}>
-                  <div style={{ fontSize: 12, color: '#047857', fontWeight: 700 }}>סה"כ מכירות מזומן</div>
-                  <div style={{ fontSize: 24, fontWeight: 900, color: '#065f46' }}>₪{Math.round(closingsCash).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                <div style={{ padding: 14, background: 'var(--m-surface)', borderRadius: 12, border: '1px solid var(--m-border)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--m-text-muted)', fontWeight: 600 }}>סה"כ מכירות מזומן</div>
+                  <div className="m-num" style={{ fontSize: 24, fontWeight: 800, color: 'var(--m-text)' }}>₪{Math.round(closingsCash).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                 </div>
-                <div style={{ padding: 14, background: '#eff6ff', borderRadius: 12, border: '1px solid #bfdbfe' }}>
-                  <div style={{ fontSize: 12, color: '#1d4ed8', fontWeight: 700 }}>סה"כ מכירות אשראי</div>
-                  <div style={{ fontSize: 24, fontWeight: 900, color: '#1e3a8a' }}>₪{Math.round(closingsCredit).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                <div style={{ padding: 14, background: 'var(--m-surface)', borderRadius: 12, border: '1px solid var(--m-border)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--m-text-muted)', fontWeight: 600 }}>סה"כ מכירות אשראי</div>
+                  <div className="m-num" style={{ fontSize: 24, fontWeight: 800, color: 'var(--m-text)' }}>₪{Math.round(closingsCredit).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                 </div>
-                <div style={{ padding: 14, background: '#f5f3ff', borderRadius: 12, border: '1px solid #ddd6fe' }}>
-                  <div style={{ fontSize: 12, color: '#6d28d9', fontWeight: 700 }}>סה"כ עסקאות</div>
-                  <div style={{ fontSize: 24, fontWeight: 900, color: '#4c1d95' }}>{closingsTx.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                <div style={{ padding: 14, background: 'var(--m-surface)', borderRadius: 12, border: '1px solid var(--m-border)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--m-text-muted)', fontWeight: 600 }}>סה"כ עסקאות</div>
+                  <div className="m-num" style={{ fontSize: 24, fontWeight: 800, color: 'var(--m-text)' }}>{closingsTx.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                 </div>
-                <div style={{ padding: 14, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: 12, color: '#475569', fontWeight: 700 }}>סל ממוצע</div>
-                  <div style={{ fontSize: 24, fontWeight: 900, color: '#0f172a' }}>{avgBasket > 0 ? '₪' + Math.round(avgBasket) : '—'}</div>
+                <div style={{ padding: 14, background: 'var(--m-surface)', borderRadius: 12, border: '1px solid var(--m-border)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--m-text-muted)', fontWeight: 600 }}>סל ממוצע</div>
+                  <div className="m-num" style={{ fontSize: 24, fontWeight: 800, color: 'var(--m-text)' }}>{avgBasket > 0 ? '₪' + Math.round(avgBasket) : '—'}</div>
                 </div>
               </div>
               {onNavigate && (
@@ -471,7 +471,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
             {/* טבלת סגירות קופה — קריאה בלבד */}
             {closingsInPeriod.length > 0 && (
-              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+              <div style={{ background: 'white', border: '1px solid var(--m-border)', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
                 <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--m-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#374151' }}>סגירות קופה — לתקופה</h3>
                   <span style={{ background: '#eef2ff', color: '#4338ca', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999 }}>
@@ -516,7 +516,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
             {/* טבלת נתונים היסטוריים — branch_revenue source='cashier' עם עריכה ומחיקה */}
             {legacyCashierEntries.length > 0 && (
-              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+              <div style={{ background: 'white', border: '1px solid var(--m-border)', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
                 <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--m-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#374151' }}>נתונים היסטוריים — רשומות ישנות</h3>
                   <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999 }}>
@@ -569,7 +569,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         {/* טופס הזנה — לאתר/הקפה בלבד */}
         {tab !== 'cashier' && (
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
-        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, padding: '20px', marginBottom: 16 }}>
+        <div style={{ background: 'white', border: '1px solid var(--m-border)', borderRadius: 12, padding: '20px', marginBottom: 16 }}>
           <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת {cfg.label}</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
 
@@ -631,7 +631,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         {tab !== 'cashier' && (
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
         <div className="table-scroll">
-        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+        <div style={{ background: 'white', border: '1px solid var(--m-border)', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: tab === 'credit' ? '110px 1fr 110px 130px 36px 36px' : '110px 1fr 80px 130px 36px 36px', padding: '10px 20px', borderBottom: '1px solid var(--m-border)', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
             <span>תאריך</span>
             <span>{tab === 'credit' ? 'לקוח' : 'הערות'}</span>
@@ -686,7 +686,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         {dailySummary.length > 0 && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
           <div className="table-scroll">
-          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ background: 'white', border: '1px solid var(--m-border)', borderRadius: 12, overflow: 'hidden' }}>
             <div style={{ padding: '16px 18px 0' }}>
               <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>סיכום יומי — כל המקורות</h3>
             </div>
@@ -721,7 +721,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         {/* מגמת 6 חודשים */}
         {trendData.length > 0 && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, padding: '20px', marginTop: 16 }}>
+          <div style={{ background: 'white', border: '1px solid var(--m-border)', borderRadius: 12, padding: '20px', marginTop: 16 }}>
               <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>מגמת 6 חודשים — הכנסות</h3>
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={trendData}>
