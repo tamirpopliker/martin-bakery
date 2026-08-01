@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { VAT_DIVIDER } from '../lib/vat'
-import PageHeader from '../components/PageHeader'
+import { Button as MButton, SegmentedControl } from '@/components/ui/Controls'
+import { Banner } from '@/components/ui/Banner'
 import {
   DollarSign, CreditCard, Wallet, CheckCircle2, AlertCircle,
-  Camera, X, ArrowRight, ArrowLeft, FileSpreadsheet, History, Calculator, Pencil, Home as HomeIcon,
+  Camera, X, ArrowRight, ArrowLeft, FileSpreadsheet, History, Calculator, Pencil,
   Zap, Archive, Trash2, Receipt
 } from 'lucide-react'
 
@@ -136,7 +137,7 @@ function DenomCounter({ denoms, counts, setCounts, label, kind }: {
                   onChange={e => setCounts({ ...counts, [key]: Math.max(0, parseInt(e.target.value) || 0) })}
                   style={{ width: 58, height: 40, border: '1.5px solid #e2e8f0', borderRadius: 10, fontSize: 17, fontWeight: 800, textAlign: 'center', color: '#0f172a', outline: 'none' }} />
                 <button type="button" onClick={() => inc(1)}
-                  style={{ width: 40, height: 40, borderRadius: 10, background: '#6366f1', border: 'none', color: 'white', fontSize: 22, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>+</button>
+                  style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--m-accent)', border: 'none', color: 'white', fontSize: 22, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>+</button>
               </div>
             </div>
           )
@@ -407,12 +408,12 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
           </div>
           <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
             {steps.map((s, i) => (
-              <div key={s} style={{ flex: 1, height: 5, borderRadius: 3, background: i + 1 <= step ? '#6366f1' : '#e2e8f0' }} />
+              <div key={s} style={{ flex: 1, height: 5, borderRadius: 3, background: i + 1 <= step ? 'var(--m-accent)' : '#e2e8f0' }} />
             ))}
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
             {steps.map((s, i) => (
-              <div key={s} style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: 700, color: i + 1 === step ? '#6366f1' : '#94a3b8' }}>{s}</div>
+              <div key={s} style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: 700, color: i + 1 === step ? 'var(--m-accent)' : '#94a3b8' }}>{s}</div>
             ))}
           </div>
         </div>
@@ -437,7 +438,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                   <label style={S.label}>יתרת פתיחה (₪)</label>
                   <input type="number" inputMode="decimal" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)} style={S.input} placeholder="0" />
                   {!isEdit && prevBalanceLoaded && (
-                    <div style={{ fontSize: 13, color: '#6366f1', marginTop: 8, fontWeight: 600 }}>
+                    <div style={{ fontSize: 13, color: 'var(--m-accent)', marginTop: 8, fontWeight: 600 }}>
                       מולא אוטומטית מסגירה קודמת — ניתן לשנות
                     </div>
                   )}
@@ -510,13 +511,13 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                   <div style={{ fontSize: 14, fontWeight: 800, color: '#4338ca', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Camera size={16} /> העלאת צילום דוח Z (אופציונלי)
                   </div>
-                  <div style={{ fontSize: 13, color: '#6366f1', marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, color: 'var(--m-accent)', marginBottom: 12 }}>
                     צלם את דוח ה-Z והמערכת תמלא עבורך את המכירות
                   </div>
                   <input ref={zFileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
                     onChange={e => e.target.files && e.target.files[0] && handleZPhoto(e.target.files[0])} />
                   <button onClick={() => zFileRef.current?.click()} disabled={zPhotoParsing}
-                    style={{ background: zPhotoParsing ? '#c7d2fe' : '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, cursor: zPhotoParsing ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 52 }}>
+                    style={{ background: zPhotoParsing ? '#c7d2fe' : 'var(--m-accent)', color: 'white', border: 'none', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, cursor: zPhotoParsing ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 52 }}>
                     <Camera size={18} />
                     {zPhotoParsing ? 'מחלץ נתונים…' : 'בחר תמונה'}
                   </button>
@@ -529,7 +530,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
           {/* Step 3 — Cash count */}
           {step === 3 && (
             <motion.div variants={fadeIn} initial="hidden" animate="visible">
-              <div style={{ position: 'sticky', top: 86, zIndex: 1, background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', borderRadius: 16, padding: '20px 18px', marginBottom: 14, color: 'white', boxShadow: '0 6px 20px rgba(99,102,241,0.25)' }}>
+              <div style={{ position: 'sticky', top: 86, zIndex: 1, background: 'var(--m-accent)', borderRadius: 16, padding: '20px 18px', marginBottom: 14, color: 'white', boxShadow: 'var(--m-shadow)' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 10, alignItems: 'end' }}>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: 12, opacity: 0.9, fontWeight: 700, marginBottom: 4 }}>נספר</div>
@@ -562,7 +563,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
               <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 14 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
                   <Kpi label="נספר" value={countedCash} color="#0f172a" />
-                  <Kpi label="צפוי" value={expectedCash} color="#6366f1" sub="פתיחה + מזומן" />
+                  <Kpi label="צפוי" value={expectedCash} color="var(--m-accent)" sub="פתיחה + מזומן" />
                   <Kpi label="לשים בשקית" value={depositToBag} color="#059669" emphasis sub="מזומן בדיוק" />
                   <Kpi label="פתיחה מחר" value={defaultNextOpening} color="#7c3aed" sub="נספר − מזומן" />
                   <VarianceDisplay value={variance} />
@@ -631,7 +632,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                         { k: 'kept', l: 'השאר בקופה' },
                       ].map(o => (
                         <button key={o.k} onClick={() => setVarianceAction(o.k as any)}
-                          style={{ background: varianceAction === o.k ? '#6366f1' : 'white', color: varianceAction === o.k ? 'white' : '#475569', border: '1.5px solid ' + (varianceAction === o.k ? '#6366f1' : '#e2e8f0'), borderRadius: 10, padding: '10px 16px', fontSize: 14, fontWeight: 800, cursor: 'pointer', minHeight: 44 }}>
+                          style={{ background: varianceAction === o.k ? 'var(--m-accent)' : 'white', color: varianceAction === o.k ? 'white' : '#475569', border: '1.5px solid ' + (varianceAction === o.k ? 'var(--m-accent)' : '#e2e8f0'), borderRadius: 10, padding: '10px 16px', fontSize: 14, fontWeight: 800, cursor: 'pointer', minHeight: 44 }}>
                           {o.l}
                         </button>
                       ))}
@@ -675,7 +676,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
             return (
               <button onClick={() => setStep(step + 1)}
                 disabled={nextDisabled}
-                style={{ background: nextDisabled ? '#c7d2fe' : '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: nextDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 56 }}>
+                style={{ background: nextDisabled ? '#c7d2fe' : 'var(--m-accent)', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: nextDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 56 }}>
                 הבא <ArrowLeft size={17} />
               </button>
             )
@@ -696,7 +697,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
             style={{ background: 'white', width: '100%', maxWidth: 460, borderRadius: 16, direction: 'rtl', overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Pencil size={18} color="#6366f1" /> הזנת סכום ידנית
+                <Pencil size={18} color="var(--m-accent)" /> הזנת סכום ידנית
               </div>
               <button onClick={() => setManualEntryOpen(false)}
                 style={{ width: 40, height: 40, background: '#f8fafc', border: 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -732,7 +733,7 @@ function ClosingWizard({ branchId, registerNumber, existing, onClose, onSaved }:
                 setManualEntryOpen(false)
               }}
                 disabled={manualEntryAmount === '' || isNaN(parseFloat(manualEntryAmount)) || parseFloat(manualEntryAmount) < 0}
-                style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 10, padding: '12px 22px', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
+                style={{ background: 'var(--m-accent)', color: 'white', border: 'none', borderRadius: 10, padding: '12px 22px', fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>
                 אישור
               </button>
             </div>
@@ -802,7 +803,7 @@ function OverallCount({ totalExpectedCash, onClose }: { totalExpectedCash: numbe
           <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 14 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
               <Kpi label="נספר" value={counted} color="#0f172a" />
-              <Kpi label="אמור להיות" value={totalExpectedCash} color="#6366f1" />
+              <Kpi label="אמור להיות" value={totalExpectedCash} color="var(--m-accent)" />
               <VarianceDisplay value={diff} />
             </div>
             {Math.abs(diff) < 0.01 && totalExpectedCash > 0 && (
@@ -883,7 +884,7 @@ function ActivateDialog({ branchId, registerNumber, fundBalance, onClose, onSave
         style={{ background: 'white', width: '100%', maxWidth: 520, borderRadius: '20px 20px 0 0', direction: 'rtl', overflow: 'hidden' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Zap size={20} color="#6366f1" /> הפעלת קופה {registerNumber}
+            <Zap size={20} color="var(--m-accent)" /> הפעלת קופה {registerNumber}
           </div>
           <button onClick={onClose}
             style={{ width: 44, height: 44, background: '#f8fafc', border: 'none', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -912,7 +913,7 @@ function ActivateDialog({ branchId, registerNumber, fundBalance, onClose, onSave
             ביטול
           </button>
           <button onClick={activate} disabled={saving || amt <= 0 || amt > fundBalance}
-            style={{ background: saving || amt <= 0 ? '#c7d2fe' : amt > fundBalance ? '#fecaca' : '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, cursor: saving || amt <= 0 ? 'not-allowed' : 'pointer', minHeight: 56, display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: saving || amt <= 0 ? '#c7d2fe' : amt > fundBalance ? '#fecaca' : 'var(--m-accent)', color: 'white', border: 'none', borderRadius: 12, padding: '14px 22px', fontSize: 15, fontWeight: 800, cursor: saving || amt <= 0 ? 'not-allowed' : 'pointer', minHeight: 56, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Zap size={16} /> {saving ? 'מפעיל…' : 'הפעל קופה'}
           </button>
         </div>
@@ -1205,24 +1206,22 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
-      <PageHeader title="סגירת קופות" subtitle={branchName} onBack={onBack} />
+    <div style={{ minHeight: '100vh', background: 'var(--m-canvas)', direction: 'rtl', fontFamily: 'var(--m-font)' }}>
+      <header className="page-header" style={{ height: 'var(--m-header-h)', background: 'var(--m-surface)', borderBottom: '1px solid #eef1f4', display: 'flex', alignItems: 'center', gap: 12, padding: '0 22px', position: 'sticky', top: 0, zIndex: 20 }}>
+        <MButton variant="secondary" size="sm" icon={<ArrowRight size={16} />} onClick={onBack}>חזרה</MButton>
+        <div style={{ lineHeight: 1.2 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--m-text)' }}>סגירת קופות</div>
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>{branchName}</div>
+        </div>
+      </header>
 
       {/* Top-level tabs */}
-      <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '0 20px', display: 'flex', gap: 4, maxWidth: 1000, margin: '0 auto', overflowX: 'auto' }}>
-        {[
-          { k: 'today', l: 'היום', Icon: HomeIcon },
-          { k: 'history', l: 'היסטוריה', Icon: History },
-        ].map(t => {
-          const Icon = t.Icon
-          const active = tab === t.k
-          return (
-            <button key={t.k} onClick={() => setTab(t.k as any)}
-              style={{ padding: '14px 20px', background: 'none', border: 'none', borderBottom: '3px solid ' + (active ? '#6366f1' : 'transparent'), cursor: 'pointer', fontSize: 15, fontWeight: 800, color: active ? '#6366f1' : '#94a3b8', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Icon size={17} /> {t.l}
-            </button>
-          )
-        })}
+      <div style={{ maxWidth: 1000, margin: '0 auto', padding: '14px 20px 0' }}>
+        <SegmentedControl
+          options={[{ value: 'today', label: 'היום' }, { value: 'history', label: 'היסטוריה' }]}
+          value={tab}
+          onChange={v => setTab(v as 'today' | 'history')}
+        />
       </div>
 
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: 20 }}>
@@ -1265,14 +1264,14 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
 
             {/* Registers grid */}
             <motion.div variants={fadeIn} initial="hidden" animate="visible">
-              <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 18, marginBottom: 16 }}>
+              {registersNeedingAttention.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <Banner tone="warn" title={`${registersNeedingAttention.length} קופות דורשות סגירה`} detail="קופות שלא נסגרו היום — מומלץ לסגור לפני סוף היום" />
+                </div>
+              )}
+              <div style={{ background: 'var(--m-surface)', borderRadius: 'var(--m-r-card)', border: '1px solid var(--m-border)', padding: 18, marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a' }}>קופות הסניף</div>
-                  {registersNeedingAttention.length > 0 && (
-                    <span style={{ background: '#fee2e2', color: '#991b1b', fontSize: 12, fontWeight: 800, padding: '4px 12px', borderRadius: 999 }}>
-                      {registersNeedingAttention.length} דורשות סגירה
-                    </span>
-                  )}
+                  <div style={{ fontSize: 'var(--m-fs-card)', fontWeight: 800, color: 'var(--m-text)' }}>קופות הסניף</div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 10 }}>
@@ -1317,7 +1316,7 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
 
                         {isInactive && (
                           <button onClick={() => setActivatingReg(r)}
-                            style={{ width: '100%', background: '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '12px', fontSize: 15, fontWeight: 800, cursor: 'pointer', marginTop: 6, minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            style={{ width: '100%', background: 'var(--m-accent)', color: 'white', border: 'none', borderRadius: 12, padding: '12px', fontSize: 15, fontWeight: 800, cursor: 'pointer', marginTop: 6, minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                             <Zap size={16} /> הפעל קופה
                           </button>
                         )}
@@ -1325,7 +1324,7 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
                         {!isClosedToday && !isInactive && (
                           <>
                             <button onClick={() => setWizardReg(r)}
-                              style={{ width: '100%', background: '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '12px', fontSize: 15, fontWeight: 800, cursor: 'pointer', marginTop: 6, minHeight: 48 }}>
+                              style={{ width: '100%', background: 'var(--m-accent)', color: 'white', border: 'none', borderRadius: 12, padding: '12px', fontSize: 15, fontWeight: 800, cursor: 'pointer', marginTop: 6, minHeight: 48 }}>
                               סגור קופה
                             </button>
                             <button onClick={() => setEmptyingReg(r)}
@@ -1354,9 +1353,9 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
 
         {tab === 'history' && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <div style={{ background: 'white', borderRadius: 14, border: '1px solid #f1f5f9', padding: 18 }}>
+            <div style={{ background: 'var(--m-surface)', borderRadius: 'var(--m-r-card)', border: '1px solid var(--m-border)', padding: 18 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-                <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: 'var(--m-fs-card)', fontWeight: 800, color: 'var(--m-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <History size={18} /> היסטוריה
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1411,7 +1410,7 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
                             <button onClick={() => setEditClosing(c)}
                               title="עריכה"
                               style={{ width: 36, height: 36, border: '1.5px solid #e2e8f0', background: 'white', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Pencil size={14} color="#6366f1" />
+                              <Pencil size={14} color="var(--m-accent)" />
                             </button>
                             <button onClick={() => setDeletingClosing(c)}
                               title="מחיקה"
@@ -1470,13 +1469,13 @@ export default function RegisterClosings({ branchId, branchName, onBack }: Props
 
 function KpiCard({ Icon, color, label, value }: { Icon: any; color: string; label: string; value: string }) {
   return (
-    <div style={{ background: 'white', border: '1px solid #f1f5f9', borderRadius: 14, padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div style={{ background: 'var(--m-surface)', border: '1px solid var(--m-border)', borderRadius: 'var(--m-r-card)', padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
       <div style={{ width: 40, height: 40, background: color + '15', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <Icon size={19} color={color} />
       </div>
       <div>
-        <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>{label}</div>
-        <div style={{ fontSize: 19, fontWeight: 900, color: '#0f172a' }}>{value}</div>
+        <div style={{ fontSize: 12, color: 'var(--m-text-muted)', fontWeight: 600 }}>{label}</div>
+        <div className="m-num" style={{ fontSize: 20, fontWeight: 800, color: 'var(--m-text)' }}>{value}</div>
       </div>
     </div>
   )
@@ -1567,7 +1566,7 @@ function DepositCalculator({ totalCash, onClose }: { totalCash: number; onClose:
         {/* Sticky bottom close */}
         <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid #f1f5f9', padding: '14px 16px', display: 'flex', justifyContent: 'flex-end', zIndex: 10 }}>
           <button onClick={onClose}
-            style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: 'pointer', minHeight: 56 }}>
+            style={{ background: 'var(--m-accent)', color: 'white', border: 'none', borderRadius: 12, padding: '14px 26px', fontSize: 15, fontWeight: 800, cursor: 'pointer', minHeight: 56 }}>
             סגור
           </button>
         </div>
