@@ -381,7 +381,7 @@ export default function BranchPL({ branchId, branchName, branchColor, onBack }: 
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                     <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'k'} />
-                    <Tooltip formatter={(value: number, name: string) => ['₪' + Math.round(value).toLocaleString(undefined, { maximumFractionDigits: 2 }), name]} />
+                    <Tooltip formatter={(value: any, name: any) => ['₪' + Math.round(Number(value)).toLocaleString(undefined, { maximumFractionDigits: 2 }), name]} />
                     <Legend />
                     <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
                     <Line type="monotone" dataKey="revenue" name="הכנסות" stroke="#378ADD" strokeWidth={2} dot={{ r: 3 }} />

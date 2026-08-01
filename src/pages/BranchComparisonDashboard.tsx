@@ -302,7 +302,7 @@ export default function BranchComparisonDashboard({ onBack }: { onBack: () => vo
                       <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => `₪${(v / 1000).toFixed(0)}K`} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: '#374151', fontWeight: 600 }} width={90} />
                       <Tooltip
-                        formatter={(value: number, name: string) => [`₪${Math.round(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, name]}
+                        formatter={(value: any, name: any) => [`₪${Math.round(Number(value)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, name]}
                         contentStyle={{ borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '12px', direction: 'rtl' }}
                       />
                       <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />

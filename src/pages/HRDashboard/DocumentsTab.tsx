@@ -98,7 +98,7 @@ export function DocumentsTab({ employee }: { employee: UnifiedEmployee }) {
   }
 
   async function downloadDoc(doc: EmployeeDocument) {
-    const signed = await supabase.storage.from('hr-documents').createSignedUrl(doc.file_url, 60 * 5)
+    const signed = await supabase.storage.from('hr-documents').createSignedUrl(doc.file_url ?? '', 60 * 5)
     if (signed.error || !signed.data?.signedUrl) {
       setMsg({ type: 'error', text: 'יצירת קישור הורדה נכשלה' })
       return
@@ -108,7 +108,7 @@ export function DocumentsTab({ employee }: { employee: UnifiedEmployee }) {
 
   async function deleteDoc(doc: EmployeeDocument) {
     if (!confirm(`למחוק את "${doc.file_name}"?`)) return
-    const storageRes = await supabase.storage.from('hr-documents').remove([doc.file_url])
+    const storageRes = await supabase.storage.from('hr-documents').remove([doc.file_url ?? ''])
     if (storageRes.error) {
       setMsg({ type: 'error', text: `מחיקה נכשלה: ${storageRes.error.message}` })
       return
@@ -136,7 +136,7 @@ export function DocumentsTab({ employee }: { employee: UnifiedEmployee }) {
     try {
       const zip = new JSZip()
       for (const doc of docs) {
-        const dl = await supabase.storage.from('hr-documents').download(doc.file_url)
+        const dl = await supabase.storage.from('hr-documents').download(doc.file_url ?? '')
         if (dl.error || !dl.data) continue
         const folder = doc.document_type_label.replace(/[\\/:*?"<>|]/g, '_')
         const arrayBuffer = await dl.data.arrayBuffer()

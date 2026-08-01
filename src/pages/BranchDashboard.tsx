@@ -288,7 +288,7 @@ export default function BranchDashboard({ branchId, branchName, branchColor, onB
       const rev = current.revenue || 0
       const insightInput: InsightsInput = {
         labor: { totalCost: current.laborEmployer || 0, targetPct: kpiRes.data?.labor_pct || 28, revenue: rev },
-        revenue: { actual: rev, target: kpiRes.data?.revenue_target || 0 },
+        revenue: { actual: rev, target: (kpiRes.data as any)?.revenue_target || 0 },
         waste: { totalAmount: current.wasteTotal || 0, targetPct: kpiRes.data?.waste_pct || 3, revenue: rev },
         controllableProfit: { actual: current.controllableMargin || 0, target: rev * 0.30, revenue: rev },
         factoryPurchases: { amount: current.expSuppliersInternal || 0, avgMonthly: current.expSuppliersInternal || 0, isHolidayMonth: false },

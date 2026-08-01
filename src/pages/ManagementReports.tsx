@@ -796,7 +796,7 @@ function ComparisonTab() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} />
                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v) => '₪' + (v / 1000).toFixed(0) + 'K'} />
-                <Tooltip formatter={(v: number) => fmt(v)} />
+                <Tooltip formatter={(v: any) => fmt(Number(v))} />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
                 {branches.map((br, i) => (
                   <Line key={br.id} type="monotone" dataKey={br.name} stroke={['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'][i % 5]} strokeWidth={2} dot={{ r: 3 }} />

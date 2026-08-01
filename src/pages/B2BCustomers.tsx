@@ -578,7 +578,7 @@ export default function B2BCustomers({ onBack }: Props) {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `₪${(v / 1000).toFixed(0)}K`} />
-                    <Tooltip formatter={(v: number) => fmtM(v)} />
+                    <Tooltip formatter={(v: any) => fmtM(Number(v))} />
                     <Legend />
                     <Line type="monotone" dataKey="billed" name="חיובים" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
                     <Line type="monotone" dataKey="collected" name="גביה" stroke="#16a34a" strokeWidth={2} dot={{ r: 4 }} />

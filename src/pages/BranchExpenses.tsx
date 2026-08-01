@@ -667,7 +667,7 @@ export default function BranchExpenses({ branchId, branchName, branchColor, onBa
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
                   <YAxis yAxisId="amount" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
                   <YAxis yAxisId="pct" orientation="left" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => v + '%'} />
-                  <Tooltip formatter={(value: number, name: string) => name === '% מהכנסות' ? value + '%' : '₪' + Math.round(value).toLocaleString(undefined, { maximumFractionDigits: 2 })} />
+                  <Tooltip formatter={(value: any, name: any) => name === '% מהכנסות' ? value + '%' : '₪' + Math.round(Number(value)).toLocaleString(undefined, { maximumFractionDigits: 2 })} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
                   <Line yAxisId="amount" type="monotone" dataKey="factory" name="רכישות מפעל" stroke="#0ea5e9" strokeWidth={2} dot={{ r: 3 }} />
                   <Line yAxisId="amount" type="monotone" dataKey="supplier" name="ספקים" stroke="#818cf8" strokeWidth={2} dot={{ r: 3 }} />

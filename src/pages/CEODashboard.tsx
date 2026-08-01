@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, getOverheadPct } from '../lib/supabase'
@@ -110,6 +110,7 @@ export default function CEODashboard({ onBack }: Props) {
   const [loading, setLoading] = useState(false)
   const [branches, setBranches] = useState<BranchData[]>([])
   const [revenueExpanded, setRevenueExpanded] = useState(false)
+  const [sellingExpanded, setSellingExpanded] = useState(false)
   const [revBreakdown, setRevBreakdown] = useState<{ source: string; emoji: string; factory: number; byBranch: Record<number, number> }[]>([])
   const [prevTotalRev, setPrevTotalRev] = useState(0)
   const [prevTotalGross, setPrevTotalGross] = useState(0)
@@ -121,6 +122,9 @@ export default function CEODashboard({ onBack }: Props) {
   const [dailyRevenue, setDailyRevenue] = useState<{ date: string; [key: string]: string | number }[]>([])
   const [expenseBreakdown, setExpenseBreakdown] = useState<{ name: string; value: number }[]>([])
   const [monthlyTrend, setMonthlyTrend] = useState<{ month: string; 'הכנסות': number; 'רווח תפעולי': number }[]>([])
+  // Lazy-load gate for the 6-month trend (its computation is ~70% of this page's queries).
+  const trendRef = useRef<HTMLDivElement>(null)
+  const [trendVisible, setTrendVisible] = useState(false)
   const [avgLaborTarget, setAvgLaborTarget] = useState(0)
   const [overheadPct, setOverheadPct] = useState(5)
   // Per-branch KPI targets: { branchId: { labor_pct, waste_pct } }
@@ -155,7 +159,8 @@ export default function CEODashboard({ onBack }: Props) {
 
   const [insightsSummary, setInsightsSummary] = useState<InsightsSummary | null>(null)
   const [insightsExpanded, setInsightsExpanded] = useState(false)
-  const [priceAlerts, setPriceAlerts] = useState<{ product_name: string; current_price: number; last_price: number; pct: number }[]>([])
+  // priceAlerts stays [] — feature disabled (see fetchData note). Setter omitted.
+  const [priceAlerts] = useState<{ product_name: string; current_price: number; last_price: number; pct: number }[]>([])
   const [hqCost, setHqCost] = useState(0)
   const [hasEmployerReport, setHasEmployerReport] = useState(false)
   const [dataFreshness, setDataFreshness] = useState<Array<{
@@ -311,10 +316,9 @@ export default function CEODashboard({ onBack }: Props) {
     // counted above via source check). Only add factory-level B2B (no branch),
     // which has no branch_revenue home. Adding branch invoices here again — or
     // external_sales (the same factory invoices) — double-counted.
-    const { data: b2bInvData } = await supabase.from('b2b_invoices').select('branch_id, total_before_vat').is('branch_id', null).gte('invoice_date', from).lt('invoice_date', to)
-    for (const inv of (b2bInvData || [])) {
-      revBd[2].factory += Number(inv.total_before_vat)
-    }
+    // Reuse b2bFactory (summed above from the same b2b_invoices query) instead
+    // of re-fetching the identical rows.
+    revBd[2].factory += b2bFactory
     // Factory internal sales
     const { data: intSalesData } = await supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', from).lt('order_date', to)
     revBd[3].factory = (intSalesData || []).reduce((s: number, r: any) => s + Number(r.total_amount), 0)
@@ -443,22 +447,12 @@ export default function CEODashboard({ onBack }: Props) {
     ]
     setInsightsSummary(buildInsightsSummary(insightInputs))
 
-    // Price alerts — products with >10% price change
-    const { data: prods } = await supabase.from('products').select('product_name, current_price, last_price')
-      .not('last_price', 'is', null)
-    if (prods) {
-      const alerts = prods.filter((p: any) => {
-        if (!p.last_price || p.last_price === 0) return false
-        const pct = Math.abs((p.current_price - p.last_price) / p.last_price * 100)
-        return pct > 10
-      }).map((p: any) => ({
-        product_name: p.product_name,
-        current_price: Number(p.current_price),
-        last_price: Number(p.last_price),
-        pct: ((p.current_price - p.last_price) / p.last_price * 100),
-      })).sort((a: any, b: any) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 10)
-      setPriceAlerts(alerts)
-    }
+    // Price alerts — DISABLED. The `products` table no longer has the
+    // product_name/current_price/last_price columns (schema changed to
+    // id/name/is_active/…), so this query returned HTTP 400 on every dashboard
+    // load and the feature has been silently broken. Left off until price
+    // history has a proper home table; priceAlerts stays [] so the alerts panel
+    // is hidden by its length check. TODO: re-point at the correct price source.
 
     // Employer report — headquarters cost
     const [mYear, mMonth] = mk.split('-').map(Number)
@@ -503,10 +497,23 @@ export default function CEODashboard({ onBack }: Props) {
 
   useEffect(() => { if (BRANCHES.length > 0) fetchData() }, [from, to, BRANCHES.length])
 
-  // 6-month consolidated trend — revenue and operating profit per month.
-  // Runs alongside fetchData so the main dashboard doesn't wait for it.
+  // Load the trend only once its chart scrolls near the viewport. The chart
+  // sits below the fold; computing it eagerly fired ~320 queries on every
+  // dashboard load and period change (see calculateBranchPL fan-out × 6 months).
   useEffect(() => {
-    if (BRANCHES.length === 0) return
+    const el = trendRef.current
+    if (!el || trendVisible) return
+    const io = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) { setTrendVisible(true); io.disconnect() }
+    }, { rootMargin: '200px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [trendVisible])
+
+  // 6-month consolidated trend — revenue and operating profit per month.
+  // Gated on trendVisible so it only runs when the user reaches the chart.
+  useEffect(() => {
+    if (BRANCHES.length === 0 || !trendVisible) return
     let cancelled = false
     ;(async () => {
       const branchIds = BRANCHES.map(b => b.id)
@@ -551,7 +558,7 @@ export default function CEODashboard({ onBack }: Props) {
       void oh
     })()
     return () => { cancelled = true }
-  }, [from, BRANCHES.length])
+  }, [from, BRANCHES.length, trendVisible])
 
   const totalRevenue    = branches.reduce((s, b) => s + b.revenue, 0)
   const totalExpenses   = branches.reduce((s, b) => s + b.expenses, 0)
@@ -1227,6 +1234,7 @@ export default function CEODashboard({ onBack }: Props) {
               type PLRow = {
                 label: string; factory: number; getBr: (br: BranchData) => number
                 bold: boolean; color: '' | 'profit'; kpiKey?: 'labor' | 'waste' | 'operating'
+                expandKey?: 'selling'
               }
               // Use values directly from calculateBranchPL — no recalculation
               // grossProfit = controllableProfit from PLResult
@@ -1245,15 +1253,13 @@ export default function CEODashboard({ onBack }: Props) {
               const factoryOp = factoryGross - factoryFixed - factoryOverhead
               const rows: PLRow[] = [
                 { label: 'הכנסות', factory: fRev, getBr: br => br.revenue, bold: false, color: '' },
-                ...(isSegment ? [
-                  // Factory is the SELLER on internal trade, not the buyer — its
-                  // internal sales are already counted in the income row above.
-                  // Showing factoryInternalSales as a cost here misled readers
-                  // into thinking the factory paid 338K for purchases.
-                  { label: 'רכישות פנימיות', factory: 0, getBr: (br: BranchData) => br.expInternal, bold: false, color: '' as const },
-                ] : []),
                 ...(isSegment
-                  ? [{ label: 'ספקים חיצוניים', factory: factorySuppliers, getBr: (br: BranchData) => br.expExternal, bold: false, color: '' as const }]
+                  // Segment view: one collapsible "total selling costs" row = internal
+                  // purchases + external suppliers. Expands to show the two detail lines.
+                  // % of revenue is rendered on this total row (via renderCell).
+                  // Factory column: internal purchases = 0 (factory is the seller), so its
+                  // selling cost is just its external suppliers (factorySuppliers).
+                  ? [{ label: 'סה"כ הוצאות מכירה', factory: factorySuppliers, getBr: (br: BranchData) => br.expInternal + br.expExternal, bold: true, color: '' as const, expandKey: 'selling' as const }]
                   : [
                       { label: 'חומרי גלם', factory: factorySuppliers, getBr: (_br: BranchData) => 0,                 bold: false, color: '' as const },
                       { label: 'ספקים',     factory: 0,                 getBr: (br: BranchData) => br.expExternal,    bold: false, color: '' as const },
@@ -1337,12 +1343,17 @@ export default function CEODashboard({ onBack }: Props) {
                             const total = row.factory + brVals.reduce((s, v) => s + v, 0)
                             const totalRev = fRev + branches.reduce((s, br) => s + br.revenue, 0)
                             const isRevRow = row.label === 'הכנסות'
+                            const isSellingRow = row.expandKey === 'selling'
                             return (
                               <>{/* dg fragment */}
-                              <TableRow key={row.label} style={{ ...(row.bold ? { background: '#fafafa' } : { borderBottom: '1px solid #f8fafc' }), ...(isRevRow ? { cursor: 'pointer' } : {}) }}
-                                onClick={isRevRow ? () => setRevenueExpanded(p => !p) : undefined}>
+                              <TableRow key={row.label} style={{ ...(row.bold ? { background: '#fafafa' } : { borderBottom: '1px solid #f8fafc' }), ...((isRevRow || isSellingRow) ? { cursor: 'pointer' } : {}) }}
+                                onClick={isRevRow ? () => setRevenueExpanded(p => !p) : isSellingRow ? () => setSellingExpanded(p => !p) : undefined}>
                                 <TableCell className={`text-[12px] ${row.bold ? 'font-bold text-slate-800' : 'text-slate-600'}`}>
-                                  {isRevRow ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{row.label} <span style={{ fontSize: 10, color: '#94a3b8' }}>{revenueExpanded ? '▲' : '▼'}</span></span> : row.label}
+                                  {isRevRow
+                                    ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{row.label} <span style={{ fontSize: 10, color: '#94a3b8' }}>{revenueExpanded ? '▲' : '▼'}</span></span>
+                                    : isSellingRow
+                                    ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{row.label} <span style={{ fontSize: 10, color: '#94a3b8' }}>{sellingExpanded ? '▲' : '▼'}</span></span>
+                                    : row.label}
                                 </TableCell>
                                 {renderCell(row.factory, fRev, row.kpiKey, getFactoryTarget(row.kpiKey), row.bold, row.color, false)}
                                 {branches.map((br, i) => renderCell(brVals[i], br.revenue, row.kpiKey, getBrTarget(br.id, row.kpiKey), row.bold, row.color, false))}
@@ -1359,6 +1370,23 @@ export default function CEODashboard({ onBack }: Props) {
                                       <TableCell key={br.id} className="text-[11px] text-center text-slate-500">{(src.byBranch[br.id] || 0) > 0 ? fmtN(src.byBranch[br.id]) : '—'}</TableCell>
                                     ))}
                                     <TableCell className="text-[11px] text-center font-semibold text-slate-600">{srcTotal > 0 ? fmtN(srcTotal) : '—'}</TableCell>
+                                  </TableRow>
+                                )
+                              })}
+                              {isSellingRow && sellingExpanded && ([
+                                { label: 'רכישות פנימיות', factory: 0,               getBr: (br: BranchData) => br.expInternal },
+                                { label: 'ספקים חיצוניים',  factory: factorySuppliers, getBr: (br: BranchData) => br.expExternal },
+                              ]).map(child => {
+                                const childBrVals = branches.map(br => child.getBr(br))
+                                const childTotal = child.factory + childBrVals.reduce((s, v) => s + v, 0)
+                                return (
+                                  <TableRow key={child.label} style={{ background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
+                                    <TableCell className="text-[11px] text-slate-400" style={{ paddingRight: 24 }}>{child.label}</TableCell>
+                                    <TableCell className="text-[11px] text-center text-slate-500">{child.factory > 0 ? fmtN(child.factory) : '—'}</TableCell>
+                                    {branches.map((br, i) => (
+                                      <TableCell key={br.id} className="text-[11px] text-center text-slate-500">{childBrVals[i] > 0 ? fmtN(childBrVals[i]) : '—'}</TableCell>
+                                    ))}
+                                    <TableCell className="text-[11px] text-center font-semibold text-slate-600">{childTotal > 0 ? fmtN(childTotal) : '—'}</TableCell>
                                   </TableRow>
                                 )
                               })}
@@ -1521,8 +1549,15 @@ export default function CEODashboard({ onBack }: Props) {
               </div>
             </motion.div>
 
-            {/* Monthly trend — consolidated revenue + operating profit, last 6 months */}
-            {monthlyTrend.length > 0 && (
+            {/* Monthly trend — consolidated revenue + operating profit, last 6 months.
+                Lazy-loaded: the ref wrapper always renders so the IntersectionObserver
+                can trigger computation when it scrolls into view. */}
+            <div ref={trendRef}>
+            {monthlyTrend.length === 0 ? (
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px', marginBottom: '12px', height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13 }}>
+                {trendVisible ? 'טוען מגמת 6 חודשים…' : 'מגמת 6 חודשים'}
+              </div>
+            ) : (
               <motion.div variants={fadeIn} initial="hidden" animate="visible">
                 <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', borderRadius: '12px', border: '1px solid #f1f5f9', padding: '16px', marginBottom: '12px' }}>
                   <span style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '4px' }}>מגמת הכנסות ורווח תפעולי — 6 חודשים אחרונים</span>
@@ -1549,6 +1584,7 @@ export default function CEODashboard({ onBack }: Props) {
                 </div>
               </motion.div>
             )}
+            </div>
 
             {/* Daily revenue area chart */}
             {dailyRevenue.length > 0 && (

@@ -579,7 +579,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                 style={{ ...S.input, textAlign: 'right' as const }} />
             </div>
 
-            {(tab === 'cashier' || tab === 'website') && (
+            {tab === 'website' && (
               <div style={{ display: 'flex', flexDirection: 'column' as const }}>
                 <label style={S.label}>מספר עסקאות <span style={{ fontWeight: 400, color: '#94a3b8' }}>(אופ׳)</span></label>
                 <input type="number" placeholder="0" value={txCount} onChange={e => setTxCount(e.target.value)}
@@ -606,7 +606,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
             </div>
           </div>
 
-          {(tab === 'cashier' || tab === 'website') && amount && txCount && parseInt(txCount) > 0 && (
+          {tab === 'website' && amount && txCount && parseInt(txCount) > 0 && (
             <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '10px 14px', marginBottom: '14px', fontSize: '13px', color: '#065f46' }}>
               סל ממוצע: <strong>₪{(parseFloat(amount) / parseInt(txCount)).toFixed(0)}</strong>
             </div>
@@ -722,7 +722,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
-                  <Tooltip formatter={(value: number) => '₪' + Math.round(value).toLocaleString(undefined, { maximumFractionDigits: 2 })} />
+                  <Tooltip formatter={(value: any) => '₪' + Math.round(Number(value)).toLocaleString(undefined, { maximumFractionDigits: 2 })} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
                   <Line type="monotone" dataKey="cashier" name="קופה" stroke="#818cf8" strokeWidth={2} dot={{ r: 3 }} />
                   <Line type="monotone" dataKey="website" name="אתר" stroke="#c084fc" strokeWidth={2} dot={{ r: 3 }} />

@@ -28,6 +28,7 @@ interface ParsedRow {
   retention_bonus: number
   selected: boolean
   hasStoredRate?: boolean // true if rate comes from branch_employees
+  incomplete?: boolean
 }
 
 interface Entry {
@@ -1279,7 +1280,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={v => `₪${(v / 1000).toFixed(0)}K`} axisLine={false} tickLine={false} />
-                        <RTooltip formatter={(v: number) => [`₪${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, '']} />
+                        <RTooltip formatter={(v: any) => [`₪${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, '']} />
                         <Legend wrapperStyle={{ fontSize: '12px' }} />
                         <ReferenceLine y={0} stroke="#e2e8f0" />
                         <Line type="monotone" dataKey="עלות גולמית" stroke={branchColor} strokeWidth={2} dot={{ r: 3, fill: 'white', stroke: branchColor, strokeWidth: 2 }} />
@@ -1303,7 +1304,7 @@ export default function BranchLabor({ branchId, branchName, branchColor, onBack 
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} />
                   <YAxis yAxisId="cost" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => '₪' + (v / 1000).toFixed(0) + 'K'} />
                   <YAxis yAxisId="pct" orientation="left" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v: number) => v + '%'} />
-                  <RTooltip formatter={(value: number, name: string) => name === '% לייבור' ? value + '%' : '₪' + Math.round(value).toLocaleString(undefined, { maximumFractionDigits: 2 })} />
+                  <RTooltip formatter={(value: any, name: any) => name === '% לייבור' ? value + '%' : '₪' + Math.round(Number(value)).toLocaleString(undefined, { maximumFractionDigits: 2 })} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
                   {laborTargetPct > 0 && <ReferenceLine yAxisId="pct" y={laborTargetPct} stroke="#fb7185" strokeDasharray="5 5" label={{ value: `יעד ${laborTargetPct}%`, fill: '#fb7185', fontSize: 11 }} />}
                   <Line yAxisId="cost" type="monotone" dataKey="laborCost" name="עלות לייבור" stroke={branchColor} strokeWidth={2} dot={{ r: 3 }} />

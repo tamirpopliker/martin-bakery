@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, type JSX } from 'react'
 import { motion } from 'framer-motion'
 import CountUp from 'react-countup'
 import { supabase, getOverheadPct } from '../lib/supabase'
@@ -628,7 +628,7 @@ export default function BranchManagerDashboard({ onBack }: Props) {
 
                       visibleCostRows.forEach((row) => {
                         const isBold = !!row.bold
-                        const totalVal = branches.reduce((s, b) => s + b[row.key], 0)
+                        const totalVal = branches.reduce((s, b) => s + Number(b[row.key]), 0)
                         // Suppress the % under the top-level revenue row (always 100%) \u2014 keep only on the indented sub-rows.
                         const showPct = row.key !== 'totalRevenue'
                         const fmtCell = (val: number, rev: number) => {

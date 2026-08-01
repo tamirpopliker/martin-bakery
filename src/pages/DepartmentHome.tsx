@@ -55,7 +55,7 @@ export default function DepartmentHome({ department, onBack }: Props) {
 
   // ─── ניתוב פנימי ────────────────────────────────────────────────────────────
   if (page === 'production') return (
-    <DailyProduction department={department} onBack={() => setPage(null)} />
+    <DailyProduction department={department as any} onBack={() => setPage(null)} />
   )
   if (page === 'labor') return (
     <DepartmentLabor department={department} onBack={() => setPage(null)} />
@@ -100,7 +100,7 @@ export default function DepartmentHome({ department, onBack }: Props) {
                     display: 'flex', alignItems: 'center', gap: 14,
                     boxShadow: isHov ? '0 4px 12px rgba(0,0,0,0.06)' : '0 1px 3px rgba(0,0,0,0.04)',
                     cursor: 'pointer', transition: 'all 0.18s',
-                    textAlign: 'right', cursor: 'pointer', transition: 'all 0.15s',
+                    textAlign: 'right',
                   }}
                 >
                   <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

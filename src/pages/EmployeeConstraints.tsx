@@ -1,17 +1,11 @@
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence, type PanInfo } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { safeDbOperation } from '../lib/dbHelpers'
 import { useAppUser } from '../lib/UserContext'
 import { useBranches } from '../lib/BranchContext'
-import { Button } from '@/components/ui/button'
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
-
-const fadeIn = (delay = 0) => ({
-  hidden: { opacity: 0, y: 14 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.3, delay } },
-})
 
 type Availability = 'unavailable' | 'prefer_not' | 'available'
 type TabKey = 'availability' | 'roles'
@@ -44,17 +38,14 @@ interface StaffingRequirement {
   required_count: number
 }
 
-const AVAIL_CONFIG: Record<Availability, { label: string; icon: string; color: string; border: string }> = {
-  available:    { label: 'פנוי',         icon: '✓', color: '#10b981', border: '#a7f3d0' },
-  prefer_not:   { label: 'מעדיף שלא',   icon: '~', color: '#f59e0b', border: '#fde68a' },
-  unavailable:  { label: 'לא יכול',     icon: '✕', color: '#ef4444', border: '#fecaca' },
-}
+// Order shown in the segmented control (right-to-left in RTL): available first.
+const STATES: { key: Availability; label: string; icon: string; color: string; tint: string }[] = [
+  { key: 'available',   label: 'פנוי',       icon: '✓', color: '#10b981', tint: '#ecfdf5' },
+  { key: 'prefer_not',  label: 'מעדיף שלא',  icon: '~', color: '#f59e0b', tint: '#fffbeb' },
+  { key: 'unavailable', label: 'לא יכול',    icon: '✕', color: '#ef4444', tint: '#fef2f2' },
+]
 
-const UNSET_BORDER = '#e2e8f0'
-
-const CYCLE_ORDER: Availability[] = ['available', 'prefer_not', 'unavailable']
-
-const DAY_NAMES_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
+const DAY_NAMES_FULL = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי']
 
 function getWeekDays(weekOffset: number): string[] {
   const today = new Date()
@@ -64,7 +55,6 @@ function getWeekDays(weekOffset: number): string[] {
   for (let i = 0; i < 7; i++) {
     const d = new Date(sunday)
     d.setDate(sunday.getDate() + i)
-    // Use local date format to avoid timezone issues
     const yyyy = d.getFullYear()
     const mm = String(d.getMonth() + 1).padStart(2, '0')
     const dd = String(d.getDate()).padStart(2, '0')
@@ -103,8 +93,6 @@ export default function EmployeeConstraints({ onBack }: Props) {
   const [constraintMap, setConstraintMap] = useState<Map<string, Availability>>(new Map())
   const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set())
   const [saveError, setSaveError] = useState('')
-  const [currentDayIndex, setCurrentDayIndex] = useState(0)
-  const [direction, setDirection] = useState(0)
 
   // Role assignments tab state
   const [roles, setRoles] = useState<ShiftRole[]>([])
@@ -113,7 +101,6 @@ export default function EmployeeConstraints({ onBack }: Props) {
   const [isManager, setIsManager] = useState(false)
 
   const weekDays = getWeekDays(weekOffset)
-  const weekLabel = `שבוע — ${formatShortDate(weekDays[0])} עד ${formatShortDate(weekDays[6])}`
 
   // ─── Force non-managers to availability tab ────────────
   useEffect(() => {
@@ -158,7 +145,6 @@ export default function EmployeeConstraints({ onBack }: Props) {
   // ─── Load shifts & constraints when employee resolved or week changes ───
   useEffect(() => {
     if (resolvedEmpId) loadShiftsAndConstraints()
-    setCurrentDayIndex(0)
   }, [resolvedEmpId, weekOffset])
 
   async function loadShiftsAndConstraints() {
@@ -185,8 +171,7 @@ export default function EmployeeConstraints({ onBack }: Props) {
         .eq('employee_id', resolvedEmpId!),
     ])
 
-    const loadedShifts: BranchShift[] = (shiftsRes.data || []) as BranchShift[]
-    setShifts(loadedShifts)
+    setShifts((shiftsRes.data || []) as BranchShift[])
     setStaffingReqs((staffingRes.data || []) as StaffingRequirement[])
     setMyRoleIds(((myRolesRes.data || []) as { role_id: number }[]).map(r => r.role_id))
 
@@ -211,6 +196,11 @@ export default function EmployeeConstraints({ onBack }: Props) {
       .map(r => r.role_id)
     if (reqRoleIdsForShift.length === 0) return true
     return reqRoleIdsForShift.some(rid => myRoleIds.includes(rid))
+  }
+
+  // Shifts that apply to a given day-of-week, filtered to this employee's roles.
+  function shiftsForDow(dow: number): BranchShift[] {
+    return shifts.filter(s => s.days_of_week?.includes(dow) && isShiftForMe(s.id))
   }
 
   // ─── Load roles & assignments ──────────────────────────
@@ -239,17 +229,13 @@ export default function EmployeeConstraints({ onBack }: Props) {
     if (!resolvedEmpId || shiftId === 0) return
     const key = `${dateStr}|${shiftId}`
     const prevValue = constraintMap.get(key) ?? null
+    if (prevValue === availability) return // no change
     setSaveError('')
 
-    // Optimistic update
-    setConstraintMap(prev => {
-      const next = new Map(prev)
-      next.set(key, availability)
-      return next
-    })
+    setConstraintMap(prev => new Map(prev).set(key, availability))
+    if (navigator.vibrate) navigator.vibrate(8)
 
     // Atomic UPSERT on the (employee_id, date, shift_id) unique index (migration 063).
-    // Replaces the old non-atomic DELETE→INSERT that failed silently under RLS.
     const res = await safeDbOperation(
       () => supabase.from('schedule_constraints').upsert({
         branch_id: appUser?.branch_id,
@@ -264,7 +250,6 @@ export default function EmployeeConstraints({ onBack }: Props) {
     )
 
     if (!res.ok) {
-      // Revert the optimistic change and surface the error inline
       setConstraintMap(prev => {
         const next = new Map(prev)
         if (prevValue === null) next.delete(key)
@@ -275,7 +260,6 @@ export default function EmployeeConstraints({ onBack }: Props) {
       return
     }
 
-    // Brief checkmark
     setSavedKeys(prev => new Set(prev).add(key))
     setTimeout(() => {
       setSavedKeys(prev => {
@@ -283,10 +267,10 @@ export default function EmployeeConstraints({ onBack }: Props) {
         next.delete(key)
         return next
       })
-    }, 1500)
+    }, 1400)
   }
 
-  // ─── Toggle role assignment ────────────────────────────
+  // ─── Toggle role assignment (manager only) ─────────────
   async function toggleRole(roleId: number) {
     if (!resolvedEmpId) return
     const existing = assignments.find(a => a.employee_id === resolvedEmpId && a.role_id === roleId)
@@ -295,7 +279,6 @@ export default function EmployeeConstraints({ onBack }: Props) {
       setAssignments(prev => prev.filter(a => a.id !== existing.id))
       const { error } = await supabase.from('employee_role_assignments').delete().eq('id', existing.id)
       if (error) {
-        console.error('[EmployeeConstraints toggleRole delete] error:', error)
         setAssignments(prevAssignments)
         alert(`עדכון התפקיד נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
       }
@@ -304,452 +287,218 @@ export default function EmployeeConstraints({ onBack }: Props) {
         .insert({ employee_id: resolvedEmpId, role_id: roleId })
         .select()
       if (error) {
-        console.error('[EmployeeConstraints toggleRole insert] error:', error)
         alert(`עדכון התפקיד נכשל: ${error.message || 'שגיאת מסד נתונים'}. נסה שוב.`)
         return
       }
-      if (data && data[0]) {
-        setAssignments(prev => [...prev, data[0] as EmployeeRoleAssignment])
+      if (data && data[0]) setAssignments(prev => [...prev, data[0] as EmployeeRoleAssignment])
+    }
+  }
+
+  // Count of shifts this week the employee marked as NOT fully available.
+  const markedCount = (() => {
+    let n = 0
+    for (let i = 0; i < 6; i++) {
+      const date = weekDays[i]
+      const dow = new Date(date + 'T12:00:00').getDay()
+      for (const s of shiftsForDow(dow)) {
+        const v = constraintMap.get(`${date}|${s.id}`)
+        if (v && v !== 'available') n++
       }
     }
-  }
+    return n
+  })()
 
-  // ─── Swipe gesture handler ──────────────────────────────
-  const handleDragEnd = (_: any, info: PanInfo) => {
-    const threshold = 50
-    if (info.offset.x < -threshold && currentDayIndex < 5) {
-      setDirection(1)
-      setCurrentDayIndex(prev => prev + 1)
-      if (navigator.vibrate) navigator.vibrate(10)
-    } else if (info.offset.x > threshold && currentDayIndex > 0) {
-      setDirection(-1)
-      setCurrentDayIndex(prev => prev - 1)
-      if (navigator.vibrate) navigator.vibrate(10)
+  const hasAnyShift = (() => {
+    for (let i = 0; i < 6; i++) {
+      const dow = new Date(weekDays[i] + 'T12:00:00').getDay()
+      if (shiftsForDow(dow).length > 0) return true
     }
-  }
-
-  const swipeVariants = {
-    enter: (dir: number) => ({ x: dir > 0 ? 300 : -300, opacity: 0 }),
-    center: { x: 0, opacity: 1 },
-    exit: (dir: number) => ({ x: dir > 0 ? -300 : 300, opacity: 0 }),
-  }
-
-  // ─── Compute which shifts apply to ANY day in the week ─
-  function getWeekShifts(): BranchShift[] {
-    const daysInWeek = weekDays.map(d => new Date(d + 'T12:00:00').getDay())
-    return shifts.filter(s =>
-      s.days_of_week && s.days_of_week.some(dow => daysInWeek.includes(dow)) && isShiftForMe(s.id)
-    )
-  }
-
-  // Helper to get cell style for availability
-  function getCellStyle(current: Availability | null): React.CSSProperties {
-    if (!current) {
-      return {
-        border: `1px solid ${UNSET_BORDER}`,
-        background: 'white',
-      }
-    }
-    const ac = AVAIL_CONFIG[current]
-    return {
-      border: `1px solid ${ac.border}`,
-      background: 'white',
-    }
-  }
+    return false
+  })()
 
   // ─── Render ────────────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc' }} dir="rtl">
-      <div className="max-w-lg mx-auto px-4 py-6">
+    <div style={{ minHeight: '100vh', background: '#f8fafc', paddingBottom: activeTab === 'availability' && hasAnyShift ? 88 : 24 }} dir="rtl">
+      <div className="max-w-md mx-auto px-4 py-5">
         <PageHeader title="הזמינות שלי" subtitle={branchName} onBack={onBack} />
 
-        {/* Tab toggle — only show if manager/admin */}
+        {/* Tab toggle — only for managers/admin */}
         {isManager && (
-        <motion.div variants={fadeIn(0.05)} initial="hidden" animate="visible" className="flex items-center justify-center gap-2 mb-5">
-          <div className="bg-slate-100 rounded-xl p-1 flex gap-1">
-            <button
-              onClick={() => setActiveTab('availability')}
-              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                activeTab === 'availability'
-                  ? 'bg-white text-slate-800 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              הזמינות שלי
-            </button>
-            <button
-              onClick={() => setActiveTab('roles')}
-              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                activeTab === 'roles'
-                  ? 'bg-white text-slate-800 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              התפקידים שלי
-            </button>
+          <div className="flex items-center justify-center mb-4">
+            <div className="bg-slate-100 rounded-xl p-1 flex gap-1">
+              {(['availability', 'roles'] as TabKey[]).map(t => (
+                <button key={t} onClick={() => setActiveTab(t)}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
+                    activeTab === t ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
+                  }`}>
+                  {t === 'availability' ? 'הזמינות שלי' : 'התפקידים שלי'}
+                </button>
+              ))}
+            </div>
           </div>
-        </motion.div>
         )}
 
         {noEmployee ? (
-          <div className="text-center py-12">
+          <div className="text-center py-16">
             <p className="text-slate-500 font-semibold">לא נמצאת כעובד במערכת</p>
             <p className="text-sm text-slate-400 mt-2">פנה למנהל הסניף שלך לקישור החשבון.</p>
           </div>
         ) : activeTab === 'availability' ? (
-          /* ===== TAB 1: AVAILABILITY CALENDAR ===== */
+          /* ═══════════ AVAILABILITY ═══════════ */
           <>
-            {/* Legend */}
-            <motion.div variants={fadeIn(0.05)} initial="hidden" animate="visible"
-              className="flex justify-center gap-5 mb-5 text-xs">
-              {Object.entries(AVAIL_CONFIG).map(([, cfg]) => (
-                <span key={cfg.label} className="flex items-center gap-1.5" style={{ color: cfg.color }}>
-                  <span style={{ fontWeight: '700', fontSize: 11 }}>{cfg.icon}</span>
-                  <span style={{ color: '#64748b' }}>{cfg.label}</span>
-                </span>
-              ))}
-            </motion.div>
+            {/* Week navigation */}
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <button onClick={() => setWeekOffset(w => w + 1)}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-semibold active:scale-95 transition">
+                <ChevronRight size={16} /> הבא
+              </button>
+              <div className="text-center">
+                <div className="text-sm font-extrabold text-slate-800">
+                  {formatShortDate(weekDays[0])} – {formatShortDate(weekDays[5])}
+                </div>
+                {weekOffset === 1 && <div className="text-[11px] text-indigo-500 font-semibold">השבוע הבא</div>}
+              </div>
+              <button onClick={() => setWeekOffset(w => Math.max(0, w - 1))} disabled={weekOffset <= 0}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-semibold disabled:opacity-40 active:scale-95 transition">
+                קודם <ChevronLeft size={16} />
+              </button>
+            </div>
 
-            <p className="text-center text-xs text-slate-400 mb-4">
-              כברירת מחדל אתה מסומן כפנוי — סמן רק ימים או משמרות שבהם אינך יכול.
-            </p>
+            {/* Hint */}
+            <div className="rounded-xl px-4 py-3 mb-3" style={{ background: '#eef2ff', border: '1px solid #e0e7ff' }}>
+              <p className="text-[13px] text-indigo-900 leading-relaxed">
+                כברירת מחדל אתה מסומן <b>פנוי</b> לכל המשמרות. סמן רק היכן שאינך יכול —
+                <span className="text-indigo-600"> נשמר אוטומטית</span>.
+              </p>
+            </div>
 
             {saveError && (
-              <div className="mb-4 px-4 py-2.5 rounded-lg text-sm text-center"
+              <div className="mb-3 px-4 py-2.5 rounded-xl text-sm text-center"
                 style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
                 {saveError}
               </div>
             )}
 
-            {/* Week nav */}
-            <motion.div variants={fadeIn(0.1)} initial="hidden" animate="visible"
-              className="flex items-center justify-center gap-4 mb-5">
-              <Button variant="outline" size="sm"
-                onClick={() => setWeekOffset(w => w + 1)}
-                className="rounded-lg">
-                <ChevronRight size={16} />
-              </Button>
-              <span className="text-sm font-bold text-slate-700 min-w-[180px] text-center">{weekLabel}</span>
-              <Button variant="outline" size="sm"
-                onClick={() => setWeekOffset(w => w - 1)}
-                disabled={weekOffset <= 0}
-                className="rounded-lg">
-                <ChevronLeft size={16} />
-              </Button>
-              {weekOffset !== 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setWeekOffset(0)} className="text-xs text-indigo-500">
-                  השבוע
-                </Button>
-              )}
-            </motion.div>
-
             {loading ? (
-              <div className="text-center py-12 text-slate-400">טוען...</div>
-            ) : shifts.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-sm">
-                לא הוגדרו משמרות לסניף זה
-              </div>
+              <div className="text-center py-16 text-slate-400">טוען...</div>
+            ) : !hasAnyShift ? (
+              <div className="text-center py-16 text-slate-400 text-sm">לא הוגדרו משמרות לסניף זה</div>
             ) : (
-              <>
-              {/* ═══ MOBILE: Day-by-day card view with swipe ═══ */}
-              <motion.div variants={fadeIn(0.15)} initial="hidden" animate="visible" className="md:hidden">
-                {(() => {
-                  const DAY_NAMES_FULL = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי']
-                  const mDate = weekDays[currentDayIndex]
-                  const mDow = new Date(mDate + 'T12:00:00').getDay()
-                  const mShifts = shifts.filter(s => s.days_of_week && s.days_of_week.includes(mDow) && isShiftForMe(s.id))
-
+              <div className="flex flex-col gap-4">
+                {[0, 1, 2, 3, 4, 5].map(dayIdx => {
+                  const date = weekDays[dayIdx]
+                  const dow = new Date(date + 'T12:00:00').getDay()
+                  const dayShifts = shiftsForDow(dow)
+                  if (dayShifts.length === 0) return null
                   return (
-                    <>
+                    <motion.div key={date}
+                      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, delay: dayIdx * 0.03 }}>
                       {/* Day header */}
-                      <div style={{ textAlign: 'center', marginBottom: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                          <button
-                            onClick={() => { if (currentDayIndex > 0) { setDirection(-1); setCurrentDayIndex(prev => prev - 1); if (navigator.vibrate) navigator.vibrate(10) } }}
-                            disabled={currentDayIndex === 0}
-                            style={{ width: 44, height: 44, borderRadius: '50%', background: 'white', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: currentDayIndex > 0 ? 'pointer' : 'default', opacity: currentDayIndex === 0 ? 0.3 : 1, fontSize: 18 }}
-                          >{'\u2192'}</button>
-                          <div>
-                            <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>{'יום ' + DAY_NAMES_FULL[currentDayIndex]}</div>
-                            <div style={{ fontSize: 14, color: '#94a3b8' }}>{formatShortDate(weekDays[currentDayIndex])}</div>
-                          </div>
-                          <button
-                            onClick={() => { if (currentDayIndex < 5) { setDirection(1); setCurrentDayIndex(prev => prev + 1); if (navigator.vibrate) navigator.vibrate(10) } }}
-                            disabled={currentDayIndex === 5}
-                            style={{ width: 44, height: 44, borderRadius: '50%', background: 'white', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: currentDayIndex < 5 ? 'pointer' : 'default', opacity: currentDayIndex === 5 ? 0.3 : 1, fontSize: 18 }}
-                          >{'\u2190'}</button>
-                        </div>
-                        {/* Dots */}
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 10 }}>
-                          {[0,1,2,3,4,5].map(i => (
-                            <div key={i} style={{
-                              width: i === currentDayIndex ? 10 : 8,
-                              height: i === currentDayIndex ? 10 : 8,
-                              borderRadius: '50%',
-                              background: i === currentDayIndex ? '#6366f1' : '#e2e8f0',
-                              transition: 'all 0.2s',
-                            }} />
-                          ))}
-                        </div>
+                      <div className="flex items-baseline gap-2 mb-2 px-1">
+                        <span className="text-[15px] font-extrabold text-slate-800">יום {DAY_NAMES_FULL[dayIdx]}</span>
+                        <span className="text-xs text-slate-400 font-medium">{formatShortDate(date)}</span>
                       </div>
 
-                      {/* Day content with swipe */}
-                      <div style={{ overflow: 'hidden' }}>
-                        <AnimatePresence mode="wait" custom={direction}>
-                          <motion.div
-                            key={currentDayIndex}
-                            custom={direction}
-                            variants={swipeVariants}
-                            initial="enter"
-                            animate="center"
-                            exit="exit"
-                            transition={{ duration: 0.2, ease: 'easeInOut' }}
-                            drag="x"
-                            dragConstraints={{ left: 0, right: 0 }}
-                            dragElastic={0.2}
-                            onDragEnd={handleDragEnd}
-                            style={{ touchAction: 'pan-y' }}
-                          >
-                            {mShifts.length === 0 ? (
-                              <div style={{
-                                background: 'white',
-                                border: '1px solid #f1f5f9',
-                                borderRadius: 12,
-                                padding: 32,
-                                textAlign: 'center',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                              }}>
-                                <div className="text-slate-400 text-sm">אין משמרות ביום זה</div>
+                      <div className="flex flex-col gap-2.5">
+                        {dayShifts.map(shift => {
+                          const key = `${date}|${shift.id}`
+                          const current: Availability = constraintMap.get(key) || 'available'
+                          const isSaved = savedKeys.has(key)
+                          return (
+                            <div key={shift.id} className="bg-white rounded-2xl p-3"
+                              style={{ border: '1px solid #f1f5f9', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                              <div className="flex items-center justify-between mb-2.5 px-0.5">
+                                <span className="text-[14px] font-bold text-slate-800">{shift.name}</span>
+                                <span className="flex items-center gap-2">
+                                  {isSaved && (
+                                    <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="text-emerald-500 flex items-center gap-0.5 text-[11px] font-semibold">
+                                      <Check size={13} /> נשמר
+                                    </motion.span>
+                                  )}
+                                  <span className="text-[12px] text-slate-400 font-medium">
+                                    {formatTime(shift.start_time)}–{formatTime(shift.end_time)}
+                                  </span>
+                                </span>
                               </div>
-                            ) : (
-                              <div className="flex flex-col gap-3">
-                                {mShifts.map(shift => {
-                                  const key = `${mDate}|${shift.id}`
-                                  const current = constraintMap.get(key) || 'available'
-                                  const isSaved = savedKeys.has(key)
-                                  const ac = AVAIL_CONFIG[current]
-                                  const nextAvail = CYCLE_ORDER[(CYCLE_ORDER.indexOf(current) + 1) % 3]
-
+                              {/* Segmented 3-state control */}
+                              <div className="flex gap-1.5">
+                                {STATES.map(st => {
+                                  const active = current === st.key
                                   return (
-                                    <div key={shift.id} style={{
-                                      background: 'white',
-                                      border: '1px solid #f1f5f9',
-                                      borderRadius: 12,
-                                      overflow: 'hidden',
-                                      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                                    }}>
-                                      <div style={{
-                                        padding: '10px 16px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        borderBottom: '1px solid #f1f5f9',
+                                    <button key={st.key}
+                                      onClick={() => setAvailability(date, shift.id, st.key)}
+                                      className="flex-1 rounded-xl font-bold transition-all active:scale-[0.97]"
+                                      style={{
+                                        minHeight: 46,
+                                        fontSize: 13,
+                                        border: `1.5px solid ${active ? st.color : '#e2e8f0'}`,
+                                        background: active ? st.color : 'white',
+                                        color: active ? 'white' : '#94a3b8',
+                                        boxShadow: active ? `0 2px 8px ${st.color}44` : 'none',
                                       }}>
-                                        <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{shift.name}</span>
-                                        <span style={{ fontSize: 12, color: '#94a3b8' }}>{formatTime(shift.start_time)} — {formatTime(shift.end_time)}</span>
-                                      </div>
-                                      <motion.button
-                                        whileTap={{ scale: 0.96 }}
-                                        onClick={() => setAvailability(mDate, shift.id, nextAvail)}
-                                        className="w-full transition-colors duration-200 relative"
-                                        style={{
-                                          height: '100px',
-                                          border: 'none',
-                                          background: 'white',
-                                          cursor: 'pointer',
-                                          display: 'flex',
-                                          flexDirection: 'column',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          gap: '4px',
-                                        }}>
-                                        <span style={{ fontSize: '28px', fontWeight: '800', color: ac.color, lineHeight: 1 }}>{ac.icon}</span>
-                                        <span style={{ fontSize: '13px', fontWeight: '600', color: ac.color }}>{ac.label}</span>
-                                        {isSaved && (
-                                          <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
-                                            style={{ position: 'absolute', top: '8px', left: '8px' }}
-                                            className="text-emerald-500">
-                                            <Check size={16} />
-                                          </motion.span>
-                                        )}
-                                      </motion.button>
-                                    </div>
+                                      <span style={{ marginLeft: 4 }}>{st.icon}</span>{st.label}
+                                    </button>
                                   )
                                 })}
                               </div>
-                            )}
-                          </motion.div>
-                        </AnimatePresence>
-                      </div>
-                    </>
-                  )
-                })()}
-              </motion.div>
-
-              {/* ═══ DESKTOP: Weekly grid table ═══ */}
-              <motion.div variants={fadeIn(0.15)} initial="hidden" animate="visible"
-                className="hidden md:block" style={{
-                  background: 'white',
-                  borderRadius: 12,
-                  overflow: 'hidden',
-                  border: '1px solid #f1f5f9',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                }}>
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse" style={{ minWidth: '600px' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <th className="px-3 py-2 text-xs font-bold text-slate-500 text-right sticky right-0 bg-white z-10" style={{ minWidth: '90px' }}>
-                          משמרת
-                        </th>
-                        {weekDays.map((date, i) => {
-                          const isSat = i === 6
-                          return (
-                            <th key={date} className="px-1 py-2 text-center text-xs font-bold"
-                              style={{ color: isSat ? '#cbd5e1' : '#64748b' }}>
-                              <div>{DAY_NAMES_SHORT[i]}</div>
-                              <div className="text-[10px] font-normal" style={{ color: '#94a3b8' }}>{formatShortDate(date)}</div>
-                            </th>
+                            </div>
                           )
                         })}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {getWeekShifts().map(shift => (
-                        <tr key={shift.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                          <td className="px-3 py-2 text-xs font-semibold text-slate-700 sticky right-0 bg-white z-10">
-                            <div>{shift.name}</div>
-                            <div className="text-[10px] text-slate-400 font-normal">
-                              {formatTime(shift.start_time)}-{formatTime(shift.end_time)}
-                            </div>
-                          </td>
-                          {weekDays.map((date, dayIdx) => {
-                            const isSat = dayIdx === 6
-                            const dow = new Date(date + 'T12:00:00').getDay()
-                            const applies = shift.days_of_week && shift.days_of_week.includes(dow)
-
-                            if (isSat) {
-                              return (
-                                <td key={date} className="p-1">
-                                  <div style={{ height: '64px', borderRadius: '8px', background: '#fafafa', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <span className="text-[10px] text-slate-300">שבת</span>
-                                  </div>
-                                </td>
-                              )
-                            }
-
-                            if (!applies) {
-                              return (
-                                <td key={date} className="p-1">
-                                  <div style={{ height: '64px', borderRadius: '8px', background: '#fafafa', border: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <span className="text-slate-200">—</span>
-                                  </div>
-                                </td>
-                              )
-                            }
-
-                            const key = `${date}|${shift.id}`
-                            const current = constraintMap.get(key) || 'available'
-                            const isSaved = savedKeys.has(key)
-                            const ac = AVAIL_CONFIG[current]
-                            const nextAvail = CYCLE_ORDER[(CYCLE_ORDER.indexOf(current) + 1) % 3]
-
-                            return (
-                              <td key={date} className="p-1">
-                                <motion.button
-                                  whileTap={{ scale: 0.93 }}
-                                  onClick={() => setAvailability(date, shift.id, nextAvail)}
-                                  className="w-full transition-colors duration-200 relative"
-                                  style={{
-                                    height: '64px',
-                                    borderRadius: '8px',
-                                    border: `1px solid ${ac.border}`,
-                                    background: 'white',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '2px',
-                                  }}>
-                                  <span style={{ fontSize: '16px', fontWeight: '700', color: ac.color, lineHeight: 1 }}>{ac.icon}</span>
-                                  <span style={{ fontSize: '9px', fontWeight: '600', color: ac.color }}>{ac.label}</span>
-                                  {isSaved && (
-                                    <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
-                                      style={{ position: 'absolute', top: '3px', left: '3px' }}
-                                      className="text-emerald-500">
-                                      <Check size={10} />
-                                    </motion.span>
-                                  )}
-                                </motion.button>
-                              </td>
-                            )
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </motion.div>
-              </>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
             )}
           </>
         ) : (
-          /* ===== TAB 2: ROLE ASSIGNMENTS ===== */
-          <motion.div variants={fadeIn(0.1)} initial="hidden" animate="visible">
+          /* ═══════════ ROLES (manager only) ═══════════ */
+          <div>
             {rolesLoading ? (
               <div className="text-center py-12 text-slate-400">טוען...</div>
             ) : roles.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-sm">
-                המנהל טרם הגדיר תפקידים לסניף
-              </div>
+              <div className="text-center py-12 text-slate-400 text-sm">המנהל טרם הגדיר תפקידים לסניף</div>
             ) : (
-              <div style={{
-                background: 'white',
-                borderRadius: 12,
-                overflow: 'hidden',
-                border: '1px solid #f1f5f9',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-              }}>
+              <div className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #f1f5f9' }}>
                 {roles.map((role, idx) => {
                   const isAssigned = assignments.some(a => a.role_id === role.id)
-                  const canEdit = isManager
                   return (
-                    <div key={role.id}
-                      className="flex items-center gap-3 px-4 py-3"
+                    <div key={role.id} className="flex items-center gap-3 px-4 py-3"
                       style={{ borderBottom: idx < roles.length - 1 ? '1px solid #f1f5f9' : undefined }}>
                       <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: role.color }} />
                       <span className="flex-1 text-sm font-semibold text-slate-700">{role.name}</span>
-                      {canEdit ? (
-                        <button
-                          onClick={() => toggleRole(role.id)}
-                          className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none"
-                          style={{
-                            background: isAssigned ? '#6366f1' : '#e2e8f0',
-                          }}
-                        >
-                          <span
-                            className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200"
-                            style={{
-                              transform: isAssigned ? 'translateX(-6px)' : 'translateX(-26px)',
-                            }}
-                          />
-                        </button>
-                      ) : (
-                        isAssigned ? (
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#eef2ff', color: '#6366f1' }}>פעיל</span>
-                        ) : (
-                          <span className="text-xs text-slate-300">—</span>
-                        )
-                      )}
+                      <button onClick={() => toggleRole(role.id)}
+                        className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                        style={{ background: isAssigned ? '#6366f1' : '#e2e8f0' }}>
+                        <span className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
+                          style={{ transform: isAssigned ? 'translateX(-6px)' : 'translateX(-26px)' }} />
+                      </button>
                     </div>
                   )
                 })}
               </div>
             )}
-          </motion.div>
+          </div>
         )}
       </div>
+
+      {/* Sticky bottom summary + done */}
+      {activeTab === 'availability' && hasAnyShift && !noEmployee && (
+        <div className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200" style={{ boxShadow: '0 -2px 10px rgba(0,0,0,0.04)' }}>
+          <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between gap-3">
+            <span className="text-[13px] text-slate-500">
+              {markedCount === 0
+                ? 'פנוי לכל המשמרות'
+                : `${markedCount} משמרות סימנת כלא-פנוי`}
+            </span>
+            <button onClick={onBack}
+              className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold active:scale-95 transition">
+              סיימתי
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

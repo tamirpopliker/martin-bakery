@@ -29,6 +29,7 @@ interface SaleRow {
   confirmed_by: string | null
   completed_at: string | null
   created_at: string
+  department?: string | null
 }
 
 interface SaleItemRow {

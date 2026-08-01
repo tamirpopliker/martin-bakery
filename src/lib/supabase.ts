@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { instrumentedFetch } from './queryPerf'
 
 const supabaseUrl = 'https://nlklndgmtmwoacipjyek.supabase.co'
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -6,7 +7,10 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     flowType: 'pkce',
-  }
+  },
+  // Dev-only: count + time every PostgREST round-trip to baseline load perf.
+  // instrumentedFetch is a transparent passthrough; it self-disables outside DEV.
+  ...(import.meta.env.DEV ? { global: { fetch: instrumentedFetch } } : {}),
 })
 
 /**
