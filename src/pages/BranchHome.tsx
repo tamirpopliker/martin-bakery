@@ -1,6 +1,7 @@
 import { useState, useEffect, type ComponentType } from 'react'
 import { supabase, fetchBranchPL, getOverheadPct, type BranchPLResult } from '../lib/supabase'
 import { usePeriod } from '../lib/PeriodContext'
+import PeriodPicker from '../components/PeriodPicker'
 import { ShoppingBag, Receipt, Users, Trash2, BarChart2, Settings, Building2, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound, ImagePlus, IdCard, FileSignature, ShieldCheck, ClipboardCheck, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import AppShell, { type NavGroup, type NavItem } from '@/components/ui/AppShell'
@@ -138,7 +139,7 @@ const HOME_KEY = '__home__'
 
 export default function BranchHome({ branch, onBack }: Props) {
   const { appUser } = useAppUser()
-  const { from, to, monthKey, comparisonPeriod } = usePeriod()
+  const { period, setPeriod, from, to, monthKey, comparisonPeriod } = usePeriod()
   const isAdmin = appUser?.role === 'admin'
   // "restricted" = עובד קבוע במשמרת (username-auth) — רואה תפריט מצומצם, בלי P&L.
   const restricted = !!appUser && isRestrictedBranchUser(appUser)
@@ -468,6 +469,7 @@ export default function BranchHome({ branch, onBack }: Props) {
       title={`סניף ${branch.name}`}
       headerActions={
         <>
+          {managerView && <PeriodPicker period={period} onChange={setPeriod} />}
           <span style={{ fontSize: 12.5, color: 'var(--m-text-muted)' }}>{today}</span>
           {appUser?.role === 'branch'
             ? <MButton variant="secondary" size="sm" onClick={() => { supabase.auth.signOut() }}>התנתק</MButton>
