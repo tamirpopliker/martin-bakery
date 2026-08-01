@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { supabase } from '../lib/supabase'
-import { ShoppingBag, Receipt, Users, Trash2, BarChart3, BarChart2, Settings, Building2, TrendingUp, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound, ImagePlus, IdCard, FileSignature, ShieldCheck, Lightbulb, ChevronDown, ChevronUp, ClipboardCheck } from 'lucide-react'
+import { useState, useEffect, type ComponentType } from 'react'
+import { supabase, fetchBranchPL, getOverheadPct, type BranchPLResult } from '../lib/supabase'
+import { usePeriod } from '../lib/PeriodContext'
+import { ShoppingBag, Receipt, Users, Trash2, BarChart2, Settings, Building2, Upload, Package, ArrowRight, MessageSquare, Calculator, Wallet, Cake, KeyRound, ImagePlus, IdCard, FileSignature, ShieldCheck, ClipboardCheck, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import PageHeader from '../components/PageHeader'
+import AppShell, { type NavGroup, type NavItem } from '@/components/ui/AppShell'
+import StatCard from '@/components/ui/StatCard'
+import { ActionList, type ActionItem } from '@/components/ui/Banner'
+import { Button as MButton } from '@/components/ui/Controls'
 import { useAppUser, isRestrictedBranchUser } from '../lib/UserContext'
 import BranchRevenue from './BranchRevenue'
 import BranchExpenses from './BranchExpenses'
@@ -11,7 +14,6 @@ import BranchLabor from './BranchLabor'
 import BranchWaste from './BranchWaste'
 // BranchPL removed from navigation — P&L data now shown in BranchDashboard
 import BranchSettings from './BranchSettings'
-import BranchCreditCustomers from './BranchCreditCustomers'
 import BranchB2BHistory from './BranchB2BHistory'
 import BranchSuppliers from './BranchSuppliers'
 import BranchOrders from './BranchOrders'
@@ -37,10 +39,6 @@ import MonthlyChangesReport from './MonthlyChangesReport'
 import QualityHub from './QualityHub'
 import CustomerComplaints from './CustomerComplaints'
 // calculateBranchPL moved to BranchManagerDashboard
-
-// ─── אנימציות ─────────────────────────────────────────────────────────────────
-const staggerContainer = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }
-const fadeUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } } }
 
 // ─── טיפוסים ────────────────────────────────────────────────────────────────
 interface Branch {
@@ -86,56 +84,82 @@ type BranchPage =
   | 'customer_complaints'
   | 'register_reconciliation'
 
+// ─── תפריט הסיידבר ─────────────────────────────────────────────────────────
+// אותם מפתחות ניווט כמו קודם, מקובצים לפי טבלת הקבוצות ב-README.
+// הבאדג'ים (הזמנות / הודעות / הזמנות מיוחדות) עוברים לפריט הסיידבר.
+type MenuGroup = 'daily' | 'orders' | 'control' | 'settings'
+type BadgeKind = 'orders' | 'messages' | 'special'
+
 interface MenuItem {
   page: BranchPage
   label: string
-  subtitle: string
-  Icon: any
-  ready: boolean
-  cardBg?: string
-  cardBorder?: string
+  Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>
+  group: MenuGroup
+  badge?: BadgeKind
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { page: 'dashboard', label: 'דשבורד סניף',   subtitle: 'KPI · הכנסות · הוצאות · גרפים', Icon: BarChart2, ready: true },
-  { page: 'revenue',   label: 'הכנסות',        subtitle: 'קופה · אתר · הקפה',        Icon: ShoppingBag, ready: true },
-  { page: 'register_closings', label: 'סגירת קופות', subtitle: 'ספירה · הפקדה · פערים', Icon: Calculator, ready: true },
-  { page: 'register_reconciliation', label: 'בקרת סגירות קופה', subtitle: 'השוואה לקובץ CashOnTab', Icon: ClipboardCheck, ready: true },
-  { page: 'change_fund', label: 'קופת עודף',     subtitle: 'יתרה · תנועות · קרן בסיס',  Icon: Wallet,      ready: true },
-  { page: 'expenses',  label: 'הוצאות',         subtitle: 'ספקים · תיקונים · תשתיות', Icon: Receipt,     ready: true },
-  { page: 'labor',     label: 'לייבור',          subtitle: 'שעות · עלות מעסיק',         Icon: Users,       ready: true },
-  { page: 'branch-team', label: 'ניהול צוות',       subtitle: 'סידור עבודה · משימות · עובדים', Icon: Users,       ready: true },
-  { page: 'waste',     label: 'פחת',             subtitle: 'סחורה · חומרי גלם',         Icon: Trash2,      ready: true },
-  { page: 'suppliers', label: 'ספקים',           subtitle: 'ניהול · קטגוריות',           Icon: Building2,   ready: true },
-  // לקוחות הקפה מנוהלים מרוכזים בעמוד B2B בדף הראשי — הוסתר מתפריט הסניף.
-  { page: 'communication', label: 'מרכז תקשורת', subtitle: 'הודעות · משימות · עדכונים', Icon: MessageSquare, ready: true },
-  { page: 'orders',    label: 'הזמנות מהמפעל',  subtitle: 'אישור · עריכה · חומרי גלם', Icon: Package,     ready: true },
-  { page: 'special_orders', label: 'הזמנות עוגות מיוחדות', subtitle: 'עוגות מעוצבות · לפי הזמנה', Icon: Cake,     ready: true },
-  { page: 'cake_print_editor', label: 'הדפסת תמונה לעוגה', subtitle: 'תמונה אכילה · A4 להדפסה', Icon: ImagePlus, ready: true },
-  // BranchPL removed — P&L now integrated in BranchDashboard
-  { page: 'hr_dashboard', label: 'מחלקת HR',       subtitle: 'עובדים · מסמכים · קליטה',     Icon: IdCard,      ready: true },
-  { page: 'changes_report', label: 'דוח שינויים',    subtitle: 'קליטות · עזיבות · שכר · בנק', Icon: FileSignature, ready: true },
-  { page: 'quality_hub',  label: 'איכות ובקרה',    subtitle: 'תלונות · משרד הבריאות · תחזוקה', Icon: ShieldCheck, ready: true },
-  { page: 'settings',     label: 'הגדרות סניף',    subtitle: 'KPI · עלויות קבועות · עובדים', Icon: Settings,    ready: true },
-  { page: 'data_import',  label: 'ייבוא נתונים',   subtitle: 'CSV מ-Base44 · העלאה',         Icon: Upload,      ready: true },
-  { page: 'change_password', label: 'שינוי סיסמה',  subtitle: 'עדכון סיסמת הכניסה',          Icon: KeyRound,    ready: true },
+  // יומיומי
+  { page: 'register_closings', label: 'סגירת קופות', Icon: Calculator,  group: 'daily' },
+  { page: 'revenue',           label: 'הכנסות',      Icon: ShoppingBag, group: 'daily' },
+  { page: 'change_fund',       label: 'קופת עודף',   Icon: Wallet,      group: 'daily' },
+  { page: 'expenses',          label: 'הוצאות',      Icon: Receipt,     group: 'daily' },
+  { page: 'labor',             label: 'לייבור',      Icon: Users,       group: 'daily' },
+  { page: 'waste',             label: 'פחת',         Icon: Trash2,      group: 'daily' },
+  // הזמנות
+  { page: 'orders',            label: 'הזמנות מהמפעל',        Icon: Package,   group: 'orders', badge: 'orders' },
+  { page: 'special_orders',    label: 'הזמנות עוגות מיוחדות', Icon: Cake,      group: 'orders', badge: 'special' },
+  { page: 'cake_print_editor', label: 'הדפסת תמונה לעוגה',    Icon: ImagePlus, group: 'orders' },
+  // צוות ובקרה
+  { page: 'branch-team',             label: 'ניהול צוות',       Icon: Users,         group: 'control' },
+  { page: 'communication',           label: 'מרכז תקשורת',      Icon: MessageSquare, group: 'control', badge: 'messages' },
+  { page: 'dashboard',               label: 'דשבורד סניף',      Icon: BarChart2,     group: 'control' },
+  { page: 'quality_hub',             label: 'איכות ובקרה',      Icon: ShieldCheck,   group: 'control' },
+  { page: 'suppliers',               label: 'ספקים',            Icon: Building2,     group: 'control' },
+  { page: 'register_reconciliation', label: 'בקרת סגירות קופה', Icon: ClipboardCheck, group: 'control' },
+  // הגדרות (admin)
+  { page: 'settings',        label: 'הגדרות סניף',   Icon: Settings,      group: 'settings' },
+  { page: 'data_import',     label: 'ייבוא נתונים',  Icon: Upload,        group: 'settings' },
+  { page: 'hr_dashboard',    label: 'מחלקת HR',      Icon: IdCard,        group: 'settings' },
+  { page: 'changes_report',  label: 'דוח שינויים',   Icon: FileSignature, group: 'settings' },
+  { page: 'change_password', label: 'שינוי סיסמה',   Icon: KeyRound,      group: 'settings' },
 ]
+
+const GROUP_TITLES: Record<MenuGroup, string> = {
+  daily: 'יומיומי',
+  orders: 'הזמנות',
+  control: 'צוות ובקרה',
+  settings: 'הגדרות',
+}
+const GROUP_ORDER: MenuGroup[] = ['daily', 'orders', 'control', 'settings']
+
+// מפתח הפריט "דף הבית" — מייצג page === null (מסך הבית עצמו).
+const HOME_KEY = '__home__'
 
 export default function BranchHome({ branch, onBack }: Props) {
   const { appUser } = useAppUser()
+  const { from, to, monthKey, comparisonPeriod } = usePeriod()
   const isAdmin = appUser?.role === 'admin'
+  // "restricted" = עובד קבוע במשמרת (username-auth) — רואה תפריט מצומצם, בלי P&L.
+  const restricted = !!appUser && isRestrictedBranchUser(appUser)
+  const managerView = !!appUser && !restricted
   const [page, setPage] = useState<BranchPage | null>(null)
   const [pageData, setPageData] = useState<any>(null)
   // When BranchTeam's edit button hands off to HR Dashboard, we stash the key
   // here and switch to hr_dashboard so the EmployeeDetail opens straight away.
   const [hrInitialKey, setHrInitialKey] = useState<{ kind: 'branch'; id: number } | null>(null)
   const [hrOriginPage, setHrOriginPage] = useState<BranchPage | null>(null)
-  const [hovCard, setHovCard] = useState<BranchPage | null>(null)
-  const [insightsExpanded, setInsightsExpanded] = useState(false)
   const [pendingOrders, setPendingOrders] = useState(0)
   const [unreadMessages, setUnreadMessages] = useState(0)
   const [unreadSpecialOrders, setUnreadSpecialOrders] = useState(0)
   const [registerDaysBehind, setRegisterDaysBehind] = useState<number | null>(null)
+
+  // Labor / P&L for the "דורש טיפול" labor item and the KPI StatCards.
+  // Same call BranchDashboard makes — fetchBranchPL + branch_kpi_targets.
+  const [pl, setPl] = useState<BranchPLResult | null>(null)
+  const [prevPl, setPrevPl] = useState<BranchPLResult | null>(null)
+  const [laborTarget, setLaborTarget] = useState(0)
+  const [wasteTarget, setWasteTarget] = useState(3)
 
   // ─── טעינת התראות הזמנות מיוחדות ──────────────────────────────────────────
   useEffect(() => {
@@ -199,6 +223,35 @@ export default function BranchHome({ branch, onBack }: Props) {
     }
     loadDaysBehind()
   }, [branch.id])
+
+  // ─── טעינת P&L לסניף (מדדים + פריט "לייבור מעל יעד") ─────────────────────────
+  // אותה שליפה של BranchDashboard. לא רץ למשתמשים מוגבלים (אין להם הרשאת P&L).
+  useEffect(() => {
+    if (!managerView) return
+    let cancelled = false
+    async function loadPL() {
+      try {
+        const oh = await getOverheadPct()
+        const curMonthKey = monthKey || from.slice(0, 7)
+        const prevMonthKey = comparisonPeriod.monthKey || comparisonPeriod.from.slice(0, 7)
+        const [current, prev, kpiRes] = await Promise.all([
+          fetchBranchPL(branch.id, from, to, curMonthKey, oh),
+          fetchBranchPL(branch.id, comparisonPeriod.from, comparisonPeriod.to, prevMonthKey, oh),
+          supabase.from('branch_kpi_targets').select('labor_pct, waste_pct').eq('branch_id', branch.id).maybeSingle(),
+        ])
+        if (cancelled) return
+        setPl(current)
+        setPrevPl(prev)
+        if (kpiRes.data?.labor_pct) setLaborTarget(kpiRes.data.labor_pct)
+        if (kpiRes.data?.waste_pct) setWasteTarget(kpiRes.data.waste_pct)
+      } catch (err) {
+        console.error('BranchHome P&L fetch error:', err)
+      }
+    }
+    loadPL()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branch.id, from, to, monthKey, managerView])
 
   // ─── ניתוב פנימי ──────────────────────────────────────────────────────────
   if (page === 'dashboard') return (
@@ -327,144 +380,127 @@ export default function BranchHome({ branch, onBack }: Props) {
     </div>
   )
 
+  // ─── מסך הבית: סיידבר (AppShell) + "דורש טיפול" + מדדים + תובנות ──────────────
+
+  // אותם כללי הרשאות שהיו על גריד הכרטיסים — עכשיו מסננים את פריטי הסיידבר.
+  function isVisible(item: MenuItem): boolean {
+    if (appUser && isRestrictedBranchUser(appUser)) {
+      return ['branch-team', 'special_orders', 'cake_print_editor', 'change_password', 'quality_hub'].includes(item.page)
+    }
+    if (!isAdmin && (item.page === 'settings' || item.page === 'data_import' || item.page === 'hr_dashboard' || item.page === 'changes_report')) return false
+    if (item.page === 'change_password' && !isRestrictedBranchUser(appUser ?? { role: '', email: '' })) return false
+    return true
+  }
+
+  const badgeValue = (b: BadgeKind): number =>
+    b === 'orders' ? pendingOrders : b === 'messages' ? unreadMessages : unreadSpecialOrders
+  const badgeColor = (b: BadgeKind): string | undefined =>
+    b === 'messages' ? 'var(--m-info)' : b === 'special' ? 'var(--m-good)' : undefined // orders = אדום (ברירת מחדל)
+
+  const homeItem: NavItem = { key: HOME_KEY, label: 'דף הבית', Icon: Home }
+  const groups: NavGroup[] = []
+  for (const g of GROUP_ORDER) {
+    let items: NavItem[] = MENU_ITEMS.filter(it => it.group === g && isVisible(it)).map(it => ({
+      key: it.page,
+      label: it.label,
+      Icon: it.Icon,
+      badge: it.badge ? badgeValue(it.badge) : undefined,
+      badgeColor: it.badge ? badgeColor(it.badge) : undefined,
+    }))
+    if (g === 'daily') items = [homeItem, ...items]
+    if (items.length > 0) groups.push({ title: GROUP_TITLES[g], items })
+  }
+
+  // ─── "דורש טיפול" ───────────────────────────────────────────────────────────
+  const totalRevenue = pl?.revenue ?? 0
+  const controllable = pl?.controllableMargin ?? 0
+  const laborEmployer = pl?.laborEmployer ?? 0
+  const wasteTotal = pl?.wasteTotal ?? 0
+  const laborPct = totalRevenue > 0 ? (laborEmployer / totalRevenue) * 100 : 0
+  const wastePct = totalRevenue > 0 ? (wasteTotal / totalRevenue) * 100 : 0
+  const prevLaborPct = prevPl && prevPl.revenue > 0 ? (prevPl.laborEmployer / prevPl.revenue) * 100 : undefined
+  const prevWastePct = prevPl && prevPl.revenue > 0 ? (prevPl.wasteTotal / prevPl.revenue) * 100 : undefined
+  const laborOverTarget = laborTarget > 0 && laborPct > laborTarget
+
+  const actionItems: ActionItem[] = []
+  if (registerDaysBehind !== null && registerDaysBehind >= 2) {
+    actionItems.push({
+      key: 'register',
+      tone: registerDaysBehind >= 5 ? 'bad' : 'warn',
+      title: registerDaysBehind >= 999 ? 'עדיין לא נסגרו קופות בסניף' : `סגירת הקופה האחרונה הייתה לפני ${registerDaysBehind} ימים`,
+      detail: 'מומלץ להזין סגירת קופה מדי יום — בלעדיה נתוני הדשבורד לא משקפים את המצב בפועל',
+      actions: <MButton variant="primary" size="sm" onClick={() => setPage('register_closings')}>פתח אשף סגירה</MButton>,
+    })
+  }
+  if (pendingOrders > 0) {
+    actionItems.push({
+      key: 'orders',
+      tone: 'warn',
+      title: `${pendingOrders} תעודות ממתינות מהמפעל`,
+      detail: 'תעודות משלוח שטרם אושרו — אישור מעדכן את המלאי ואת ההוצאות',
+      actions: (
+        <>
+          <MButton variant="secondary" size="sm" onClick={() => setPage('orders')}>עבור אחת-אחת</MButton>
+          <MButton variant="confirm" size="sm" onClick={() => setPage('orders')}>אשר את כולן</MButton>
+        </>
+      ),
+    })
+  }
+  if (laborOverTarget) {
+    actionItems.push({
+      key: 'labor',
+      tone: 'bad',
+      title: `לייבור מעל היעד — ${laborPct.toFixed(1)}% מול ${laborTarget}%`,
+      detail: 'עלות השכר חורגת מהיעד החודשי. בדיקת סידור העבודה יכולה לצמצם את הפער',
+      actions: <MButton variant="secondary" size="sm" onClick={() => setPage('branch-team')}>לניהול צוות</MButton>,
+    })
+  }
+
   const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
+    <AppShell
+      entityName={branch.name}
+      entitySubtitle="סניף"
+      groups={groups}
+      activeKey={HOME_KEY}
+      onNavigate={(key) => setPage(key === HOME_KEY ? null : (key as BranchPage))}
+      title={`סניף ${branch.name}`}
+      headerActions={
+        <>
+          <span style={{ fontSize: 12.5, color: 'var(--m-text-muted)' }}>{today}</span>
+          {appUser?.role === 'branch'
+            ? <MButton variant="secondary" size="sm" onClick={() => { supabase.auth.signOut() }}>התנתק</MButton>
+            : <MButton variant="secondary" size="sm" onClick={onBack}>חזרה</MButton>}
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {managerView && <ActionList items={actionItems} />}
 
-      <PageHeader title={`סניף ${branch.name}`} subtitle={today}
-        onBack={appUser?.role === 'branch' ? undefined : onBack}
-        action={appUser?.role === 'branch' ? (
-          <button onClick={() => { supabase.auth.signOut() }} style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 14px', fontSize: 13, color: '#64748b', cursor: 'pointer' }}>
-            התנתק
-          </button>
-        ) : undefined}
-      />
-
-      {/* ─── כרטיסי מודולים ──────────────────────────────────────────────── */}
-      <div style={{ padding: '36px', maxWidth: '960px', margin: '0 auto' }}>
-
-        {registerDaysBehind !== null && registerDaysBehind >= 2 && (
-          <div style={{ background: registerDaysBehind >= 5 ? '#fef2f2' : '#fef3c7', border: `1px solid ${registerDaysBehind >= 5 ? '#fca5a5' : '#fcd34d'}`, borderRadius: 12, padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 22 }}>⏰</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: registerDaysBehind >= 5 ? '#991b1b' : '#92400e' }}>
-                {registerDaysBehind >= 999 ? 'עדיין לא נסגרו קופות בסניף' : `סגירת הקופה האחרונה הייתה לפני ${registerDaysBehind} ימים`}
-              </div>
-              <div style={{ fontSize: 12, color: '#78716c', marginTop: 2 }}>
-                מומלץ להזין סגירת קופה מדי יום — בלעדיה נתוני הדשבורד לא משקפים את המצב בפועל
-              </div>
-            </div>
-            <button onClick={() => setPage('register_closings')}
-              style={{ background: '#0f172a', color: 'white', border: 'none', borderRadius: 10, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              לסגירת קופה ←
-            </button>
+        {managerView && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14 }}>
+            <StatCard label="הכנסות" value={totalRevenue} previous={prevPl?.revenue} />
+            <StatCard label="רווח נשלט" value={controllable} previous={prevPl?.controllableMargin} />
+            <StatCard label="לייבור" value={laborPct} previous={prevLaborPct} isPct inverse lowerIsBetter target={laborTarget || undefined} />
+            <StatCard label="פחת" value={wastePct} previous={prevWastePct} isPct inverse lowerIsBetter target={wasteTarget || undefined} />
           </div>
         )}
 
-        {/* Weekly AI advisor — branch managers only (admin/factory see it on CEODashboard).
-            Collapsed by default; the card only loads its data when expanded.
-            Hidden from restricted @martin.local users (permanent staff who shouldn't see P&L commentary). */}
-        {appUser && !isRestrictedBranchUser(appUser) && (
-          <div style={{ marginBottom: 16 }}>
-            <button
-              onClick={() => setInsightsExpanded(v => !v)}
-              style={{
-                width: '100%', background: 'white', border: '1px solid #f1f5f9',
-                borderRadius: 12, padding: '12px 16px', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                fontFamily: 'inherit', fontSize: 14, fontWeight: 700, color: '#0f172a',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-              }}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Lightbulb size={18} color="#7C3AED" />
-                <span>תובנות שבועיות — {branch.name}</span>
-              </span>
-              {insightsExpanded ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
-            </button>
-            {insightsExpanded && (
-              <div style={{ marginTop: 10 }}>
-                <WeeklyInsightsCard
-                  entityType="branch"
-                  entityId={branch.id}
-                  title={`תובנות שבועיות — ${branch.name}`}
-                />
-              </div>
-            )}
-          </div>
+        {managerView && (
+          <WeeklyInsightsCard
+            entityType="branch"
+            entityId={branch.id}
+            title={`תובנות שבועיות — ${branch.name}`}
+          />
         )}
 
-        <motion.div
-          style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}
-          variants={staggerContainer}
-          initial="hidden"
-          animate="visible"
-        >
-          {MENU_ITEMS.filter(item => {
-            // Username-auth branch users: restricted to scheduling + special orders + cake editor + password change
-            if (appUser && isRestrictedBranchUser(appUser)) {
-              return ['branch-team', 'special_orders', 'cake_print_editor', 'change_password', 'quality_hub'].includes(item.page)
-            }
-            // Hide settings, data_import, HR dashboard and changes report for non-admin users
-            if (!isAdmin && (item.page === 'settings' || item.page === 'data_import' || item.page === 'hr_dashboard' || item.page === 'changes_report')) return false
-            // Hide change_password for email-auth branch users; they manage it via settings
-            if (item.page === 'change_password' && !isRestrictedBranchUser(appUser || ({ role: '', email: '' } as any))) return false
-            return true
-          }).map(item => {
-            const Icon = item.Icon
-            const isHov = hovCard === item.page
-            return (
-              <motion.div key={item.page} variants={fadeUp}>
-                <button
-                  onClick={() => setPage(item.page)}
-                  onMouseEnter={() => setHovCard(item.page)}
-                  onMouseLeave={() => setHovCard(null)}
-                  style={{
-                    width: '100%',
-                    background: 'white',
-                    border: `1px solid ${isHov && item.ready ? '#c7d2fe' : '#f1f5f9'}`,
-                    borderRadius: 12, padding: '20px',
-                    display: 'flex', alignItems: 'center', gap: 14,
-                    cursor: 'pointer', transition: 'all 0.18s',
-                    boxShadow: isHov && item.ready ? '0 4px 12px rgba(0,0,0,0.06)' : '0 1px 3px rgba(0,0,0,0.04)',
-                    textAlign: 'right', opacity: item.ready ? 1 : 0.6,
-                    position: 'relative' as const
-                  }}
-                >
-                  {!item.ready && (
-                    <span style={{ position: 'absolute', top: 10, left: 10, background: '#f1f5f9', color: '#94a3b8', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 600 }}>
-                      בקרוב
-                    </span>
-                  )}
-                  {item.page === 'orders' && pendingOrders > 0 && (
-                    <span style={{ position: 'absolute', top: 10, left: 10, background: '#fb7185', color: 'white', fontSize: 12, fontWeight: 800, minWidth: 24, height: 24, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px', boxShadow: '0 2px 8px rgba(251,113,133,0.4)' }}>
-                      {pendingOrders}
-                    </span>
-                  )}
-                  {item.page === 'communication' && unreadMessages > 0 && (
-                    <span style={{ position: 'absolute', top: 10, left: 10, background: '#3b82f6', color: 'white', fontSize: 12, fontWeight: 800, minWidth: 24, height: 24, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px', boxShadow: '0 2px 8px rgba(59,130,246,0.4)' }}>
-                      {unreadMessages}
-                    </span>
-                  )}
-                  {item.page === 'special_orders' && unreadSpecialOrders > 0 && (
-                    <span style={{ position: 'absolute', top: 10, left: 10, background: '#10b981', color: 'white', fontSize: 12, fontWeight: 800, minWidth: 24, height: 24, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px', boxShadow: '0 2px 8px rgba(16,185,129,0.4)' }}>
-                      {unreadSpecialOrders}
-                    </span>
-                  )}
-                  <div style={{ width: 36, height: 36, background: '#f1f5f9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Icon size={18} color="#6366f1" strokeWidth={1.5} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>{item.label}</div>
-                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{item.subtitle}</div>
-                  </div>
-                </button>
-              </motion.div>
-            )
-          })}
-        </motion.div>
+        {restricted && (
+          <div style={{ color: 'var(--m-text-muted)', fontSize: 13.5, padding: '8px 2px' }}>
+            בחר פעולה מהתפריט כדי להתחיל.
+          </div>
+        )}
       </div>
-    </div>
+    </AppShell>
   )
 }

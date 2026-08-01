@@ -1,0 +1,99 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   מרטין · טוקני עיצוב — שלב 1
+   הוסיפו את הבלוק הזה ל-src/index.css (אחרי ה-@import-ים, לפני :root הקיים).
+   אין למחוק את :root הקיים של shadcn — הטוקנים כאן חיים לצידו ומשמשים את
+   קומפוננטות ה-UI החדשות. כל ערך כאן נגזר מהעיצוב שאושר (כיוון 1a).
+   ───────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* משטחים */
+  --m-canvas:        #f6f7f9;   /* רקע עמוד */
+  --m-surface:       #ffffff;   /* כרטיס, סיידבר, כותרת */
+  --m-surface-sub:   #fbfcfd;   /* כותרת טבלה, אזור משני */
+  --m-surface-hover: #f4f6f8;   /* ריחוף על שורה/כפתור משני */
+  --m-border:        #e9edf1;   /* מסגרת כרטיס וטבלה */
+  --m-border-strong: #dfe3e8;   /* מסגרת פקד (input/כפתור משני) */
+  --m-border-soft:   #f4f6f8;   /* קו הפרדה בין שורות */
+
+  /* טקסט */
+  --m-text:          #0f172a;
+  --m-text-2:        #334155;
+  --m-text-3:        #475569;
+  --m-text-muted:    #8a95a3;
+  --m-text-faint:    #a3adba;
+
+  /* אינטראקציה (אינדיגו) */
+  --m-accent:        #4f46e5;
+  --m-accent-hover:  #4338ca;
+  --m-accent-text:   #3730a3;
+  --m-accent-tint:   #eef0ff;
+  --m-accent-border: #d7dcfb;
+
+  /* מותג */
+  --m-brand:         #0d6165;
+
+  /* פעולה ראשית (כפתור כהה) */
+  --m-ink:           #0f172a;
+  --m-ink-hover:     #1e293b;
+
+  /* מצבים — צבע = משמעות. אין להשתמש בהם לקישוט */
+  --m-good:          #16a34a;
+  --m-good-strong:   #166534;
+  --m-good-tint:     #f0fdf4;
+  --m-good-border:   #bbf7d0;
+  --m-good-bar:      #34d399;
+
+  --m-warn:          #d97706;
+  --m-warn-strong:   #92400e;
+  --m-warn-tint:     #fffbeb;
+  --m-warn-border:   #fde68a;
+  --m-warn-bar:      #fbbf24;
+
+  --m-bad:           #e11d48;
+  --m-bad-strong:    #be123c;
+  --m-bad-tint:      #fff1f2;
+  --m-bad-border:    #fecdd3;
+  --m-bad-bar:       #fb7185;
+  --m-bad-row:       #fff7f8;   /* רקע שורת טבלה בעייתית */
+
+  --m-info:          #0ea5e9;
+  --m-info-tint:     #f0f9ff;
+  --m-info-border:   #bae6fd;
+  --m-info-strong:   #075985;
+
+  --m-ai:            #7c3aed;   /* תובנות בלבד */
+
+  /* מרווח — הסולם היחיד */
+  --m-1: 6px;
+  --m-2: 10px;
+  --m-3: 14px;
+  --m-4: 20px;
+  --m-5: 26px;
+
+  /* פינות */
+  --m-r-control: 9px;
+  --m-r-tag: 7px;
+  --m-r-card: 14px;
+  --m-r-panel: 16px;
+
+  /* צל — רק לאלמנט מורם */
+  --m-shadow: 0 1px 2px rgba(15, 23, 42, .06);
+
+  /* מידות מסגרת */
+  --m-header-h: 60px;
+  --m-sidebar-w: 236px;
+  --m-row-h: 44px;
+  --m-content-max: 1180px;
+
+  /* טיפוגרפיה */
+  --m-font: 'Segoe UI', 'Arial Hebrew', Arial, sans-serif;
+  --m-fs-page: 22px;      /* כותרת עמוד, 800 */
+  --m-fs-card: 15px;      /* כותרת כרטיס, 800 */
+  --m-fs-kpi: 25px;       /* מספר גדול, 800 */
+  --m-fs-body: 13.5px;    /* גוף, 500 */
+  --m-fs-sub: 12.5px;     /* משני */
+  --m-fs-label: 11.5px;   /* תווית, 800 */
+}
+
+/* כל מספר במערכת מיושר בעמודות */
+.m-num { font-variant-numeric: tabular-nums; }
