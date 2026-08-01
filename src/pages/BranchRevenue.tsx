@@ -5,8 +5,8 @@ import type { BranchRevenueTrend } from '../lib/supabase'
 import { safeDbOperation } from '../lib/dbHelpers'
 import { usePeriod } from '../lib/PeriodContext'
 import PeriodPicker from '../components/PeriodPicker'
-import PageHeader from '../components/PageHeader'
-import { Plus, Pencil, Trash2, Search, X, ShoppingBag, CreditCard, Monitor, Upload, FileText, Check, AlertCircle, HelpCircle } from 'lucide-react'
+import { Button as MButton } from '@/components/ui/Controls'
+import { Plus, Pencil, Trash2, Search, X, ShoppingBag, CreditCard, Monitor, Upload, FileText, Check, AlertCircle, HelpCircle, ArrowRight } from 'lucide-react'
 import { Sheet, SheetPortal, SheetBackdrop, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { parseCashOnTabPDF } from '../lib/parseCashOnTab'
 import type { CashOnTabRow } from '../lib/parseCashOnTab'
@@ -68,7 +68,7 @@ function AutocompleteInput({ value, onChange, suggestions, placeholder, color }:
         <div style={{ position: 'absolute', top: '100%', right: 0, left: 0, zIndex: 50, background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', marginTop: '4px', overflow: 'hidden' }}>
           {filtered.slice(0, 6).map(s => (
             <div key={s} onMouseDown={() => { onChange(s); setOpen(false) }}
-              style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '14px', color: '#374151', borderBottom: '1px solid #f1f5f9' }}
+              style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '14px', color: '#374151', borderBottom: '1px solid var(--m-border)' }}
               onMouseEnter={e => (e.currentTarget.style.background = color + '15')}
               onMouseLeave={e => (e.currentTarget.style.background = 'white')}>{s}</div>
           ))}
@@ -347,9 +347,15 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', direction: 'rtl' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--m-canvas)', direction: 'rtl', fontFamily: 'var(--m-font)' }}>
 
-      <PageHeader title="הכנסות" subtitle={branchName} onBack={onBack} />
+      <header className="page-header" style={{ height: 'var(--m-header-h)', background: 'var(--m-surface)', borderBottom: '1px solid #eef1f4', display: 'flex', alignItems: 'center', gap: 12, padding: '0 22px', position: 'sticky', top: 0, zIndex: 20 }}>
+        <MButton variant="secondary" size="sm" icon={<ArrowRight size={16} />} onClick={onBack}>חזרה</MButton>
+        <div style={{ lineHeight: 1.2 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--m-text)' }}>הכנסות</div>
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>{branchName}</div>
+        </div>
+      </header>
 
       {saveError && (
         <div style={{ maxWidth: 1000, margin: '12px auto 0', padding: '0 20px' }}>
@@ -364,7 +370,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
       {onNavigate && (BRANCH_REGISTERS[branchId] || []).length > 0 && (
         <div style={{ padding: '12px 20px 0', maxWidth: 1000, margin: '0 auto' }}>
           <button onClick={() => onNavigate('register_closings')}
-            style={{ width: '100%', background: openRegisters > 0 ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', color: 'white', border: 'none', borderRadius: 12, padding: '14px 20px', fontSize: 15, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, boxShadow: openRegisters > 0 ? '0 4px 12px rgba(239,68,68,0.25)' : '0 4px 12px rgba(99,102,241,0.25)', position: 'relative' }}>
+            style={{ width: '100%', background: openRegisters > 0 ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, var(--m-accent) 0%, #8b5cf6 100%)', color: 'white', border: 'none', borderRadius: 12, padding: '14px 20px', fontSize: 15, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, boxShadow: openRegisters > 0 ? '0 4px 12px rgba(239,68,68,0.25)' : '0 4px 12px rgba(99,102,241,0.25)', position: 'relative' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <ShoppingBag size={20} />
               <span>סגור קופה</span>
@@ -391,7 +397,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
             { label: 'הקפה',  val: totalCredit,  color: '#fbbf24' },
             { label: 'סה"כ',  val: totalRevenue, color: '#0f172a' },
           ].map(s => (
-            <div key={s.label} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '16px', textAlign: 'center' as const }}>
+            <div key={s.label} style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, padding: '16px', textAlign: 'center' as const }}>
               <div style={{ fontSize: '24px', fontWeight: '700', color: s.color }}>₪{Math.round(s.val).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
               <div style={{ fontSize: '12px', color: '#94a3b8' }}>{s.label}</div>
             </div>
@@ -400,7 +406,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
       </div>
 
       {/* Underline tabs */}
-      <div style={{ display: 'flex', padding: '0 20px', maxWidth: '1000px', margin: '0 auto', borderBottom: '1px solid #f1f5f9' }}>
+      <div style={{ display: 'flex', padding: '0 20px', maxWidth: '1000px', margin: '0 auto', borderBottom: '1px solid var(--m-border)' }}>
         {/* הקפה מנוהלת מרוכזת בעמוד B2B — מסתירים את טאב ההזנה הידנית בסניף */}
         {(Object.entries(SOURCE_CONFIG) as [Source, any][]).filter(([key]) => key !== 'credit').map(([key, c]) => (
           <button key={key} onClick={() => setTab(key)}
@@ -432,10 +438,10 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         {/* קופה — סיכום מסגירות קופה (קריאה בלבד) */}
         {tab === 'cashier' && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: 20, marginBottom: 16 }}>
+            <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, padding: 20, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                <AlertCircle size={16} color="#6366f1" />
-                <span style={{ fontSize: 13, color: '#6366f1', fontWeight: 700 }}>נתונים מסגירות קופה — לקריאה בלבד</span>
+                <AlertCircle size={16} color="var(--m-accent)" />
+                <span style={{ fontSize: 13, color: 'var(--m-accent)', fontWeight: 700 }}>נתונים מסגירות קופה — לקריאה בלבד</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
                 <div style={{ padding: 14, background: '#ecfdf5', borderRadius: 12, border: '1px solid #a7f3d0' }}>
@@ -457,7 +463,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
               </div>
               {onNavigate && (
                 <button onClick={() => onNavigate('register_closings')}
-                  style={{ marginTop: 14, background: '#6366f1', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 14, fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  style={{ marginTop: 14, background: 'var(--m-accent)', color: 'white', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 14, fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   מעבר לסגירת קופות ←
                 </button>
               )}
@@ -465,8 +471,8 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
             {/* טבלת סגירות קופה — קריאה בלבד */}
             {closingsInPeriod.length > 0 && (
-              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
-                <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--m-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#374151' }}>סגירות קופה — לתקופה</h3>
                   <span style={{ background: '#eef2ff', color: '#4338ca', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999 }}>
                     מסגירת קופה
@@ -477,7 +483,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                     <thead>
                       <tr style={{ background: '#f8fafc' }}>
                         {['תאריך', 'קופה', 'מזומן', 'אשראי', 'שיקים', 'סה"כ', 'עסקאות'].map(h => (
-                          <th key={h} style={{ padding: '9px 14px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap' }}>{h}</th>
+                          <th key={h} style={{ padding: '9px 14px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#94a3b8', borderBottom: '1px solid var(--m-border)', whiteSpace: 'nowrap' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -501,7 +507,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                     </tbody>
                   </table>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #f1f5f9', background: '#f8fafc' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid var(--m-border)', background: '#f8fafc' }}>
                   <span style={{ fontWeight: 700, color: '#374151', fontSize: 13 }}>סה"כ — {closingsInPeriod.length} סגירות</span>
                   <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 15 }}>₪{Math.round(closingsTotal).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                 </div>
@@ -510,15 +516,15 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
             {/* טבלת נתונים היסטוריים — branch_revenue source='cashier' עם עריכה ומחיקה */}
             {legacyCashierEntries.length > 0 && (
-              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
-                <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--m-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#374151' }}>נתונים היסטוריים — רשומות ישנות</h3>
                   <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999 }}>
                     ישן
                   </span>
                 </div>
                 <div className="table-scroll" style={{ overflowX: 'auto' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 80px 130px 36px 36px', padding: '10px 18px', borderBottom: '1px solid #f1f5f9', fontSize: 11, fontWeight: 700, color: '#94a3b8' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 80px 130px 36px 36px', padding: '10px 18px', borderBottom: '1px solid var(--m-border)', fontSize: 11, fontWeight: 700, color: '#94a3b8' }}>
                     <span>תאריך</span>
                     <span>הערות</span>
                     <span style={{ textAlign: 'center' }}>עסקאות</span>
@@ -531,10 +537,10 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                       onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
                       {editId === entry.id ? (
                         <>
-                          <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 6px', fontSize: 12 }} />
-                          <input type="text" value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }} />
-                          <input type="number" value={editData.transaction_count || ''} onChange={e => setEditData({ ...editData, transaction_count: parseInt(e.target.value) })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 8px', fontSize: 12, textAlign: 'center' }} />
-                          <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid #6366f1', borderRadius: 6, padding: '4px 8px', fontSize: 12 }} />
+                          <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid var(--m-accent)', borderRadius: 6, padding: '4px 6px', fontSize: 12 }} />
+                          <input type="text" value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} style={{ border: '1px solid var(--m-accent)', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontFamily: 'inherit' }} />
+                          <input type="number" value={editData.transaction_count || ''} onChange={e => setEditData({ ...editData, transaction_count: parseInt(e.target.value) })} style={{ border: '1px solid var(--m-accent)', borderRadius: 6, padding: '4px 8px', fontSize: 12, textAlign: 'center' }} />
+                          <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid var(--m-accent)', borderRadius: 6, padding: '4px 8px', fontSize: 12 }} />
                           <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>✓</button>
                           <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 12 }}>✕</button>
                         </>
@@ -551,7 +557,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                     </div>
                   ))}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #f1f5f9', background: '#f8fafc' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid var(--m-border)', background: '#f8fafc' }}>
                   <span style={{ fontWeight: 700, color: '#374151', fontSize: 13 }}>סה"כ היסטורי — {legacyCashierEntries.length} רשומות</span>
                   <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 15 }}>₪{Math.round(legacyCashierTotal).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                 </div>
@@ -563,7 +569,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         {/* טופס הזנה — לאתר/הקפה בלבד */}
         {tab !== 'cashier' && (
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
-        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px', marginBottom: 16 }}>
+        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, padding: '20px', marginBottom: 16 }}>
           <h2 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: '700', color: '#374151' }}>הוספת {cfg.label}</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '14px' }}>
 
@@ -614,7 +620,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
 
           <button onClick={addEntry}
             disabled={loading || !amount || (tab === 'credit' && !customer)}
-            style={{ background: loading || !amount || (tab === 'credit' && !customer) ? '#e2e8f0' : '#6366f1', color: loading || !amount || (tab === 'credit' && !customer) ? '#94a3b8' : 'white', border: 'none', borderRadius: 8, padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            style={{ background: loading || !amount || (tab === 'credit' && !customer) ? '#e2e8f0' : 'var(--m-accent)', color: loading || !amount || (tab === 'credit' && !customer) ? '#94a3b8' : 'white', border: 'none', borderRadius: 8, padding: '10px 28px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Plus size={18} />הוסף
           </button>
         </div>
@@ -625,8 +631,8 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         {tab !== 'cashier' && (
         <motion.div variants={fadeIn} initial="hidden" animate="visible">
         <div className="table-scroll">
-        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: tab === 'credit' ? '110px 1fr 110px 130px 36px 36px' : '110px 1fr 80px 130px 36px 36px', padding: '10px 20px', borderBottom: '1px solid #f1f5f9', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
+        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: tab === 'credit' ? '110px 1fr 110px 130px 36px 36px' : '110px 1fr 80px 130px 36px 36px', padding: '10px 20px', borderBottom: '1px solid var(--m-border)', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
             <span>תאריך</span>
             <span>{tab === 'credit' ? 'לקוח' : 'הערות'}</span>
             <span style={{ textAlign: 'center' }}>{tab === 'credit' ? 'תעודה' : 'עסקאות'}</span>
@@ -642,13 +648,13 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
               onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
               {editId === entry.id ? (
                 <>
-                  <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid #6366f1', borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
+                  <input type="date" value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} style={{ border: '1px solid var(--m-accent)', borderRadius: '6px', padding: '4px 6px', fontSize: '12px' }} />
                   {tab === 'credit'
-                    ? <AutocompleteInput value={editData.customer || ''} onChange={v => setEditData({ ...editData, customer: v })} suggestions={creditCustomers} placeholder="לקוח" color="#6366f1" />
-                    : <input type="text" value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} style={{ border: '1px solid #6366f1', borderRadius: '6px', padding: '4px 8px', fontSize: '13px', fontFamily: 'inherit' }} />
+                    ? <AutocompleteInput value={editData.customer || ''} onChange={v => setEditData({ ...editData, customer: v })} suggestions={creditCustomers} placeholder="לקוח" color="var(--m-accent)" />
+                    : <input type="text" value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} style={{ border: '1px solid var(--m-accent)', borderRadius: '6px', padding: '4px 8px', fontSize: '13px', fontFamily: 'inherit' }} />
                   }
-                  <input type={tab === 'credit' ? 'text' : 'number'} value={tab === 'credit' ? (editData.doc_number || '') : (editData.transaction_count || '')} onChange={e => setEditData({ ...editData, ...(tab === 'credit' ? { doc_number: e.target.value } : { transaction_count: parseInt(e.target.value) }) })} style={{ border: '1px solid #6366f1', borderRadius: '6px', padding: '4px 8px', fontSize: '12px', textAlign: 'center' as const }} />
-                  <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid #6366f1', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
+                  <input type={tab === 'credit' ? 'text' : 'number'} value={tab === 'credit' ? (editData.doc_number || '') : (editData.transaction_count || '')} onChange={e => setEditData({ ...editData, ...(tab === 'credit' ? { doc_number: e.target.value } : { transaction_count: parseInt(e.target.value) }) })} style={{ border: '1px solid var(--m-accent)', borderRadius: '6px', padding: '4px 8px', fontSize: '12px', textAlign: 'center' as const }} />
+                  <input type="number" value={editData.amount || ''} onChange={e => setEditData({ ...editData, amount: parseFloat(e.target.value) })} style={{ border: '1px solid var(--m-accent)', borderRadius: '6px', padding: '4px 8px', fontSize: '12px' }} />
                   <button onClick={() => saveEdit(entry.id)} style={{ background: '#34d399', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' }}>✓</button>
                   <button onClick={() => setEditId(null)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }}>✕</button>
                 </>
@@ -666,7 +672,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
           ))}
 
           {filtered.length > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid var(--m-border)' }}>
               <span style={{ fontWeight: '700', color: '#374151', fontSize: '14px' }}>סה"כ — {filtered.length} רשומות</span>
               <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '18px' }}>₪{tabTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
             </div>
@@ -680,11 +686,11 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         {dailySummary.length > 0 && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
           <div className="table-scroll">
-          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, overflow: 'hidden' }}>
             <div style={{ padding: '16px 18px 0' }}>
               <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>סיכום יומי — כל המקורות</h3>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr 110px 70px', padding: '9px 18px', borderBottom: '1px solid #f1f5f9', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr 110px 70px', padding: '9px 18px', borderBottom: '1px solid var(--m-border)', fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>
               <span>תאריך</span><span>קופה</span><span>אתר</span><span>הקפה</span><span>סה"כ</span><span style={{ textAlign: 'center' }}>עסקאות</span>
             </div>
             {dailySummary.map((day: any, i: number) => (
@@ -699,7 +705,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                 <span style={{ textAlign: 'center', fontSize: '13px', color: '#64748b' }}>{day.transactions || '—'}</span>
               </div>
             ))}
-            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr 110px 70px', padding: '12px 18px', borderTop: '1px solid #f1f5f9', fontWeight: '700' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr 1fr 110px 70px', padding: '12px 18px', borderTop: '1px solid var(--m-border)', fontWeight: '700' }}>
               <span style={{ color: '#374151', fontSize: '13px' }}>סה"כ</span>
               <span style={{ color: '#818cf8' }}>₪{totalCashier.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
               <span style={{ color: '#c084fc' }}>₪{totalWebsite.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
@@ -715,7 +721,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
         {/* מגמת 6 חודשים */}
         {trendData.length > 0 && (
           <motion.div variants={fadeIn} initial="hidden" animate="visible">
-          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', borderRadius: 12, padding: '20px', marginTop: 16 }}>
+          <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid var(--m-border)', borderRadius: 12, padding: '20px', marginTop: 16 }}>
               <h3 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: '700', color: '#374151' }}>מגמת 6 חודשים — הכנסות</h3>
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={trendData}>
@@ -775,7 +781,7 @@ export default function BranchRevenue({ branchId, branchName, branchColor, onBac
                     {pdfRows.map((row, i) => (
                       <div key={row.date} style={{
                         display: 'grid', gridTemplateColumns: '36px 100px 110px 80px',
-                        padding: '10px 14px', borderBottom: '1px solid #f1f5f9',
+                        padding: '10px 14px', borderBottom: '1px solid var(--m-border)',
                         background: row.exists ? '#fef9c3' : (i % 2 === 0 ? 'white' : '#fafafa'),
                         alignItems: 'center',
                       }}>
