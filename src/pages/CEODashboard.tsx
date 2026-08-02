@@ -575,7 +575,6 @@ export default function CEODashboard({ onBack }: Props) {
   const grandLabor     = totalLabor + factoryLabor
   const grandGross     = totalGross + factoryGrossProfit
   const grandOperating = totalOperating + factoryOperatingProfit
-  const grandLaborPct  = grandRevenue > 0 ? (grandLabor / grandRevenue) * 100 : 0
 
   // ─── Consolidated view (intercompany eliminated) ──────────────────────────
   // factorySales now includes internal — subtract for consolidated (net = external only)
@@ -674,7 +673,11 @@ export default function CEODashboard({ onBack }: Props) {
   }
 
   function renderLaborTable() {
-    const factoryLaborPct = factorySales > 0 ? (factoryLabor / factorySales) * 100 : 0
+    // "לייבור כולל" = employees + manager salaries, per unit and in total.
+    const factoryLaborTotal = factoryLabor + factoryManagerSalary
+    const factoryLaborPct = factorySales > 0 ? (factoryLaborTotal / factorySales) * 100 : 0
+    const grandLaborTotal = branches.reduce((s, b) => s + b.labor + b.managerSalary, 0) + factoryLaborTotal
+    const grandLaborTotalPct = grandRevenue > 0 ? (grandLaborTotal / grandRevenue) * 100 : 0
     return (
       <Table>
         <TableHeader>
@@ -686,7 +689,8 @@ export default function CEODashboard({ onBack }: Props) {
         </TableHeader>
         <TableBody>
           {branches.map((br, i) => {
-            const pct = br.revenue > 0 ? (br.labor / br.revenue) * 100 : 0
+            const brLaborTotal = br.labor + br.managerSalary
+            const pct = br.revenue > 0 ? (brLaborTotal / br.revenue) * 100 : 0
             const overTarget = avgLaborTarget > 0 && pct > avgLaborTarget
             return (
               <TableRow key={br.id} style={{ borderBottom: '1px solid #f8fafc' }}>
@@ -696,7 +700,7 @@ export default function CEODashboard({ onBack }: Props) {
                     <span className="text-sm font-semibold text-slate-700">{br.name}</span>
                   </div>
                 </TableCell>
-                <TableCell className="text-sm font-semibold text-slate-700">{fmtN(br.labor)}</TableCell>
+                <TableCell className="text-sm font-semibold text-slate-700">{fmtN(brLaborTotal)}</TableCell>
                 <TableCell className={`text-sm font-semibold ${avgLaborTarget > 0 ? (overTarget ? 'text-rose-500' : 'text-emerald-500') : 'text-slate-700'}`}>{pct.toFixed(1)}%</TableCell>
               </TableRow>
             )
@@ -708,13 +712,13 @@ export default function CEODashboard({ onBack }: Props) {
                 <span className="text-sm font-semibold text-slate-700">מפעל</span>
               </div>
             </TableCell>
-            <TableCell className="text-sm font-semibold text-slate-700">{fmtN(factoryLabor)}</TableCell>
+            <TableCell className="text-sm font-semibold text-slate-700">{fmtN(factoryLaborTotal)}</TableCell>
             <TableCell className={`text-sm font-semibold ${avgLaborTarget > 0 ? (factoryLaborPct > avgLaborTarget ? 'text-rose-500' : 'text-emerald-500') : 'text-slate-700'}`}>{factoryLaborPct.toFixed(1)}%</TableCell>
           </TableRow>
           <TableRow style={{ background: '#fafafa', borderTop: '1px solid #e2e8f0' }}>
             <TableCell className="text-sm font-bold text-slate-800">סה"כ</TableCell>
-            <TableCell className="text-sm font-extrabold text-slate-900">{fmtN(grandLabor)}</TableCell>
-            <TableCell className={`text-sm font-bold ${avgLaborTarget > 0 ? (grandLaborPct > avgLaborTarget ? 'text-rose-500' : 'text-emerald-500') : 'text-slate-700'}`}>{grandLaborPct.toFixed(1)}%</TableCell>
+            <TableCell className="text-sm font-extrabold text-slate-900">{fmtN(grandLaborTotal)}</TableCell>
+            <TableCell className={`text-sm font-bold ${avgLaborTarget > 0 ? (grandLaborTotalPct > avgLaborTarget ? 'text-rose-500' : 'text-emerald-500') : 'text-slate-700'}`}>{grandLaborTotalPct.toFixed(1)}%</TableCell>
           </TableRow>
         </TableBody>
       </Table>
