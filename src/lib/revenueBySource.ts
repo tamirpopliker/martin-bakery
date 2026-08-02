@@ -64,8 +64,9 @@ export async function fetchRevenueBySource(
     const amount = Number(row.amount) || 0
     if (row.source === 'cashier') pos[bid] = (pos[bid] || 0) + amount
     else if (row.source === 'website') website[bid] = (website[bid] || 0) + amount
-    // Manual הקפה + B2B invoices (credit_b2b, backfilled for every branch invoice).
-    else if (row.source === 'credit' || row.source === 'credit_b2b') credit[bid] = (credit[bid] || 0) + amount
+    // Manual legacy הקפה only. Branch B2B is read straight from b2b_invoices below;
+    // credit_b2b rows are intentionally NOT counted here (would double-count).
+    else if (row.source === 'credit') credit[bid] = (credit[bid] || 0) + amount
   }
 
   for (const row of closeRes.data || []) {
@@ -76,12 +77,17 @@ export async function fetchRevenueBySource(
       + (Number((row as any).check_sales) || 0)
   }
 
-  // Factory-level B2B (no branch) has no branch_revenue home, so read it straight
-  // from b2b_invoices. Branch-attributed B2B is already in credit above (backfilled
-  // credit_b2b rows), so it is NOT re-added here.
+  // B2B invoices are the source of truth for הקפה. Attribute each invoice to its
+  // branch (net of VAT); branch_id null = factory-level. This captures every invoice
+  // — including newly entered ones that never got a backfilled credit_b2b row.
   let creditFactory = 0
   for (const row of b2bRes.data || []) {
-    if (row.branch_id == null) creditFactory += Number(row.total_before_vat) || 0
+    const amt = Number(row.total_before_vat) || 0
+    if (row.branch_id == null) creditFactory += amt
+    else {
+      const bid = Number(row.branch_id)
+      if (bid in credit) credit[bid] += amt
+    }
   }
 
   return { pos, website, credit, creditFactory }

@@ -225,13 +225,18 @@ export default function CEODashboard({ onBack }: Props) {
       ]))
     )
 
-    // Factory-level B2B (no branch) for the הקפה מפעל row — net of VAT. Branch-
-    // attributed B2B lives in branch_revenue (backfilled credit_b2b) and is
-    // counted in the branch loop below, so it is NOT read here.
+    // B2B invoices are the source of truth for הקפה — read all, attribute by
+    // branch_id (null = factory-level). Captures new invoices too; credit_b2b rows
+    // in branch_revenue are NOT counted below (would double-count).
     const { data: b2bInvAll } = await supabase.from('b2b_invoices')
-      .select('total_before_vat').is('branch_id', null).gte('invoice_date', from).lt('invoice_date', to)
+      .select('branch_id, total_before_vat').gte('invoice_date', from).lt('invoice_date', to)
     let b2bFactory = 0
-    for (const inv of (b2bInvAll || [])) b2bFactory += Number(inv.total_before_vat) || 0
+    const b2bByBranch: Record<number, number> = {}
+    for (const inv of (b2bInvAll || [])) {
+      const amt = Number(inv.total_before_vat) || 0
+      if (inv.branch_id == null) b2bFactory += amt
+      else b2bByBranch[Number(inv.branch_id)] = (b2bByBranch[Number(inv.branch_id)] || 0) + amt
+    }
     setFactoryB2b(b2bFactory)
 
     const branchResults: BranchData[] = branchPLs.map((pl, i) => {
@@ -242,8 +247,8 @@ export default function CEODashboard({ onBack }: Props) {
       for (const r of revData) {
         const amt = Number(r.amount)
         if (r.source === 'cashier') { totalCashier += amt; brCashier += amt }
-        // Manual הקפה + B2B invoices (credit_b2b, backfilled for every branch invoice).
-        else if (r.source === 'credit' || r.source === 'credit_b2b') { totalCredit += amt; brCredit += amt }
+        // Manual legacy הקפה only; branch B2B added from b2b_invoices below.
+        else if (r.source === 'credit') { totalCredit += amt; brCredit += amt }
         else if (r.source === 'website') { totalWebsite += amt; brWebsite += amt }
       }
       // register_closings: both cash and credit-card sales are POS revenue (cashier bucket).
@@ -252,6 +257,9 @@ export default function CEODashboard({ onBack }: Props) {
         const total = Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
         totalCashier += total; brCashier += total
       }
+      // Branch B2B הקפה — straight from b2b_invoices (source of truth).
+      const brB2b = b2bByBranch[br.id] || 0
+      totalCredit += brB2b; brCredit += brB2b
       const expenses = pl.factoryPurchases + pl.externalSuppliers + pl.repairs + pl.deliveries + pl.infrastructure + pl.otherExpenses
       return {
         ...br,
@@ -299,7 +307,7 @@ export default function CEODashboard({ onBack }: Props) {
         const amt = Number(r.amount)
         if (r.source === 'cashier') { revBd[0].byBranch[br.id] = (revBd[0].byBranch[br.id] || 0) + amt }
         else if (r.source === 'website') { revBd[1].byBranch[br.id] = (revBd[1].byBranch[br.id] || 0) + amt }
-        else if (r.source === 'credit' || r.source === 'credit_b2b') { revBd[2].byBranch[br.id] = (revBd[2].byBranch[br.id] || 0) + amt }
+        else if (r.source === 'credit') { revBd[2].byBranch[br.id] = (revBd[2].byBranch[br.id] || 0) + amt }
       }
       // register_closings = in-store POS sales (cash + credit-card) — bucket as cashier
       for (const c of (chCloseRes.data || [])) {
@@ -307,14 +315,13 @@ export default function CEODashboard({ onBack }: Props) {
         revBd[0].byBranch[br.id] = (revBd[0].byBranch[br.id] || 0) + total
       }
     }
-    // B2B הקפה: branch invoices are already in branch_revenue (credit_b2b,
-    // counted above via source check). Only add factory-level B2B (no branch),
-    // which has no branch_revenue home. Adding branch invoices here again — or
-    // external_sales (the same factory invoices) — double-counted.
-    const { data: b2bInvData } = await supabase.from('b2b_invoices').select('branch_id, total_before_vat').is('branch_id', null).gte('invoice_date', from).lt('invoice_date', to)
-    for (const inv of (b2bInvData || [])) {
-      revBd[2].factory += Number(inv.total_before_vat)
+    // B2B הקפה breakdown — from b2b_invoices (source of truth): branch invoices by
+    // branch, factory-level (no branch) into the factory column. Reuses the maps
+    // built above — no second fetch, no reliance on credit_b2b rows.
+    for (const br of BRANCHES) {
+      revBd[2].byBranch[br.id] = (revBd[2].byBranch[br.id] || 0) + (b2bByBranch[br.id] || 0)
     }
+    revBd[2].factory += b2bFactory
     // Factory internal sales
     const { data: intSalesData } = await supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', from).lt('order_date', to)
     revBd[3].factory = (intSalesData || []).reduce((s: number, r: any) => s + Number(r.total_amount), 0)
