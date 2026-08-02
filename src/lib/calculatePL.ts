@@ -139,8 +139,8 @@ export async function calculateBranchPL(
   const mk = monthKey || periodStart.slice(0, 7)
   const hq = hqContext || await getHQAllocationContext(periodStart, periodEnd, mk)
 
-  const [revRes, expRes, labRes, wasteRes, fcRes, intSalesRes, closingsRes] = await Promise.all([
-    supabase.from('branch_revenue').select('amount')
+  const [revRes, expRes, labRes, wasteRes, fcRes, intSalesRes, closingsRes, b2bRes] = await Promise.all([
+    supabase.from('branch_revenue').select('amount, source')
       .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
     supabase.from('branch_expenses').select('expense_type, amount, from_factory')
       .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
@@ -160,13 +160,22 @@ export async function calculateBranchPL(
     // default to 0 so the sum stays identical for historical periods.
     supabase.from('register_closings').select('cash_sales, credit_sales, check_sales')
       .eq('branch_id', branchId).gte('date', periodStart).lt('date', periodEnd).range(0, 99999),
+    // B2B הקפה invoices attributed to this branch — source of truth (net of VAT).
+    supabase.from('b2b_invoices').select('total_before_vat')
+      .eq('branch_id', branchId).gte('invoice_date', periodStart).lt('invoice_date', periodEnd).range(0, 99999),
   ])
 
-  // Revenue (legacy branch_revenue + newer register_closings)
-  const legacyRevenue = (revRes.data || []).reduce((s, r) => s + Number(r.amount), 0)
+  // Revenue = legacy branch_revenue (POS/website/manual הקפה, EXCLUDING backfilled
+  // credit_b2b rows) + register_closings + B2B invoices (source of truth for branch
+  // הקפה). credit_b2b is excluded to avoid double-counting with b2b_invoices —
+  // consistent with revenueBySource and the dashboard channel breakdown.
+  const legacyRevenue = (revRes.data || [])
+    .filter(r => (r as { source?: string }).source !== 'credit_b2b')
+    .reduce((s, r) => s + Number(r.amount), 0)
   const closingsRevenue = (closingsRes.data || []).reduce((s, c) =>
     s + Number(c.cash_sales || 0) + Number(c.credit_sales || 0) + Number(c.check_sales || 0), 0)
-  const revenue = legacyRevenue + closingsRevenue
+  const b2bRevenue = (b2bRes.data || []).reduce((s, r) => s + Number(r.total_before_vat), 0)
+  const revenue = legacyRevenue + closingsRevenue + b2bRevenue
 
   // Factory purchases: prefer internal_sales (completed), fallback to branch_expenses from_factory
   const intSalesTotal = (intSalesRes.data || []).reduce((s, r) => s + Number(r.total_amount), 0)

@@ -220,7 +220,7 @@ export default function CEODashboard({ onBack }: Props) {
       BRANCHES.map(br => Promise.all([
         supabase.from('branch_revenue').select('source, amount')
           .eq('branch_id', br.id).gte('date', from).lt('date', to),
-        supabase.from('register_closings').select('cash_sales, credit_sales')
+        supabase.from('register_closings').select('cash_sales, credit_sales, check_sales')
           .eq('branch_id', br.id).gte('date', from).lt('date', to),
       ]))
     )
@@ -254,7 +254,7 @@ export default function CEODashboard({ onBack }: Props) {
       // register_closings: both cash and credit-card sales are POS revenue (cashier bucket).
       // The "credit" bucket is reserved for customer credit / Hakafa from branch_revenue.
       for (const c of (closeRes.data || [])) {
-        const total = Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
+        const total = Number(c.cash_sales || 0) + Number(c.credit_sales || 0) + Number((c as any).check_sales || 0)
         totalCashier += total; brCashier += total
       }
       // Branch B2B הקפה — straight from b2b_invoices (source of truth).
@@ -311,7 +311,7 @@ export default function CEODashboard({ onBack }: Props) {
       }
       // register_closings = in-store POS sales (cash + credit-card) — bucket as cashier
       for (const c of (chCloseRes.data || [])) {
-        const total = Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
+        const total = Number(c.cash_sales || 0) + Number(c.credit_sales || 0) + Number((c as any).check_sales || 0)
         revBd[0].byBranch[br.id] = (revBd[0].byBranch[br.id] || 0) + total
       }
     }
@@ -369,7 +369,7 @@ export default function CEODashboard({ onBack }: Props) {
     const [{ data: dailyData }, { data: closingsDaily }] = await Promise.all([
       supabase.from('branch_revenue').select('branch_id, date, amount')
         .in('branch_id', branchIds).gte('date', from).lt('date', to).order('date'),
-      supabase.from('register_closings').select('branch_id, date, cash_sales, credit_sales')
+      supabase.from('register_closings').select('branch_id, date, cash_sales, credit_sales, check_sales')
         .in('branch_id', branchIds).gte('date', from).lt('date', to).order('date'),
     ])
     const byDate: Record<string, Record<string, number>> = {}
@@ -381,7 +381,7 @@ export default function CEODashboard({ onBack }: Props) {
     for (const c of (closingsDaily || [])) {
       if (!byDate[c.date]) byDate[c.date] = {}
       const brName = BRANCHES.find(b => b.id === c.branch_id)?.name || ''
-      byDate[c.date][brName] = (byDate[c.date][brName] || 0) + Number(c.cash_sales || 0) + Number(c.credit_sales || 0)
+      byDate[c.date][brName] = (byDate[c.date][brName] || 0) + Number(c.cash_sales || 0) + Number(c.credit_sales || 0) + Number((c as any).check_sales || 0)
     }
     setDailyRevenue(Object.entries(byDate).sort().map(([date, vals]) => ({
       date: new Date(date + 'T12:00:00').toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' }),
