@@ -396,14 +396,15 @@ export async function calculateFactoryPL(
     supabase.from('factory_waste').select('amount').gte('date', periodStart).lt('date', periodEnd),
     supabase.from('factory_repairs').select('amount').gte('date', periodStart).lt('date', periodEnd),
     supabase.from('internal_sales').select('total_amount').eq('status', 'completed').gte('order_date', periodStart).lt('order_date', periodEnd),
-    supabase.from('external_sales').select('total_before_vat').gte('invoice_date', periodStart).lt('invoice_date', periodEnd),
+    supabase.from('b2b_invoices').select('total_before_vat').is('branch_id', null).gte('invoice_date', periodStart).lt('invoice_date', periodEnd),
   ])
 
   const sum = (d: any) => (d.data || []).reduce((s: number, r: any) => s + Number(r.amount || r.employer_cost || 0), 0)
 
-  // External revenue: factory_sales/b2b is_internal=false + external_sales (PDF-imported invoices,
-  // kept in a separate table — already shown in CEODashboard's revenue-breakdown panel but historically
-  // missing from the P&L calculation here).
+  // External revenue: factory_sales/b2b is_internal=false + factory-level B2B invoices
+  // (b2b_invoices with branch_id NULL, net of VAT) — the source of truth. Replaces the
+  // legacy external_sales table, which only held a one-time backfill and missed newly
+  // entered invoices (consistent with the branch B2B fix in calculateBranchPL).
   const extSalesTotal = (extSalesRes.data || []).reduce((s: number, r: any) => s + Number(r.total_before_vat), 0)
   const externalRevenue = sum(fSalesExt) + sum(fB2bExt) + extSalesTotal
   // Internal revenue: prefer internal_sales, fallback to factory_sales/b2b is_internal
