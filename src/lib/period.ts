@@ -7,6 +7,7 @@ export type PeriodType =
   | 'month'
   | 'last_month'
   | 'custom_month'
+  | 'custom_range'
   | 'this_week'
   | 'last_week'
   | 'quarter'
@@ -20,7 +21,8 @@ export interface PeriodRange {
   label: string           // Hebrew display label
   type: PeriodType
   monthKey: string | null // YYYY-MM for single-month periods, null for multi
-  customMonth?: string    // YYYY-MM when type === 'custom_month'
+  customMonth?: string    // YYYY-MM when type === 'custom_month', or start month of a custom_range
+  customTo?: string       // YYYY-MM end month when type === 'custom_range'
 }
 
 // ─── Hebrew helpers ─────────────────────────────────────────────────────────
@@ -92,7 +94,7 @@ function addDays(d: Date, n: number): Date {
 
 // ─── Compute period range ───────────────────────────────────────────────────
 
-export function computePeriod(type: PeriodType, customMonth?: string): PeriodRange {
+export function computePeriod(type: PeriodType, customMonth?: string, customTo?: string): PeriodRange {
   const now = new Date()
   const cm = currentMonth()
   const cy = currentYear()
@@ -130,6 +132,26 @@ export function computePeriod(type: PeriodType, customMonth?: string): PeriodRan
         type: 'custom_month',
         monthKey: m,
         customMonth: m,
+      }
+    }
+
+    case 'custom_range': {
+      // Multi-month range (e.g. מאי–אוגוסט). monthKey is null so P&L iterates months.
+      const fromM = customMonth || cm
+      const toM = customTo || fromM
+      const [f, t] = fromM <= toM ? [fromM, toM] : [toM, fromM]
+      const fy = f.split('-')[0], ty = t.split('-')[0]
+      const label = fy === ty
+        ? `${hebrewMonthName(f)}–${hebrewMonthName(t)} ${ty}`
+        : `${hebrewMonthYear(f)} – ${hebrewMonthYear(t)}`
+      return {
+        from: f + '-01',
+        to: monthEnd(t),
+        label,
+        type: 'custom_range',
+        monthKey: null,
+        customMonth: f,
+        customTo: t,
       }
     }
 
@@ -214,6 +236,22 @@ export function getComparisonPeriod(period: PeriodRange): PeriodRange {
         type: 'custom_month',
         monthKey: pm,
         customMonth: pm,
+      }
+    }
+
+    case 'custom_range': {
+      // Equal-length range immediately preceding the selected one.
+      const n = getMonthsInRange(period.from, period.to).length || 1
+      const [fy, fm] = period.from.split('-').map(Number)
+      let sy = fy, sm = fm - n
+      while (sm < 1) { sm += 12; sy-- }
+      const compFrom = `${sy}-${String(sm).padStart(2, '0')}`
+      return {
+        from: compFrom + '-01',
+        to: period.from,
+        label: `${n} חודשים קודמים`,
+        type: 'custom_range',
+        monthKey: null,
       }
     }
 

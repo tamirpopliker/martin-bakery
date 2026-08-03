@@ -27,6 +27,8 @@ const PRESETS: Preset[] = [
 
 export default function PeriodPicker({ period, onChange }: Props) {
   const [open, setOpen] = useState(false)
+  const [rangeFrom, setRangeFrom] = useState(period.type === 'custom_range' ? (period.customMonth || '') : '')
+  const [rangeTo, setRangeTo] = useState(period.type === 'custom_range' ? (period.customTo || '') : '')
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -48,6 +50,12 @@ export default function PeriodPicker({ period, onChange }: Props) {
   function handleCustomMonth(val: string) {
     if (!val) return
     onChange(computePeriod('custom_month', val))
+    setOpen(false)
+  }
+
+  function applyRange(f: string, t: string) {
+    if (!f || !t) return
+    onChange(computePeriod('custom_range', f, t))
     setOpen(false)
   }
 
@@ -138,6 +146,45 @@ export default function PeriodPicker({ period, onChange }: Props) {
               className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-[13px] bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-all"
               style={{ fontFamily: 'inherit', boxSizing: 'border-box' }}
             />
+          </div>
+
+          {/* Custom month range */}
+          <div className="h-px bg-slate-100 mx-3" />
+          <div className="px-4 py-3">
+            <div className="text-[11px] text-slate-400 font-semibold mb-2">
+              טווח חודשים
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="month"
+                value={rangeFrom}
+                onChange={e => setRangeFrom(e.target.value)}
+                className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2 py-1.5 text-[13px] bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                style={{ fontFamily: 'inherit', boxSizing: 'border-box' }}
+              />
+              <span className="text-[11px] text-slate-400 flex-shrink-0">עד</span>
+              <input
+                type="month"
+                value={rangeTo}
+                onChange={e => setRangeTo(e.target.value)}
+                className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2 py-1.5 text-[13px] bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                style={{ fontFamily: 'inherit', boxSizing: 'border-box' }}
+              />
+            </div>
+            <button
+              onClick={() => applyRange(rangeFrom, rangeTo)}
+              disabled={!rangeFrom || !rangeTo}
+              className="mt-2 w-full rounded-lg px-3 py-1.5 text-[13px] font-bold transition-colors"
+              style={{
+                background: (!rangeFrom || !rangeTo) ? '#e2e8f0' : '#4f46e5',
+                color: (!rangeFrom || !rangeTo) ? '#94a3b8' : '#fff',
+                border: 'none',
+                cursor: (!rangeFrom || !rangeTo) ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              החל טווח
+            </button>
           </div>
         </div>
       )}
