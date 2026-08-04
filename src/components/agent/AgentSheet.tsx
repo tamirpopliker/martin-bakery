@@ -9,23 +9,28 @@ import { useEffect, useRef, useState } from 'react'
 import { useAgent, type AgentMessage } from './useAgent'
 import { useVoiceInput } from './useVoiceInput'
 import MicButton from './MicButton'
+import ConfirmationCard from './ConfirmationCard'
 
 const SUGGESTIONS = [
   'כמה פחת היה החודש בהפועלים?',
   'מה ההכנסות של אברהם אבינו החודש?',
-  'מה יתרת קופת העודף בהפועלים?',
+  'תרשום פחת של 200 שקל אתמול בהפועלים',
 ]
 
 export default function AgentSheet({ onClose }: { onClose: () => void }) {
-  const { messages, busy, send, reset } = useAgent()
+  const { messages, pending, busy, send, reset, resolve } = useAgent()
   const [draft, setDraft] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Speech goes straight through — stage 6 is read-only, so a mis-heard word
-  // costs nothing and asking again is faster than proof-reading every line.
-  const voice = useVoiceInput((text) => send(text))
+  // Speech goes straight through. A mis-heard read costs nothing, and a
+  // mis-heard write is caught by the confirmation card before it lands.
+  const voice = useVoiceInput((text) => send(text, true))
   const recording = voice.state === 'recording' || voice.state === 'cancelling'
+
+  // While a write is awaiting approval the microphone is unavailable —
+  // approval is a tap, never a spoken word.
+  const locked = !!pending
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -63,7 +68,7 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
           </div>
           <div className="flex-1">
             <div className="text-[15px] font-medium text-slate-900">עוזר מרטין</div>
-            <div className="text-xs text-slate-500">החזק את המיקרופון ודבר · עדיין לא רושם</div>
+            <div className="text-xs text-slate-500">החזק את המיקרופון ודבר</div>
           </div>
           {messages.length > 0 && (
             <button
@@ -105,7 +110,16 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
 
           {messages.map((m, i) => <Bubble key={i} m={m} />)}
 
-          {busy && (
+          {pending && (
+            <ConfirmationCard
+              pending={pending}
+              busy={busy}
+              onConfirm={() => resolve(true)}
+              onReject={() => resolve(false)}
+            />
+          )}
+
+          {busy && !pending && (
             <div className="flex gap-1.5 px-1 py-2">
               {[0, 150, 300].map((d) => (
                 <span
@@ -136,7 +150,7 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
               state={voice.state}
               level={voice.level}
               seconds={voice.seconds}
-              disabled={busy}
+              disabled={busy || locked}
               onStart={voice.start}
               onMove={voice.move}
               onEnd={voice.end}
@@ -155,15 +169,19 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() }
                 }}
                 rows={1}
-                placeholder={voice.state === 'transcribing' ? 'מתמלל…' : 'החזק את המיקרופון או כתוב…'}
-                disabled={voice.state === 'transcribing'}
+                placeholder={
+                  locked ? 'אשר או בטל את הפעולה למעלה'
+                  : voice.state === 'transcribing' ? 'מתמלל…'
+                  : 'החזק את המיקרופון או כתוב…'
+                }
+                disabled={voice.state === 'transcribing' || locked}
                 className="max-h-32 min-h-[44px] flex-1 resize-none rounded-2xl border border-slate-200 px-4 py-2.5 text-[15px] outline-none focus:border-indigo-400 disabled:bg-slate-50"
               />
             )}
 
             <button
               onClick={submit}
-              disabled={!draft.trim() || busy || recording}
+              disabled={!draft.trim() || busy || recording || locked}
               aria-label="שלח"
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white transition disabled:bg-slate-200 disabled:text-slate-400"
             >
@@ -172,7 +190,7 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
           </div>
 
           <p className="mt-2 text-center text-[11px] text-slate-400">
-            קריאה בלבד — אינו יכול לרשום או לשנות נתונים
+            כל רישום דורש אישור בלחיצה
           </p>
         </div>
       </div>

@@ -69,6 +69,18 @@ export interface ToolContext {
   user: AppUser
 }
 
+/** What the user is shown before a write happens. Built server-side from the
+ *  validated arguments — never from anything the client sent. */
+export interface ActionSummary {
+  title: string
+  fields: Array<{ label: string; value: string }>
+  /** Rendered large and bold — the number a rushed user must not miss. */
+  amount?: string
+  warnings: string[]
+  /** Blocks confirmation entirely. Duplicates of a unique record, etc. */
+  blocker?: string
+}
+
 export interface AgentTool {
   name: string
   description: string
@@ -78,6 +90,8 @@ export interface AgentTool {
   // Written now, enforced in phase 2 — see AGENT_PLAN.md 3.3
   requiredPage?: (args: Record<string, unknown>) => string
   deniedForRestricted?: boolean
+  /** Required for mutating tools. Validates and describes; must not write. */
+  summarize?: (args: Record<string, unknown>, ctx: ToolContext) => Promise<ActionSummary>
   run: (args: Record<string, unknown>, ctx: ToolContext) => Promise<unknown>
 }
 
@@ -113,6 +127,54 @@ const dateRangeSchema = {
   from: { type: 'string', description: 'תאריך התחלה כולל, YYYY-MM-DD' },
   to: { type: 'string', description: 'תאריך סיום לא כולל, YYYY-MM-DD' },
 }
+
+// ─── write helpers ──────────────────────────────────────────────────────
+
+const LARGE_AMOUNT = 5000
+const OLD_DATE_DAYS = 30
+
+function parseAmount(v: unknown): number {
+  const n = Number(v)
+  if (!Number.isFinite(n)) throw new Error('סכום לא תקין')
+  if (n <= 0) throw new Error('הסכום חייב להיות גדול מאפס')
+  if (n > 1_000_000) throw new Error('הסכום גדול מדי')
+  return Math.round(n * 100) / 100
+}
+
+function parseDate(v: unknown): string {
+  const s = String(v ?? '')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw new Error('תאריך לא תקין')
+  if (Number.isNaN(Date.parse(s))) throw new Error('תאריך לא קיים')
+  return s
+}
+
+/** Warnings that apply to any dated money entry. */
+function commonWarnings(amount: number, date: string, today: string): string[] {
+  const w: string[] = []
+  if (amount > LARGE_AMOUNT) w.push(`סכום חריג — מעל ${LARGE_AMOUNT.toLocaleString('he-IL')} ₪`)
+  if (date > today) w.push('התאריך עתידי')
+  else {
+    const days = Math.floor((Date.parse(today) - Date.parse(date)) / 86_400_000)
+    if (days > OLD_DATE_DAYS) w.push(`התאריך לפני ${days} ימים`)
+  }
+  return w
+}
+
+async function branchName(db: SupabaseClient, id: number): Promise<string> {
+  const { data } = await db.from('branches').select('short_name, name').eq('id', id).maybeSingle()
+  return data?.short_name || data?.name || `סניף ${id}`
+}
+
+const money = (n: number) => `${n.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₪`
+const heDate = (s: string) => s.split('-').reverse().join('/')
+
+// The three values actually present in branch_waste. Not invented — queried.
+const WASTE_CATEGORIES: Record<string, string> = {
+  end_of_day: 'סוף יום',
+  finished: 'מוצר מוגמר',
+  returned_product: 'מוצר שהוחזר',
+}
+const DEFAULT_WASTE_CATEGORY = 'end_of_day'
 
 // ─── tools ──────────────────────────────────────────────────────────────
 
@@ -318,6 +380,107 @@ export const TOOLS: AgentTool[] = [
     },
   },
 ]
+
+// ═══════════════════════════════════════════════════════════════════════
+// Writes
+//
+// A mutating tool is NEVER executed when Claude calls it. The call is
+// summarised, parked in agent_actions as pending_confirmation, and shown
+// to the user. Only an explicit tap runs `run`, and by then the arguments
+// are re-read from the database — the client only ever sends an id.
+//
+// That is what makes it impossible to approve 340 and have 34,000 written.
+// See AGENT_PLAN.md section 7.
+// ═══════════════════════════════════════════════════════════════════════
+
+TOOLS.push({
+  name: 'add_branch_waste',
+  description:
+    'רישום פחת לסניף. פחת נרשם לפי סכום בלבד — אין צורך במוצר. ' +
+    'קטגוריות: end_of_day (סוף יום, ברירת המחדל), finished (מוצר מוגמר), returned_product (מוצר שהוחזר). ' +
+    'הפעולה אינה מתבצעת מיד — היא מוצגת למשתמש לאישור.',
+  mutates: true,
+  allowedRoles: ['admin'],
+  requiredPage: (a) => `branch_${a.branch_id}_waste`,
+  deniedForRestricted: true,
+  input_schema: {
+    type: 'object',
+    properties: {
+      branch_id: { type: 'integer', description: 'מזהה הסניף' },
+      date: { type: 'string', description: 'תאריך הפחת, YYYY-MM-DD' },
+      amount: { type: 'number', description: 'סכום הפחת בשקלים' },
+      category: {
+        type: 'string',
+        enum: ['end_of_day', 'finished', 'returned_product'],
+        description: 'ברירת מחדל end_of_day',
+      },
+      notes: { type: 'string', description: 'הערה חופשית, אופציונלי' },
+    },
+    required: ['branch_id', 'date', 'amount'],
+  },
+
+  async summarize(args, { db }) {
+    const branchId = await assertBranch(db, args.branch_id)
+    const date = parseDate(args.date)
+    const amount = parseAmount(args.amount)
+    const category = String(args.category ?? DEFAULT_WASTE_CATEGORY)
+    if (!WASTE_CATEGORIES[category]) throw new Error('קטגוריית פחת לא מוכרת')
+
+    const today = new Date().toISOString().slice(0, 10)
+    const warnings = commonWarnings(amount, date, today)
+
+    // Same branch, same day, same amount — almost certainly a repeat.
+    const { data: dupe } = await db
+      .from('branch_waste')
+      .select('id')
+      .eq('branch_id', branchId).eq('date', date).eq('amount', amount)
+      .limit(1)
+    if (dupe?.length) warnings.push('כבר קיים רישום פחת זהה לאותו יום ובאותו סכום')
+
+    const fields = [
+      { label: 'סניף', value: await branchName(db, branchId) },
+      { label: 'תאריך', value: heDate(date) },
+      { label: 'קטגוריה', value: WASTE_CATEGORIES[category] },
+    ]
+    if (args.notes) fields.push({ label: 'הערה', value: String(args.notes) })
+
+    return { title: 'רישום פחת', fields, amount: money(amount), warnings }
+  },
+
+  async run(args, { db }) {
+    // Re-validate. These arguments came from the database, but the tool must
+    // be safe to call on its own terms.
+    const branchId = await assertBranch(db, args.branch_id)
+    const date = parseDate(args.date)
+    const amount = parseAmount(args.amount)
+    const category = String(args.category ?? DEFAULT_WASTE_CATEGORY)
+    if (!WASTE_CATEGORIES[category]) throw new Error('קטגוריית פחת לא מוכרת')
+
+    const { data, error } = await db
+      .from('branch_waste')
+      .insert({
+        branch_id: branchId,
+        date,
+        amount,
+        category,
+        notes: args.notes ? String(args.notes) : null,
+        // product_id stays null — waste is recorded by amount only.
+      })
+      .select('id')
+      .single()
+
+    if (error) {
+      console.error('[add_branch_waste]', error.message)
+      throw new Error('הרישום נכשל')
+    }
+
+    return {
+      table: 'branch_waste',
+      id: String(data.id),
+      message: `נרשם פחת ${money(amount)} ב${await branchName(db, branchId)} לתאריך ${heDate(date)}`,
+    }
+  },
+})
 
 export const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]))
 

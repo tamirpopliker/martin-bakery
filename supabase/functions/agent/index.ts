@@ -15,6 +15,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { authenticateAgentRequest, corsHeaders, json } from '../_shared/agentAuth.ts'
 import { TOOL_BY_NAME, toolsFor } from '../_shared/agentTools.ts'
 
@@ -64,10 +65,89 @@ function buildSystemPrompt(userName: string, ctx: AgentContext, todayFallback: s
     '',
     '**משימה אחת בכל פעם.** אם התבקשו כמה דברים — טפל בראשון ושאל אם להמשיך.',
     '',
-    '## מה אתה לא יכול לעשות כרגע',
-    'אתה יכול רק **לקרוא** נתונים. אינך יכול לרשום פחת, הוצאה, סגירת קופה או הזמנה, ואינך יכול לשנות או למחוק דבר. אם מתבקשת פעולת כתיבה — הסבר בפשטות שיכולת הרישום עדיין לא הופעלה, ושכרגע אתה יכול לענות על שאלות בלבד. אל תעמיד פנים שביצעת משהו.',
+    '## מה אתה יכול לעשות',
+    '',
+    '**קריאה** — פחת, הכנסות, הוצאות, סגירות קופה, יתרת קופת עודף.',
+    '',
+    '**כתיבה — רישום פחת בלבד** (`add_branch_waste`). כשאתה קורא לכלי כתיבה, הפעולה **אינה מתבצעת** — היא מוצגת למשתמש ככרטיס אישור, והוא מאשר בלחיצה. לכן אל תשאל "לרשום?" ואל תכריז "רשמתי": פשוט קרא לכלי, והמערכת תציג את הכרטיס. אל תתאר את הפעולה במילים לפני הקריאה — הכרטיס עושה זאת טוב ממך.',
+    '',
+    'כל שאר הרישומים — הוצאות, סגירת קופה, קופת עודף, הזמנות עוגות — **עדיין לא זמינים**. אם מתבקשים, אמור זאת בפשטות ואל תעמיד פנים שביצעת משהו.',
   )
   return lines.join('\n')
+}
+
+const CONFIRMATION_TTL_MS = 15 * 60 * 1000
+
+/**
+ * Executes or rejects a parked action.
+ *
+ * Every guard that matters lives here, because this is the only path that
+ * writes: the row must belong to the caller, must still be pending, and must
+ * not have expired. A row can only ever be consumed once — the status update
+ * is conditional on it still being pending.
+ */
+async function resolveAction(
+  auth: { user: { id: string; email: string; role: string }; db: SupabaseClient },
+  actionId: string,
+  reject: boolean,
+): Promise<Response> {
+  const { data: action, error } = await auth.db
+    .from('agent_actions')
+    .select('id, user_id, tool_name, tool_args, status, created_at')
+    .eq('id', actionId)
+    .maybeSingle()
+
+  if (error || !action) return json({ error: 'הפעולה לא נמצאה' }, 404)
+  if (action.user_id !== auth.user.id) return json({ error: 'הפעולה אינה שלך' }, 403)
+  if (action.status !== 'pending_confirmation') {
+    return json({ error: 'הפעולה כבר טופלה' }, 409)
+  }
+  if (Date.now() - Date.parse(action.created_at) > CONFIRMATION_TTL_MS) {
+    await auth.db.from('agent_actions').update({ status: 'expired' }).eq('id', action.id)
+    return json({ error: 'האישור פג. בקש את הפעולה מחדש.' }, 410)
+  }
+
+  if (reject) {
+    await auth.db.from('agent_actions')
+      .update({ status: 'rejected', executed_at: new Date().toISOString() })
+      .eq('id', action.id).eq('status', 'pending_confirmation')
+    return json({ reply: 'בוטל. לא נרשם כלום.' })
+  }
+
+  const tool = TOOL_BY_NAME.get(action.tool_name)
+  if (!tool?.mutates || !tool.allowedRoles.includes(auth.user.role)) {
+    return json({ error: 'הפעולה אינה זמינה' }, 403)
+  }
+
+  // Claim the row first. If this updates nothing, someone else already
+  // consumed it and we must not write.
+  const { data: claimed } = await auth.db
+    .from('agent_actions')
+    .update({ status: 'executed', executed_at: new Date().toISOString() })
+    .eq('id', action.id).eq('status', 'pending_confirmation')
+    .select('id')
+  if (!claimed?.length) return json({ error: 'הפעולה כבר טופלה' }, 409)
+
+  try {
+    const out = await tool.run(
+      (action.tool_args ?? {}) as Record<string, unknown>,
+      { db: auth.db, user: auth.user as never },
+    ) as { table?: string; id?: string; message?: string }
+
+    await auth.db.from('agent_actions')
+      .update({ result_table: out?.table ?? null, result_id: out?.id ?? null })
+      .eq('id', action.id)
+
+    console.log(`[agent] ${auth.user.email} executed ${action.tool_name} -> ${out?.id}`)
+    return json({ reply: out?.message ?? 'בוצע.', executed: true })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'שגיאה'
+    await auth.db.from('agent_actions')
+      .update({ status: 'failed', error: msg })
+      .eq('id', action.id)
+    console.error(`[agent] ${action.tool_name} failed: ${msg}`)
+    return json({ error: msg }, 500)
+  }
 }
 
 serve(async (req) => {
@@ -83,12 +163,33 @@ serve(async (req) => {
     return json({ error: 'הסוכן אינו מוגדר' }, 500)
   }
 
-  let body: { messages?: unknown; context?: AgentContext }
+  let body: {
+    messages?: unknown
+    context?: AgentContext
+    conversation_id?: string
+    transcript?: string
+    input_mode?: string
+    action_id?: string
+    reject?: boolean
+  }
   try {
     body = await req.json()
   } catch {
     return json({ error: 'בקשה לא תקינה' }, 400)
   }
+
+  // ── Confirmation path ──
+  // The client sends ONLY an id. Arguments are re-read from the database, so
+  // what runs is exactly what was displayed and approved.
+  if (body.action_id) {
+    return await resolveAction(auth, body.action_id, body.reject === true)
+  }
+
+  const conversationId = typeof body.conversation_id === 'string' && body.conversation_id
+    ? body.conversation_id
+    : crypto.randomUUID()
+  const transcript = typeof body.transcript === 'string' ? body.transcript : null
+  const inputMode = body.input_mode === 'text' ? 'text' : 'voice'
 
   const incoming = Array.isArray(body.messages) ? body.messages : []
   if (!incoming.length) return json({ error: 'לא התקבלה הודעה' }, 400)
@@ -106,6 +207,7 @@ serve(async (req) => {
   const trace: Array<{ tool: string; args: unknown; ok: boolean; ms: number }> = []
   let inputTokens = 0
   let outputTokens = 0
+  const usageOut = () => ({ input_tokens: inputTokens, output_tokens: outputTokens })
 
   try {
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
@@ -172,15 +274,60 @@ serve(async (req) => {
           continue
         }
 
-        // Belt and braces: stage 4 is read-only by construction, but if a
-        // mutating tool is ever added to this catalogue by mistake, it stops here.
+        // ── The stop. A write is never executed here. ──
+        // It is summarised, parked, and handed to the user as a card. The
+        // loop ends: one task at a time, and nothing happens without a tap.
         if (tool.mutates) {
-          trace.push({ tool: use.name, args: use.input, ok: false, ms: 0 })
-          results.push({
-            type: 'tool_result', tool_use_id: use.id, is_error: true,
-            content: 'פעולות כתיבה אינן מופעלות בשלב זה',
-          })
-          continue
+          if (!tool.summarize) {
+            console.error(`[agent] mutating tool ${tool.name} has no summarize()`)
+            return json({ error: 'הפעולה אינה זמינה' }, 500)
+          }
+          try {
+            const summary = await tool.summarize(use.input ?? {}, { db: auth.db, user: auth.user })
+            trace.push({ tool: use.name, args: use.input, ok: true, ms: Date.now() - t0 })
+
+            if (summary.blocker) {
+              return json({ reply: summary.blocker, trace, usage: usageOut() })
+            }
+
+            const { data: action, error: insErr } = await auth.db
+              .from('agent_actions')
+              .insert({
+                user_id: auth.user.id,
+                conversation_id: conversationId,
+                tool_name: tool.name,
+                tool_args: use.input ?? {},
+                status: 'pending_confirmation',
+                summary_he: summary.title,
+                transcript: transcript ?? null,
+                input_mode: inputMode,
+              })
+              .select('id')
+              .single()
+
+            if (insErr) {
+              console.error('[agent] agent_actions insert failed:', insErr.message)
+              return json({ error: 'לא ניתן להכין את הפעולה לאישור' }, 500)
+            }
+
+            return json({
+              reply: '',
+              pending: {
+                action_id: action.id,
+                title: summary.title,
+                fields: summary.fields,
+                amount: summary.amount ?? null,
+                warnings: summary.warnings,
+              },
+              trace,
+              usage: usageOut(),
+            })
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : 'שגיאה'
+            trace.push({ tool: use.name, args: use.input, ok: false, ms: Date.now() - t0 })
+            results.push({ type: 'tool_result', tool_use_id: use.id, is_error: true, content: msg })
+            continue
+          }
         }
 
         try {
