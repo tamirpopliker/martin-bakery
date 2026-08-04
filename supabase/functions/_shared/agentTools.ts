@@ -488,11 +488,13 @@ export const TOOLS: AgentTool[] = [
         .eq('branch_id', branchId)
         .order('created_at', { ascending: false })
         .limit(limit)
-      const rows = data ?? []
       return {
         branch_id: branchId,
-        balance: rows.length ? ils(Number(rows[0].balance_after || 0)) : 0,
-        recent: rows,
+        // Falls back to the configured base fund when there are no movements,
+        // same as the screen and the RPC — not a bare 0.
+        balance: ils(await fundBalance(db, branchId)),
+        registers: await branchRegisters(db, branchId),
+        recent: data ?? [],
       }
     },
   },
@@ -696,6 +698,146 @@ TOOLS.push({
       table: 'branch_expenses',
       id: String(data.id),
       message: `נרשמה הוצאה ${money(amount)} ל${supplier.name} ב${await branchName(db, branchId)} לתאריך ${heDate(date)}`,
+    }
+  },
+})
+
+const FUND_TYPES: Record<string, string> = {
+  income: 'הכנסה לקופת עודף',
+  expense: 'הוצאה מקופת עודף',
+  withdraw_to_register: 'משיכה לקופה',
+  push_from_register: 'דחיפה מקופה',
+}
+
+/** Registers are derived from history, never from a hardcoded map. */
+async function branchRegisters(db: SupabaseClient, branchId: number): Promise<number[]> {
+  const { data } = await db
+    .from('register_closings')
+    .select('register_number')
+    .eq('branch_id', branchId)
+    .range(0, 9999)
+  return [...new Set((data ?? []).map((r) => Number(r.register_number)))].sort((a, b) => a - b)
+}
+
+/** Current fund balance: last movement, else the configured base. Mirrors the RPC. */
+async function fundBalance(db: SupabaseClient, branchId: number): Promise<number> {
+  const { data } = await db
+    .from('change_fund').select('balance_after')
+    .eq('branch_id', branchId)
+    .order('created_at', { ascending: false }).limit(1)
+  if (data?.length) return Number(data[0].balance_after || 0)
+
+  const { data: setting } = await db
+    .from('system_settings').select('value')
+    .eq('key', `change_fund_base_${branchId}`).maybeSingle()
+  return setting ? Number(setting.value || 0) : 0
+}
+
+TOOLS.push({
+  name: 'add_change_fund_movement',
+  description:
+    'תנועה בקופת העודף של סניף. סוגים: income (כסף נכנס לקופת העודף), expense (כסף יוצא ממנה), ' +
+    'withdraw_to_register (משיכה מקופת העודף אל קופה רושמת — דורש מספר קופה), ' +
+    'push_from_register (העברה מקופה רושמת אל קופת העודף — דורש מספר קופה). ' +
+    'הסכום תמיד חיובי; הכיוון נקבע לפי הסוג. הפעולה מוצגת למשתמש לאישור לפני ביצוע.',
+  mutates: true,
+  allowedRoles: ['admin'],
+  requiredPage: (a) => `branch_${a.branch_id}_change_fund`,
+  input_schema: {
+    type: 'object',
+    properties: {
+      branch_id: { type: 'integer' },
+      type: {
+        type: 'string',
+        enum: ['income', 'expense', 'withdraw_to_register', 'push_from_register'],
+      },
+      amount: { type: 'number', description: 'סכום חיובי בשקלים' },
+      register_number: { type: 'integer', description: 'חובה עבור משיכה או דחיפה' },
+      description: { type: 'string', description: 'תיאור, אופציונלי' },
+    },
+    required: ['branch_id', 'type', 'amount'],
+  },
+
+  async summarize(args, { db }) {
+    const branchId = await assertBranch(db, args.branch_id)
+    const amount = parseAmount(args.amount)
+    const type = String(args.type ?? '')
+    if (!FUND_TYPES[type]) throw new Error('סוג תנועה לא מוכר')
+
+    const needsRegister = type === 'withdraw_to_register' || type === 'push_from_register'
+    let register: number | null = null
+    const warnings: string[] = []
+
+    if (needsRegister) {
+      if (args.register_number == null) throw new Error('יש לציין מספר קופה')
+      register = Number(args.register_number)
+      const registers = await branchRegisters(db, branchId)
+      if (registers.length && !registers.includes(register)) {
+        return {
+          title: FUND_TYPES[type], fields: [], warnings: [],
+          blocker: `קופה ${register} אינה שייכת לסניף. הקופות בסניף: ${registers.join(', ')}.`,
+        }
+      }
+    }
+
+    if (amount > LARGE_AMOUNT) {
+      warnings.push(`סכום חריג — מעל ${LARGE_AMOUNT.toLocaleString('he-IL')} ₪`)
+    }
+
+    const before = await fundBalance(db, branchId)
+    const signed = (type === 'income' || type === 'push_from_register') ? amount : -amount
+    const after = ils(before + signed)
+
+    if (after < 0) {
+      warnings.push(`היתרה תרד מתחת לאפס (${money(after)})`)
+    }
+
+    const fields = [
+      { label: 'סניף', value: await branchName(db, branchId) },
+      { label: 'פעולה', value: FUND_TYPES[type] },
+    ]
+    if (register != null) fields.push({ label: 'קופה', value: String(register) })
+    fields.push(
+      { label: 'יתרה נוכחית', value: money(before) },
+      { label: 'יתרה אחרי', value: money(after) },
+    )
+    if (args.description) fields.push({ label: 'תיאור', value: String(args.description) })
+
+    return {
+      title: FUND_TYPES[type],
+      fields,
+      amount: `${signed < 0 ? '−' : '+'}${money(amount)}`,
+      warnings,
+    }
+  },
+
+  async run(args, { db }) {
+    const branchId = await assertBranch(db, args.branch_id)
+    const amount = parseAmount(args.amount)
+    const type = String(args.type ?? '')
+    if (!FUND_TYPES[type]) throw new Error('סוג תנועה לא מוכר')
+
+    // One RPC, one transaction. The balance chain and the register's opening
+    // move together or not at all — see sql/072_change_fund_movement.sql.
+    const { data, error } = await db.rpc('change_fund_movement', {
+      p_branch_id: branchId,
+      p_type: type,
+      p_amount: amount,
+      p_description: args.description ? String(args.description) : null,
+      p_register_number: args.register_number != null ? Number(args.register_number) : null,
+    })
+
+    if (error) {
+      console.error('[add_change_fund_movement]', error.message)
+      // The function raises Hebrew messages; pass them through when present.
+      throw new Error(/[֐-׿]/.test(error.message) ? error.message : 'הרישום נכשל')
+    }
+
+    const out = data as { id: number; balance_after: number }
+    return {
+      table: 'change_fund',
+      id: String(out.id),
+      message: `${FUND_TYPES[type]} ${money(amount)} — היתרה בקופת העודף כעת ${money(Number(out.balance_after))}`,
     }
   },
 })
