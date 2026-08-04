@@ -7,6 +7,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useAgent, type AgentMessage } from './useAgent'
+import { useVoiceInput } from './useVoiceInput'
+import MicButton from './MicButton'
 
 const SUGGESTIONS = [
   'כמה פחת היה החודש בהפועלים?',
@@ -19,6 +21,11 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
   const [draft, setDraft] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Speech goes straight through — stage 6 is read-only, so a mis-heard word
+  // costs nothing and asking again is faster than proof-reading every line.
+  const voice = useVoiceInput((text) => send(text))
+  const recording = voice.state === 'recording' || voice.state === 'cancelling'
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -54,7 +61,7 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
           </div>
           <div className="flex-1">
             <div className="text-[15px] font-medium text-slate-900">עוזר מרטין</div>
-            <div className="text-xs text-slate-500">עונה על שאלות · עדיין לא רושם</div>
+            <div className="text-xs text-slate-500">החזק את המיקרופון ודבר · עדיין לא רושם</div>
           </div>
           {messages.length > 0 && (
             <button
@@ -78,7 +85,7 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
           {messages.length === 0 && (
             <div className="pt-6">
               <p className="text-center text-sm text-slate-400">
-                שאל אותי על פחת, הכנסות, הוצאות או קופת עודף
+                החזק את המיקרופון ושאל על פחת, הכנסות,<br />הוצאות או קופת עודף
               </p>
               <div className="mt-5 space-y-2">
                 {SUGGESTIONS.map((s) => (
@@ -112,27 +119,53 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
 
         {/* composer */}
         <div className="border-t border-slate-200 px-3 py-3">
+          {voice.error && (
+            <div className="mb-2 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-800">
+              <span className="flex-1">{voice.error}</span>
+              <button onClick={voice.clearError} className="text-rose-400 hover:text-rose-700">✕</button>
+            </div>
+          )}
+
           <div className="flex items-end gap-2">
-            <textarea
-              ref={inputRef}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() }
-              }}
-              rows={1}
-              placeholder="כתוב שאלה…"
-              className="max-h-32 min-h-[44px] flex-1 resize-none rounded-2xl border border-slate-200 px-4 py-2.5 text-[15px] outline-none focus:border-indigo-400"
+            <MicButton
+              state={voice.state}
+              level={voice.level}
+              seconds={voice.seconds}
+              disabled={busy}
+              onStart={voice.start}
+              onMove={voice.move}
+              onEnd={voice.end}
             />
+
+            {recording ? (
+              <div className="flex h-11 flex-1 items-center rounded-2xl bg-indigo-50 px-4 text-[15px] text-indigo-700">
+                {voice.state === 'cancelling' ? 'שחרר לביטול' : 'מקשיב…'}
+              </div>
+            ) : (
+              <textarea
+                ref={inputRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() }
+                }}
+                rows={1}
+                placeholder={voice.state === 'transcribing' ? 'מתמלל…' : 'החזק את המיקרופון או כתוב…'}
+                disabled={voice.state === 'transcribing'}
+                className="max-h-32 min-h-[44px] flex-1 resize-none rounded-2xl border border-slate-200 px-4 py-2.5 text-[15px] outline-none focus:border-indigo-400 disabled:bg-slate-50"
+              />
+            )}
+
             <button
               onClick={submit}
-              disabled={!draft.trim() || busy}
+              disabled={!draft.trim() || busy || recording}
               aria-label="שלח"
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white transition disabled:bg-slate-200 disabled:text-slate-400"
             >
               <SendIcon />
             </button>
           </div>
+
           <p className="mt-2 text-center text-[11px] text-slate-400">
             קריאה בלבד — אינו יכול לרשום או לשנות נתונים
           </p>
