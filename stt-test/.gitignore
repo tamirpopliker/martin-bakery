@@ -1,0 +1,10 @@
+.env
+*.m4a
+*.mp3
+*.mp4
+*.wav
+*.ogg
+*.webm
+*.flac
+results.json
+RESULTS.md

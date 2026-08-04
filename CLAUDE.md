@@ -11,13 +11,22 @@ For full project structure, page-by-page breakdown, and architecture, see `CONTE
 - `npm run lint` — ESLint
 - `npm run preview` — preview production build
 
+## Testing workflow — no localhost
+
+**The owner cannot log in on `localhost`.** Auth is Google OAuth bound to the Vercel domain, so a local dev server has no usable login. Never finish a change by asking him to run `npm run dev` and try it.
+
+- **Frontend changes** are only testable after **commit → push → Vercel deploy**. Batch UI work into a single deployable milestone rather than asking for verification step by step.
+- **Supabase migrations and Edge Functions** deploy independently of git and can be verified immediately (query the DB, check the function list/logs).
+- Type-check locally with `npx tsc -b` before pushing — that is the last gate that runs without a deploy.
+
 ## Canonical sources of truth — do not duplicate
 
 These exist because past duplication caused real bugs (dashboards and email reports showing different numbers). Always reuse, never re-implement:
 
 - **`src/lib/calculatePL.ts`** — the only P&L calculator. `calculateBranchPL`, `calculateFactoryPL`, `calculateConsolidatedPL`. Any component or page that needs profit/loss numbers calls these. Do not inline the formula in a component.
 - **`src/lib/dbHelpers.ts::safeDbOperation`** — the standard wrapper for Supabase mutations. Translates Postgres error codes to Hebrew. Use it instead of `if (error) { alert(...); return }`.
-- **DB view `branch_pl_summary`** — pre-aggregated per-branch P&L. Prefer `fetchAllBranchesProfit` over fanning out `calculateBranchPL` per branch in a loop.
+- **`supabase/functions/_shared/laborQueries.ts`** — the canonical revenue/labor layer for **Edge Functions**, which cannot import from `src/`. `getBranchRevenueWithClosings`, `getBranchLaborWithFallback`, `getBranchManagerSalary`, `getFactoryLaborWithFallback`. It mirrors the priority chain in `calculatePL.ts`. Any new Edge Function needing these numbers reuses it — do not write a third copy.
+- ~~**DB view `branch_pl_summary`**~~ — **GONE.** Renamed to `_deprecated_branch_pl_summary` because it reads from the stale `branch_labor` table. `fetchAllBranchesProfit` no longer exists either. Do not reintroduce them; use `calculatePL.ts` (in `src/`) or `laborQueries.ts` (in Edge Functions).
 - **`src/lib/period.ts`** — period computation, Hebrew month names, comparison periods. Don't hand-roll date math for periods.
 - **`src/lib/internalCustomers.ts::detectBranchId`** — mapping internal customer names → branch IDs. Centralized; do not pattern-match branch names elsewhere.
 

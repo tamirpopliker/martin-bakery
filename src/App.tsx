@@ -5,6 +5,7 @@ import { UserProvider } from './lib/UserContext'
 import { BranchProvider } from './lib/BranchContext'
 import Login from './pages/Login'
 import Home from './pages/Home'
+import AgentButton from './components/agent/AgentButton'
 
 function App() {
   const [session, setSession] = useState<any>(null)
@@ -32,6 +33,7 @@ function App() {
       <BranchProvider>
         <PeriodProvider>
           <Home />
+          <AgentButton />
         </PeriodProvider>
       </BranchProvider>
     </UserProvider>

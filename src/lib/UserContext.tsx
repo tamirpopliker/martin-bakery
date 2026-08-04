@@ -17,6 +17,8 @@ export interface AppUser {
   employee_id?: number | null
   username?: string | null
   must_change_password?: boolean
+  /** Voice agent access. Phase 1: admins only, enabled per user. See AGENT_PLAN.md 3.1 */
+  agent_enabled?: boolean
 }
 
 interface UserContextValue {
