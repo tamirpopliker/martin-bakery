@@ -842,6 +842,229 @@ TOOLS.push({
   },
 })
 
+// ─── Special cake orders ────────────────────────────────────────────────
+//
+// MIRRORED from src/pages/BranchSpecialOrders.tsx:57-76. Edge functions
+// cannot import from src/. If the form's constants change, change these too.
+
+const MEDIUM_ROUND = 'עגולה בינונית'
+const BASE_SIZES = ['עגולה גדולה', MEDIUM_ROUND, 'ריבוע', 'רבע פלטה', 'לב']
+const TORTE_FLAVORS = ['וניל', 'שוקולד']
+const CREAMS: Record<string, string[]> = {
+  'חלבי': ['שאנטי שוקולד', 'וניל'],
+  'פרווה': ['קרם שוקולד פרווה', 'קרם וניל פרווה'],
+}
+const FILLINGS: Record<string, string[]> = {
+  'חלבי': ['ריבת חלב', 'תות', 'אוכמניות', 'שוקולד', 'קרם בלבד'],
+  'פרווה': ['תות', 'אוכמניות', 'שוקולד', 'קרמל', 'קרם בלבד'],
+}
+const PRESETS: Record<string, string[]> = {
+  'חלבי': ['ריבת חלב', 'שאנטי שוקולד', 'פירות יער', 'היער השחור'],
+  'פרווה': ['קרם שוקולד', 'שוקו שוקו', 'קרמל', 'אוכמניות'],
+}
+const COATINGS = ['מזרה סוכריות', 'קוקוס קלוי', 'אגוזי מלך טחונים', 'קרם חלק', 'שתי וערב']
+const SPRINKLE = 'מזרה סוכריות'
+const SPRINKLE_COLORS = ['צבעוניות', 'לבנות', 'חומות', 'ורודות', 'תכלת']
+const CROWNS = ['ללא', 'לבן', 'חום', 'ורוד', 'תכלת', 'תכלת-לבן', 'ורוד-לבן', 'חום-לבן']
+const EXTRAS = ['דובדבנים', 'דובדבנים אקסטרה', 'כדורי שוקולד', 'אגוזי מלך (בתוך העוגה)']
+
+/** Loose match against a closed list, so transcription wobble still lands. */
+function pickOption(spoken: unknown, options: string[]): string | null {
+  const raw = String(spoken ?? '').trim()
+  if (!raw) return null
+  const t = normaliseSupplier(raw)
+  for (const o of options) if (normaliseSupplier(o) === t) return o
+  const ts = skeleton(raw)
+  if (ts.length >= 2) for (const o of options) if (skeleton(o) === ts) return o
+  for (const o of options) {
+    const n = normaliseSupplier(o)
+    if (n.includes(t) || t.includes(n)) return o
+  }
+  for (const o of options) if (editDistance(normaliseSupplier(o), t) <= (t.length <= 6 ? 1 : 2)) return o
+  return null
+}
+
+TOOLS.push({
+  name: 'create_special_order',
+  description:
+    'יצירת הזמנת עוגה מיוחדת. ' +
+    'סוג: חלבי או פרווה. גדלים: ' + BASE_SIZES.join(' / ') + '. ' +
+    `אם הגודל הוא "${MEDIUM_ROUND}" — חובה לבחור עוגה מוכנה (preset_cake), ואין צורך בטורט/קרם/מילוי. ` +
+    'אחרת — חובה טורט, קרם ומילוי. ' +
+    'ציפויים: ' + COATINGS.join(' / ') + `. אם הציפוי הוא "${SPRINKLE}" — חובה גוון: ` + SPRINKLE_COLORS.join(' / ') + '. ' +
+    'כתר: ' + CROWNS.join(' / ') + '. ' +
+    'מסור את הערכים כפי שנאמרו — המערכת מתאימה אותם לרשימה. ' +
+    'הפעולה מוצגת לאישור לפני ביצוע.',
+  mutates: true,
+  allowedRoles: ['admin'],
+  requiredPage: (a) => `branch_${a.branch_id}_special_orders`,
+  input_schema: {
+    type: 'object',
+    properties: {
+      branch_id: { type: 'integer' },
+      customer_name: { type: 'string', description: 'שם הלקוח' },
+      pickup_date: { type: 'string', description: 'תאריך איסוף, YYYY-MM-DD' },
+      pickup_time: { type: 'string', description: 'שעת איסוף, HH:MM, אופציונלי' },
+      customer_phone: { type: 'string', description: 'טלפון, אופציונלי' },
+      type: { type: 'string', enum: ['חלבי', 'פרווה'] },
+      base_size: { type: 'string', description: BASE_SIZES.join(' / ') },
+      preset_cake: { type: 'string', description: `רק כאשר הגודל הוא ${MEDIUM_ROUND}` },
+      torte_flavor: { type: 'string', description: TORTE_FLAVORS.join(' / ') },
+      cream_between: { type: 'string', description: 'תלוי בסוג' },
+      filling: { type: 'string', description: 'תלוי בסוג' },
+      coating: { type: 'string', description: COATINGS.join(' / ') },
+      sprinkle_color: { type: 'string', description: `רק כאשר הציפוי הוא ${SPRINKLE}` },
+      crown: { type: 'string', description: CROWNS.join(' / ') },
+      extras: { type: 'array', items: { type: 'string' }, description: EXTRAS.join(' / ') },
+      notes: { type: 'string' },
+      order_number_manual: { type: 'string', description: 'מספר הזמנה ידני, אופציונלי' },
+    },
+    required: ['branch_id', 'customer_name', 'pickup_date', 'type', 'base_size', 'coating', 'crown'],
+  },
+
+  async summarize(args, { db }) {
+    const branchId = await assertBranch(db, args.branch_id)
+    const missing: string[] = []
+
+    const customer = String(args.customer_name ?? '').trim()
+    if (!customer) missing.push('שם לקוח')
+
+    const pickup = String(args.pickup_date ?? '')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(pickup)) missing.push('תאריך איסוף')
+
+    const type = pickOption(args.type, ['חלבי', 'פרווה'])
+    if (!type) missing.push('סוג — חלבי או פרווה')
+
+    const baseSize = pickOption(args.base_size, BASE_SIZES)
+    if (!baseSize) missing.push(`גודל — ${BASE_SIZES.join(' / ')}`)
+
+    const coatingBase = pickOption(args.coating, COATINGS)
+    if (!coatingBase) missing.push(`ציפוי — ${COATINGS.join(' / ')}`)
+
+    const crown = pickOption(args.crown, CROWNS)
+    if (!crown) missing.push(`כתר — ${CROWNS.join(' / ')}`)
+
+    let preset: string | null = null
+    let torte: string | null = null
+    let cream: string | null = null
+    let filling: string | null = null
+
+    if (baseSize === MEDIUM_ROUND && type) {
+      preset = pickOption(args.preset_cake, PRESETS[type])
+      if (!preset) missing.push(`עוגה מוכנה — ${PRESETS[type].join(' / ')}`)
+    } else if (baseSize && type) {
+      torte = pickOption(args.torte_flavor, TORTE_FLAVORS)
+      if (!torte) missing.push(`טעם טורט — ${TORTE_FLAVORS.join(' / ')}`)
+      cream = pickOption(args.cream_between, CREAMS[type])
+      if (!cream) missing.push(`קרם — ${CREAMS[type].join(' / ')}`)
+      filling = pickOption(args.filling, FILLINGS[type])
+      if (!filling) missing.push(`מילוי — ${FILLINGS[type].join(' / ')}`)
+    }
+
+    let coating = coatingBase
+    if (coatingBase === SPRINKLE) {
+      const colour = pickOption(args.sprinkle_color, SPRINKLE_COLORS)
+      if (!colour) missing.push(`גוון סוכריות — ${SPRINKLE_COLORS.join(' / ')}`)
+      else coating = `${SPRINKLE} - ${colour}`
+    }
+
+    const extras = Array.isArray(args.extras)
+      ? (args.extras as unknown[]).map((e) => pickOption(e, EXTRAS)).filter(Boolean) as string[]
+      : []
+
+    // Everything missing is reported at once, so the user is asked one time
+    // rather than dragged through a field-by-field interrogation.
+    if (missing.length) {
+      return {
+        title: 'הזמנת עוגה', fields: [], warnings: [],
+        blocker: `חסר כדי ליצור את ההזמנה:\n· ${missing.join('\n· ')}`,
+      }
+    }
+
+    const warnings: string[] = []
+    const today = new Date().toISOString().slice(0, 10)
+    if (pickup < today) warnings.push('תאריך האיסוף כבר עבר')
+
+    const { data: dupe } = await db
+      .from('special_orders')
+      .select('order_number')
+      .eq('branch_id', branchId).eq('customer_name', customer).eq('pickup_date', pickup)
+      .not('status', 'eq', 'cancelled')
+      .limit(1)
+    if (dupe?.length) warnings.push(`כבר קיימת הזמנה ל${customer} לאותו תאריך`)
+
+    const fields = [
+      { label: 'סניף', value: await branchName(db, branchId) },
+      { label: 'לקוח', value: customer },
+      { label: 'איסוף', value: heDate(pickup) + (args.pickup_time ? ` ${args.pickup_time}` : '') },
+      { label: 'סוג', value: type! },
+      { label: 'בסיס', value: baseSize! },
+    ]
+    if (preset) fields.push({ label: 'עוגה מוכנה', value: preset })
+    else fields.push(
+      { label: 'טורט', value: torte! },
+      { label: 'קרם', value: cream! },
+      { label: 'מילוי', value: filling! },
+    )
+    fields.push({ label: 'ציפוי', value: coating! }, { label: 'כתר', value: crown! })
+    if (extras.length) fields.push({ label: 'תוספות', value: extras.join(', ') })
+    if (args.customer_phone) fields.push({ label: 'טלפון', value: String(args.customer_phone) })
+    if (args.notes) fields.push({ label: 'הערות', value: String(args.notes) })
+
+    return { title: 'הזמנת עוגה מיוחדת', fields, warnings }
+  },
+
+  async run(args, { db, user }) {
+    const branchId = await assertBranch(db, args.branch_id)
+    const type = pickOption(args.type, ['חלבי', 'פרווה'])!
+    const baseSize = pickOption(args.base_size, BASE_SIZES)!
+    const isPreset = baseSize === MEDIUM_ROUND
+
+    let coating = pickOption(args.coating, COATINGS)!
+    if (coating === SPRINKLE) {
+      const colour = pickOption(args.sprinkle_color, SPRINKLE_COLORS)
+      if (!colour) throw new Error('חסר גוון סוכריות')
+      coating = `${SPRINKLE} - ${colour}`
+    }
+
+    const extras = Array.isArray(args.extras)
+      ? (args.extras as unknown[]).map((e) => pickOption(e, EXTRAS)).filter(Boolean) as string[]
+      : []
+
+    const { data, error } = await db.rpc('create_special_order', {
+      p_branch_id: branchId,
+      p_customer_name: String(args.customer_name).trim(),
+      p_pickup_date: String(args.pickup_date),
+      p_type: type,
+      p_base_size: baseSize,
+      p_coating: coating,
+      p_crown: pickOption(args.crown, CROWNS)!,
+      p_torte_flavor: isPreset ? null : pickOption(args.torte_flavor, TORTE_FLAVORS),
+      p_cream_between: isPreset ? null : pickOption(args.cream_between, CREAMS[type]),
+      p_filling: isPreset ? null : pickOption(args.filling, FILLINGS[type]),
+      p_preset_cake: isPreset ? pickOption(args.preset_cake, PRESETS[type]) : null,
+      p_pickup_time: args.pickup_time ? String(args.pickup_time) : null,
+      p_customer_phone: args.customer_phone ? String(args.customer_phone) : null,
+      p_extras: extras.length ? extras : null,
+      p_notes: args.notes ? String(args.notes) : null,
+      p_manual_number: args.order_number_manual ? String(args.order_number_manual) : null,
+      p_created_by: user.id,
+    })
+
+    if (error) {
+      console.error('[create_special_order]', error.message)
+      throw new Error(/[֐-׿]/.test(error.message) ? error.message : 'יצירת ההזמנה נכשלה')
+    }
+
+    const out = data as { id: number; order_number: string; notified: number }
+    return {
+      table: 'special_orders',
+      id: String(out.id),
+      message: `נוצרה הזמנה ${out.order_number} ל${String(args.customer_name).trim()}. המפעל עודכן.`,
+    }
+  },
+})
+
 export const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]))
 
 /**
