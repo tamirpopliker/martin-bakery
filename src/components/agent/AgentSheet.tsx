@@ -13,8 +13,8 @@ import ConfirmationCard from './ConfirmationCard'
 
 const SUGGESTIONS = [
   'כמה פחת היה החודש בהפועלים?',
-  'מה ההכנסות של אברהם אבינו החודש?',
   'תרשום פחת של 200 שקל אתמול בהפועלים',
+  'תרשום הוצאה של 450 שקל לבית הבגט היום בהפועלים',
 ]
 
 export default function AgentSheet({ onClose }: { onClose: () => void }) {

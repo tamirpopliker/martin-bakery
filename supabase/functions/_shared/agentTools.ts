@@ -176,6 +176,71 @@ const WASTE_CATEGORIES: Record<string, string> = {
 }
 const DEFAULT_WASTE_CATEGORY = 'end_of_day'
 
+// Queried from branch_expenses, not assumed.
+const EXPENSE_TYPES: Record<string, string> = {
+  suppliers: 'ספקים',
+  deliveries: 'משלוחים',
+  repairs: 'תיקונים',
+  other: 'אחר',
+}
+const DEFAULT_EXPENSE_TYPE = 'suppliers'
+
+/**
+ * Supplier names in branch_expenses are free text and already inconsistent —
+ * "בית הבגט"/"בית הבאגט", "טרה"/"טרה חלב", "דני וגלית"/"דני וגלית בעמ",
+ * "—ליאם אריזות". Writing whatever was transcribed would make that worse, so
+ * a spoken name is matched against what already exists and the established
+ * spelling wins. An unmatched name is still allowed — it is simply flagged on
+ * the card so the user knows they are creating a new one.
+ */
+function normaliseSupplier(s: string): string {
+  return s
+    .replace(/[֑-ׇ]/g, '')
+    .replace(/בע["'׳״]?מ\.?/g, '')      // בע"מ / בעמ / בע'מ
+    .replace(/[."'׳״\-–—,()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function resolveSupplier(
+  db: SupabaseClient,
+  branchId: number,
+  spoken: string,
+): Promise<{ name: string; isNew: boolean }> {
+  const raw = spoken.trim()
+  if (!raw) throw new Error('שם ספק חסר')
+  const target = normaliseSupplier(raw)
+  if (!target) throw new Error('שם ספק לא תקין')
+
+  // Known names, most-used first, so ties resolve to the established spelling.
+  const [histRes, listRes] = await Promise.all([
+    db.from('branch_expenses').select('supplier')
+      .eq('branch_id', branchId).not('supplier', 'is', null).range(0, 4999),
+    db.from('suppliers_new').select('name').eq('active', true),
+  ])
+
+  const counts = new Map<string, number>()
+  for (const r of histRes.data ?? []) {
+    const n = (r.supplier ?? '').trim()
+    if (n && n !== '—') counts.set(n, (counts.get(n) ?? 0) + 1)
+  }
+  for (const r of listRes.data ?? []) {
+    const n = (r.name ?? '').trim()
+    if (n && !counts.has(n)) counts.set(n, 0)
+  }
+
+  const known = [...counts.entries()].sort((a, b) => b[1] - a[1])
+
+  // exact on the normalised form
+  for (const [name] of known) if (normaliseSupplier(name) === target) return { name, isNew: false }
+  // one contains the other — "טרה" spoken, "טרה חלב" on file
+  for (const [name] of known) {
+    const n = normaliseSupplier(name)
+    if (n.includes(target) || target.includes(n)) return { name, isNew: false }
+  }
+  return { name: raw, isNew: true }
+}
+
 // ─── tools ──────────────────────────────────────────────────────────────
 
 export const TOOLS: AgentTool[] = [
@@ -478,6 +543,107 @@ TOOLS.push({
       table: 'branch_waste',
       id: String(data.id),
       message: `נרשם פחת ${money(amount)} ב${await branchName(db, branchId)} לתאריך ${heDate(date)}`,
+    }
+  },
+})
+
+TOOLS.push({
+  name: 'add_branch_expense',
+  description:
+    'רישום הוצאה לסניף. ' +
+    'סוגים: suppliers (ספקים, ברירת המחדל), deliveries (משלוחים), repairs (תיקונים), other (אחר). ' +
+    'שם הספק נאמר כפי שהוא — המערכת מתאימה אותו לשמות הקיימים. ' +
+    'הפעולה אינה מתבצעת מיד — היא מוצגת למשתמש לאישור.',
+  mutates: true,
+  allowedRoles: ['admin'],
+  requiredPage: (a) => `branch_${a.branch_id}_expenses`,
+  deniedForRestricted: true,
+  input_schema: {
+    type: 'object',
+    properties: {
+      branch_id: { type: 'integer', description: 'מזהה הסניף' },
+      date: { type: 'string', description: 'תאריך ההוצאה, YYYY-MM-DD' },
+      amount: { type: 'number', description: 'סכום ההוצאה בשקלים' },
+      supplier: { type: 'string', description: 'שם הספק כפי שנאמר' },
+      expense_type: {
+        type: 'string',
+        enum: ['suppliers', 'deliveries', 'repairs', 'other'],
+        description: 'ברירת מחדל suppliers',
+      },
+      doc_number: { type: 'string', description: 'מספר חשבונית, אופציונלי' },
+      notes: { type: 'string', description: 'הערה חופשית, אופציונלי' },
+    },
+    required: ['branch_id', 'date', 'amount', 'supplier'],
+  },
+
+  async summarize(args, { db }) {
+    const branchId = await assertBranch(db, args.branch_id)
+    const date = parseDate(args.date)
+    const amount = parseAmount(args.amount)
+    const type = String(args.expense_type ?? DEFAULT_EXPENSE_TYPE)
+    if (!EXPENSE_TYPES[type]) throw new Error('סוג הוצאה לא מוכר')
+
+    const supplier = await resolveSupplier(db, branchId, String(args.supplier ?? ''))
+
+    const today = new Date().toISOString().slice(0, 10)
+    const warnings = commonWarnings(amount, date, today)
+    if (supplier.isNew) warnings.push(`"${supplier.name}" הוא ספק חדש — לא נרשמו לו הוצאות בסניף הזה`)
+
+    const { data: dupe } = await db
+      .from('branch_expenses')
+      .select('id')
+      .eq('branch_id', branchId).eq('date', date).eq('amount', amount)
+      .eq('supplier', supplier.name)
+      .limit(1)
+    if (dupe?.length) warnings.push('כבר קיימת הוצאה זהה לאותו ספק, יום וסכום')
+
+    const fields = [
+      { label: 'סניף', value: await branchName(db, branchId) },
+      { label: 'תאריך', value: heDate(date) },
+      { label: 'ספק', value: supplier.name },
+      { label: 'סוג', value: EXPENSE_TYPES[type] },
+    ]
+    if (args.doc_number) fields.push({ label: 'חשבונית', value: String(args.doc_number) })
+    if (args.notes) fields.push({ label: 'הערה', value: String(args.notes) })
+
+    return { title: 'רישום הוצאה', fields, amount: money(amount), warnings }
+  },
+
+  async run(args, { db }) {
+    const branchId = await assertBranch(db, args.branch_id)
+    const date = parseDate(args.date)
+    const amount = parseAmount(args.amount)
+    const type = String(args.expense_type ?? DEFAULT_EXPENSE_TYPE)
+    if (!EXPENSE_TYPES[type]) throw new Error('סוג הוצאה לא מוכר')
+    const supplier = await resolveSupplier(db, branchId, String(args.supplier ?? ''))
+
+    const { data, error } = await db
+      .from('branch_expenses')
+      .insert({
+        branch_id: branchId,
+        date,
+        amount,
+        supplier: supplier.name,
+        expense_type: type,
+        doc_number: args.doc_number ? String(args.doc_number) : null,
+        notes: args.notes ? String(args.notes) : null,
+        // ALWAYS false. from_factory=true rows take precedence over
+        // internal_sales; creating one here would double-count factory
+        // purchases. Those rows come from the factory flow only.
+        from_factory: false,
+      })
+      .select('id')
+      .single()
+
+    if (error) {
+      console.error('[add_branch_expense]', error.message)
+      throw new Error('הרישום נכשל')
+    }
+
+    return {
+      table: 'branch_expenses',
+      id: String(data.id),
+      message: `נרשמה הוצאה ${money(amount)} ל${supplier.name} ב${await branchName(db, branchId)} לתאריך ${heDate(date)}`,
     }
   },
 })
