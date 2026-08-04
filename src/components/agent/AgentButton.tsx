@@ -25,7 +25,9 @@ export default function AgentButton() {
         onClick={() => setOpen(true)}
         aria-label="עוזר מרטין"
         title="עוזר מרטין"
-        className="fixed bottom-5 left-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition hover:bg-indigo-700 active:scale-95"
+        // .agent-fab sets `bottom` — clears the mobile bottom nav (see index.css).
+        // z must beat the nav's z-300.
+        className="agent-fab fixed left-5 z-[310] flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition hover:bg-indigo-700 active:scale-95"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />

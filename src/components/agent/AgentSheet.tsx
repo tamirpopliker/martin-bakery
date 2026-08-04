@@ -46,7 +46,9 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex md:justify-start" dir="rtl">
+    // z-[400] beats the mobile bottom nav (z-300) so the sheet covers it
+    // completely — otherwise the nav sits on top of the composer.
+    <div className="fixed inset-0 z-[400] flex md:justify-start" dir="rtl">
       <div
         className="absolute inset-0 bg-black/30"
         onClick={onClose}
@@ -117,8 +119,11 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
           <div ref={endRef} />
         </div>
 
-        {/* composer */}
-        <div className="border-t border-slate-200 px-3 py-3">
+        {/* composer — pb clears the iOS/Android home indicator */}
+        <div
+          className="border-t border-slate-200 px-3 pt-3"
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+        >
           {voice.error && (
             <div className="mb-2 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-800">
               <span className="flex-1">{voice.error}</span>

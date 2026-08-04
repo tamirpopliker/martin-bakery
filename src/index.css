@@ -15,8 +15,20 @@ body {
   background-color: #f8fafc;
 }
 
+/* ─── Voice agent ───────────────────────────────────────────────────
+   The mobile bottom nav is fixed at z-300 and 3.5rem tall. The agent
+   floating button has to clear it, and the sheet has to sit above it. */
+.agent-fab {
+  bottom: 1.25rem;
+}
+
 /* ─── Mobile Responsive ─────────────────────────────────────────── */
 @media (max-width: 768px) {
+
+  /* Lift the agent button above the bottom nav (h-14 + safe area) */
+  .agent-fab {
+    bottom: calc(3.5rem + env(safe-area-inset-bottom) + 0.75rem) !important;
+  }
 
   /* Hide desktop sidebar on mobile */
   .app-sidebar {
