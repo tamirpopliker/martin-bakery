@@ -18,9 +18,42 @@ export interface AgentMessage {
   error?: boolean
   /** Set once the write has actually happened. */
   done?: boolean
+  /** What the confirmation card showed, kept after the card is dismissed. */
+  summaryOf?: string
 }
 
 const MAX_TURNS = 20
+
+/**
+ * Turns a thrown error into something a human can act on.
+ *
+ * supabase-js wraps non-2xx responses in a FunctionsHttpError whose message is
+ * just "Edge Function returned a non-2xx status code" — the Hebrew reason the
+ * server sent is inside `context`, and has to be read out of the Response.
+ */
+async function describeError(e: unknown): Promise<string> {
+  const err = e as { message?: string; context?: Response }
+  const msg = err?.message ?? ''
+
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+    return 'אין חיבור לשרת. בדוק את האינטרנט ונסה שוב.'
+  }
+
+  try {
+    if (err?.context && typeof err.context.json === 'function') {
+      const body = await err.context.clone().json()
+      if (body?.error) return body.error
+    }
+  } catch { /* body wasn't JSON */ }
+
+  const status = err?.context?.status
+  if (status === 401 || status === 403) return 'אין לך הרשאה לפעולה הזו.'
+  if (status === 429 || status === 503) return 'השירות עמוס כרגע. נסה שוב בעוד רגע.'
+  if (status === 504) return 'הבקשה ארכה יותר מדי. נסה לנסח קצר יותר.'
+  if (status) return `השרת החזיר שגיאה (${status}). נסה שוב.`
+
+  return msg ? `תקלה: ${msg}` : 'משהו השתבש. נסה שוב.'
+}
 
 export function useAgent() {
   const [messages, setMessages] = useState<AgentMessage[]>([])
@@ -51,17 +84,23 @@ export function useAgent() {
       })
       if (error) throw error
 
+      // Keep a one-line record of what was proposed, so the conversation
+      // still shows it after the card is gone.
+      const stub = `${pending.title}${pending.amount ? ` · ${pending.amount}` : ''}`
       setPending(null)
       setMessages((m) => [...m, {
         role: 'assistant',
         content: data?.error ?? data?.reply ?? 'בוצע.',
+        summaryOf: stub,
         error: !!data?.error,
         done: !data?.error && confirm,
       }])
-    } catch {
+    } catch (e) {
+      const detail = await describeError(e)
+      console.error('[agent] resolve failed:', e)
       setMessages((m) => [...m, {
         role: 'assistant',
-        content: 'הפעולה נכשלה. שום דבר לא נרשם.',
+        content: `${detail} שום דבר לא נרשם.`,
         error: true,
       }])
       setPending(null)
@@ -128,12 +167,13 @@ export function useAgent() {
         trace: traceOut,
       }])
     } catch (e) {
-      const msg = e instanceof Error ? e.message : ''
+      // "Something went wrong" is useless when the whole point of this phase
+      // is finding out what breaks. Surface what we actually know.
+      const detail = await describeError(e)
+      console.error('[agent] send failed:', e)
       setMessages((m) => [...m, {
         role: 'assistant',
-        content: msg.includes('Failed to fetch')
-          ? 'אין חיבור לשרת. בדוק את החיבור לאינטרנט ונסה שוב.'
-          : 'משהו השתבש. נסה שוב.',
+        content: detail,
         error: true,
       }])
     } finally {

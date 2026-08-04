@@ -211,10 +211,19 @@ function Bubble({ m }: { m: AgentMessage }) {
               ? 'rounded-2xl rounded-tr-sm bg-indigo-600 px-3.5 py-2.5 text-[15px] leading-relaxed text-white'
               : m.error
                 ? 'rounded-2xl rounded-tl-sm bg-rose-50 px-3.5 py-2.5 text-[15px] leading-relaxed text-rose-900'
-                : 'rounded-2xl rounded-tl-sm bg-slate-100 px-3.5 py-2.5 text-[15px] leading-relaxed text-slate-800'
+                : m.done
+                  ? 'rounded-2xl rounded-tl-sm bg-emerald-50 px-3.5 py-2.5 text-[15px] leading-relaxed text-emerald-900'
+                  : 'rounded-2xl rounded-tl-sm bg-slate-100 px-3.5 py-2.5 text-[15px] leading-relaxed text-slate-800'
           }
         >
-          <div className="whitespace-pre-wrap">{m.content}</div>
+          {m.summaryOf && (
+            <div className={`mb-1 text-[12px] ${m.done ? 'text-emerald-700/70' : 'text-slate-500'}`}>
+              {m.summaryOf}
+            </div>
+          )}
+          <div className="whitespace-pre-wrap">
+            {m.done && '✓ '}{m.content}
+          </div>
         </div>
 
         {!!m.trace?.length && (
