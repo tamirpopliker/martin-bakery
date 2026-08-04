@@ -202,6 +202,32 @@ function normaliseSupplier(s: string): string {
     .trim()
 }
 
+/**
+ * Hebrew is written with and without matres lectionis, and transcription
+ * flips between them constantly — "בית הבאגט" for "בית הבגט", "לחמניה" for
+ * "לחמנייה". Dropping א/ו/י entirely collapses both spellings onto the same
+ * key. Used only after exact and containment have failed.
+ */
+function skeleton(s: string): string {
+  return normaliseSupplier(s).replace(/[אוי]/g, '')
+}
+
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0
+  if (!a.length || !b.length) return Math.max(a.length, b.length)
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i]
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = a[i - 1] === b[j - 1]
+        ? prev[j - 1]
+        : 1 + Math.min(prev[j], cur[j - 1], prev[j - 1])
+    }
+    prev = cur
+  }
+  return prev[b.length]
+}
+
 async function resolveSupplier(
   db: SupabaseClient,
   branchId: number,
@@ -212,32 +238,58 @@ async function resolveSupplier(
   const target = normaliseSupplier(raw)
   if (!target) throw new Error('שם ספק לא תקין')
 
-  // Known names, most-used first, so ties resolve to the established spelling.
+  // Names from every branch, not just this one — a supplier new to this branch
+  // is usually still an existing supplier. This branch's usage ranks first so
+  // its established spelling wins a tie.
   const [histRes, listRes] = await Promise.all([
-    db.from('branch_expenses').select('supplier')
-      .eq('branch_id', branchId).not('supplier', 'is', null).range(0, 4999),
+    db.from('branch_expenses').select('supplier, branch_id')
+      .not('supplier', 'is', null).range(0, 9999),
     db.from('suppliers_new').select('name').eq('active', true),
   ])
 
-  const counts = new Map<string, number>()
+  const here = new Map<string, number>()
+  const elsewhere = new Map<string, number>()
   for (const r of histRes.data ?? []) {
     const n = (r.supplier ?? '').trim()
-    if (n && n !== '—') counts.set(n, (counts.get(n) ?? 0) + 1)
+    if (!n || n === '—') continue
+    const m = r.branch_id === branchId ? here : elsewhere
+    m.set(n, (m.get(n) ?? 0) + 1)
   }
   for (const r of listRes.data ?? []) {
     const n = (r.name ?? '').trim()
-    if (n && !counts.has(n)) counts.set(n, 0)
+    if (n && !here.has(n) && !elsewhere.has(n)) elsewhere.set(n, 0)
   }
 
-  const known = [...counts.entries()].sort((a, b) => b[1] - a[1])
+  const known = [
+    ...[...here.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n),
+    ...[...elsewhere.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n),
+  ]
 
-  // exact on the normalised form
-  for (const [name] of known) if (normaliseSupplier(name) === target) return { name, isNew: false }
-  // one contains the other — "טרה" spoken, "טרה חלב" on file
-  for (const [name] of known) {
+  // 1. exact, normalised
+  for (const name of known) if (normaliseSupplier(name) === target) return { name, isNew: false }
+
+  // 2. same consonant skeleton — catches בית הבאגט / בית הבגט
+  const targetSkel = skeleton(raw)
+  if (targetSkel.length >= 3) {
+    for (const name of known) if (skeleton(name) === targetSkel) return { name, isNew: false }
+  }
+
+  // 3. one contains the other — "טרה" spoken, "טרה חלב" on file
+  for (const name of known) {
     const n = normaliseSupplier(name)
+    if (n.length < 3 || target.length < 3) continue
     if (n.includes(target) || target.includes(n)) return { name, isNew: false }
   }
+
+  // 4. near miss — one or two characters, scaled so short names stay strict
+  const budget = target.length <= 6 ? 1 : 2
+  let best: { name: string; d: number } | null = null
+  for (const name of known) {
+    const d = editDistance(normaliseSupplier(name), target)
+    if (d <= budget && (!best || d < best.d)) best = { name, d }
+  }
+  if (best) return { name: best.name, isNew: false }
+
   return { name: raw, isNew: true }
 }
 
