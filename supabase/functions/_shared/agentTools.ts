@@ -15,8 +15,9 @@
 // See AGENT_PLAN.md sections 4.1–4.4.
 // ═══════════════════════════════════════════════════════════════════════
 
-import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import type { AppUser } from './agentAuth.ts'
+// Client type comes from agentAuth so the pinned npm: specifier lives in one
+// place — see the note there about the esm.sh deploy failures.
+import type { AppUser, SupabaseClient } from './agentAuth.ts'
 
 // ─── Branch revenue ─────────────────────────────────────────────────────
 //

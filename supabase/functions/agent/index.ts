@@ -15,8 +15,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { authenticateAgentRequest, corsHeaders, json } from '../_shared/agentAuth.ts'
+import { authenticateAgentRequest, corsHeaders, json, type SupabaseClient } from '../_shared/agentAuth.ts'
 import { TOOL_BY_NAME, toolsFor } from '../_shared/agentTools.ts'
 
 const MODEL = 'claude-sonnet-5'

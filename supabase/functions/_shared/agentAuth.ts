@@ -12,7 +12,15 @@
 // Phase 1 = admin only. See AGENT_PLAN.md section 3.1.
 // ═══════════════════════════════════════════════════════════════════════
 
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// Pinned, and via npm: rather than esm.sh.
+//
+// `https://esm.sh/@supabase/supabase-js@2` floats to whatever is newest. On
+// 2026-08-04 that became 2.112.2, whose postgrest-js sub-module esm.sh had
+// not built, and every deploy failed on a release nothing here asked for.
+// npm: is resolved by Deno itself, so there is no third-party build step in
+// the path, and the pin means a new release cannot break a deploy again.
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.98.0'
+export type { SupabaseClient }
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

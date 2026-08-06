@@ -5,7 +5,7 @@
 //
 // See AGENT_PLAN.md sections 9, 11 (stage 5).
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { usePeriod } from '../../lib/PeriodContext'
 import type { PendingAction } from './ConfirmationCard'
@@ -61,7 +61,13 @@ export function useAgent() {
   const [busy, setBusy] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const conversationRef = useRef<string>(crypto.randomUUID())
+  // Mirrors of state, so conversation mode can read the outcome of a turn
+  // without waiting for a re-render.
+  const pendingRef = useRef<PendingAction | null>(null)
+  const lastReplyRef = useRef<string>('')
   const { from, to, monthKey } = usePeriod()
+
+  useEffect(() => { pendingRef.current = pending }, [pending])
 
   const reset = useCallback(() => {
     abortRef.current?.abort()
@@ -87,6 +93,7 @@ export function useAgent() {
       // Keep a one-line record of what was proposed, so the conversation
       // still shows it after the card is gone.
       const stub = `${pending.title}${pending.amount ? ` · ${pending.amount}` : ''}`
+      pendingRef.current = null
       setPending(null)
       setMessages((m) => [...m, {
         role: 'assistant',
@@ -144,6 +151,7 @@ export function useAgent() {
       if (error) throw error
 
       if (data?.error) {
+        lastReplyRef.current = data.error
         setMessages((m) => [...m, { role: 'assistant', content: data.error, error: true }])
         return
       }
@@ -154,6 +162,10 @@ export function useAgent() {
 
       // A write was proposed — nothing has happened yet.
       if (data?.pending) {
+        // Set the ref synchronously: conversation mode checks it the moment
+        // this resolves, long before React re-renders.
+        pendingRef.current = data.pending as PendingAction
+        lastReplyRef.current = ''
         setPending(data.pending as PendingAction)
         if (data.reply) {
           setMessages((m) => [...m, { role: 'assistant', content: data.reply, trace: traceOut }])
@@ -161,16 +173,15 @@ export function useAgent() {
         return
       }
 
-      setMessages((m) => [...m, {
-        role: 'assistant',
-        content: data?.reply ?? 'לא התקבלה תשובה.',
-        trace: traceOut,
-      }])
+      const reply = data?.reply ?? 'לא התקבלה תשובה.'
+      lastReplyRef.current = reply
+      setMessages((m) => [...m, { role: 'assistant', content: reply, trace: traceOut }])
     } catch (e) {
       // "Something went wrong" is useless when the whole point of this phase
       // is finding out what breaks. Surface what we actually know.
       const detail = await describeError(e)
       console.error('[agent] send failed:', e)
+      lastReplyRef.current = detail
       setMessages((m) => [...m, {
         role: 'assistant',
         content: detail,
@@ -181,5 +192,18 @@ export function useAgent() {
     }
   }, [messages, busy, from, to, monthKey])
 
-  return { messages, pending, busy, send, reset, resolve }
+  /**
+   * Conversation-mode turn. Returns the reply to speak, or null when a
+   * confirmation card opened — the caller must then shut the microphone.
+   */
+  const turn = useCallback(async (text: string): Promise<string | null> => {
+    const before = pendingRef.current
+    await send(text, true)
+    // send() has already updated state; read through the ref to avoid a stale
+    // closure over `pending`.
+    if (pendingRef.current && pendingRef.current !== before) return null
+    return lastReplyRef.current
+  }, [send])
+
+  return { messages, pending, busy, send, reset, resolve, turn }
 }
