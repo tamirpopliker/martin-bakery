@@ -55,7 +55,12 @@ async function describeError(e: unknown): Promise<string> {
   return msg ? `תקלה: ${msg}` : 'משהו השתבש. נסה שוב.'
 }
 
-export function useAgent() {
+/** Admin-only role simulation, so branch-manager behaviour can be tested
+ *  without logging in as someone else. The server refuses anything that is
+ *  not strictly a downgrade. */
+export interface Simulation { role: 'branch'; branch_id: number }
+
+export function useAgent(simulate?: Simulation | null) {
   const [messages, setMessages] = useState<AgentMessage[]>([])
   const [pending, setPending] = useState<PendingAction | null>(null)
   const [busy, setBusy] = useState(false)
@@ -86,7 +91,7 @@ export function useAgent() {
     setBusy(true)
     try {
       const { data, error } = await supabase.functions.invoke('agent', {
-        body: { action_id: pending.action_id, reject: !confirm },
+        body: { action_id: pending.action_id, reject: !confirm, simulate: simulate ?? undefined },
       })
       if (error) throw error
 
@@ -114,7 +119,7 @@ export function useAgent() {
     } finally {
       setBusy(false)
     }
-  }, [pending, busy])
+  }, [pending, busy, simulate])
 
   const send = useCallback(async (text: string, fromVoice = false) => {
     const clean = text.trim()
@@ -139,6 +144,7 @@ export function useAgent() {
           // Only role+content go to the model; trace is display-only.
           messages: history.map(({ role, content }) => ({ role, content })),
           conversation_id: conversationRef.current,
+          simulate: simulate ?? undefined,
           transcript: fromVoice ? clean : undefined,
           input_mode: fromVoice ? 'voice' : 'text',
           context: {
@@ -190,7 +196,7 @@ export function useAgent() {
     } finally {
       setBusy(false)
     }
-  }, [messages, busy, from, to, monthKey])
+  }, [messages, busy, from, to, monthKey, simulate])
 
   /**
    * Conversation-mode turn. Returns the reply to speak, or null when a

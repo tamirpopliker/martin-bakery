@@ -15,7 +15,10 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { authenticateAgentRequest, corsHeaders, json, type SupabaseClient } from '../_shared/agentAuth.ts'
+import {
+  authenticateAgentRequest, corsHeaders, json,
+  type AgentIdentity, type SupabaseClient,
+} from '../_shared/agentAuth.ts'
 import { TOOL_BY_NAME, toolsFor } from '../_shared/agentTools.ts'
 
 const MODEL = 'claude-sonnet-5'
@@ -29,13 +32,23 @@ interface AgentContext {
   today?: string
 }
 
-function buildSystemPrompt(userName: string, ctx: AgentContext, todayFallback: string): string {
+function buildSystemPrompt(
+  identity: AgentIdentity,
+  ctx: AgentContext,
+  todayFallback: string,
+  branchLabel: string,
+): string {
   const today = ctx.today || todayFallback
+  const userName = identity.user.name || identity.user.email
+  const scoped = identity.lockedBranch != null
+
   const lines = [
     'אתה עוזר תפעולי של קונדיטוריית מרטין — מפעל ושלושה סניפים. אתה עונה בעברית בלבד.',
     '',
     '## ההקשר הנוכחי',
-    `המשתמש: ${userName} (מנהל מערכת — רואה את כל הסניפים).`,
+    scoped
+      ? `המשתמש: ${userName}, מנהל ${branchLabel}. הוא רואה ופועל **אך ורק בסניף שלו**.`
+      : `המשתמש: ${userName} (מנהל מערכת — רואה את כל הסניפים).`,
     `התאריך היום: ${today}.`,
   ]
   if (ctx.currentPage) lines.push(`המסך שהמשתמש נמצא בו: ${ctx.currentPage}.`)
@@ -52,7 +65,9 @@ function buildSystemPrompt(userName: string, ctx: AgentContext, todayFallback: s
     '',
     '**אל תנחש מספרים, תאריכים או סניפים.** אם חסר פרט — שאל שאלה קצרה. עדיף שאלה אחת מאשר תשובה שגויה.',
     '',
-    '**סניף.** המשתמש רואה את כל הסניפים ואין לו סניף ברירת מחדל. אם הסניף לא ברור מההקשר של המסך — קרא ל-get_branches ושאל באיזה סניף מדובר.',
+    scoped
+      ? `**סניף.** כל פעולה נעשית ב${branchLabel} ואין צורך לשאול עליו. אם המשתמש נוקב בסניף אחר — אמור לו שאין לו גישה אליו. אל תעביר את הפעולה לסניף שלו בשקט.`
+      : '**סניף.** המשתמש רואה את כל הסניפים ואין לו סניף ברירת מחדל. אם הסניף לא ברור מההקשר של המסך — קרא ל-get_branches ושאל באיזה סניף מדובר.',
     '',
     `**תאריכים.** "אתמול", "שלשום", "החודש שעבר" מחושבים מ-${today}. טווחים תמיד ניתנים כ-from כולל ו-to לא כולל: חודש אוגוסט 2026 הוא from=2026-08-01, to=2026-09-01.`,
     '',
@@ -113,7 +128,7 @@ const CONFIRMATION_TTL_MS = 15 * 60 * 1000
  * is conditional on it still being pending.
  */
 async function resolveAction(
-  auth: { user: { id: string; email: string; role: string }; db: SupabaseClient },
+  auth: { identity: AgentIdentity; db: SupabaseClient },
   actionId: string,
   reject: boolean,
 ): Promise<Response> {
@@ -124,7 +139,7 @@ async function resolveAction(
     .maybeSingle()
 
   if (error || !action) return json({ error: 'הפעולה לא נמצאה' }, 404)
-  if (action.user_id !== auth.user.id) return json({ error: 'הפעולה אינה שלך' }, 403)
+  if (action.user_id !== auth.identity.user.id) return json({ error: 'הפעולה אינה שלך' }, 403)
   if (action.status !== 'pending_confirmation') {
     return json({ error: 'הפעולה כבר טופלה' }, 409)
   }
@@ -141,7 +156,7 @@ async function resolveAction(
   }
 
   const tool = TOOL_BY_NAME.get(action.tool_name)
-  if (!tool?.mutates || !tool.allowedRoles.includes(auth.user.role)) {
+  if (!tool?.mutates || !tool.allowedRoles.includes(auth.identity.effectiveRole)) {
     return json({ error: 'הפעולה אינה זמינה' }, 403)
   }
 
@@ -157,14 +172,14 @@ async function resolveAction(
   try {
     const out = await tool.run(
       (action.tool_args ?? {}) as Record<string, unknown>,
-      { db: auth.db, user: auth.user as never },
+      { db: auth.db, identity: auth.identity },
     ) as { table?: string; id?: string; message?: string }
 
     await auth.db.from('agent_actions')
       .update({ result_table: out?.table ?? null, result_id: out?.id ?? null })
       .eq('id', action.id)
 
-    console.log(`[agent] ${auth.user.email} executed ${action.tool_name} -> ${out?.id}`)
+    console.log(`[agent] ${auth.identity.user.email} executed ${action.tool_name} -> ${out?.id}`)
     return json({ reply: out?.message ?? 'בוצע.', executed: true })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'שגיאה'
@@ -180,7 +195,13 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
-  const auth = await authenticateAgentRequest(req)
+  // The simulation is read before authentication so it can be applied there,
+  // and resolveIdentity refuses anything that is not strictly a downgrade.
+  let preBody: { simulate?: { role?: string; branch_id?: number } } = {}
+  const raw = await req.text()
+  try { preBody = raw ? JSON.parse(raw) : {} } catch { /* handled below */ }
+
+  const auth = await authenticateAgentRequest(req, preBody.simulate)
   if (!auth.ok) return json({ error: auth.error }, auth.status)
 
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
@@ -197,9 +218,10 @@ serve(async (req) => {
     input_mode?: string
     action_id?: string
     reject?: boolean
+    simulate?: { role?: string; branch_id?: number }
   }
   try {
-    body = await req.json()
+    body = raw ? JSON.parse(raw) : {}
   } catch {
     return json({ error: 'בקשה לא תקינה' }, 400)
   }
@@ -225,8 +247,14 @@ serve(async (req) => {
 
   const ctx = body.context ?? {}
   const todayFallback = new Date().toISOString().slice(0, 10)
-  const system = buildSystemPrompt(auth.user.name || auth.user.email, ctx, todayFallback)
-  const tools = toolsFor(auth.user)
+  let branchLabel = ''
+  if (auth.identity.lockedBranch != null) {
+    const { data: b } = await auth.db.from('branches')
+      .select('short_name, name').eq('id', auth.identity.lockedBranch).maybeSingle()
+    branchLabel = `סניף ${b?.short_name || b?.name || auth.identity.lockedBranch}`
+  }
+  const system = buildSystemPrompt(auth.identity, ctx, todayFallback, branchLabel)
+  const tools = toolsFor(auth.identity)
 
   // deno-lint-ignore no-explicit-any
   const messages: any[] = [...incoming]
@@ -273,7 +301,7 @@ serve(async (req) => {
           .join('\n')
           .trim()
 
-        console.log(`[agent] ${auth.user.email} · ${trace.length} tools · ${inputTokens}/${outputTokens} tok`)
+        console.log(`[agent] ${auth.identity.user.email} · ${trace.length} tools · ${inputTokens}/${outputTokens} tok`)
         return json({
           reply: text || 'לא הצלחתי לנסח תשובה. נסה לשאול אחרת.',
           trace,
@@ -291,7 +319,7 @@ serve(async (req) => {
         // Re-check authorisation with the ACTUAL arguments. The catalogue was
         // filtered before Claude saw it, but a model can still emit a call for
         // a tool it was not given.
-        if (!tool || !tool.allowedRoles.includes(auth.user.role)) {
+        if (!tool || !tool.allowedRoles.includes(auth.identity.effectiveRole)) {
           trace.push({ tool: use.name, args: use.input, ok: false, ms: 0 })
           results.push({
             type: 'tool_result', tool_use_id: use.id, is_error: true,
@@ -309,7 +337,7 @@ serve(async (req) => {
             return json({ error: 'הפעולה אינה זמינה' }, 500)
           }
           try {
-            const summary = await tool.summarize(use.input ?? {}, { db: auth.db, user: auth.user })
+            const summary = await tool.summarize(use.input ?? {}, { db: auth.db, identity: auth.identity })
             trace.push({ tool: use.name, args: use.input, ok: true, ms: Date.now() - t0 })
 
             if (summary.blocker) {
@@ -319,7 +347,7 @@ serve(async (req) => {
             const { data: action, error: insErr } = await auth.db
               .from('agent_actions')
               .insert({
-                user_id: auth.user.id,
+                user_id: auth.identity.user.id,
                 conversation_id: conversationId,
                 tool_name: tool.name,
                 tool_args: use.input ?? {},
@@ -357,7 +385,7 @@ serve(async (req) => {
         }
 
         try {
-          const out = await tool.run(use.input ?? {}, { db: auth.db, user: auth.user })
+          const out = await tool.run(use.input ?? {}, { db: auth.db, identity: auth.identity })
           trace.push({ tool: use.name, args: use.input, ok: true, ms: Date.now() - t0 })
           results.push({
             type: 'tool_result', tool_use_id: use.id,

@@ -36,9 +36,67 @@ export interface AppUser {
   agent_enabled: boolean
 }
 
+/**
+ * Who the request acts as.
+ *
+ * `effectiveRole` and `lockedBranch` — not `user.role` and `user.branch_id` —
+ * are what every permission decision reads. They differ only when an admin is
+ * simulating a lower role in order to test it.
+ *
+ * `lockedBranch` is the important one. For an admin it is null: the branch is
+ * an argument they supply. For a branch user it is their own branch, and the
+ * argument is ignored — a branch is part of who you are, not something you ask
+ * for.
+ */
+export interface AgentIdentity {
+  user: AppUser
+  effectiveRole: string
+  lockedBranch: number | null
+  restricted: boolean
+  simulating: boolean
+}
+
 export type AuthResult =
-  | { ok: true; user: AppUser; db: SupabaseClient }
+  | { ok: true; identity: AgentIdentity; db: SupabaseClient }
   | { ok: false; status: number; error: string }
+
+/** Roles the agent is open to. Adding one here is the whole rollout switch. */
+const ENABLED_ROLES = ['admin', 'branch']
+
+const USERNAME_AUTH_DOMAIN = '@martin.local'
+
+/** Mirrors src/lib/UserContext.tsx::isRestrictedBranchUser. */
+function isRestricted(role: string, email: string): boolean {
+  return role === 'branch' && email.toLowerCase().endsWith(USERNAME_AUTH_DOMAIN)
+}
+
+export interface Simulation { role?: string; branch_id?: number }
+
+/**
+ * Builds the identity, applying a simulation only if it strictly reduces
+ * access. An admin may act as a branch user to test; nobody may act as an
+ * admin, and a branch user may not switch branch.
+ */
+export function resolveIdentity(user: AppUser, sim?: Simulation): AgentIdentity {
+  const base: AgentIdentity = {
+    user,
+    effectiveRole: user.role,
+    lockedBranch: user.role === 'admin' ? null : user.branch_id,
+    restricted: isRestricted(user.role, user.email),
+    simulating: false,
+  }
+
+  if (!sim?.role || user.role !== 'admin') return base
+  if (sim.role === 'admin') return base   // never an upgrade
+
+  return {
+    user,
+    effectiveRole: sim.role,
+    lockedBranch: sim.branch_id ?? null,
+    restricted: false,
+    simulating: true,
+  }
+}
 
 /** JSON response with CORS headers applied. */
 export function json(body: unknown, status = 200): Response {
@@ -57,7 +115,7 @@ export function json(body: unknown, status = 200): Response {
  * Returns a service-role client for DB work. In phase 2 reads should move to
  * a client carrying the user's JWT so RLS applies (AGENT_PLAN.md 3.5).
  */
-export async function authenticateAgentRequest(req: Request): Promise<AuthResult> {
+export async function authenticateAgentRequest(req: Request, sim?: Simulation): Promise<AuthResult> {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader?.startsWith('Bearer ')) {
     return { ok: false, status: 401, error: 'נדרשת התחברות' }
@@ -99,12 +157,22 @@ export async function authenticateAgentRequest(req: Request): Promise<AuthResult
   }
 
   // ── The gate ──
+  // Two independent checks. The flag alone never grants access, and the role
+  // alone never does either.
   if (!user.agent_enabled) {
     return { ok: false, status: 403, error: 'הסוכן אינו זמין עבור המשתמש הזה' }
   }
-  if (user.role !== 'admin') {
-    return { ok: false, status: 403, error: 'הסוכן זמין כרגע למנהלי מערכת בלבד' }
+  if (!ENABLED_ROLES.includes(user.role)) {
+    return { ok: false, status: 403, error: 'הסוכן אינו זמין לתפקיד הזה' }
+  }
+  // Restricted @martin.local logins are shared shop-floor accounts. Until
+  // "who is speaking" has an answer, they do not get to write anything.
+  if (isRestricted(user.role, user.email)) {
+    return { ok: false, status: 403, error: 'הסוכן אינו זמין למשתמש משותף' }
+  }
+  if (user.role !== 'admin' && user.branch_id == null) {
+    return { ok: false, status: 403, error: 'למשתמש לא משויך סניף' }
   }
 
-  return { ok: true, user: user as AppUser, db }
+  return { ok: true, identity: resolveIdentity(user as AppUser, sim), db }
 }

@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useAgent, type AgentMessage } from './useAgent'
+import { useBranches } from '../../lib/BranchContext'
 import { useVoiceInput } from './useVoiceInput'
 import { useConversation } from './useConversation'
 import MicButton from './MicButton'
@@ -19,7 +20,13 @@ const SUGGESTIONS = [
 ]
 
 export default function AgentSheet({ onClose }: { onClose: () => void }) {
-  const { messages, pending, busy, send, reset, resolve, turn } = useAgent()
+  // Admin-only: act as a branch manager to see exactly what they would get.
+  // The server refuses any simulation that is not a downgrade.
+  const { branches } = useBranches()
+  const [simBranch, setSimBranch] = useState<number | null>(null)
+  const simulate = simBranch != null ? { role: 'branch' as const, branch_id: simBranch } : null
+
+  const { messages, pending, busy, send, reset, resolve, turn } = useAgent(simulate)
   const [draft, setDraft] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -107,6 +114,21 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
+        {/* role simulation — a visible reminder that this is not your own view */}
+        {simBranch != null && (
+          <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[13px] text-amber-900">
+            <span className="flex-1">
+              פועל כמנהל {branches.find((b) => b.id === simBranch)?.short_name ?? simBranch}
+            </span>
+            <button
+              onClick={() => { setSimBranch(null); reset() }}
+              className="rounded px-2 py-0.5 text-amber-700 underline hover:bg-amber-100"
+            >
+              חזור לאדמין
+            </button>
+          </div>
+        )}
+
         {/* messages */}
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
           {messages.length === 0 && (
@@ -125,6 +147,25 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
                   </button>
                 ))}
               </div>
+
+              {simBranch == null && branches.length > 0 && (
+                <div className="mt-8 border-t border-slate-100 pt-4">
+                  <p className="mb-2 text-center text-[11px] text-slate-400">
+                    בדיקה: לראות את הסוכן כפי שמנהל סניף יראה אותו
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {branches.map((b) => (
+                      <button
+                        key={b.id}
+                        onClick={() => { setSimBranch(b.id); reset() }}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1 text-[12px] text-slate-500 hover:bg-slate-50"
+                      >
+                        {b.short_name ?? b.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

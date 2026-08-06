@@ -17,7 +17,7 @@
 
 // Client type comes from agentAuth so the pinned npm: specifier lives in one
 // place — see the note there about the esm.sh deploy failures.
-import type { AppUser, SupabaseClient } from './agentAuth.ts'
+import type { AgentIdentity, SupabaseClient } from './agentAuth.ts'
 
 // ─── Branch revenue ─────────────────────────────────────────────────────
 //
@@ -67,7 +67,7 @@ async function getBranchRevenue(
 
 export interface ToolContext {
   db: SupabaseClient
-  user: AppUser
+  identity: AgentIdentity
 }
 
 /** What the user is shown before a write happens. Built server-side from the
@@ -115,7 +115,27 @@ function range(args: Record<string, unknown>): { from: string; to: string } {
   return { from, to }
 }
 
-async function assertBranch(db: SupabaseClient, branchId: unknown): Promise<number> {
+/**
+ * Resolves the branch a call acts on — and this is where a branch user stops
+ * being able to reach anyone else's data.
+ *
+ * When `lockedBranch` is set, the argument is not trusted. Naming another
+ * branch is refused rather than quietly redirected: a manager who says
+ * "record it at הפועלים" and gets it silently written to their own branch has
+ * been lied to. Omitting it is fine — theirs is the only one they have.
+ */
+async function assertBranch(
+  db: SupabaseClient,
+  branchId: unknown,
+  identity: AgentIdentity,
+): Promise<number> {
+  if (identity.lockedBranch != null) {
+    if (branchId != null && Number(branchId) !== identity.lockedBranch) {
+      throw new Error('אין לך גישה לסניף אחר')
+    }
+    return identity.lockedBranch
+  }
+
   const id = Number(branchId)
   if (!Number.isInteger(id)) throw new Error('מזהה סניף לא תקין')
   // branches is the only source of branch identity — never hardcode ids.
@@ -301,14 +321,16 @@ export const TOOLS: AgentTool[] = [
     name: 'get_branches',
     description: 'רשימת הסניפים הפעילים עם המזהים שלהם. יש לקרוא לפני כל פעולה שדורשת סניף, אם הסניף לא ידוע מההקשר.',
     mutates: false,
-    allowedRoles: ['admin'],
+    allowedRoles: ['admin', 'branch'],
     input_schema: { type: 'object', properties: {}, required: [] },
-    async run(_args, { db }) {
-      const { data } = await db
-        .from('branches')
+    async run(_args, { db, identity }) {
+      let q = db.from('branches')
         .select('id, name, short_name, manager_name')
         .eq('active', true)
-        .order('id')
+      // A branch user is shown one branch. Offering the others would only
+      // invite requests the next call is going to refuse.
+      if (identity.lockedBranch != null) q = q.eq('id', identity.lockedBranch)
+      const { data } = await q.order('id')
       return { branches: data ?? [] }
     },
   },
@@ -318,7 +340,7 @@ export const TOOLS: AgentTool[] = [
     description:
       'סך ההכנסות של סניף בטווח תאריכים, מפוצל לפי ערוץ: קופה (סגירות קופה — מזומן, אשראי ושיקים), אתר, ו-B2B הקפה. הסכומים נטו, ללא מע"מ. זהה למה שמוצג בדשבורד המנכ"ל.',
     mutates: false,
-    allowedRoles: ['admin'],
+    allowedRoles: ['admin', 'branch'],
     requiredPage: (a) => `branch_${a.branch_id}_revenue`,
     deniedForRestricted: true,
     input_schema: {
@@ -326,8 +348,8 @@ export const TOOLS: AgentTool[] = [
       properties: { branch_id: { type: 'integer' }, ...dateRangeSchema },
       required: ['branch_id', 'from', 'to'],
     },
-    async run(args, { db }) {
-      const branchId = await assertBranch(db, args.branch_id)
+    async run(args, { db, identity }) {
+      const branchId = await assertBranch(db, args.branch_id, identity)
       const { from, to } = range(args)
       const r = await getBranchRevenue(db, branchId, from, to)
       return {
@@ -347,7 +369,7 @@ export const TOOLS: AgentTool[] = [
     description:
       'רישומי פחת של סניף בטווח תאריכים, עם סך הכל ופילוח לפי קטגוריה. פחת נרשם לפי סכום בלבד, ללא מוצר.',
     mutates: false,
-    allowedRoles: ['admin'],
+    allowedRoles: ['admin', 'branch'],
     requiredPage: (a) => `branch_${a.branch_id}_waste`,
     deniedForRestricted: true,
     input_schema: {
@@ -355,8 +377,8 @@ export const TOOLS: AgentTool[] = [
       properties: { branch_id: { type: 'integer' }, ...dateRangeSchema },
       required: ['branch_id', 'from', 'to'],
     },
-    async run(args, { db }) {
-      const branchId = await assertBranch(db, args.branch_id)
+    async run(args, { db, identity }) {
+      const branchId = await assertBranch(db, args.branch_id, identity)
       const { from, to } = range(args)
       const { data } = await db
         .from('branch_waste')
@@ -387,7 +409,7 @@ export const TOOLS: AgentTool[] = [
     description:
       'הוצאות של סניף בטווח תאריכים, עם פילוח לפי סוג וספק. שדה from_factory מסמן רכישות מהמפעל — אלה מקבלות קדימות על פני מכירות פנימיות ואין לספור אותן פעמיים.',
     mutates: false,
-    allowedRoles: ['admin'],
+    allowedRoles: ['admin', 'branch'],
     requiredPage: (a) => `branch_${a.branch_id}_expenses`,
     deniedForRestricted: true,
     input_schema: {
@@ -395,8 +417,8 @@ export const TOOLS: AgentTool[] = [
       properties: { branch_id: { type: 'integer' }, ...dateRangeSchema },
       required: ['branch_id', 'from', 'to'],
     },
-    async run(args, { db }) {
-      const branchId = await assertBranch(db, args.branch_id)
+    async run(args, { db, identity }) {
+      const branchId = await assertBranch(db, args.branch_id, identity)
       const { from, to } = range(args)
       const { data } = await db
         .from('branch_expenses')
@@ -430,7 +452,7 @@ export const TOOLS: AgentTool[] = [
     description:
       'סגירות קופה של סניף בטווח תאריכים. הסכומים המאוחסנים הם נטו (ללא מע"מ) — הקלט במסך הוא ברוטו. כולל סטיות והפקדות.',
     mutates: false,
-    allowedRoles: ['admin'],
+    allowedRoles: ['admin', 'branch'],
     requiredPage: (a) => `branch_${a.branch_id}_closings`,
     input_schema: {
       type: 'object',
@@ -441,8 +463,8 @@ export const TOOLS: AgentTool[] = [
       },
       required: ['branch_id', 'from', 'to'],
     },
-    async run(args, { db }) {
-      const branchId = await assertBranch(db, args.branch_id)
+    async run(args, { db, identity }) {
+      const branchId = await assertBranch(db, args.branch_id, identity)
       const { from, to } = range(args)
       let q = db
         .from('register_closings')
@@ -469,7 +491,7 @@ export const TOOLS: AgentTool[] = [
     name: 'get_change_fund_balance',
     description: 'יתרת קופת העודף הנוכחית של סניף, ותנועות אחרונות.',
     mutates: false,
-    allowedRoles: ['admin'],
+    allowedRoles: ['admin', 'branch'],
     requiredPage: (a) => `branch_${a.branch_id}_change_fund`,
     input_schema: {
       type: 'object',
@@ -479,8 +501,8 @@ export const TOOLS: AgentTool[] = [
       },
       required: ['branch_id'],
     },
-    async run(args, { db }) {
-      const branchId = await assertBranch(db, args.branch_id)
+    async run(args, { db, identity }) {
+      const branchId = await assertBranch(db, args.branch_id, identity)
       const limit = Math.min(Number(args.limit ?? 10), 50)
       // balance_after of the most recent row is the running balance
       const { data } = await db
@@ -520,7 +542,7 @@ TOOLS.push({
     'קטגוריות: end_of_day (סוף יום, ברירת המחדל), finished (מוצר מוגמר), returned_product (מוצר שהוחזר). ' +
     'הפעולה אינה מתבצעת מיד — היא מוצגת למשתמש לאישור.',
   mutates: true,
-  allowedRoles: ['admin'],
+  allowedRoles: ['admin', 'branch'],
   requiredPage: (a) => `branch_${a.branch_id}_waste`,
   deniedForRestricted: true,
   input_schema: {
@@ -539,8 +561,8 @@ TOOLS.push({
     required: ['branch_id', 'date', 'amount'],
   },
 
-  async summarize(args, { db }) {
-    const branchId = await assertBranch(db, args.branch_id)
+  async summarize(args, { db, identity }) {
+    const branchId = await assertBranch(db, args.branch_id, identity)
     const date = parseDate(args.date)
     const amount = parseAmount(args.amount)
     const category = String(args.category ?? DEFAULT_WASTE_CATEGORY)
@@ -567,10 +589,10 @@ TOOLS.push({
     return { title: 'רישום פחת', fields, amount: money(amount), warnings }
   },
 
-  async run(args, { db }) {
+  async run(args, { db, identity }) {
     // Re-validate. These arguments came from the database, but the tool must
     // be safe to call on its own terms.
-    const branchId = await assertBranch(db, args.branch_id)
+    const branchId = await assertBranch(db, args.branch_id, identity)
     const date = parseDate(args.date)
     const amount = parseAmount(args.amount)
     const category = String(args.category ?? DEFAULT_WASTE_CATEGORY)
@@ -610,7 +632,7 @@ TOOLS.push({
     'שם הספק נאמר כפי שהוא — המערכת מתאימה אותו לשמות הקיימים. ' +
     'הפעולה אינה מתבצעת מיד — היא מוצגת למשתמש לאישור.',
   mutates: true,
-  allowedRoles: ['admin'],
+  allowedRoles: ['admin', 'branch'],
   requiredPage: (a) => `branch_${a.branch_id}_expenses`,
   deniedForRestricted: true,
   input_schema: {
@@ -631,8 +653,8 @@ TOOLS.push({
     required: ['branch_id', 'date', 'amount', 'supplier'],
   },
 
-  async summarize(args, { db }) {
-    const branchId = await assertBranch(db, args.branch_id)
+  async summarize(args, { db, identity }) {
+    const branchId = await assertBranch(db, args.branch_id, identity)
     const date = parseDate(args.date)
     const amount = parseAmount(args.amount)
     const type = String(args.expense_type ?? DEFAULT_EXPENSE_TYPE)
@@ -664,8 +686,8 @@ TOOLS.push({
     return { title: 'רישום הוצאה', fields, amount: money(amount), warnings }
   },
 
-  async run(args, { db }) {
-    const branchId = await assertBranch(db, args.branch_id)
+  async run(args, { db, identity }) {
+    const branchId = await assertBranch(db, args.branch_id, identity)
     const date = parseDate(args.date)
     const amount = parseAmount(args.amount)
     const type = String(args.expense_type ?? DEFAULT_EXPENSE_TYPE)
@@ -742,7 +764,7 @@ TOOLS.push({
     'push_from_register (העברה מקופה רושמת אל קופת העודף — דורש מספר קופה). ' +
     'הסכום תמיד חיובי; הכיוון נקבע לפי הסוג. הפעולה מוצגת למשתמש לאישור לפני ביצוע.',
   mutates: true,
-  allowedRoles: ['admin'],
+  allowedRoles: ['admin', 'branch'],
   requiredPage: (a) => `branch_${a.branch_id}_change_fund`,
   input_schema: {
     type: 'object',
@@ -759,8 +781,8 @@ TOOLS.push({
     required: ['branch_id', 'type', 'amount'],
   },
 
-  async summarize(args, { db }) {
-    const branchId = await assertBranch(db, args.branch_id)
+  async summarize(args, { db, identity }) {
+    const branchId = await assertBranch(db, args.branch_id, identity)
     const amount = parseAmount(args.amount)
     const type = String(args.type ?? '')
     if (!FUND_TYPES[type]) throw new Error('סוג תנועה לא מוכר')
@@ -812,8 +834,8 @@ TOOLS.push({
     }
   },
 
-  async run(args, { db }) {
-    const branchId = await assertBranch(db, args.branch_id)
+  async run(args, { db, identity }) {
+    const branchId = await assertBranch(db, args.branch_id, identity)
     const amount = parseAmount(args.amount)
     const type = String(args.type ?? '')
     if (!FUND_TYPES[type]) throw new Error('סוג תנועה לא מוכר')
@@ -897,7 +919,7 @@ TOOLS.push({
     'מסור את הערכים כפי שנאמרו — המערכת מתאימה אותם לרשימה. ' +
     'הפעולה מוצגת לאישור לפני ביצוע.',
   mutates: true,
-  allowedRoles: ['admin'],
+  allowedRoles: ['admin', 'branch'],
   requiredPage: (a) => `branch_${a.branch_id}_special_orders`,
   input_schema: {
     type: 'object',
@@ -923,8 +945,8 @@ TOOLS.push({
     required: ['branch_id', 'customer_name', 'pickup_date', 'type', 'base_size', 'coating', 'crown'],
   },
 
-  async summarize(args, { db }) {
-    const branchId = await assertBranch(db, args.branch_id)
+  async summarize(args, { db, identity }) {
+    const branchId = await assertBranch(db, args.branch_id, identity)
     const missing: string[] = []
 
     const customer = String(args.customer_name ?? '').trim()
@@ -1015,8 +1037,8 @@ TOOLS.push({
     return { title: 'הזמנת עוגה מיוחדת', fields, warnings }
   },
 
-  async run(args, { db, user }) {
-    const branchId = await assertBranch(db, args.branch_id)
+  async run(args, { db, identity }) {
+    const branchId = await assertBranch(db, args.branch_id, identity)
     const type = pickOption(args.type, ['חלבי', 'פרווה'])!
     const baseSize = pickOption(args.base_size, BASE_SIZES)!
     const isPreset = baseSize === MEDIUM_ROUND
@@ -1049,7 +1071,7 @@ TOOLS.push({
       p_extras: extras.length ? extras : null,
       p_notes: args.notes ? String(args.notes) : null,
       p_manual_number: args.order_number_manual ? String(args.order_number_manual) : null,
-      p_created_by: user.id,
+      p_created_by: identity.user.id,
     })
 
     if (error) {
@@ -1123,7 +1145,7 @@ TOOLS.push({
     'יתרת הפתיחה נשלפת אוטומטית מהסגירה הקודמת. ' +
     'אם תתגלה סטייה יידרש `variance_action`. הפעולה מוצגת לאישור לפני ביצוע.',
   mutates: true,
-  allowedRoles: ['admin'],
+  allowedRoles: ['admin', 'branch'],
   requiredPage: (a) => `branch_${a.branch_id}_closings`,
   input_schema: {
     type: 'object',
@@ -1150,8 +1172,8 @@ TOOLS.push({
     required: ['branch_id', 'register_number', 'date', 'cash_sales', 'transactions'],
   },
 
-  async summarize(args, { db }) {
-    const branchId = await assertBranch(db, args.branch_id)
+  async summarize(args, { db, identity }) {
+    const branchId = await assertBranch(db, args.branch_id, identity)
     const date = parseDate(args.date)
     const register = Number(args.register_number)
 
@@ -1233,8 +1255,8 @@ TOOLS.push({
     return { title: 'סגירת קופה', fields, amount: money(ils(cash)), warnings }
   },
 
-  async run(args, { db }) {
-    const branchId = await assertBranch(db, args.branch_id)
+  async run(args, { db, identity }) {
+    const branchId = await assertBranch(db, args.branch_id, identity)
     const date = parseDate(args.date)
     const counted = countedFrom(args)
 
@@ -1275,8 +1297,9 @@ export const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]))
  * `requiredPage` and `deniedForRestricted` are declared but not yet checked
  * (AGENT_PLAN.md 3.3). Claude never sees a tool it may not call.
  */
-export function toolsFor(user: AppUser) {
+export function toolsFor(identity: AgentIdentity) {
   return TOOLS
-    .filter((t) => t.allowedRoles.includes(user.role))
+    .filter((t) => t.allowedRoles.includes(identity.effectiveRole))
+    .filter((t) => !(identity.restricted && t.deniedForRestricted))
     .map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema }))
 }
