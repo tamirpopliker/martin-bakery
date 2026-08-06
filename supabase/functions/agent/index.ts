@@ -128,6 +128,39 @@ function buildSystemPrompt(
 const CONFIRMATION_TTL_MS = 15 * 60 * 1000
 
 /**
+ * Records a turn. Best effort — a failure here must never cost the user their
+ * answer, so it is fire-and-forget and only warns.
+ *
+ * agent_actions covers attempts to write. This covers everything else, which
+ * is where "it doesn't understand my questions" lives — the complaint that
+ * previously left no evidence at all.
+ */
+function logTurn(
+  db: SupabaseClient,
+  identity: AgentIdentity,
+  row: {
+    conversation_id: string
+    user_text: string
+    reply_text?: string | null
+    input_mode: string
+    tools: unknown
+    proposed_action?: string | null
+    ms: number
+    input_tokens: number
+    output_tokens: number
+  },
+): void {
+  db.from('agent_messages').insert({
+    ...row,
+    user_id: identity.user.id,
+    acted_as: identity.effectiveRole,
+    branch_id: identity.lockedBranch,
+  }).then(({ error }) => {
+    if (error) console.warn('[agent] logTurn failed:', error.message)
+  })
+}
+
+/**
  * Executes or rejects a parked action.
  *
  * Every guard that matters lives here, because this is the only path that
@@ -270,6 +303,10 @@ serve(async (req) => {
   let inputTokens = 0
   let outputTokens = 0
   const usageOut = () => ({ input_tokens: inputTokens, output_tokens: outputTokens })
+  const startedAt = Date.now()
+  const lastUserText = String(
+    (incoming[incoming.length - 1] as { content?: unknown })?.content ?? '',
+  )
 
   try {
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
@@ -310,6 +347,17 @@ serve(async (req) => {
           .trim()
 
         console.log(`[agent] ${auth.identity.user.email} · ${trace.length} tools · ${inputTokens}/${outputTokens} tok`)
+
+        logTurn(auth.db, auth.identity, {
+          conversation_id: conversationId,
+          user_text: lastUserText,
+          reply_text: text,
+          input_mode: inputMode,
+          tools: trace,
+          ms: Date.now() - startedAt,
+          ...usageOut(),
+        })
+
         return json({
           reply: text || 'לא הצלחתי לנסח תשובה. נסה לשאול אחרת.',
           trace,
@@ -371,6 +419,17 @@ serve(async (req) => {
               console.error('[agent] agent_actions insert failed:', insErr.message)
               return json({ error: 'לא ניתן להכין את הפעולה לאישור' }, 500)
             }
+
+            logTurn(auth.db, auth.identity, {
+              conversation_id: conversationId,
+              user_text: lastUserText,
+              reply_text: null,
+              input_mode: inputMode,
+              tools: trace,
+              proposed_action: tool.name,
+              ms: Date.now() - startedAt,
+              ...usageOut(),
+            })
 
             return json({
               reply: '',
