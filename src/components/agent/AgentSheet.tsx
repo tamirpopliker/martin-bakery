@@ -9,7 +9,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useAgent, type AgentMessage } from './useAgent'
 import { useBranches } from '../../lib/BranchContext'
 import { useVoiceInput } from './useVoiceInput'
-import { useConversation } from './useConversation'
 import MicButton from './MicButton'
 import ConfirmationCard from './ConfirmationCard'
 
@@ -26,7 +25,7 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
   const [simBranch, setSimBranch] = useState<number | null>(null)
   const simulate = simBranch != null ? { role: 'branch' as const, branch_id: simBranch } : null
 
-  const { messages, pending, busy, send, reset, resolve, turn } = useAgent(simulate)
+  const { messages, pending, busy, send, reset, resolve } = useAgent(simulate)
   const [draft, setDraft] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -39,9 +38,6 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
   // While a write is awaiting approval the microphone is unavailable —
   // approval is a tap, never a spoken word.
   const locked = !!pending
-
-  // Hands-free mode. It shuts itself off the moment a card appears.
-  const conv = useConversation({ onTurn: turn, blocked: locked })
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -79,25 +75,11 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
           </div>
           <div className="flex-1">
             <div className="text-[15px] font-medium text-slate-900">עוזר מרטין</div>
-            <div className="text-xs text-slate-500">
-              {conv.active ? 'מצב שיחה — דבר חופשי' : 'החזק את המיקרופון ודבר'}
-            </div>
+            <div className="text-xs text-slate-500">החזק את המיקרופון ודבר</div>
           </div>
 
-          <button
-            onClick={() => (conv.active ? conv.stop() : conv.start())}
-            disabled={locked || busy}
-            title={conv.active ? 'צא ממצב שיחה' : 'מצב שיחה — ללא ידיים'}
-            className={`rounded-lg px-2.5 py-1.5 text-xs transition disabled:opacity-40 ${
-              conv.active
-                ? 'bg-emerald-600 text-white'
-                : 'border border-slate-300 text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            {conv.active ? 'סיים שיחה' : 'מצב שיחה'}
-          </button>
 
-          {messages.length > 0 && !conv.active && (
+          {messages.length > 0 && (
             <button
               onClick={reset}
               className="rounded-lg px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
@@ -199,10 +181,6 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
           className="border-t border-slate-200 px-3 pt-3"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
         >
-          {conv.active ? (
-            <ConversationBar conv={conv} />
-          ) : (
-          <>
           {voice.error && (
             <div className="mb-2 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-800">
               <span className="flex-1">{voice.error}</span>
@@ -253,65 +231,12 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
               <SendIcon />
             </button>
           </div>
-          </>
-          )}
 
           <p className="mt-2 text-center text-[11px] text-slate-400">
             כל רישום דורש אישור בלחיצה
           </p>
         </div>
       </div>
-    </div>
-  )
-}
-
-/** What the composer becomes in hands-free mode: state, not controls. */
-function ConversationBar({ conv }: { conv: ReturnType<typeof useConversation> }) {
-  const label = {
-    off: '',
-    calibrating: 'מכייל רעש רקע…',
-    listening: 'מקשיב — דבר',
-    hearing: 'שומע אותך…',
-    thinking: 'חושב…',
-    speaking: 'עונה…',
-  }[conv.state]
-
-  const active = conv.state === 'hearing'
-
-  return (
-    <div className="space-y-2">
-      {conv.error && (
-        <div className="flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[13px] text-rose-800">
-          <span className="flex-1">{conv.error}</span>
-          <button onClick={conv.clearError} className="text-rose-400 hover:text-rose-700">✕</button>
-        </div>
-      )}
-
-      <div className="flex items-center gap-3 rounded-2xl bg-emerald-50 px-4 py-3">
-        <span className="relative flex h-3 w-3 shrink-0">
-          {(active || conv.state === 'listening') && (
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-          )}
-          <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-600" />
-        </span>
-
-        <span className="flex-1 text-[15px] text-emerald-900">{label}</span>
-
-        {/* live level, so it is obvious the microphone is actually hearing */}
-        <span className="flex h-6 items-end gap-[3px]">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <span
-              key={i}
-              className="w-[3px] rounded-full bg-emerald-500 transition-all duration-100"
-              style={{ height: `${6 + Math.max(0, conv.level * 24 - i * 3)}px`, opacity: active ? 1 : 0.35 }}
-            />
-          ))}
-        </span>
-      </div>
-
-      {conv.heard && (
-        <p className="px-1 text-[12px] text-slate-400">נשמע: {conv.heard}</p>
-      )}
     </div>
   )
 }
