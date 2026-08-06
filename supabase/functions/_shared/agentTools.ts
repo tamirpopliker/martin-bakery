@@ -1065,6 +1065,208 @@ TOOLS.push({
   },
 })
 
+// ─── Register closing ───────────────────────────────────────────────────
+
+const DENOMINATIONS = [200, 100, 50, 20, 10, 5, 2, 1, 0.5, 0.1]
+const VAT_DIVIDER = 1.18
+const LARGE_VARIANCE = 50
+
+const VARIANCE_ACTIONS: Record<string, string> = {
+  surplus_fund: 'העברה לקופת עודף',
+  documented: 'תיעוד כחוסר/עודף',
+  kept: 'השארה בקופה',
+}
+
+/** Counting notes and counting a total are both valid; managers differ. */
+function countedFrom(args: Record<string, unknown>): number {
+  const hasDenoms = args.denominations && typeof args.denominations === 'object'
+  const hasTotal = args.counted_cash != null
+
+  if (hasDenoms && hasTotal) {
+    throw new Error('אפשר לציין ספירת שטרות או סכום כולל — לא את שניהם')
+  }
+  if (hasTotal) {
+    const n = Number(args.counted_cash)
+    if (!Number.isFinite(n) || n < 0) throw new Error('סכום המזומן שנספר לא תקין')
+    return Math.round(n * 100) / 100
+  }
+  if (!hasDenoms) throw new Error('חסרה ספירת המזומן')
+
+  let total = 0
+  for (const [k, v] of Object.entries(args.denominations as Record<string, unknown>)) {
+    const denom = Number(k)
+    const count = Number(v)
+    if (!DENOMINATIONS.includes(denom)) throw new Error(`ערך שטר/מטבע לא מוכר: ${k}`)
+    if (!Number.isInteger(count) || count < 0) throw new Error(`כמות לא תקינה עבור ${k}`)
+    total += denom * count
+  }
+  return Math.round(total * 100) / 100
+}
+
+async function previousOpening(
+  db: SupabaseClient, branchId: number, register: number, date: string,
+): Promise<number> {
+  const { data } = await db
+    .from('register_closings').select('next_opening_balance')
+    .eq('branch_id', branchId).eq('register_number', register).lt('date', date)
+    .order('date', { ascending: false }).order('created_at', { ascending: false })
+    .limit(1)
+  return data?.length ? ils(Number(data[0].next_opening_balance || 0)) : 0
+}
+
+TOOLS.push({
+  name: 'add_register_closing',
+  description:
+    'סגירת קופה. כל סכומי המכירות נמסרים **ברוטו**, בדיוק כפי שנאמרים — המערכת מפחיתה מע"מ בעצמה. ' +
+    'ספירת המזומן: או `denominations` (מפה של שטר→כמות, למשל {"200":4,"100":10}) או `counted_cash` (סכום כולל) — לא שניהם. ' +
+    'יתרת הפתיחה נשלפת אוטומטית מהסגירה הקודמת. ' +
+    'אם תתגלה סטייה יידרש `variance_action`. הפעולה מוצגת לאישור לפני ביצוע.',
+  mutates: true,
+  allowedRoles: ['admin'],
+  requiredPage: (a) => `branch_${a.branch_id}_closings`,
+  input_schema: {
+    type: 'object',
+    properties: {
+      branch_id: { type: 'integer' },
+      register_number: { type: 'integer' },
+      date: { type: 'string', description: 'תאריך הסגירה, YYYY-MM-DD' },
+      cash_sales: { type: 'number', description: 'מכירות מזומן ברוטו' },
+      credit_sales: { type: 'number', description: 'מכירות אשראי ברוטו' },
+      check_sales: { type: 'number', description: 'מכירות שיקים ברוטו' },
+      transactions: { type: 'integer', description: 'מספר עסקאות' },
+      counted_cash: { type: 'number', description: 'סכום כולל שנספר בקופה' },
+      denominations: {
+        type: 'object',
+        description: 'ספירה מפורטת, שטר→כמות. למשל {"200":4,"100":10,"50":4}',
+      },
+      variance_action: {
+        type: 'string',
+        enum: ['surplus_fund', 'documented', 'kept'],
+        description: 'נדרש רק כשיש סטייה',
+      },
+      notes: { type: 'string' },
+    },
+    required: ['branch_id', 'register_number', 'date', 'cash_sales', 'transactions'],
+  },
+
+  async summarize(args, { db }) {
+    const branchId = await assertBranch(db, args.branch_id)
+    const date = parseDate(args.date)
+    const register = Number(args.register_number)
+
+    const registers = await branchRegisters(db, branchId)
+    if (registers.length && !registers.includes(register)) {
+      return {
+        title: 'סגירת קופה', fields: [], warnings: [],
+        blocker: `קופה ${register} אינה שייכת לסניף. הקופות בסניף: ${registers.join(', ')}.`,
+      }
+    }
+
+    const { data: exists } = await db
+      .from('register_closings').select('id')
+      .eq('branch_id', branchId).eq('date', date).eq('register_number', register).limit(1)
+    if (exists?.length) {
+      return {
+        title: 'סגירת קופה', fields: [], warnings: [],
+        blocker: `כבר קיימת סגירה לקופה ${register} בתאריך ${heDate(date)}.`,
+      }
+    }
+
+    const cash = Number(args.cash_sales)
+    if (!Number.isFinite(cash) || cash < 0) throw new Error('מכירות מזומן לא תקינות')
+    const credit = Number(args.credit_sales ?? 0)
+    const check = Number(args.check_sales ?? 0)
+    const tx = Number(args.transactions)
+    if (!Number.isInteger(tx) || tx <= 0) throw new Error('מספר העסקאות חייב להיות גדול מאפס')
+
+    const counted = countedFrom(args)
+    const opening = await previousOpening(db, branchId, register, date)
+    const expected = ils(opening + cash)
+    const variance = ils(counted - expected)
+
+    const action = Math.abs(variance) >= 0.01 ? String(args.variance_action ?? '') : ''
+    if (Math.abs(variance) >= 0.01 && !VARIANCE_ACTIONS[action]) {
+      const sign = variance > 0 ? 'עודף' : 'חוסר'
+      return {
+        title: 'סגירת קופה', fields: [], warnings: [],
+        blocker:
+          `נספרו ${money(counted)} מול ${money(expected)} צפויים — ${sign} של ${money(Math.abs(variance))}.\n` +
+          `כיצד לטפל?\n· העברה לקופת עודף (surplus_fund)\n· תיעוד כחוסר/עודף (documented)\n· השארה בקופה (kept)`,
+      }
+    }
+
+    const warnings = []
+    if (Math.abs(variance) > LARGE_VARIANCE) {
+      warnings.push(`סטייה גדולה — ${money(Math.abs(variance))}. שווה לספור שוב לפני האישור.`)
+    }
+    const today = new Date().toISOString().slice(0, 10)
+    if (date > today) warnings.push('התאריך עתידי')
+
+    const nextOpening = ils(
+      action === 'surplus_fund' && Math.abs(variance) > 0.009 ? opening : counted - cash,
+    )
+
+    const fields = [
+      { label: 'סניף', value: await branchName(db, branchId) },
+      { label: 'קופה', value: String(register) },
+      { label: 'תאריך', value: heDate(date) },
+      { label: 'יתרת פתיחה', value: money(opening) },
+      { label: 'מזומן (ברוטו)', value: money(ils(cash)) },
+    ]
+    if (credit) fields.push({ label: 'אשראי (ברוטו)', value: money(ils(credit)) })
+    if (check) fields.push({ label: 'שיקים (ברוטו)', value: money(ils(check)) })
+    fields.push(
+      { label: 'עסקאות', value: String(tx) },
+      { label: 'נספר בפועל', value: money(counted) },
+      { label: 'צפוי', value: money(expected) },
+      { label: 'סטייה', value: `${variance > 0 ? '+' : ''}${money(variance)}` },
+    )
+    if (VARIANCE_ACTIONS[action]) fields.push({ label: 'טיפול בסטייה', value: VARIANCE_ACTIONS[action] })
+    fields.push(
+      { label: 'להפקדה בשקית', value: money(ils(cash)) },
+      { label: 'פתיחה מחר', value: money(nextOpening) },
+      { label: 'נטו לאחסון', value: money(ils(cash / VAT_DIVIDER)) },
+    )
+    if (args.notes) fields.push({ label: 'הערה', value: String(args.notes) })
+
+    return { title: 'סגירת קופה', fields, amount: money(ils(cash)), warnings }
+  },
+
+  async run(args, { db }) {
+    const branchId = await assertBranch(db, args.branch_id)
+    const date = parseDate(args.date)
+    const counted = countedFrom(args)
+
+    const { data, error } = await db.rpc('save_register_closing', {
+      p_branch_id: branchId,
+      p_date: date,
+      p_register_number: Number(args.register_number),
+      p_cash_gross: Number(args.cash_sales),
+      p_credit_gross: Number(args.credit_sales ?? 0),
+      p_check_gross: Number(args.check_sales ?? 0),
+      p_transactions: Number(args.transactions),
+      p_counted_cash: counted,
+      p_variance_action: args.variance_action ? String(args.variance_action) : null,
+      p_next_opening: null,
+      p_notes: args.notes ? String(args.notes) : null,
+    })
+
+    if (error) {
+      console.error('[add_register_closing]', error.message)
+      throw new Error(/[֐-׿]/.test(error.message) ? error.message : 'שמירת הסגירה נכשלה')
+    }
+
+    const out = data as { id: number; variance: number; deposit: number; next_opening: number }
+    return {
+      table: 'register_closings',
+      id: String(out.id),
+      message:
+        `נסגרה קופה ${args.register_number}. להפקדה ${money(Number(out.deposit))}, ` +
+        `פתיחה מחר ${money(Number(out.next_opening))}.`,
+    }
+  },
+})
+
 export const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]))
 
 /**
