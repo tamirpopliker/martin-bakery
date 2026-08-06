@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAgent, type AgentMessage } from './useAgent'
 import { useBranches } from '../../lib/BranchContext'
+import { useAppUser } from '../../lib/UserContext'
 import { useVoiceInput } from './useVoiceInput'
 import MicButton from './MicButton'
 import ConfirmationCard from './ConfirmationCard'
@@ -21,7 +22,9 @@ const SUGGESTIONS = [
 export default function AgentSheet({ onClose }: { onClose: () => void }) {
   // Admin-only: act as a branch manager to see exactly what they would get.
   // The server refuses any simulation that is not a downgrade.
+  const { appUser } = useAppUser()
   const { branches } = useBranches()
+  const canSimulate = appUser?.role === 'admin'
   const [simBranch, setSimBranch] = useState<number | null>(null)
   const simulate = simBranch != null ? { role: 'branch' as const, branch_id: simBranch } : null
 
@@ -130,7 +133,7 @@ export default function AgentSheet({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
 
-              {simBranch == null && branches.length > 0 && (
+              {canSimulate && simBranch == null && branches.length > 0 && (
                 <div className="mt-8 border-t border-slate-100 pt-4">
                   <p className="mb-2 text-center text-[11px] text-slate-400">
                     בדיקה: לראות את הסוכן כפי שמנהל סניף יראה אותו

@@ -17,7 +17,12 @@ export default function AgentButton() {
   const { appUser } = useAppUser()
   const [open, setOpen] = useState(false)
 
-  if (!appUser?.agent_enabled || appUser.role !== 'admin') return null
+  // Mirrors ENABLED_ROLES in supabase/functions/_shared/agentAuth.ts. This is
+  // for the experience — nobody should see a button they cannot use — and is
+  // NOT the control. The edge functions re-check independently and reject
+  // regardless of what the client believes.
+  if (!appUser?.agent_enabled) return null
+  if (appUser.role !== 'admin' && appUser.role !== 'branch') return null
 
   return (
     <>
